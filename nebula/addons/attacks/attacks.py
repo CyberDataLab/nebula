@@ -145,7 +145,7 @@ class DelayerAttack(Attack):
     def attack(self, received_weights):
         logging.info("[DelayerAttack] Performing delayer attack")
         logging.info("Delaying time from 15 seconds")
-        time.sleep(10)
+        time.sleep(15)
         logging.info("Delaying time finished")
         if self.weights is None:
             self.weights = deepcopy(received_weights)

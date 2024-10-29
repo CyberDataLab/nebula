@@ -94,6 +94,7 @@ class CommunicationsManager:
             self.reputation_with_all_feedback = {}
             self.total_messages_reputation_received = 0
             self.message_timestamps = {}
+            self.fraction_of_params_changed = {}
 
     @property
     def engine(self):
@@ -144,7 +145,11 @@ class CommunicationsManager:
             message_wrapper = nebula_pb2.Wrapper()
             message_wrapper.ParseFromString(data)
             source = message_wrapper.source
-            logging.debug(f"📥  handle_incoming_message | Received message from {addr_from} with source {source}")
+            #logging.debug(f"📥  handle_incoming_message | Received message from {addr_from} with source {source}")
+            if message_wrapper.HasField("flood_attack_message"):
+                logging.debug(f"📥  handle_incoming_message | Received flooding attack message from {addr_from} with source {source}")
+            else:
+                logging.debug(f"📥  handle_incoming_message | Received message from {addr_from} with source {source}")
             if source == self.addr:
                 return
 
@@ -169,9 +174,13 @@ class CommunicationsManager:
                     await self.handle_model_message(source, message_wrapper.model_message)
             elif message_wrapper.HasField("reputation_message"):
                 if self.reputation_file == 'True':
-                    if self.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                    if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
                         self.forwarder.forward(data, addr_from=addr_from)
                         await self.handle_reputation_message(source, message_wrapper.reputation_message)
+            elif message_wrapper.HasField("flood_attack_message"):
+                if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                    await self.forwarder.forward(data, addr_from=addr_from)
+                    await self.handle_flooding_attack_message(source, message_wrapper.flood_attack_message)
             elif message_wrapper.HasField("connection_message"):
                 await self.handle_connection_message(source, message_wrapper.connection_message)
             else:
@@ -203,7 +212,7 @@ class CommunicationsManager:
         try:
             await self.engine.event_manager.trigger_event(source, message)
             self.store_receive_timestamp(source, "federation", message.round)
-            self.calculate_latency(source, "federation")
+            #self.calculate_latency(source, "federation")
         except Exception as e:
             logging.error(f"📝  handle_federation_message | Error while processing: {message.action} {message.arguments} | {e}")
     
@@ -214,6 +223,29 @@ class CommunicationsManager:
             current_round = self.get_round()
             await self.engine.get_round_lock().release_async()
 
+            # Checking similarity
+            logging.info(f"🤖  handle_model_message | Checking model similarity")
+            decoded_model = self.engine.trainer.deserialize_model(message.parameters)
+            cosine_value = cosine_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+            euclidean_value = euclidean_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+            minkowski_value = minkowski_metric(self.engine.trainer.get_model_parameters(), decoded_model, p=2, similarity=True)
+            manhattan_value = manhattan_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+            pearson_correlation_value = pearson_correlation_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+            jaccard_value = jaccard_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+            file = f'app/logs/{self.config.participant["scenario_args"]["name"]}/participant_{self.id}_similarity.csv'
+            with open(file, "a+") as f:
+                if os.stat(file).st_size == 0:
+                    f.write("timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n")
+                f.write(f"{datetime.now()}, {source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n")
+                    
+            # Manage communication latency
+            self.store_receive_timestamp(source, "model", message.round)
+            self.calculate_latency(source, "model")
+            
+            # Manage parameters of models
+            parameters_local = self.engine.trainer.get_model_parameters()
+            self.fraction_of_parameters_changed(source, parameters_local, decoded_model, current_round)
+            
             if message.round != current_round and message.round != -1:
                 logging.info(f"❗️  handle_model_message | Received a model from a different round | Model round: {message.round} | Current round: {current_round}")
                 if message.round > current_round:
@@ -234,36 +266,28 @@ class CommunicationsManager:
                 # get_federation_ready_lock() is locked when the model is being initialized (first round)
                 # non-starting nodes receive the initialized model from the starting node
                 if not self.engine.get_federation_ready_lock().locked() or self.engine.get_initialization_status():
-                    decoded_model = self.engine.trainer.deserialize_model(message.parameters)
-                    # if source != self.addr:
-                    #     contribution_key = (source, message.round)
-                    #     if contribution_key not in self.receive_data_contribution:
-                    #         self.receive_data_contribution[contribution_key] = len(message.parameters)
-                    #         logging.info(f"🤖 handle_model_message | Received model from {source} with round {message.round} | data contribution: {self.receive_data_contribution[contribution_key]}")
-                    #         save_data(self.config.participant['scenario_args']['name'], 'data_contribution', source, self.addr, message.round, data_contribution=self.receive_data_contribution[contribution_key])
-
                     #if self.config.participant["adaptive_args"]["model_similarity"]:
                     if current_round >= 0 and message.round >= 0:
-                        logging.info(f"🤖  handle_model_message | Checking model similarity")
-                        cosine_value = cosine_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
-                        euclidean_value = euclidean_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
-                        minkowski_value = minkowski_metric(self.engine.trainer.get_model_parameters(), decoded_model, p=2, similarity=True)
-                        manhattan_value = manhattan_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
-                        pearson_correlation_value = pearson_correlation_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
-                        jaccard_value = jaccard_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
-                        file = f'app/logs/{self.config.participant["scenario_args"]["name"]}/participant_{self.id}_similarity.csv'
-                        with open(file, "a+") as f:
-                            if os.stat(file).st_size == 0:
-                                f.write("timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n")
-                            f.write(f"{datetime.now()}, {source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n")
+                        # logging.info(f"🤖  handle_model_message | Checking model similarity")
+                        # cosine_value = cosine_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+                        # euclidean_value = euclidean_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+                        # minkowski_value = minkowski_metric(self.engine.trainer.get_model_parameters(), decoded_model, p=2, similarity=True)
+                        # manhattan_value = manhattan_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+                        # pearson_correlation_value = pearson_correlation_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+                        # jaccard_value = jaccard_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
+                        # file = f'app/logs/{self.config.participant["scenario_args"]["name"]}/participant_{self.id}_similarity.csv'
+                        # with open(file, "a+") as f:
+                        #     if os.stat(file).st_size == 0:
+                        #         f.write("timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n")
+                        #     f.write(f"{datetime.now()}, {source}, {message.round}, {current_round}, {cosine_value}, {euclidean_value}, {minkowski_value}, {manhattan_value}, {pearson_correlation_value}, {jaccard_value}\n")
                         
-                        # Manage communication latency
-                        self.store_receive_timestamp(source, "model", message.round)
-                        self.calculate_latency(source, "model")
+                        # # Manage communication latency
+                        # self.store_receive_timestamp(source, "model", message.round)
+                        # self.calculate_latency(source, "model")
 
                         # Manage parameters of models
-                        parameters_local = self.engine.trainer.get_model_parameters()
-                        self.calculate_rate_of_change(source, parameters_local, decoded_model, current_round) 
+                        # parameters_local = self.engine.trainer.get_model_parameters()
+                        # self.fraction_of_parameters_changed(source, parameters_local, decoded_model, current_round)
 
                         if cosine_value < 0.5:
                             logging.info(f"🤖  handle_model_message | Model similarity is below 0.5 {cosine_value} with source {source}")
@@ -388,7 +412,7 @@ class CommunicationsManager:
             logging.info(f"handle_reputation_message | Reputation message received from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
             
             self.store_receive_timestamp(source, "reputation", message.round)
-            self.calculate_latency(source, "reputation")
+            #self.calculate_latency(source, "reputation")
             
             current_node = self.addr
 
@@ -404,25 +428,76 @@ class CommunicationsManager:
         except Exception as e:
             logging.error(f"Error handling reputation message: {e}")
     
-    def calculate_rate_of_change(self, source, parameters_local, parameters_received, current_round):
-        # logging.info(f"🤖  manage_parameters_models | Managing parameters of models")
-        # logging.info(f"🤖  manage_parameters_models | Parameters local: {parameters_local}")
-        # logging.info(f"🤖  manage_parameters_models | Parameters received: {parameters_received}")
-        changes = []
+    async def handle_flooding_attack_message(self, source, message):
+        try:
+            logging.info(f"🔥  handle_flooding_attack_message | Received flooding attack message from {source} | Attacker: {message.attacker_id} | Frequency: {message.frequency} | Duration: {message.duration} | Target node: {message.target_node}")
+            current_round = self.engine.get_round()
+            self.store_receive_timestamp(source, "flooding_attack", current_round)
+        except Exception as e:
+            logging.error(f"🔥  handle_flooding_attack_message | Error while processing: {e}")
+
+    def fraction_of_parameters_changed(self, source, parameters_local, parameters_received, current_round):
+        # logging.info(f"🤖  fraction_of_parameters_changed | Managing parameters of models")
+        # logging.info(f"🤖  fraction_of_parameters_changed | Parameters local: {parameters_local}")
+        # logging.info(f"🤖  fraction_of_parameters_changed | Parameters received: {parameters_received}")
+        differences = []
+        total_params = 0
+        changed_params = 0
+        changes_record = {}
+        prev_threshold = None
+
+        if source in self.fraction_of_params_changed and current_round - 1 in self.fraction_of_params_changed[source]:
+            prev_threshold = self.fraction_of_params_changed[source][current_round - 1][-1]["threshold"]
+
         for key in parameters_local.keys():
+            #logging.info(f"🤖  fraction_of_parameters_changed | Key: {key}")
             if key in parameters_received:
-                # Calcula la norma de la diferencia entre los parámetros
-                change = torch.norm(parameters_local[key] - parameters_received[key])
-                changes.append(change.item())
+                diff = torch.abs(parameters_local[key] - parameters_received[key])
+                differences.extend(diff.flatten().tolist())
+                total_params += diff.numel()
+                #logging.info(f"🤖  fraction_of_parameters_changed | Total params: {total_params}")
 
-        if changes:
-            total_rate_of_change = sum(changes) / len(changes)  # Promedio de los cambios
+        if differences:
+            mean_threshold = torch.mean(torch.tensor(differences)).item()
+            current_threshold = (prev_threshold + mean_threshold) / 2 if prev_threshold is not None else mean_threshold
         else:
-            total_rate_of_change = 0.0
+            current_threshold = 0
 
-        logging.info(f"calculate_rate_of_change | Rate of change: {total_rate_of_change} | Source: {source} | Round: {current_round}")
-        save_data(self.config.participant['scenario_args']['name'], 'rate_of_change', source, self.addr, current_round, rate_of_change=total_rate_of_change)
-    
+
+        for key in  parameters_local.keys():
+            if key in parameters_received:
+                diff = torch.abs(parameters_local[key] - parameters_received[key])
+                num_changed = torch.sum(diff > current_threshold).item()
+                changed_params += num_changed
+                if num_changed > 0:
+                    changes_record[key] = num_changed
+
+        fraction_changed = changed_params / total_params if total_params > 0 else 0.0
+
+        if source not in self.fraction_of_params_changed:
+            self.fraction_of_params_changed[source] = {}
+        if current_round not in self.fraction_of_params_changed[source]:
+            self.fraction_of_params_changed[source][current_round] = []
+
+        self.fraction_of_params_changed[source][current_round].append({
+            "fraction_changed": fraction_changed,
+            "total_params": total_params,
+            "changed_params": changed_params,
+            "threshold": current_threshold,
+            "changes_record": changes_record
+        })
+
+        save_data(self.config.participant['scenario_args']['name'], 
+                  'fraction_of_params_changed', 
+                  source, 
+                  self.addr, 
+                  current_round, 
+                  fraction_changed=fraction_changed, 
+                  total_params=total_params, 
+                  changed_params=changed_params, 
+                  threshold=current_threshold, 
+                  changes_record=changes_record)
+                     
     def get_connections_lock(self):
         return self.connections_lock
 
@@ -754,26 +829,21 @@ class CommunicationsManager:
 
     def calculate_latency(self, source, type_message):
         if (self.addr, source, type_message) in self.message_timestamps:
-            range_after = 5
-            range_before = -5
             send_time = self.message_timestamps[(self.addr, source, type_message)]["send"]
             receive_time = self.message_timestamps[(self.addr, source, type_message)]["receive"]
             round_number = self.message_timestamps[(self.addr, source, type_message)]["round"]
             current_round = self.get_round()
 
-            if send_time and receive_time:
+            if send_time and receive_time and type_message == "model":
                 send_time = datetime.strptime(send_time, "%H:%M:%S")
                 receive_time = datetime.strptime(receive_time, "%H:%M:%S")
 
                 latency = (receive_time - send_time).total_seconds()
+                logging.info(f"🕒  Latency from {source} with type message {type_message} in round {round_number}: {latency}")
+
                 self.message_timestamps[(self.addr, source, type_message)]["latency"] = latency
                 save_data(self.config.participant['scenario_args']['name'], 'communication', source, self.addr, round_number, time=latency, type_message=type_message, current_round=current_round)
                 
-                if range_before <= latency <= range_after:
-                    logging.info(f"🕒  Latency from {source} with type message {type_message} in round {round_number}: {latency}")
-                else:
-                    logging.info(f"❗️  Latency from {source} in round {round_number} is out of bounds: {latency}")
-
                 return latency
         return None
     

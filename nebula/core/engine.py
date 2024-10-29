@@ -561,7 +561,7 @@ class Engine:
                 
                 if node_ip in self.reputation and "last_feedback_round" in self.reputation[node_ip]:
                     if self.reputation[node_ip]["last_feedback_round"] >= round_num:
-                        logging.info(f"Feedback already included in reputation for node {node_ip} in round {round_num}. Skipping...")
+                        #logging.info(f"Feedback already included in reputation for node {node_ip} in round {round_num}. Skipping...")
                         continue
                 
                 
@@ -575,10 +575,14 @@ class Engine:
                         current_reputation = self.reputation[node_ip]["reputation"]
                         logging.info(f"Current reputation for node {node_ip}: {current_reputation}")
                     else:
-                        logging.info(f"No previous reputation found for node {node_ip}. Setting initial reputation.")
+                        logging.info(f"No node {node_ip} in reputation history.")
 
-                    combined_reputation = (current_reputation + avg_feedback) / 2
-                    logging.info(f"Combined reputation for node {node_ip} in round {round_num}: {combined_reputation}")
+                    if current_reputation:
+                        combined_reputation = (current_reputation + avg_feedback) / 2
+                        logging.info(f"Combined reputation for node {node_ip} in round {round_num}: {combined_reputation}")
+                    else:
+                        combined_reputation = current_reputation
+                        logging.info(f"No reputation calculate for node {node_ip}.")
 
                     self.reputation[node_ip] = {
                         "reputation": combined_reputation,
@@ -699,8 +703,8 @@ class MaliciousNode(Engine):
         self.fit_time = 0.0
         self.extra_time = 0.0
 
-        self.round_start_attack = 3
-        self.round_stop_attack = 7
+        self.round_start_attack = 6
+        self.round_stop_attack = 9
 
         self.aggregator_bening = self._aggregator
 
@@ -716,24 +720,31 @@ class MaliciousNode(Engine):
 
     #     await AggregatorNode._extended_learning_cycle(self)
 
+    async def flood_attack(self, message, repetitions=10, interval=0.15):
+        neighbors = set(await self.cm.get_addrs_current_connections(only_direct=True))
+        for nei in neighbors:
+            for i in range(repetitions):
+                message_data = self.cm.mm.generate_flood_attack_message(
+                    attacker_id=self.addr,
+                    frequency=int(i),
+                    duration=int(interval*1000),
+                    target_node=nei,
+                )
+                await self.cm.send_message_to_neighbors(message_data)
+                logging.info(f"Flood attack message sent to {nei} - Attempt {i + 1}/{repetitions}.")
+                await asyncio.sleep(interval)
+                self.cm.store_send_timestamp(nei, self.round, "flood_attack")
+
     async def _extended_learning_cycle(self):
         if self.round in range(self.round_start_attack, self.round_stop_attack):
             logging.info(f"Changing aggregation function maliciously...")
             self._aggregator = create_malicious_aggregator(self._aggregator, self.attack)
+            await self.flood_attack(message="Flood attack message", repetitions=10, interval=0.15)
         elif self.round == self.round_stop_attack:
             logging.info(f"Changing aggregation function benignly...")
             self._aggregator = self.aggregator_bening
 
         await AggregatorNode._extended_learning_cycle(self)
-
-    # async def change_time_communication(self):
-    #     current_cycle_round = self.round % 11
-    #     if current_cycle_round == 0 or (current_cycle_round in range(3, 5 + 1)) or (current_cycle_round in range(8, 10 + 1)):
-    #         self.start_time_communication = datetime.now()
-    #         logging.info(f"Round {self.round}: Normal communication time {self.start_time_communication}.")
-    #     else:
-    #         self.start_time_communication = datetime.now() + timedelta(seconds=10)
-    #         logging.info(f"Round {self.round}: Malicious communication time with delay {self.start_time_communication}.")
 
 class AggregatorNode(Engine):
     def __init__(self, model, dataset, config=Config, trainer=Lightning, security=False, model_poisoning=False, poisoned_ratio=0, noise_type="gaussian"):
