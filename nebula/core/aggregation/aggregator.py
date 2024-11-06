@@ -233,19 +233,15 @@ class Aggregator(ABC):
         return result
 
     async def get_aggregation(self):
-        if not self.engine.rejected_nodes:
-            logging.info(f"🔄 get_aggregation | No rejected nodes.")
-            try:
-                timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
-                await self._aggregation_done_lock.acquire_async(timeout=timeout)
-            except TimeoutError:
-                logging.exception("🔄  get_aggregation | Timeout reached for aggregation")
-            finally:
-                if self._aggregation_done_lock.locked():
-                    logging.info(f"🔄  get_aggregation | Release")
-                    await self._aggregation_done_lock.release_async()
-        else:
-            logging.info(f"🔄 get_aggregation | Nodes rejected: {self.engine.rejected_nodes}")
+        try:
+            timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
+            await self._aggregation_done_lock.acquire_async(timeout=timeout)
+        except TimeoutError:
+            logging.exception("🔄  get_aggregation | Timeout reached for aggregation")
+        finally:
+            # if self._aggregation_done_lock.locked():
+            #     logging.info(f"🔄  get_aggregation | Release")
+            await self._aggregation_done_lock.release_async()
 
         if self._waiting_global_update and len(self._pending_models_to_aggregate) == 1:
             logging.info(

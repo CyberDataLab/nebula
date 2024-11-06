@@ -84,17 +84,12 @@ class CommunicationsManager:
         max_concurrent_tasks = 5
         self.semaphore_send_model = asyncio.Semaphore(max_concurrent_tasks)
 
-        reputation_file = f'nebula/core/reputation/reputation.txt'
-
-        with open(reputation_file) as f:
-            self.reputation_file = f.read()
-
-        if self.reputation_file == 'True':
-            self.reputation_instance = Reputation(self.engine)
-            self.reputation_with_all_feedback = {}
-            self.total_messages_reputation_received = 0
-            self.message_timestamps = {}
-            self.fraction_of_params_changed = {}
+        # Reputation
+        self.reputation_instance = Reputation(self.engine)
+        self.reputation_with_all_feedback = {}
+        self.total_messages_reputation_received = 0
+        self.message_timestamps = {}
+        self.fraction_of_params_changed = {}
 
     @property
     def engine(self):
@@ -179,10 +174,9 @@ class CommunicationsManager:
                         await self.forwarder.forward(data, addr_from=addr_from)
                     await self.handle_model_message(source, message_wrapper.model_message)
             elif message_wrapper.HasField("reputation_message"):
-                if self.reputation_file == 'True':
-                    if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                        self.forwarder.forward(data, addr_from=addr_from)
-                        await self.handle_reputation_message(source, message_wrapper.reputation_message)
+                if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                    self.forwarder.forward(data, addr_from=addr_from)
+                    await self.handle_reputation_message(source, message_wrapper.reputation_message)
             elif message_wrapper.HasField("flood_attack_message"):
                 # if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
                 #     await self.forwarder.forward(data, addr_from=addr_from)
@@ -249,6 +243,7 @@ class CommunicationsManager:
             pearson_correlation_value = pearson_correlation_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
             jaccard_value = jaccard_metric(self.engine.trainer.get_model_parameters(), decoded_model, similarity=True)
             file = f'app/logs/{self.config.participant["scenario_args"]["name"]}/participant_{self.id}_similarity.csv'
+            os.makedirs(os.path.dirname(file), exist_ok=True)
             with open(file, "a+") as f:
                 if os.stat(file).st_size == 0:
                     f.write("timestamp,source_ip,round,current_round,cosine,euclidean,minkowski,manhattan,pearson_correlation,jaccard\n")

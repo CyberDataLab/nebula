@@ -109,16 +109,10 @@ class Engine:
         self.change_weight_nodes = set()
 
         # Reputation
-        reputation_file = f'nebula/core/reputation/reputation.txt'
-
-        with open(reputation_file) as f:
-            self.reputation_file = f.read()
-
-        if self.reputation_file == 'True':
-            self.reputation_instance = Reputation(self)
-            self.reputation = {} # Reputation of the node
-            self.reputation_with_feedback = {} # Reputation of the node with feedback
-            self.start_time_communication = 0
+        self.reputation_instance = Reputation(self)
+        self.reputation = {} # Reputation of the node
+        self.reputation_with_feedback = {} # Reputation of the node with feedback
+        self.start_time_communication = 0
         
         #self.stop_message_reputation = threading.Event()
 
@@ -495,6 +489,122 @@ class Engine:
             self.trainer.set_model_parameters(params)
         else:
             logging.error(f"Aggregation finished with no parameters")
+
+    async def _calculate_reputation(self):
+        logging.info(f"rejected nodes at round {self.round}: {self.rejected_nodes}")
+        if self.rejected_nodes is not None:
+             self.rejected_nodes.clear()
+        logging.info(f"rejected nodes after clear at round {self.round}: {self.rejected_nodes}")
+
+        logging.info(f"change weight nodes at round {self.round}: {self.change_weight_nodes}")
+        if self.change_weight_nodes is not None:
+             self.change_weight_nodes.clear()
+        logging.info(f"change weight nodes after clear at round {self.round}: {self.change_weight_nodes}")
+
+        current_round = self.get_round()
+        neighbors = set(await self.cm.get_addrs_current_connections(only_direct=True))
+
+        for nei in neighbors:
+            avg_reputation = self.reputation_instance.calculate_reputation(
+                self.config.participant["scenario_args"]["name"], 
+                self.log_dir, 
+                self.idx, 
+                self.addr, 
+                nei, 
+                current_round= current_round
+            )
+
+            if nei not in self.reputation:
+                self.reputation[nei] = {"reputation": avg_reputation, "round": self.round, "last_feedback_round": -1}
+            else:
+                self.reputation[nei]["reputation"] = avg_reputation
+                self.reputation[nei]["round"] = self.round
+
+            if self.reputation[nei]["reputation"] is not None:
+                logging.info(f"Reputation of node {nei}: {self.reputation[nei]['reputation']}")
+                if self.reputation[nei]["reputation"] <= 0.6:
+                    # logging.info(f"Rejected node: {nei}")
+                    # if nei in self.rejected_nodes:
+                    #     penalization_round, penalized_rounds = self.rejected_nodes[nei]
+                    #     if penalization_round == current_round:
+                    #         logging.info(f"Node {nei} already penalized in the current round {current_round}. No additional penalty applied.")
+                    #     else:
+                    #         logging.info(f"Node {nei} penalized in a previous round {penalization_round}. Increasing penalized rounds to {penalized_rounds + 1}.")
+                    #         self.rejected_nodes[nei] = (penalization_round, penalized_rounds + 1)
+                    # else:
+                    #     self.rejected_nodes[nei] = (current_round, 1)
+                    self.rejected_nodes.add(nei)
+                    logging.info(f"Rejected nodes: {self.rejected_nodes}")
+                elif 0.6 < self.reputation[nei]["reputation"] < 0.8:
+                    logging.info(f"Change weight node: {nei}")
+                    self.change_weight_nodes.add(nei)
+
+        await self.include_feedback_in_reputation()
+
+            # for node, (penalization_round, penalized_rounds) in list(self.rejected_nodes.items()):
+            #     if current_round - penalization_round >= 3:
+            #         logging.info(f"Removing node {node} from rejected nodes")
+            #         self.rejected_nodes.pop(node, None)
+
+        if self.reputation is not None:
+            reputation_dict_with_values = {
+                f"Reputation/{self.addr}": {
+                    node_id: float(data["reputation"]) for node_id, data in self.reputation.items() if data["reputation"] is not None
+                }
+            }
+
+            logging.info(f"Reputation dict: {reputation_dict_with_values}")
+            self.trainer._logger.log_data(reputation_dict_with_values, step=self.round)
+
+            for nei, data in self.reputation.items():
+                if data["reputation"] is not None:
+                    message_data = self.cm.mm.generate_reputation_message(
+                        node_id=nei, 
+                        score=data["reputation"], 
+                        round=data["round"],
+                    )
+                    self.cm.store_send_timestamp(nei, current_round, "reputation")
+                    await self.cm.send_message_to_neighbors(message_data, [nei])
+
+        # await self._reputation_feedback()
+
+    async def include_feedback_in_reputation(self):
+        if self._cm.reputation_with_all_feedback is not None:
+            current_round = self.get_round()
+            for(current_node, node_ip, round_num), scores in self._cm.reputation_with_all_feedback.items():
+
+                if node_ip in self.reputation and "last_feedback_round" in self.reputation[node_ip]:
+                    if self.reputation[node_ip]["last_feedback_round"] >= round_num:
+                        #logging.info(f"Feedback already included in reputation for node {node_ip} in round {round_num}. Skipping...")
+                        continue
+
+
+                logging.info(f"current_node: {current_node} | node_ip: {node_ip} | round_num: {round_num} | scores: {scores}")
+                if scores:
+                    avg_feedback = sum(scores) / len(scores)
+                    logging.info(f"Receive feedback to node {node_ip} with average score {avg_feedback}")
+
+                    logging.info(f"self.reputation: {self.reputation}")
+                    if node_ip in self.reputation:
+                        current_reputation = self.reputation[node_ip]["reputation"]
+                        logging.info(f"Current reputation for node {node_ip}: {current_reputation}")
+                    else:
+                        logging.info(f"No node {node_ip} in reputation history.")
+
+                    if current_reputation:
+                        combined_reputation = (current_reputation + avg_feedback) / 2
+                        logging.info(f"Combined reputation for node {node_ip} in round {round_num}: {combined_reputation}")
+                    else:
+                        combined_reputation = current_reputation
+                        logging.info(f"No reputation calculate for node {node_ip}.")
+
+                    self.reputation[node_ip] = {
+                        "reputation": combined_reputation,
+                        "round": current_round,
+                        "last_feedback_round": round_num  # Registrar la última ronda de feedback procesada
+                    }
+
+                    logging.info(f"Updated self.reputation for {node_ip}: {self.reputation[node_ip]}")
 
     async def _learning_cycle(self):
         while self.round is not None and self.round < self.total_rounds:
