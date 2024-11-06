@@ -268,8 +268,8 @@ class CommunicationsManager:
                 )
                 # if message.round > current_round:
                 #     logging.info(
-                        f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
-                    )
+                    #     f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
+                    # )
                 #     await self.engine.aggregator.include_next_model_in_buffer(
                 #         message.parameters,
                 #         message.weight,
