@@ -1,6 +1,7 @@
 import logging
 import pickle
 import traceback
+
 from sklearn.metrics import accuracy_score
 
 
@@ -49,8 +50,8 @@ class Scikit:
             X_train, y_train = self.data.train_dataloader()
             self.model.fit(X_train, y_train)
         except Exception as e:
-            logging.error("Error with scikit-learn fit. {}".format(e))
-            logging.error(traceback.format_exc())
+            logging.exception(f"Error with scikit-learn fit. {e}")
+            logging.exception(traceback.format_exc())
 
     def interrupt_fit(self):
         pass
@@ -62,8 +63,8 @@ class Scikit:
             accuracy = accuracy_score(y_test, y_pred)
             logging.info(f"Accuracy: {accuracy}")
         except Exception as e:
-            logging.error("Error with scikit-learn evaluate. {}".format(e))
-            logging.error(traceback.format_exc())
+            logging.exception(f"Error with scikit-learn evaluate. {e}")
+            logging.exception(traceback.format_exc())
             return None
 
     def get_train_size(self):

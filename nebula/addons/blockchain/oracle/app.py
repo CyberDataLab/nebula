@@ -1,17 +1,15 @@
-import datetime
-import os
 import json
+import os
+from collections.abc import Mapping
 from functools import wraps
-from typing import Mapping, List
 
 import requests
+from eth_account import Account
+from flask import Flask, jsonify, request
 from retry import retry
 from solcx import compile_standard, install_solc
 from web3 import Web3
-from eth_account import Account
-from flask import Flask, jsonify, request
-from web3.middleware import construct_sign_and_send_raw_middleware
-from web3.middleware import geth_poa_middleware
+from web3.middleware import construct_sign_and_send_raw_middleware, geth_poa_middleware
 
 app = Flask(__name__)
 
@@ -30,7 +28,6 @@ def error_handler(func):
 
 
 class Oracle:
-
     def __init__(self):
         # header file, required for interacting with chain code
         self.__contract_abi = dict()
@@ -45,10 +42,10 @@ class Oracle:
         self.__reputation_store = list()
 
         # current (03.2024) average amount of WEI to pay for a unit of gas
-        self.__gas_price_per_unit = float(27.3)
+        self.__gas_price_per_unit = 27.3
 
         # current (03.2024) average price in USD per WEI
-        self.__price_USD_per_WEI = float(0.00001971)
+        self.__price_USD_per_WEI = 0.00001971
 
         # static ip address of non-validator node (RPC)
         self.__blockchain_address = "http://172.25.0.104:8545"
@@ -69,7 +66,11 @@ class Oracle:
         self.__contract_address = self.deploy_chaincode()
 
         # update the contract object with the address
-        self.contract_obj = self.__web3.eth.contract(abi=self.contract_obj.abi, bytecode=self.contract_obj.bytecode, address=self.contract_address)
+        self.contract_obj = self.__web3.eth.contract(
+            abi=self.contract_obj.abi,
+            bytecode=self.contract_obj.bytecode,
+            address=self.contract_address,
+        )
 
     @property
     def contract_abi(self):
@@ -96,7 +97,7 @@ class Oracle:
         # raise Exception if status is an error one
         request.raise_for_status()
 
-        print(f"ORACLE: RPC node up and running", flush=True)
+        print("ORACLE: RPC node up and running", flush=True)
 
         return True
 
@@ -131,7 +132,7 @@ class Oracle:
         """
 
         # open raw solidity file
-        with open("reputation_system.sol", "r") as file:
+        with open("reputation_system.sol") as file:
             simple_storage_file = file.read()
 
         # set compiler version
@@ -142,7 +143,11 @@ class Oracle:
             {
                 "language": "Solidity",
                 "sources": {"reputation_system.sol": {"content": simple_storage_file}},
-                "settings": {"evmVersion": "paris", "outputSelection": {"*": {"*": ["abi", "metadata", "evm.bytecode", "evm.sourceMap"]}}, "optimizer": {"enabled": True, "runs": 1000}},
+                "settings": {
+                    "evmVersion": "paris",
+                    "outputSelection": {"*": {"*": ["abi", "metadata", "evm.bytecode", "evm.sourceMap"]}},
+                    "optimizer": {"enabled": True, "runs": 1000},
+                },
             },
             solc_version="0.8.22",
         )
@@ -152,12 +157,16 @@ class Oracle:
             json.dump(compiled_sol, file)
 
         # retrieve bytecode from the compiled contract
-        contract_bytecode = compiled_sol["contracts"]["reputation_system.sol"]["ReputationSystem"]["evm"]["bytecode"]["object"]
+        contract_bytecode = compiled_sol["contracts"]["reputation_system.sol"]["ReputationSystem"]["evm"]["bytecode"][
+            "object"
+        ]
 
         # retrieve ABI from compiled contract
-        self.__contract_abi = json.loads(compiled_sol["contracts"]["reputation_system.sol"]["ReputationSystem"]["metadata"])["output"]["abi"]
+        self.__contract_abi = json.loads(
+            compiled_sol["contracts"]["reputation_system.sol"]["ReputationSystem"]["metadata"]
+        )["output"]["abi"]
 
-        print(f"Oracle: Solidity files compiled and bytecode ready", flush=True)
+        print("Oracle: Solidity files compiled and bytecode ready", flush=True)
 
         # return draft Web3 contract object
         return self.__web3.eth.contract(abi=self.__contract_abi, bytecode=contract_bytecode)
@@ -238,9 +247,13 @@ class Oracle:
         """
 
         # create raw transaction with all properties to deploy contract
-        raw_transaction = self.contract_obj.constructor().build_transaction(
-            {"chainId": self.__web3.eth.chain_id, "from": self.acc.address, "value": self.__web3.to_wei("3", "ether"), "gasPrice": self.__web3.to_wei(self.__gas_price_per_unit, "gwei"), "nonce": self.__web3.eth.get_transaction_count(self.acc.address, "pending")}
-        )
+        raw_transaction = self.contract_obj.constructor().build_transaction({
+            "chainId": self.__web3.eth.chain_id,
+            "from": self.acc.address,
+            "value": self.__web3.to_wei("3", "ether"),
+            "gasPrice": self.__web3.to_wei(self.__gas_price_per_unit, "gwei"),
+            "nonce": self.__web3.eth.get_transaction_count(self.acc.address, "pending"),
+        })
 
         # sign transaction with private key and executes it
         tx_receipt = self.__sign_and_deploy(raw_transaction)
@@ -291,7 +304,7 @@ class Oracle:
 
         """
         # sum up all reported costs
-        total_wei = sum((record[0] for record in self.__gas_store))
+        total_wei = sum(record[0] for record in self.__gas_store)
 
         # convert sum in WEI to USD by computing with gas price USD per WEI
         total_usd = round(total_wei * self.__price_USD_per_WEI)
@@ -424,7 +437,6 @@ def rest_get_gas_series():
 @app.route("/time", methods=["POST"])
 @error_handler
 def rest_report_time():
-
     time = request.get_json().get("time")
     aggregation_round = request.get_json().get("round")
     oracle.report_time(time, aggregation_round)

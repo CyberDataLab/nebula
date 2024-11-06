@@ -47,7 +47,7 @@ def menu():
 ╚═╝  ╚═══╝╚══════╝╚═════╝  ╚═════╝ ╚══════╝╚═╝  ╚═╝
   A Platform for Decentralized Federated Learning
     Created by Enrique Tomás Martínez Beltrán
-    https://github.com/enriquetomasmb/nebula
+      https://github.com/CyberDataLab/nebula
                 """
     print("\x1b[0;36m" + banner + "\x1b[0m")
 
@@ -82,14 +82,16 @@ def check_error_logs(test_name, scenario_name):
     try:
         log_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app", "logs"))
         current_log = os.path.join(log_dir, scenario_name)
-        test_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app", "tests"))
+        test_dir = os.path.normpath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app", "tests")
+        )
         output_log_path = os.path.join(test_dir, test_name + ".log")
 
         if not os.path.exists(test_dir):
             try:
                 os.mkdir(test_dir)
             except Exception as e:
-                logging.error(f"Error creating test directory: {e}")
+                logging.exception(f"Error creating test directory: {e}")
 
         with open(output_log_path, "a", encoding="utf-8") as f:
             f.write(f"Scenario: {scenario_name}\n")
@@ -98,7 +100,7 @@ def check_error_logs(test_name, scenario_name):
                 if log_file.endswith("_error.log"):
                     log_file_path = os.path.join(current_log, log_file)
                     try:
-                        with open(log_file_path, "r", encoding="utf-8") as file:
+                        with open(log_file_path, encoding="utf-8") as file:
                             content = file.read().strip()
                             if content:
                                 f.write(f"{log_file} ❌ Errors found:\n{content}\n")
@@ -117,14 +119,16 @@ def check_error_logs(test_name, scenario_name):
 
 # Load test from .json file
 def load_test(test_path):
-    with open(test_path, "r", encoding="utf-8") as file:
+    with open(test_path, encoding="utf-8") as file:
         scenarios = json.load(file)
     return scenarios
 
 
 # Run selected test
 def run_test(test_path):
-    test_name = f"test_nebula_{os.path.splitext(os.path.basename(test_path))[0]}_" + datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+    test_name = f"test_nebula_{os.path.splitext(os.path.basename(test_path))[0]}_" + datetime.now().strftime(
+        "%d_%m_%Y_%H_%M_%S"
+    )
 
     for scenario in load_test(test_path):
         scenarioManagement = run_scenario(scenario)
@@ -133,19 +137,27 @@ def run_test(test_path):
         if finished:
             test_log_path = check_error_logs(test_name, scenarioManagement.scenario_name)
         else:
-            test_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app", "tests"))
+            test_dir = os.path.normpath(
+                os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "..",
+                    "..",
+                    "app",
+                    "tests",
+                )
+            )
             output_log_path = os.path.join(test_dir, test_name + ".log")
 
             if not os.path.exists(test_dir):
                 try:
                     os.mkdir(test_dir)
                 except Exception as e:
-                    logging.error(f"Error creating test directory: {e}")
+                    logging.exception(f"Error creating test directory: {e}")
 
             try:
                 with open(output_log_path, "a", encoding="utf-8") as f:
                     f.write(f"Scenario: {scenarioManagement.scenario_name} \n")
-                    f.write(f"🕒❌ Timeout reached \n")
+                    f.write("🕒❌ Timeout reached \n")
                     f.write("-" * os.get_terminal_size().columns + "\n")
             except Exception as e:
                 print(f"Failed to write to log file {test_name + '.log'}: {e}")
@@ -153,7 +165,7 @@ def run_test(test_path):
 
     print("Results:")
     try:
-        with open(test_log_path, "r", encoding="utf-8") as f:
+        with open(test_log_path, encoding="utf-8") as f:
             print(f.read())
     except Exception as e:
         print(f"Failed to read the log file {test_name + '.log'}: {e}")
@@ -161,8 +173,9 @@ def run_test(test_path):
 
 # Run a single scenario
 def run_scenario(scenario):
-    from nebula.scenarios import ScenarioManagement
     import subprocess
+
+    from nebula.scenarios import ScenarioManagement
 
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario, "nebula-test")
@@ -172,11 +185,13 @@ def run_scenario(scenario):
         if scenarioManagement.scenario.mobility:
             additional_participants = scenario["additional_participants"]
             schema_additional_participants = scenario["schema_additional_participants"]
-            scenarioManagement.load_configurations_and_start_nodes(additional_participants, schema_additional_participants)
+            scenarioManagement.load_configurations_and_start_nodes(
+                additional_participants, schema_additional_participants
+            )
         else:
             scenarioManagement.load_configurations_and_start_nodes()
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error docker-compose up: {e}")
+        logging.exception(f"Error docker-compose up: {e}")
 
     return scenarioManagement
 

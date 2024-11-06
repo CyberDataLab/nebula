@@ -1,13 +1,13 @@
 <!-- PROJECT LOGO -->
 <br>
 <p align="center">
-  <a href="https://github.com/enriquetomasmb/nebula">
-    <img src="../docs/_static/nebula-logo.jpg" alt="NEBULA Logo">
+  <a href="https://github.com/CyberDataLab/nebula">
+    <img src="../docs/_prebuilt/static/nebula-logo.jpg" alt="nebula">
   </a>
-  <h3 align="center">NEBULA: A Platform for Decentralized Federated Learning</h3>
+  <h1 align="center">NEBULA: A Platform for Decentralized Federated Learning</h1>
 
   <p align="center">
-    <a href="https://federeratedlearning.inf.um.es">federatedlearning.inf.um.es</a> / <a href="https://fedstellar.dev">fedstellar.dev</a> / <a href="https://fedstellar.eu">fedstellar.eu</a> / <a href="https://fedstellar.com">fedstellar.com</a>
+    <a href="https://federeratedlearning.inf.um.es">federatedlearning.inf.um.es</a>
   </p>
 </p>
 

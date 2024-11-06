@@ -1,7 +1,9 @@
-from nebula.core.datasets.nebuladataset import NebulaDataset
+import os
+
 from torchvision import transforms
 from torchvision.datasets import CIFAR100
-import os
+
+from nebula.core.datasets.nebuladataset import NebulaDataset
 
 
 class CIFAR100Dataset(NebulaDataset):
@@ -47,7 +49,9 @@ class CIFAR100Dataset(NebulaDataset):
             self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
         else:
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(self.test_set, self.partition, self.partition_parameter)
+            self.local_test_indices_map = self.generate_non_iid_map(
+                self.test_set, self.partition, self.partition_parameter
+            )
 
         print(f"Length of train indices map: {len(self.train_indices_map)}")
         print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")
@@ -56,14 +60,12 @@ class CIFAR100Dataset(NebulaDataset):
     def load_cifar100_dataset(self, train=True):
         mean = (0.4914, 0.4822, 0.4465)
         std = (0.2471, 0.2435, 0.2616)
-        apply_transforms = transforms.Compose(
-            [
-                transforms.RandomCrop(32, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std),
-            ]
-        )
+        apply_transforms = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std, inplace=True),
+        ])
         return CIFAR100(
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"),
             train=train,
@@ -96,5 +98,5 @@ class CIFAR100Dataset(NebulaDataset):
         if self.partition_id == 0:
             self.plot_data_distribution(dataset, partitions_map)
             self.plot_all_data_distribution(dataset, partitions_map)
-            
+
         return partitions_map[self.partition_id]

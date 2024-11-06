@@ -12,14 +12,21 @@ ENV TZ=Europe/Madrid
 RUN apt-get update && apt-get install -y software-properties-common
 RUN add-apt-repository ppa:deadsnakes/ppa
 RUN apt-get update && apt-get install -y python3.11 python3.11-dev python3.11-distutils python3.11-venv
-RUN apt-get install -y nginx
 
 # Install curl and network tools
-RUN apt-get install -y curl net-tools
+RUN apt-get install -y curl net-tools iproute2 iputils-ping
+
+# Update alternatives to make Python 3.11 the default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
 # Install pip
 RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
 RUN python3.11 get-pip.py
+
+RUN python3.11 -m pip install --upgrade pip setuptools virtualenv
+
+RUN apt-get install -y nginx
 
 # Install gcc and git
 RUN apt-get update && apt-get install -y build-essential gcc g++ clang git make cmake g++-aarch64-linux-gnu dos2unix
@@ -37,18 +44,17 @@ RUN apt-get update
 
 RUN apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+RUN curl -sSL https://install.python-poetry.org | python3 -
 
-COPY requirements.txt .
+ENV PATH="${PATH}:/root/.local/bin"
 
-# Install the required packages
-RUN python3.11 -m pip install --ignore-installed -r requirements.txt
+ENV POETRY_VIRTUALENVS_CREATE=false
 
-# Configure Nginx
-# RUN rm /etc/nginx/sites-enabled/default
-# COPY /config/nebula /etc/nginx/sites-available/
-# RUN ln -s /etc/nginx/sites-available/nebula /etc/nginx/sites-enabled/
+COPY pyproject.toml .
 
-COPY start_services.sh .
+RUN poetry install --only frontend --no-root
+
+COPY /nebula/frontend/start_services.sh .
 
 RUN dos2unix start_services.sh
 

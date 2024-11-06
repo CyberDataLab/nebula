@@ -1,18 +1,14 @@
-import ast
 import json
 import logging
-import os
-from json import JSONDecodeError
-import pickle
-import torch
-import yaml
-from dotmap import DotMap
-from scipy.stats import entropy
-from torch.utils.data import DataLoader
-from hashids import Hashids
-import pandas as pd
-from os.path import exists
 import math
+import os
+import pickle
+from os.path import exists
+
+import pandas as pd
+from hashids import Hashids
+from scipy.stats import entropy
+
 from nebula.addons.trustworthiness import calculation
 
 hashids = Hashids()
@@ -40,7 +36,7 @@ def count_class_samples(scenario_name, dataloaders_files):
 
     for dataloader in dataloaders:
         for batch, labels in dataloader:
-            for b, label in zip(batch, labels):
+            for b, label in zip(batch, labels, strict=False):
                 l = hashids.encode(label.item())
                 if l in result:
                     result[l] += 1
@@ -67,13 +63,13 @@ def get_entropy(client_id, scenario_name, dataloader):
 
     name_file = f"{dirname}/files/{scenario_name}/entropy.json"
     if os.path.exists(name_file):
-        with open(name_file, "r") as f:
+        with open(name_file) as f:
             client_entropy = json.load(f)
 
     client_id_hash = hashids.encode(client_id)
 
     for batch, labels in dataloader:
-        for b, label in zip(batch, labels):
+        for b, label in zip(batch, labels, strict=False):
             l = hashids.encode(label.item())
             if l in result:
                 result[l] += 1
@@ -158,7 +154,7 @@ def get_input_value(input_docs, inputs, operation):
     try:
         operationFn = getattr(calculation, operation)
         input_value = operationFn(*args)
-    except TypeError as e:
+    except TypeError:
         logger.warning(f"{operation} is not valid")
 
     return input_value
@@ -204,7 +200,15 @@ def write_results_json(out_file, dict):
         json.dump(dict, f, indent=4)
 
 
-def save_results_csv(scenario_name: str, id: int, bytes_sent: int, bytes_recv: int, accuracy: float, loss: float, finish: bool):
+def save_results_csv(
+    scenario_name: str,
+    id: int,
+    bytes_sent: int,
+    bytes_recv: int,
+    accuracy: float,
+    loss: float,
+    finish: bool,
+):
     outdir = f"{dirname}/files/{scenario_name}"
     filename = "data_results.csv"
     data_results_file = os.path.join(outdir, filename)
@@ -217,7 +221,20 @@ def save_results_csv(scenario_name: str, id: int, bytes_sent: int, bytes_recv: i
     try:
         if id not in df["id"].values:
             # Si no existe, agregar una nueva entrada con el ID del nodo
-            df = pd.concat([df, pd.DataFrame({"id": id, "bytes_sent": None, "bytes_recv": None, "accuracy": None, "loss": None, "finish": False})], ignore_index=True)
+            df = pd.concat(
+                [
+                    df,
+                    pd.DataFrame({
+                        "id": id,
+                        "bytes_sent": None,
+                        "bytes_recv": None,
+                        "accuracy": None,
+                        "loss": None,
+                        "finish": False,
+                    }),
+                ],
+                ignore_index=True,
+            )
 
             df.to_csv(data_results_file, encoding="utf-8", index=False)
         else:

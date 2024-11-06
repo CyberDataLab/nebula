@@ -1,10 +1,12 @@
 import os
-import sys
-from torchvision.datasets import MNIST, utils
-from nebula.core.datasets.nebuladataset import NebulaDataset
 import shutil
+import sys
 import zipfile
+
 import torch
+from torchvision.datasets import MNIST, utils
+
+from nebula.core.datasets.nebuladataset import NebulaDataset
 
 
 class KITSUN(MNIST):
@@ -16,7 +18,9 @@ class KITSUN(MNIST):
         self.training_file = f"{self.root}/kitsun/processed/kitsun_train.pt"
         self.test_file = f"{self.root}/kitsun/processed/kitsun_test.pt"
 
-        if not os.path.exists(f"{self.root}/kitsun/processed/kitsun_test.pt") or not os.path.exists(f"{self.root}/kitsun/processed/kitsun_train.pt"):
+        if not os.path.exists(f"{self.root}/kitsun/processed/kitsun_test.pt") or not os.path.exists(
+            f"{self.root}/kitsun/processed/kitsun_train.pt"
+        ):
             if self.download:
                 self.dataset_download()
             else:
@@ -104,7 +108,9 @@ class KITSUNDataset(NebulaDataset):
             self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
         else:
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(self.test_set, self.partition, self.partition_parameter)
+            self.local_test_indices_map = self.generate_non_iid_map(
+                self.test_set, self.partition, self.partition_parameter
+            )
 
         print(f"Length of train indices map: {len(self.train_indices_map)}")
         print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")

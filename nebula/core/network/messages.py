@@ -1,8 +1,8 @@
 import logging
+from typing import TYPE_CHECKING
+
 from nebula.core.pb import nebula_pb2
 from datetime import datetime
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager

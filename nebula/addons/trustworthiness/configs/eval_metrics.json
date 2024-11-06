@@ -476,7 +476,7 @@
               "FedAvg": 0.9509,
               "Krum": 0.9535,
               "TrimmedMean": 0.9595,
-              "Median": 0.9461  
+              "Median": 0.9461
             },
             "description": "The choice of a suitable aggregation algorithm.",
             "weight": 1
@@ -644,4 +644,3 @@
       }
     }
   }
-  

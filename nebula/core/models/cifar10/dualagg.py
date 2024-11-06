@@ -1,14 +1,22 @@
-import torch
-import torch.nn.functional as F
 import lightning as pl
-from torchmetrics.classification import MulticlassAccuracy, MulticlassRecall, MulticlassPrecision, MulticlassF1Score, MulticlassConfusionMatrix
-from torchmetrics import MetricCollection
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
+import torch.nn.functional as F
+from torchmetrics import MetricCollection
+from torchmetrics.classification import (
+    MulticlassAccuracy,
+    MulticlassConfusionMatrix,
+    MulticlassF1Score,
+    MulticlassPrecision,
+    MulticlassRecall,
+)
+
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
 import logging
+
 from nebula.config.config import TRAINING_LOGGER
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
@@ -62,7 +70,9 @@ class ContrastiveLoss(torch.nn.Module):
         # Combined loss
         contrastive_loss = ce_loss + self.mu * 0.5 * (pos_cos_sim + neg_cos_sim)
 
-        logging_training.debug(f"Contrastive loss (mu={self.mu}) with 0.5 of factor: ce_loss: {ce_loss}, pos_cos_sim_local_historical: {pos_cos_sim}, neg_cos_sim_local_global: {neg_cos_sim}, loss: {contrastive_loss}")
+        logging_training.debug(
+            f"Contrastive loss (mu={self.mu}) with 0.5 of factor: ce_loss: {ce_loss}, pos_cos_sim_local_historical: {pos_cos_sim}, neg_cos_sim_local_global: {neg_cos_sim}, loss: {contrastive_loss}"
+        )
         return contrastive_loss
         # else:
         #    logging_training.debug(f"Cross-entropy loss (local model): {ce_loss}")
@@ -105,7 +115,9 @@ class DualAggModel(pl.LightningModule):
         else:
             raise NotImplementedError
         # print(f"y_pred shape: {y_pred.shape}, y_pred_classes shape: {y_pred_classes.shape}, y shape: {y.shape}")  # Debug print
-        output = {f"{mode}/{phase}/{key.replace('Multiclass', '').split('/')[-1]}": value for key, value in output.items()}
+        output = {
+            f"{mode}/{phase}/{key.replace('Multiclass', '').split('/')[-1]}": value for key, value in output.items()
+        }
         self.log_dict(output, prog_bar=True, logger=True)
 
         if self.local_cm is not None and self.historical_cm is not None and self.global_cm is not None:
@@ -164,7 +176,10 @@ class DualAggModel(pl.LightningModule):
         else:
             raise NotImplementedError
 
-        output = {f"{mode}/{phase}Epoch/{key.replace('Multiclass', '').split('/')[-1]}": value for key, value in output.items()}
+        output = {
+            f"{mode}/{phase}Epoch/{key.replace('Multiclass', '').split('/')[-1]}": value
+            for key, value in output.items()
+        }
 
         self.log_dict(output, prog_bar=True, logger=True)
 
@@ -187,11 +202,23 @@ class DualAggModel(pl.LightningModule):
                 ax.xaxis.set_ticklabels([i for i in range(self.num_classes)])
                 ax.yaxis.set_ticklabels([i for i in range(self.num_classes)])
                 if mode == "local":
-                    self.logger.experiment.add_figure(f"{mode}/{phase}Epoch/CM", ax.get_figure(), global_step=self.local_epoch_global_number[phase])
+                    self.logger.experiment.add_figure(
+                        f"{mode}/{phase}Epoch/CM",
+                        ax.get_figure(),
+                        global_step=self.local_epoch_global_number[phase],
+                    )
                 elif mode == "historical":
-                    self.logger.experiment.add_figure(f"{mode}/{phase}Epoch/CM", ax.get_figure(), global_step=self.historical_epoch_global_number[phase])
+                    self.logger.experiment.add_figure(
+                        f"{mode}/{phase}Epoch/CM",
+                        ax.get_figure(),
+                        global_step=self.historical_epoch_global_number[phase],
+                    )
                 elif mode == "global":
-                    self.logger.experiment.add_figure(f"{mode}/{phase}Epoch/CM", ax.get_figure(), global_step=self.global_epoch_global_number[phase])
+                    self.logger.experiment.add_figure(
+                        f"{mode}/{phase}Epoch/CM",
+                        ax.get_figure(),
+                        global_step=self.global_epoch_global_number[phase],
+                    )
                 plt.close()
 
         if mode == "local":
@@ -201,7 +228,16 @@ class DualAggModel(pl.LightningModule):
         elif mode == "global":
             self.global_epoch_global_number[phase] += 1
 
-    def __init__(self, input_channels=3, num_classes=10, learning_rate=1e-3, mu=0.5, metrics=None, confusion_matrix=None, seed=None):
+    def __init__(
+        self,
+        input_channels=3,
+        num_classes=10,
+        learning_rate=1e-3,
+        mu=0.5,
+        metrics=None,
+        confusion_matrix=None,
+        seed=None,
+    ):
         super().__init__()
 
         self.input_channels = input_channels
@@ -210,7 +246,12 @@ class DualAggModel(pl.LightningModule):
         self.mu = mu
 
         if metrics is None:
-            metrics = MetricCollection([MulticlassAccuracy(num_classes=num_classes), MulticlassPrecision(num_classes=num_classes), MulticlassRecall(num_classes=num_classes), MulticlassF1Score(num_classes=num_classes)])
+            metrics = MetricCollection([
+                MulticlassAccuracy(num_classes=num_classes),
+                MulticlassPrecision(num_classes=num_classes),
+                MulticlassRecall(num_classes=num_classes),
+                MulticlassF1Score(num_classes=num_classes),
+            ])
 
         # Define metrics
         self.local_train_metrics = metrics.clone(prefix="Local/Train/")
@@ -309,7 +350,12 @@ class DualAggModel(pl.LightningModule):
 
     def configure_optimizers(self):
         """ """
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, betas=(self.config["beta1"], self.config["beta2"]), amsgrad=self.config["amsgrad"])
+        optimizer = torch.optim.Adam(
+            self.parameters(),
+            lr=self.learning_rate,
+            betas=(self.config["beta1"], self.config["beta2"]),
+            amsgrad=self.config["amsgrad"],
+        )
         return optimizer
 
     def step(self, batch, batch_idx, phase):

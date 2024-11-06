@@ -1,28 +1,33 @@
 import logging
 import os
+import platform
 import re
 import sys
-import platform
+
 import requests
 
 from nebula import __version__
 
 
 def check_version():
-    # Check version of NEBULA (__version__ is defined in __init__.py) and compare with __version__ in https://raw.githubusercontent.com/enriquetomasmb/nebula/main/nebula/__init__.py
+    # Check version of NEBULA (__version__ is defined in __init__.py) and compare with __version__ in https://raw.githubusercontent.com/CyberDataLab/nebula/main/nebula/__init__.py
     logging.info("Checking NEBULA version...")
     try:
-        r = requests.get("https://raw.githubusercontent.com/enriquetomasmb/nebula/main/nebula/__init__.py")
+        r = requests.get("https://raw.githubusercontent.com/CyberDataLab/nebula/main/nebula/__init__.py")
         if r.status_code == 200:
             version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', r.text, re.MULTILINE).group(1)
             if version != __version__:
-                logging.info(f"Your NEBULA version is {__version__} and the latest version is {version}. Please update your NEBULA version.")
-                logging.info("You can update your NEBULA version downloading the latest version from https://github.com/enriquetomasmb/nebula")
+                logging.info(
+                    f"Your NEBULA version is {__version__} and the latest version is {version}. Please update your NEBULA version."
+                )
+                logging.info(
+                    "You can update your NEBULA version downloading the latest version from https://github.com/CyberDataLab/nebula"
+                )
                 sys.exit(0)
             else:
                 logging.info(f"Your NEBULA version is {__version__} and it is the latest version.")
     except Exception as e:
-        logging.error(f"Error while checking NEBULA version: {e}")
+        logging.exception(f"Error while checking NEBULA version: {e}")
         sys.exit(0)
 
 
@@ -51,12 +56,9 @@ def check_environment():
         load1, load5, load15 = psutil.getloadavg()
         cpu_usage = (load15 / os.cpu_count()) * 100
 
-        logging.info("The CPU usage is : {:.0f}%".format(cpu_usage))
+        logging.info(f"The CPU usage is : {cpu_usage:.0f}%")
         logging.info(
-            "Available CPU Memory: {:.1f} G / {}G".format(
-                psutil.virtual_memory().available / 1024 / 1024 / 1024,
-                psutil.virtual_memory().total / 1024 / 1024 / 1024,
-            )
+            f"Available CPU Memory: {psutil.virtual_memory().available / 1024 / 1024 / 1024:.1f} G / {psutil.virtual_memory().total / 1024 / 1024 / 1024}G"
         )
     except ImportError:
         logging.info("No CPU information available")

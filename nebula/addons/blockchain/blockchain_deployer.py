@@ -1,13 +1,12 @@
+import json
 import os.path
 import random
 import shutil
 import textwrap
-import json
 from datetime import datetime
-from typing import Tuple
 
-from web3 import Web3
 from eth_keys import keys
+from web3 import Web3
 
 w3 = Web3()
 
@@ -18,7 +17,6 @@ class BlockchainDeployer:
     """
 
     def __init__(self, n_validator=3, config_dir=".", input_dir="."):
-
         # root dir of blockchain folder
         self.__input_dir = input_dir
 
@@ -38,7 +36,7 @@ class BlockchainDeployer:
         self.__oracle_ip = "172.25.0.105"
 
         # temporary yaml parameter to store config before dump
-        self.__yaml = str()
+        self.__yaml = ""
 
         # list of reserved addresses which need to be excluded in random address generation
         self.__reserved_addresses = set()
@@ -68,7 +66,7 @@ class BlockchainDeployer:
         if not os.path.exists(self.__config_dir):
             os.makedirs(self.__config_dir, exist_ok=True)
 
-    def __get_unreserved_address(self) -> Tuple[int, int]:
+    def __get_unreserved_address(self) -> tuple[int, int]:
         """
         Computes a randomized port and last 8 bits of an ip address, where both are not yet used
         Returns: Randomized and unreserved lat 8 bit of ip and port
@@ -128,7 +126,10 @@ class BlockchainDeployer:
                 "muirGlacierBlock": 0,
                 "berlinBlock": 0,
                 # Proof-of-Authority settings
-                "clique": {"period": 1, "epoch": 10000},  # block time (time in seconds between two blocks)  # number of blocks after reset the pending votes
+                "clique": {
+                    "period": 1,
+                    "epoch": 10000,
+                },  # block time (time in seconds between two blocks)  # number of blocks after reset the pending votes
             },
             # unique continuous id of transactions used by PoA
             "nonce": "0x0",
@@ -148,7 +149,9 @@ class BlockchainDeployer:
             # prefunded public wallet addresses (Oracle)
             "alloc": {
                 # will be replaced by Oracle's randomized address
-                "0x61DE01FcD560da4D6e05E58bCD34C8Dc92CE36D1": {"balance": "0x200000000000000000000000000000000000000000000000000000000000000"}
+                "0x61DE01FcD560da4D6e05E58bCD34C8Dc92CE36D1": {
+                    "balance": "0x200000000000000000000000000000000000000000000000000000000000000"
+                }
             },
             # block number of genesis block
             "number": "0x0",
@@ -199,7 +202,6 @@ class BlockchainDeployer:
         validator_addresses = list()
 
         for id in range(cnt):
-
             # create random private key and create account from it
             acc = w3.eth.account.create()
             validator_addresses.append(acc.address[2:])
@@ -245,14 +247,16 @@ class BlockchainDeployer:
         acc = w3.eth.account.create()
 
         # prefund oracle by allocating all funds to its public wallet address
-        self.__genesis["alloc"] = {acc.address: {"balance": "0x200000000000000000000000000000000000000000000000000000000000000"}}
+        self.__genesis["alloc"] = {
+            acc.address: {"balance": "0x200000000000000000000000000000000000000000000000000000000000000"}
+        }
 
         self.__yaml += textwrap.dedent(
             f"""
             oracle:
                hostname: oracle
                depends_on:
-                 - geth-rpc 
+                 - geth-rpc
                  - geth-bootnode
                environment:
                  - PRIVATE_KEY={w3.to_hex(acc.key)[2:]}
@@ -306,7 +310,7 @@ class BlockchainDeployer:
 
         """
         self.__yaml += textwrap.dedent(
-            f"""
+            """
             networks:
               chainnet:
                 name: chainnet
@@ -328,7 +332,7 @@ class BlockchainDeployer:
         final_str = textwrap.indent(f"""{self.__yaml}""", "  ")
 
         self.__yaml = textwrap.dedent(
-            f"""
+            """
                     version: "3.8"
                     name: blockchain
                     services:
@@ -354,4 +358,7 @@ class BlockchainDeployer:
 
 
 if __name__ == "__main__":
-    b = BlockchainDeployer(n_validator=3, config_dir=os.path.join("deployments", datetime.now().strftime("%Y-%m-%d_%H-%M")))
+    b = BlockchainDeployer(
+        n_validator=3,
+        config_dir=os.path.join("deployments", datetime.now().strftime("%Y-%m-%d_%H-%M")),
+    )

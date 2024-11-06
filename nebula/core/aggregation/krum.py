@@ -1,5 +1,6 @@
-import torch
 import numpy
+import torch
+
 from nebula.core.aggregation.aggregator import Aggregator
 
 

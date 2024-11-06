@@ -1,4 +1,5 @@
 import torch
+
 from nebula.core.models.nebulamodel import NebulaModel
 
 
@@ -76,7 +77,11 @@ class CIFAR100ModelCNN(NebulaModel):
             ),
         )
 
-        self.classifier = torch.nn.Sequential(torch.nn.MaxPool2d(4), torch.nn.Flatten(), torch.nn.Linear(512, self.num_classes))
+        self.classifier = torch.nn.Sequential(
+            torch.nn.MaxPool2d(4),
+            torch.nn.Flatten(),
+            torch.nn.Linear(512, self.num_classes),
+        )
 
     def forward(self, x):
         x = self.conv1(x)

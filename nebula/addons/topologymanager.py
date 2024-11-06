@@ -1,7 +1,9 @@
-import random
 import logging
+import random
+
 import matplotlib
 import matplotlib.pyplot as plt
+
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
 

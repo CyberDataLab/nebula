@@ -1,6 +1,6 @@
-import logging
-import torch
 import numpy as np
+import torch
+
 from nebula.core.aggregation.aggregator import Aggregator
 
 

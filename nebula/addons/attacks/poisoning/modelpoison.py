@@ -1,3 +1,14 @@
+"""
+This module provides a function for adding noise to a machine learning model's parameters, simulating
+data poisoning attacks. The main function allows for the injection of various types of noise into
+the model parameters, effectively altering them to test the model's robustness against malicious
+manipulations.
+
+Function:
+- modelpoison: Modifies the parameters of a model by injecting noise according to a specified ratio
+  and type of noise (e.g., Gaussian, salt, salt-and-pepper).
+"""
+
 from collections import OrderedDict
 
 import torch
@@ -6,10 +17,34 @@ from skimage.util import random_noise
 
 def modelpoison(model: OrderedDict, poisoned_ratio, noise_type="gaussian"):
     """
-    Function to add random noise of various types to the model parameter.
+    Adds random noise to the parameters of a model for the purpose of data poisoning.
+
+    This function modifies the model's parameters by injecting noise according to the specified
+    noise type and ratio. Various types of noise can be applied, including salt noise, Gaussian
+    noise, and salt-and-pepper noise.
+
+    Args:
+        model (OrderedDict): The model's parameters organized as an `OrderedDict`. Each key corresponds
+                             to a layer, and each value is a tensor representing the parameters of that layer.
+        poisoned_ratio (float): The proportion of noise to apply, expressed as a fraction (0 <= poisoned_ratio <= 1).
+        noise_type (str, optional): The type of noise to apply to the model parameters. Supported types are:
+                                    - "salt": Applies salt noise, replacing random elements with 1.
+                                    - "gaussian": Applies Gaussian-distributed additive noise.
+                                    - "s&p": Applies salt-and-pepper noise, replacing random elements with either 1 or low_val.
+                                    Default is "gaussian".
+
+    Returns:
+        OrderedDict: A new `OrderedDict` containing the model parameters with noise added.
+
+    Raises:
+        ValueError: If `poisoned_ratio` is not between 0 and 1, or if `noise_type` is unsupported.
+
+    Notes:
+        - If a layer's tensor is a single point (0-dimensional), it will be reshaped for processing.
+        - Unsupported noise types will result in an error message, and the original tensor will be retained.
     """
     poisoned_model = OrderedDict()
-    if type(noise_type) != type("salt"):
+    if not isinstance(noise_type, str):
         noise_type = noise_type[0]
 
     for layer in model:

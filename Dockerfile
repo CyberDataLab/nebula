@@ -16,6 +16,19 @@ RUN apt-get update && apt-get install -y python3.11 python3.11-dev python3.11-di
 # Install curl and network tools
 RUN apt-get install -y curl net-tools iproute2 iputils-ping
 
+# Update alternatives to make Python 3.11 the default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
+
+# Install pip
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+RUN python3.11 get-pip.py
+
+RUN python3.11 -m pip install --upgrade pip setuptools virtualenv
+
+# Install gcc and git
+RUN apt-get update && apt-get install -y build-essential gcc g++ clang git make cmake
+
 # Install docker
 RUN apt-get install -y ca-certificates curl gnupg
 RUN install -m 0755 -d /etc/apt/keyrings
@@ -29,17 +42,12 @@ RUN apt-get update
 
 RUN apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Install pip
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python3.11 get-pip.py
+RUN curl -sSL https://install.python-poetry.org | python3 -
 
-# Upgrade pip
-RUN python3.11 -m pip install --upgrade pip
+ENV PATH="${PATH}:/root/.local/bin"
 
-# Install gcc and git
-RUN apt-get update && apt-get install -y build-essential gcc g++ clang git make cmake
+ENV POETRY_VIRTUALENVS_CREATE=false
 
-WORKDIR /nebula
-COPY nebula/requirements.txt .
-# Install the required packages
-RUN python3.11 -m pip install --ignore-installed -r requirements.txt
+COPY pyproject.toml .
+
+RUN poetry install --only core --no-root

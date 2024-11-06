@@ -1,18 +1,21 @@
+import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
-import time
-import numpy as np
-from sklearn.manifold import TSNE
-from torch.utils.data import Dataset
+
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+from sklearn.manifold import TSNE
+from torch.utils.data import Dataset
+
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
 
-from nebula.core.utils.deterministic import enable_deterministic
 import logging
+
 from nebula.config.config import TRAINING_LOGGER
+from nebula.core.utils.deterministic import enable_deterministic
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
 
@@ -73,7 +76,7 @@ class NebulaDataset(Dataset, ABC):
                     self.initialize_dataset()
                     break
                 except Exception as e:
-                    logging_training.info(f"Error loading dataset: {e}. Retrying {i+1}/{max_tries} in 5 seconds...")
+                    logging_training.info(f"Error loading dataset: {e}. Retrying {i + 1}/{max_tries} in 5 seconds...")
                     time.sleep(5)
 
     @abstractmethod
@@ -143,16 +146,18 @@ class NebulaDataset(Dataset, ABC):
             for idx in indices:
                 label = dataset.targets[idx]
                 class_counts[label] += 1
-            logging_training.info(f"Participant {i+1} class distribution: {class_counts}")
+            logging_training.info(f"Participant {i + 1} class distribution: {class_counts}")
             plt.figure()
             plt.bar(range(self.num_classes), class_counts)
             plt.xlabel("Class")
             plt.ylabel("Number of samples")
             plt.xticks(range(self.num_classes))
             if self.iid:
-                plt.title(f"Participant {i+1} class distribution (IID)")
+                plt.title(f"Participant {i + 1} class distribution (IID)")
             else:
-                plt.title(f"Participant {i+1} class distribution (Non-IID - {self.partition}) - {self.partition_parameter}")
+                plt.title(
+                    f"Participant {i + 1} class distribution (Non-IID - {self.partition}) - {self.partition_parameter}"
+                )
             plt.tight_layout()
             path_to_save = f"{self.config.participant['tracking_args']['log_dir']}/{self.config.participant['scenario_args']['name']}/participant_{i}_class_distribution_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}.png"
             plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
@@ -171,7 +176,10 @@ class NebulaDataset(Dataset, ABC):
 
             # Normalize the point sizes for this partition
             max_samples_partition = max(class_counts)
-            sizes = [(size / max_samples_partition) * (max_point_size - min_point_size) + min_point_size for size in class_counts]
+            sizes = [
+                (size / max_samples_partition) * (max_point_size - min_point_size) + min_point_size
+                for size in class_counts
+            ]
             plt.scatter([i] * self.num_classes, range(self.num_classes), s=sizes, alpha=0.5)
 
         plt.xlabel("Participant")
@@ -179,9 +187,11 @@ class NebulaDataset(Dataset, ABC):
         plt.xticks(range(self.partitions_number))
         plt.yticks(range(self.num_classes))
         if self.iid:
-            plt.title(f"Participant {i+1} class distribution (IID)")
+            plt.title(f"Participant {i + 1} class distribution (IID)")
         else:
-            plt.title(f"Participant {i+1} class distribution (Non-IID - {self.partition}) - {self.partition_parameter}")
+            plt.title(
+                f"Participant {i + 1} class distribution (Non-IID - {self.partition}) - {self.partition_parameter}"
+            )
         plt.tight_layout()
 
         # Saves the distribution display with circles of different size
@@ -207,7 +217,14 @@ class NebulaDataset(Dataset, ABC):
         tsne_results = tsne.fit_transform(X)
 
         plt.figure(figsize=(16, 10))
-        sns.scatterplot(x=tsne_results[:, 0], y=tsne_results[:, 1], hue=y, palette=sns.color_palette("hsv", self.num_classes), legend="full", alpha=0.7)
+        sns.scatterplot(
+            x=tsne_results[:, 0],
+            y=tsne_results[:, 1],
+            hue=y,
+            palette=sns.color_palette("hsv", self.num_classes),
+            legend="full",
+            alpha=0.7,
+        )
 
         plt.title("t-SNE visualization of the dataset")
         plt.xlabel("t-SNE axis 1")
@@ -252,14 +269,17 @@ class NebulaDataset(Dataset, ABC):
         return {i: indices for i, indices in enumerate(indices_per_partition)}
 
     def _adjust_proportions(self, proportions, indices_per_partition, num_samples):
-        adjusted = np.array([p * (len(indices) < num_samples / self.partitions_number) for p, indices in zip(proportions, indices_per_partition)])
+        adjusted = np.array([
+            p * (len(indices) < num_samples / self.partitions_number)
+            for p, indices in zip(proportions, indices_per_partition, strict=False)
+        ])
         return adjusted / adjusted.sum()
 
     def _calculate_class_distribution(self, indices_per_partition, y_data):
         distribution = defaultdict(lambda: np.zeros(self.partitions_number))
         for partition_idx, indices in enumerate(indices_per_partition):
             labels, counts = np.unique(y_data[indices], return_counts=True)
-            for label, count in zip(labels, counts):
+            for label, count in zip(labels, counts, strict=False):
                 distribution[label][partition_idx] = count
         return {k: v / v.sum() for k, v in distribution.items()}
 
@@ -316,7 +336,7 @@ class NebulaDataset(Dataset, ABC):
             for idx in net_dataidx_map[i]:
                 label = dataset.targets[idx]
                 class_counts[label] += 1
-            logging_training.info(f"Partition {i+1} class distribution: {class_counts}")
+            logging_training.info(f"Partition {i + 1} class distribution: {class_counts}")
 
         return net_dataidx_map
 
@@ -511,7 +531,7 @@ class NebulaDataset(Dataset, ABC):
                 subset_indices[i].extend(indices[: min_count // 2])
 
             class_counts = np.bincount(np.array([dataset.targets[idx] for idx in subset_indices[i]]))
-            logging_training.info(f"Partition {i+1} class distribution: {class_counts.tolist()}")
+            logging_training.info(f"Partition {i + 1} class distribution: {class_counts.tolist()}")
 
         partitioned_datasets = {i: subset_indices[i] for i in range(num_subsets)}
 
@@ -541,8 +561,17 @@ class NebulaDataset(Dataset, ABC):
             for idx in idc:
                 label_distribution[dataset.targets[idx]].append(c_id)
 
-        plt.hist(label_distribution, stacked=True, bins=np.arange(-0.5, num_clients + 1.5, 1), label=dataset.classes, rwidth=0.5)
-        plt.xticks(np.arange(num_clients), ["Participant %d" % (c_id + 1) for c_id in range(num_clients)])
+        plt.hist(
+            label_distribution,
+            stacked=True,
+            bins=np.arange(-0.5, num_clients + 1.5, 1),
+            label=dataset.classes,
+            rwidth=0.5,
+        )
+        plt.xticks(
+            np.arange(num_clients),
+            ["Participant %d" % (c_id + 1) for c_id in range(num_clients)],
+        )
         plt.title("Distribution of splited datasets")
         plt.xlabel("Participant")
         plt.ylabel("Number of samples")

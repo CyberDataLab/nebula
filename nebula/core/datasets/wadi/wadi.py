@@ -1,10 +1,12 @@
 import os
 import sys
-from torchvision.datasets import MNIST
-from nebula.core.datasets.nebuladataset import NebulaDataset
 import urllib.request
+
 import numpy as np
 import torch
+from torchvision.datasets import MNIST
+
+from nebula.core.datasets.nebuladataset import NebulaDataset
 
 
 class WADI(MNIST):
@@ -17,17 +19,28 @@ class WADI(MNIST):
         self.train = train
         self.root = root_dir
 
-        if not os.path.exists(f"{self.root}/WADI/X_train.npy") or not os.path.exists(f"{self.root}/WADI/y_train.npy") or not os.path.exists(f"{self.root}/WADI/X_test.npy") or not os.path.exists(f"{self.root}/WADI/y_test.npy"):
+        if (
+            not os.path.exists(f"{self.root}/WADI/X_train.npy")
+            or not os.path.exists(f"{self.root}/WADI/y_train.npy")
+            or not os.path.exists(f"{self.root}/WADI/X_test.npy")
+            or not os.path.exists(f"{self.root}/WADI/y_test.npy")
+        ):
             self.dataset_download()
 
         if self.train:
             data_file = self.training_file
-            self.data, self.targets = torch.from_numpy(np.load(f"{self.root}/WADI/X_train.npy")), torch.from_numpy(np.load(f"{self.root}/WADI/y_train.npy"))
+            self.data, self.targets = (
+                torch.from_numpy(np.load(f"{self.root}/WADI/X_train.npy")),
+                torch.from_numpy(np.load(f"{self.root}/WADI/y_train.npy")),
+            )
             self.data = self.data.to(torch.float32)
             self.targets = self.targets.to(torch.float32)
         else:
             data_file = self.test_file
-            self.data, self.targets = torch.from_numpy(np.load(f"{self.root}/WADI/X_test.npy")), torch.from_numpy(np.load(f"{self.root}/WADI/y_test.npy"))
+            self.data, self.targets = (
+                torch.from_numpy(np.load(f"{self.root}/WADI/X_test.npy")),
+                torch.from_numpy(np.load(f"{self.root}/WADI/y_test.npy")),
+            )
             self.data = self.data.to(torch.float32)
             self.targets = self.targets.to(torch.float32)
 
@@ -90,7 +103,9 @@ class WADIDataModule(NebulaDataset):
             self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
         else:
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(self.test_set, self.partition, self.partition_parameter)
+            self.local_test_indices_map = self.generate_non_iid_map(
+                self.test_set, self.partition, self.partition_parameter
+            )
 
         print(f"Length of train indices map: {len(self.train_indices_map)}")
         print(f"Lenght of test indices map: {len(self.test_indices_map)}")
@@ -138,5 +153,5 @@ class WADIDataModule(NebulaDataset):
         if self.partition_id == 0:
             self.plot_data_distribution(dataset, partitions_map)
             self.plot_all_data_distribution(dataset, partitions_map)
-            
+
         return partitions_map[self.partition_id]

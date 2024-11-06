@@ -1,20 +1,16 @@
 import asyncio
-import gc
-import logging
-import time
-from geopy import distance
+import bz2
 import json
-import zlib, bz2, lzma
+import logging
+import lzma
+import time
 import uuid
+import zlib
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
-import lz4.frame
+from typing import TYPE_CHECKING, Any
 
-from typing import TYPE_CHECKING
-from nebula.core.reputation.Reputation import (
-    Reputation,
-    save_data,
-)
+import lz4.frame
+from geopy import distance
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -22,7 +18,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class MessageChunk:
-    __slots__ = ['index', 'data', 'is_last']
+    __slots__ = ["index", "data", "is_last"]
     index: int
     data: bytes
     is_last: bool
@@ -64,16 +60,23 @@ class Connection:
         self.read_task = None
         self.process_task = None
         self.pending_messages_queue = asyncio.Queue(maxsize=100)
-        self.message_buffers: Dict[bytes, Dict[int, MessageChunk]] = {}
+        self.message_buffers: dict[bytes, dict[int, MessageChunk]] = {}
 
         self.EOT_CHAR = b"\x00\x00\x00\x04"
         self.COMPRESSION_CHAR = b"\x00\x00\x00\x01"
-        self.DATA_TYPE_PREFIXES = {"pb": b"\x01\x00\x00\x00", "string": b"\x02\x00\x00\x00", "json": b"\x03\x00\x00\x00", "bytes": b"\x04\x00\x00\x00"}
+        self.DATA_TYPE_PREFIXES = {
+            "pb": b"\x01\x00\x00\x00",
+            "string": b"\x02\x00\x00\x00",
+            "json": b"\x03\x00\x00\x00",
+            "bytes": b"\x04\x00\x00\x00",
+        }
         self.HEADER_SIZE = 21
-        self.MAX_CHUNK_SIZE = 1024 # 1 KB
-        self.BUFFER_SIZE = 1024 # 1 KB
+        self.MAX_CHUNK_SIZE = 1024  # 1 KB
+        self.BUFFER_SIZE = 1024  # 1 KB
 
-        logging.info(f"Connection [established]: {self.addr} (id: {self.id}) (active: {self.active}) (direct: {self.direct})")
+        logging.info(
+            f"Connection [established]: {self.addr} (id: {self.id}) (active: {self.active}) (direct: {self.direct})"
+        )
 
     def __str__(self):
         return f"Connection to {self.addr} (id: {self.id}) (active: {self.active}) (last active: {self.last_active}) (direct: {self.direct})"
@@ -118,7 +121,10 @@ class Connection:
         return distance_m
 
     def compute_distance_myself(self):
-        distance_m = self.compute_distance(self.config.participant["mobility_args"]["latitude"], self.config.participant["mobility_args"]["longitude"])
+        distance_m = self.compute_distance(
+            self.config.participant["mobility_args"]["latitude"],
+            self.config.participant["mobility_args"]["longitude"],
+        )
         return distance_m
 
     def get_ready(self):
@@ -161,7 +167,7 @@ class Connection:
                 try:
                     await task
                 except asyncio.CancelledError:
-                    logging.error(f"❗️  {self} cancelled...")
+                    logging.exception(f"❗️  {self} cancelled...")
 
         if self.writer is not None:
             self.writer.close()
@@ -172,17 +178,29 @@ class Connection:
             try:
                 logging.info(f"Attempting to reconnect to {self.addr} (attempt {attempt + 1}/{max_retries})")
                 await self.cm.connect(self.addr)
-                self.read_task = asyncio.create_task(self.handle_incoming_message(), name=f"Connection {self.addr} reader")
-                self.process_task = asyncio.create_task(self.process_message_queue(), name=f"Connection {self.addr} processor")
+                self.read_task = asyncio.create_task(
+                    self.handle_incoming_message(),
+                    name=f"Connection {self.addr} reader",
+                )
+                self.process_task = asyncio.create_task(
+                    self.process_message_queue(),
+                    name=f"Connection {self.addr} processor",
+                )
                 logging.info(f"Reconnected to {self.addr}")
                 return
             except Exception as e:
-                logging.error(f"Reconnection attempt {attempt + 1} failed: {e}")
+                logging.exception(f"Reconnection attempt {attempt + 1} failed: {e}")
                 await asyncio.sleep(delay)
         logging.error(f"Failed to reconnect to {self.addr} after {max_retries} attempts. Stopping connection...")
         await self.stop()
 
-    async def send(self, data: Any, pb: bool = True, encoding_type: str = "utf-8", is_compressed: bool = False) -> None:
+    async def send(
+        self,
+        data: Any,
+        pb: bool = True,
+        encoding_type: str = "utf-8",
+        is_compressed: bool = False,
+    ) -> None:
         if self.writer is None:
             logging.error("Cannot send data, writer is None")
             return
@@ -201,7 +219,7 @@ class Connection:
 
             await self._send_chunks(message_id, data_to_send)
         except Exception as e:
-            logging.error(f"Error sending data: {e}")
+            logging.exception(f"Error sending data: {e}")
             await self.reconnect()
 
     def _prepare_data(self, data: Any, pb: bool, encoding_type: str) -> tuple[bytes, bytes]:
@@ -216,7 +234,7 @@ class Connection:
         else:
             raise ValueError(f"Unknown data type to send: {type(data)}")
 
-    def _compress(self, data: bytes, compression: str) -> Optional[bytes]:
+    def _compress(self, data: bytes, compression: str) -> bytes | None:
         if compression == "lz4":
             return lz4.frame.compress(data)
         elif compression == "zlib":
@@ -246,7 +264,7 @@ class Connection:
             self.writer.write(chunk_with_header)
             await self.writer.drain()
 
-            # logging.debug(f"Sent message {message_id.hex()} | chunk {chunk_index+1}/{num_chunks} | size: {len(chunk)} bytes")
+            # logging.debug(f"Sent message {message_id.hex()} | chunk {chunk_index+1}/{num_chunks} | size: {len(chunk)} bytes")
 
     def _calculate_chunk_size(self, data_size: int) -> int:
         return self.BUFFER_SIZE
@@ -263,17 +281,17 @@ class Connection:
 
                 chunk_data = await self._read_chunk(reusable_buffer)
                 self._store_chunk(message_id, chunk_index, chunk_data, is_last_chunk)
-                # logging.debug(f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes")
+                # logging.debug(f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes")
 
                 if is_last_chunk:
                     await self._process_complete_message(message_id)
         except asyncio.CancelledError:
             logging.info("Message handling cancelled")
         except ConnectionError as e:
-            logging.error(f"Connection closed while reading: {e}")
+            logging.exception(f"Connection closed while reading: {e}")
             await self.reconnect()
         except Exception as e:
-            logging.error(f"Error handling incoming message: {e}")
+            logging.exception(f"Error handling incoming message: {e}")
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:
         data = b""
@@ -302,7 +320,7 @@ class Connection:
     async def _read_chunk(self, buffer: bytearray = None) -> bytes:
         if buffer is None:
             buffer = bytearray(self.MAX_CHUNK_SIZE)
-            
+
         chunk_size_bytes = await self._read_exactly(4)
         chunk_size = int.from_bytes(chunk_size_bytes, "big")
 
@@ -327,7 +345,7 @@ class Connection:
         except Exception as e:
             if message_id in self.message_buffers:
                 del self.message_buffers[message_id]
-            logging.error(f"Error storing chunk {chunk_index} for message {message_id.hex()}: {e}")
+            logging.exception(f"Error storing chunk {chunk_index} for message {message_id.hex()}: {e}")
 
     async def _process_complete_message(self, message_id: bytes) -> None:
         chunks = sorted(self.message_buffers[message_id].values(), key=lambda x: x.index)
@@ -338,14 +356,18 @@ class Connection:
         message_content = complete_message[4:]
 
         if message_content.endswith(self.COMPRESSION_CHAR):
-            message_content = await asyncio.to_thread(self._decompress, message_content[: -len(self.COMPRESSION_CHAR)], self.compression)
+            message_content = await asyncio.to_thread(
+                self._decompress,
+                message_content[: -len(self.COMPRESSION_CHAR)],
+                self.compression,
+            )
             if message_content is None:
                 return
 
         await self.pending_messages_queue.put((data_type_prefix, memoryview(message_content)))
-        # logging.debug(f"Processed complete message {message_id.hex()} | total size: {len(complete_message)} bytes")
+        # logging.debug(f"Processed complete message {message_id.hex()} | total size: {len(complete_message)} bytes")
 
-    def _decompress(self, data: bytes, compression: str) -> Optional[bytes]:
+    def _decompress(self, data: bytes, compression: str) -> bytes | None:
         if compression == "zlib":
             return zlib.decompress(data)
         elif compression == "bz2":
@@ -368,14 +390,17 @@ class Connection:
                 await self._handle_message(data_type_prefix, message)
                 self.pending_messages_queue.task_done()
             except Exception as e:
-                logging.error(f"Error processing message queue: {e}")
+                logging.exception(f"Error processing message queue: {e}")
             finally:
                 await asyncio.sleep(0)
 
     async def _handle_message(self, data_type_prefix: bytes, message: bytes) -> None:
         if data_type_prefix == self.DATA_TYPE_PREFIXES["pb"]:
-            # logging.debug("Received a protobuf message")
-            asyncio.create_task(self.cm.handle_incoming_message(message, self.addr), name=f"Connection {self.addr} message handler")
+            # logging.debug("Received a protobuf message")
+            asyncio.create_task(
+                self.cm.handle_incoming_message(message, self.addr),
+                name=f"Connection {self.addr} message handler",
+            )
         elif data_type_prefix == self.DATA_TYPE_PREFIXES["string"]:
             logging.debug(f"Received string message: {message.decode('utf-8')}")
         elif data_type_prefix == self.DATA_TYPE_PREFIXES["json"]:

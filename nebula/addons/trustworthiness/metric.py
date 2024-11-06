@@ -1,14 +1,6 @@
 import json
 import logging
-import math
 import os
-import shutil
-from json import JSONDecodeError
-
-import numpy as np
-import pandas as pd
-from numpy import NaN
-from tabulate import tabulate
 
 from nebula.addons.trustworthiness.pillar import TrustPillar
 from nebula.addons.trustworthiness.utils import write_results_json
@@ -51,7 +43,7 @@ class TrustMetricManager:
             logger.error(f"{metrics_cfg_file} is missing! Please check documentation.")
             return
 
-        with open(factsheet_file, "r") as f, open(metrics_cfg_file, "r") as m:
+        with open(factsheet_file) as f, open(metrics_cfg_file) as m:
             factsheet = json.load(f)
             metrics_cfg = json.load(m)
             metrics = metrics_cfg.items()

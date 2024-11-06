@@ -1,0 +1,98 @@
+site_name: NEBULA
+docs_dir: '_prebuilt'
+repo_url: https://github.com/CyberDataLab/nebula
+site_url: https://nebula.enriquetomasmb.com
+site_description: "NEBULA: A Platform for Decentralized Federated Learning"
+site_author: Enrique Tomás Martínez Beltrán
+edit_uri: edit/main/docs/
+repo_name: CyberDataLab/nebula
+copyright: Created by <a href="https://enriquetomasmb.com">Enrique Tomás Martínez Beltrán</a>.
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - API Reference: api/
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+          setup_commands:
+            - import sys
+            - sys.path.append('../')
+  - gen-files:
+      scripts:
+      - scripts/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
+  - autorefs
+  - git-revision-date-localized
+theme:
+  name: material
+  feature:
+    tabs: true
+  features:
+    - navigation.tabs
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/CyberDataLab/nebula
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/nebula-dfl
+    - icon: material/email
+      link: mailto:enriquetomas@um.es
+  meta:
+    - name: description
+      content: "NEBULA: A Platform for Decentralized Federated Learning"
+    - name: keywords
+      content: "NEBULA, Fedstellar, Federated Learning, Decentralized Federated Learning, Machine Learning, Privacy, Security, Trustworthiness AI"
+  generator: false
+
+markdown_extensions:
+  - toc:
+      permalink: true
+      toc_depth: 4
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.magiclink
+  - pymdownx.details # Allowing hidden expandable regions denoted by ???
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences # Seems to enable syntax highlighting when used with the Material theme.
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      check_paths: true
+  - admonition
+  - footnotes
+  - codehilite
+  - attr_list

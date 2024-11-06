@@ -1,10 +1,10 @@
 import logging
-from lightning.pytorch.loggers import TensorBoardLogger
 from datetime import datetime
+
+from lightning.pytorch.loggers import TensorBoardLogger
 
 
 class NebulaTensorBoardLogger(TensorBoardLogger):
-
     def __init__(self, scenario_start_time, *args, **kwargs):
         self.scenario_start_time = scenario_start_time
         self.local_step = 0
@@ -20,10 +20,10 @@ class NebulaTensorBoardLogger(TensorBoardLogger):
         # logging.debug(f"Logging data for global step {step} | local step {self.local_step} | global step {self.global_step}")
         try:
             super().log_metrics(data, step)
-        except ValueError as e:
+        except ValueError:
             pass
         except Exception as e:
-            logging.error(f"Error logging statistics data [{data}] for step [{step}]: {e}")
+            logging.exception(f"Error logging statistics data [{data}] for step [{step}]: {e}")
 
     def log_metrics(self, metrics, step=None):
         if step is None:
@@ -35,7 +35,7 @@ class NebulaTensorBoardLogger(TensorBoardLogger):
         try:
             super().log_metrics(metrics, step)
         except Exception as e:
-            logging.error(f"Error logging metrics [{metrics}] for step [{step}]: {e}")
+            logging.exception(f"Error logging metrics [{metrics}] for step [{step}]: {e}")
 
     def log_figure(self, figure, step=None, name=None):
         if step is None:
@@ -43,10 +43,14 @@ class NebulaTensorBoardLogger(TensorBoardLogger):
         try:
             self.experiment.add_figure(name, figure, step)
         except Exception as e:
-            logging.error(f"Error logging figure [{name}] for step [{step}]: {e}")
+            logging.exception(f"Error logging figure [{name}] for step [{step}]: {e}")
 
     def get_logger_config(self):
-        return {"scenario_start_time": self.scenario_start_time, "local_step": self.local_step, "global_step": self.global_step}
+        return {
+            "scenario_start_time": self.scenario_start_time,
+            "local_step": self.local_step,
+            "global_step": self.global_step,
+        }
 
     def set_logger_config(self, logger_config):
         if logger_config is None:
@@ -56,4 +60,4 @@ class NebulaTensorBoardLogger(TensorBoardLogger):
             self.local_step = logger_config["local_step"]
             self.global_step = logger_config["global_step"]
         except Exception as e:
-            logging.error(f"Error setting logger config: {e}")
+            logging.exception(f"Error setting logger config: {e}")

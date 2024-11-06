@@ -1,6 +1,7 @@
 import torch
-from nebula.core.models.nebulamodel import NebulaModel
 import torchmetrics
+
+from nebula.core.models.nebulamodel import NebulaModel
 
 
 class SyscallModelSGDOneClassSVM(NebulaModel):

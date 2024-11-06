@@ -38,14 +38,7 @@ argparser.add_argument(
     help="Frontend port (default: 6060)",
 )
 
-argparser.add_argument(
-    "-t",
-    "--test",
-    dest="test",
-    action="store_true",
-    default=False,
-    help="Run tests"
-)
+argparser.add_argument("-t", "--test", dest="test", action="store_true", default=False, help="Run tests")
 
 argparser.add_argument(
     "-st",
@@ -127,10 +120,9 @@ argparser.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS,
 args = argparser.parse_args()
 
 """
-Code for deploying the controller 
+Code for deploying the controller
 """
 if __name__ == "__main__":
-
     if args.stop == "all":
         Controller.stop()
     elif args.stop == "nodes":

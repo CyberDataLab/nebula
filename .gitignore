@@ -119,13 +119,21 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
+# poetry
+poetry.lock
+
 # mkdocs documentation
 /site
+_build/
 
 # mypy
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# ruff
+.ruff/
+.ruff_cache/
 
 # Pyre type checker
 .pyre/

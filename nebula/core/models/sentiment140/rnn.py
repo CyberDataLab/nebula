@@ -1,4 +1,5 @@
 import torch
+
 from nebula.core.models.nebulamodel import NebulaModel
 
 
@@ -26,7 +27,12 @@ class Sentiment140ModelRNN(NebulaModel):
         self.output_dim = num_classes
 
         self.encoder = torch.nn.LSTM(
-            self.embedding_dim, self.hidden_dim, num_layers=self.n_layers, bidirectional=self.bidirectional, dropout=0.5, batch_first=True
+            self.embedding_dim,
+            self.hidden_dim,
+            num_layers=self.n_layers,
+            bidirectional=self.bidirectional,
+            dropout=0.5,
+            batch_first=True,
         )
         self.fc = torch.nn.Linear(self.hidden_dim * 2, self.output_dim)
         self.dropout = torch.nn.Dropout(0.5)

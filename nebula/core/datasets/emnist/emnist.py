@@ -1,7 +1,9 @@
 import os
-from nebula.core.datasets.nebuladataset import NebulaDataset
+
 from torchvision import transforms
 from torchvision.datasets import EMNIST
+
+from nebula.core.datasets.nebuladataset import NebulaDataset
 
 
 class EMNISTDataset(NebulaDataset):
@@ -46,7 +48,9 @@ class EMNISTDataset(NebulaDataset):
             self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
         else:
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(self.test_set, self.partition, self.partition_parameter)
+            self.local_test_indices_map = self.generate_non_iid_map(
+                self.test_set, self.partition, self.partition_parameter
+            )
 
         print(f"Length of train indices map: {len(self.train_indices_map)}")
         print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")
@@ -55,14 +59,12 @@ class EMNISTDataset(NebulaDataset):
     def load_emnist_dataset(self, train=True):
         mean = (0.5,)  # Adjusted mean for 1 channel
         std = (0.5,)  # Adjusted std for 1 channel
-        apply_transforms = transforms.Compose(
-            [
-                transforms.RandomCrop(28, padding=4),  # Crop size changed to 28
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std),
-            ]
-        )
+        apply_transforms = transforms.Compose([
+            transforms.RandomCrop(28, padding=4),  # Crop size changed to 28
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std, inplace=True),
+        ])
         return EMNIST(
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"),
             train=train,

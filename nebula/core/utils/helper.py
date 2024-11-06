@@ -1,10 +1,15 @@
-import logging
-from typing import OrderedDict, List, Optional
 import copy
+import logging
+from collections import OrderedDict
+
 import torch
 
 
-def cosine_metric2(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict[str, torch.Tensor], similarity: bool = False) -> Optional[float]:
+def cosine_metric2(
+    model1: OrderedDict[str, torch.Tensor],
+    model2: OrderedDict[str, torch.Tensor],
+    similarity: bool = False,
+) -> float | None:
     if model1 is None or model2 is None:
         logging.info("Cosine similarity cannot be computed due to missing model")
         return None
@@ -32,12 +37,12 @@ def cosine_metric2(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict[s
         return None
 
 
-def cosine_metric(model1: OrderedDict, model2: OrderedDict, similarity: bool = False) -> Optional[float]:
+def cosine_metric(model1: OrderedDict, model2: OrderedDict, similarity: bool = False) -> float | None:
     if model1 is None or model2 is None:
         logging.info("Cosine similarity cannot be computed due to missing model")
         return None
 
-    cos_similarities: List = []
+    cos_similarities: list = []
 
     for layer in model1:
         if layer in model2:
@@ -51,7 +56,7 @@ def cosine_metric(model1: OrderedDict, model2: OrderedDict, similarity: bool = F
             cos_mean = torch.mean(cos(l1.float(), l2.float())).mean()
             cos_similarities.append(cos_mean)
         else:
-            logging.info("Layer {} not found in model 2".format(layer))
+            logging.info(f"Layer {layer} not found in model 2")
 
     if cos_similarities:
         cos = torch.Tensor(cos_similarities)
@@ -62,7 +67,12 @@ def cosine_metric(model1: OrderedDict, model2: OrderedDict, similarity: bool = F
         return None
 
 
-def euclidean_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict[str, torch.Tensor], standardized: bool = False, similarity: bool = False) -> Optional[float]:
+def euclidean_metric(
+    model1: OrderedDict[str, torch.Tensor],
+    model2: OrderedDict[str, torch.Tensor],
+    standardized: bool = False,
+    similarity: bool = False,
+) -> float | None:
     if model1 is None or model2 is None:
         return None
 
@@ -91,7 +101,12 @@ def euclidean_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict
         return None
 
 
-def minkowski_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict[str, torch.Tensor], p: int, similarity: bool = False) -> Optional[float]:
+def minkowski_metric(
+    model1: OrderedDict[str, torch.Tensor],
+    model2: OrderedDict[str, torch.Tensor],
+    p: int,
+    similarity: bool = False,
+) -> float | None:
     if model1 is None or model2 is None:
         return None
 
@@ -117,7 +132,11 @@ def minkowski_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict
         return None
 
 
-def manhattan_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict[str, torch.Tensor], similarity: bool = False) -> Optional[float]:
+def manhattan_metric(
+    model1: OrderedDict[str, torch.Tensor],
+    model2: OrderedDict[str, torch.Tensor],
+    similarity: bool = False,
+) -> float | None:
     if model1 is None or model2 is None:
         return None
 
@@ -143,7 +162,11 @@ def manhattan_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict
         return None
 
 
-def pearson_correlation_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict[str, torch.Tensor], similarity: bool = False) -> Optional[float]:
+def pearson_correlation_metric(
+    model1: OrderedDict[str, torch.Tensor],
+    model2: OrderedDict[str, torch.Tensor],
+    similarity: bool = False,
+) -> float | None:
     if model1 is None or model2 is None:
         return None
 
@@ -172,7 +195,11 @@ def pearson_correlation_metric(model1: OrderedDict[str, torch.Tensor], model2: O
         return None
 
 
-def jaccard_metric(model1: OrderedDict[str, torch.Tensor], model2: OrderedDict[str, torch.Tensor], similarity: bool = False) -> Optional[float]:
+def jaccard_metric(
+    model1: OrderedDict[str, torch.Tensor],
+    model2: OrderedDict[str, torch.Tensor],
+    similarity: bool = False,
+) -> float | None:
     if model1 is None or model2 is None:
         return None
 
@@ -208,7 +235,7 @@ def normalise_layers(untrusted_params, trusted_params):
     for layer in untrusted_params:
         layer_norm = torch.norm(state_dict[layer].data.view(-1).float())
         scaling_factor = min(layer_norm / trusted_norms[layer], 1)
-        logging.debug("Layer: {} ScalingFactor {}".format(layer, scaling_factor))
+        logging.debug(f"Layer: {layer} ScalingFactor {scaling_factor}")
         # logging.info("Scaling client {} layer {} with factor {}".format(client, layer, scaling_factor))
         normalised_layer = torch.mul(state_dict[layer], scaling_factor)
         normalised_params[layer] = normalised_layer

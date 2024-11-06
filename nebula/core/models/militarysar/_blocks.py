@@ -1,12 +1,11 @@
-import torch.nn as nn
-
 import collections
+
+import torch.nn as nn
 
 _activations = {"relu": nn.ReLU, "relu6": nn.ReLU6, "leaky_relu": nn.LeakyReLU}
 
 
 class BaseBlock(nn.Module):
-
     def __init__(self):
         super(BaseBlock, self).__init__()
         self._layer: nn.Sequential
@@ -16,37 +15,44 @@ class BaseBlock(nn.Module):
 
 
 class DenseBlock(BaseBlock):
-
     def __init__(self, shape, **params):
         super(DenseBlock, self).__init__()
         in_dims, out_dims = shape
-        _seq = collections.OrderedDict(
-            [
-                ("dense", nn.Linear(in_dims, out_dims)),
-            ]
-        )
+        _seq = collections.OrderedDict([
+            ("dense", nn.Linear(in_dims, out_dims)),
+        ])
         _act_name = params.get("activation")
         if _act_name:
             _seq.update({_act_name: _activations[_act_name](inplace=True)})
 
         self._layer = nn.Sequential(_seq)
 
-        w_init = params.get("w_init", None)
+        w_init = params.get("w_init")
         idx = list(dict(self._layer.named_children()).keys()).index("dense")
         if w_init:
             w_init(self._layer[idx].weight)
-        b_init = params.get("b_init", None)
+        b_init = params.get("b_init")
         if b_init:
             b_init(self._layer[idx].bias)
 
 
 class Conv2DBlock(BaseBlock):
-
     def __init__(self, shape, stride, padding="same", **params):
         super(Conv2DBlock, self).__init__()
 
         h, w, in_channels, out_channels = shape
-        _seq = collections.OrderedDict([("conv", nn.Conv2d(in_channels, out_channels, kernel_size=(h, w), stride=stride, padding=padding))])
+        _seq = collections.OrderedDict([
+            (
+                "conv",
+                nn.Conv2d(
+                    in_channels,
+                    out_channels,
+                    kernel_size=(h, w),
+                    stride=stride,
+                    padding=padding,
+                ),
+            )
+        ])
 
         _bn = params.get("batch_norm")
         if _bn:
@@ -64,10 +70,10 @@ class Conv2DBlock(BaseBlock):
 
         self._layer = nn.Sequential(_seq)
 
-        w_init = params.get("w_init", None)
+        w_init = params.get("w_init")
         idx = list(dict(self._layer.named_children()).keys()).index("conv")
         if w_init:
             w_init(self._layer[idx].weight)
-        b_init = params.get("b_init", None)
+        b_init = params.get("b_init")
         if b_init:
             b_init(self._layer[idx].bias)

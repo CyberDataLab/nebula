@@ -1,11 +1,11 @@
 import os
+import random
 import sys
 import time
-import random
 import warnings
+
 import numpy as np
 import torch
-
 
 torch.multiprocessing.set_start_method("spawn", force=True)
 
@@ -15,42 +15,41 @@ from cryptography.utils import CryptographyDeprecationWarning
 warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from nebula.config.config import Config
 import logging
-from nebula.core.datasets.mnist.mnist import MNISTDataset
-from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
-from nebula.core.datasets.syscall.syscall import SYSCALLDataset
-from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
-from nebula.core.datasets.militarysar.militarysar import MilitarySARDataset
-from nebula.core.datasets.datamodule import DataModule
 
-from nebula.core.training.lightning import Lightning
-from nebula.core.training.siamese import Siamese
-from nebula.core.models.cifar10.dualagg import DualAggModel
-from nebula.core.models.mnist.mlp import MNISTModelMLP
-from nebula.core.models.mnist.cnn import MNISTModelCNN
-from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
-from nebula.core.models.fashionmnist.cnn import FashionMNISTModelCNN
-from nebula.core.models.syscall.mlp import SyscallModelMLP
-from nebula.core.models.syscall.autoencoder import SyscallModelAutoencoder
-from nebula.core.models.cifar10.resnet import CIFAR10ModelResNet
-from nebula.core.models.cifar10.fastermobilenet import FasterMobileNet
-from nebula.core.models.cifar10.simplemobilenet import SimpleMobileNetV1
+from nebula.config.config import Config
+from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
+from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
+from nebula.core.datasets.datamodule import DataModule
+from nebula.core.datasets.emnist.emnist import EMNISTDataset
+from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
+from nebula.core.datasets.kitsun.kitsun import KITSUNDataset
+from nebula.core.datasets.militarysar.militarysar import MilitarySARDataset
+from nebula.core.datasets.mnist.mnist import MNISTDataset
+from nebula.core.datasets.syscall.syscall import SYSCALLDataset
+from nebula.core.engine import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
 from nebula.core.models.cifar10.cnn import CIFAR10ModelCNN
 from nebula.core.models.cifar10.cnnV2 import CIFAR10ModelCNN_V2
 from nebula.core.models.cifar10.cnnV3 import CIFAR10ModelCNN_V3
-from nebula.core.models.militarysar.cnn import MilitarySARModelCNN
-from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
-from nebula.core.datasets.emnist.emnist import EMNISTDataset
-from nebula.core.datasets.kitsun.kitsun import KITSUNDataset
+from nebula.core.models.cifar10.dualagg import DualAggModel
+from nebula.core.models.cifar10.fastermobilenet import FasterMobileNet
+from nebula.core.models.cifar10.resnet import CIFAR10ModelResNet
+from nebula.core.models.cifar10.simplemobilenet import SimpleMobileNetV1
 from nebula.core.models.cifar100.cnn import CIFAR100ModelCNN
 from nebula.core.models.emnist.cnn import EMNISTModelCNN
 from nebula.core.models.emnist.mlp import EMNISTModelMLP
+from nebula.core.models.fashionmnist.cnn import FashionMNISTModelCNN
+from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
 from nebula.core.models.kitsun.mlp import KitsunModelMLP
-
+from nebula.core.models.militarysar.cnn import MilitarySARModelCNN
+from nebula.core.models.mnist.cnn import MNISTModelCNN
+from nebula.core.models.mnist.mlp import MNISTModelMLP
+from nebula.core.models.syscall.autoencoder import SyscallModelAutoencoder
+from nebula.core.models.syscall.mlp import SyscallModelMLP
 from nebula.core.models.syscall.svm import SyscallModelSGDOneClassSVM
-from nebula.core.engine import MaliciousNode, AggregatorNode, TrainerNode, ServerNode, IdleNode
 from nebula.core.role import Role
+from nebula.core.training.lightning import Lightning
+from nebula.core.training.siamese import Siamese
 
 # os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 # os.environ["TORCH_LOGS"] = "+dynamo"
@@ -66,7 +65,7 @@ async def main(config):
     additional_node_round = config.participant["mobility_args"]["additional_node"]["round_start"]
 
     attacks = config.participant["adversarial_args"]["attacks"]
-    poisoned_persent = config.participant["adversarial_args"]["poisoned_sample_percent"]
+    poisoned_percent = config.participant["adversarial_args"]["poisoned_sample_percent"]
     poisoned_ratio = config.participant["adversarial_args"]["poisoned_ratio"]
     targeted = str(config.participant["adversarial_args"]["targeted"])
     target_label = config.participant["adversarial_args"]["target_label"]
@@ -97,7 +96,7 @@ async def main(config):
         label_flipping = False
         data_poisoning = False
         targeted = False
-        poisoned_persent = 0
+        poisoned_percent = 0
         poisoned_ratio = 0
 
     # Adjust the total number of nodes and the index of the current node for CFL, as it doesn't require a specific partition for the server (not used for training)
@@ -111,7 +110,16 @@ async def main(config):
     num_workers = config.participant["data_args"]["num_workers"]
     model = None
     if dataset_str == "MNIST":
-        dataset = MNISTDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = MNISTDataset(
+            num_classes=10,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         if model_name == "MLP":
             model = MNISTModelMLP()
         elif model_name == "CNN":
@@ -119,7 +127,16 @@ async def main(config):
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_str}")
     elif dataset_str == "FashionMNIST":
-        dataset = FashionMNISTDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = FashionMNISTDataset(
+            num_classes=10,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         if model_name == "MLP":
             model = FashionMNISTModelMLP()
         elif model_name == "CNN":
@@ -127,7 +144,16 @@ async def main(config):
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_str}")
     elif dataset_str == "EMNIST":
-        dataset = EMNISTDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = EMNISTDataset(
+            num_classes=10,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         if model_name == "MLP":
             model = EMNISTModelMLP()
         elif model_name == "CNN":
@@ -135,7 +161,16 @@ async def main(config):
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_str}")
     elif dataset_str == "SYSCALL":
-        dataset = SYSCALLDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = SYSCALLDataset(
+            num_classes=10,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         if model_name == "MLP":
             model = SyscallModelMLP()
         elif model_name == "SVM":
@@ -145,7 +180,16 @@ async def main(config):
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_str}")
     elif dataset_str == "CIFAR10":
-        dataset = CIFAR10Dataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = CIFAR10Dataset(
+            num_classes=10,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         if model_name == "ResNet9":
             model = CIFAR10ModelResNet(classifier="resnet9")
         elif model_name == "fastermobilenet":
@@ -161,19 +205,46 @@ async def main(config):
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_str}")
     elif dataset_str == "CIFAR100":
-        dataset = CIFAR100Dataset(num_classes=100, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = CIFAR100Dataset(
+            num_classes=100,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         if model_name == "CNN":
             model = CIFAR100ModelCNN()
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_str}")
     elif dataset_str == "KITSUN":
-        dataset = KITSUNDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = KITSUNDataset(
+            num_classes=10,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         if model_name == "MLP":
             model = KitsunModelMLP()
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_str}")
     elif dataset_str == "MilitarySAR":
-        dataset = MilitarySARDataset(num_classes=10, partition_id=idx, partitions_number=n_nodes, iid=iid, partition=partition_selection, partition_parameter=partition_parameter, seed=42, config=config)
+        dataset = MilitarySARDataset(
+            num_classes=10,
+            partition_id=idx,
+            partitions_number=n_nodes,
+            iid=iid,
+            partition=partition_selection,
+            partition_parameter=partition_parameter,
+            seed=42,
+            config=config,
+        )
         model = MilitarySARModelCNN()
     else:
         raise ValueError(f"Dataset {dataset_str} not supported")
@@ -190,7 +261,7 @@ async def main(config):
         batch_size=dataset.batch_size,
         label_flipping=label_flipping,
         data_poisoning=data_poisoning,
-        poisoned_persent=poisoned_persent,
+        poisoned_percent=poisoned_percent,
         poisoned_ratio=poisoned_ratio,
         targeted=targeted,
         target_label=target_label,
@@ -259,7 +330,16 @@ async def main(config):
 
     logging.info(f"Starting node {idx} with model {model_name}, trainer {trainer.__name__}, and as {node_cls.__name__}")
 
-    node = node_cls(model=model, dataset=dataset, config=config, trainer=trainer, security=False, model_poisoning=model_poisoning, poisoned_ratio=poisoned_ratio, noise_type=noise_type)
+    node = node_cls(
+        model=model,
+        dataset=dataset,
+        config=config,
+        trainer=trainer,
+        security=False,
+        model_poisoning=model_poisoning,
+        poisoned_ratio=poisoned_ratio,
+        noise_type=noise_type,
+    )
     await node.start_communications()
     await node.deploy_federation()
 
@@ -270,7 +350,7 @@ async def main(config):
         time.sleep(6000)  # DEBUG purposes
         import requests
 
-        url = f'http://{node.config.participant["scenario_args"]["controller"]}/platform/{node.config.participant["scenario_args"]["name"]}/round'
+        url = f"http://{node.config.participant['scenario_args']['controller']}/platform/{node.config.participant['scenario_args']['name']}/round"
         current_round = int(requests.get(url).json()["round"])
         while current_round < additional_node_round:
             logging.info(f"Waiting for round {additional_node_round} to start")
@@ -286,12 +366,15 @@ if __name__ == "__main__":
     config = Config(entity="participant", participant_config_file=config_path)
     if sys.platform == "win32" or config.participant["scenario_args"]["deployment"] == "docker":
         import asyncio
+
         asyncio.run(main(config), debug=False)
     else:
         try:
-            import uvloop 
+            import uvloop
+
             uvloop.run(main(config), debug=False)
         except ImportError:
             logging.warning("uvloop not available, using default loop")
             import asyncio
+
             asyncio.run(main(config), debug=False)

@@ -1,22 +1,36 @@
 <br>
 <p align="center">
-  <a href="https://github.com/enriquetomasmb/fedstellar">
-    <img src="docs/_static/nebula-logo.jpg" alt="fedstellar">
+  <a href="https://github.com/CyberDataLab/nebula">
+    <img src="https://raw.githubusercontent.com/CyberDataLab/nebula/5b44d54eec9186f7c9f6351f26cd92b33bd37fdf/docs/_prebuilt/static/nebula-logo.jpg" alt="nebula">
   </a>
-  <h3 align="center">NEBULA: A Platform for Decentralized Federated Learning</h3>
+  <h1 align="center">NEBULA: A Platform for Decentralized Federated Learning</h1>
 
   <p align="center">
-    <a href="https://federeratedlearning.inf.um.es">federatedlearning.inf.um.es</a> / <a href="https://fedstellar.dev">fedstellar.dev</a> / <a href="https://fedstellar.eu">fedstellar.eu</a> / <a href="https://fedstellar.com">fedstellar.com</a>
+    <a href="https://federeratedlearning.inf.um.es">federatedlearning.inf.um.es</a>
   </p>
 </p>
 
-# 🌌 About NEBULA
+## 🌌 About NEBULA
 
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://nebula.enriquetomasmb.com)
-![Github Last Commit](https://img.shields.io/github/last-commit/enriquetomasmb/nebula)
-[![GitHub issues](https://img.shields.io/github/issues/enriquetomasmb/nebula)](https://github.com/enriquetomasmb/nebula/issues)
+![Github Last Commit](https://img.shields.io/github/last-commit/CyberDataLab/nebula)
+[![GitHub issues](https://img.shields.io/github/issues/CyberDataLab/nebula)](https://github.com/CyberDataLab/nebula/issues)
 
 **NEBULA** (previously known as Fedstellar[^1]) is a cutting-edge platform designed to facilitate the training of federated models within both centralized and decentralized architectures. It streamlines the development, deployment, and management of federated applications across physical and virtualized devices.
+
+**NEBULA** is developed by **[Enrique Tomás Martínez Beltrán](https://enriquetomasmb.com)** in collaboration with the [University of Murcia](https://www.um.es/en), [armasuisse](https://www.armasuisse.ch/en), and the [University of Zurich](https://www.uzh.ch/).
+
+<p align="center">
+	<a href="https://um.es">
+	<img src="https://raw.githubusercontent.com/CyberDataLab/nebula/5b44d54eec9186f7c9f6351f26cd92b33bd37fdf/docs/_prebuilt/static/umu.jpg" alt="University of Murcia" width="200" height="60">
+	</a>
+	<a href="https://www.armasuisse.ch/en">
+	<img src="https://raw.githubusercontent.com/CyberDataLab/nebula/5b44d54eec9186f7c9f6351f26cd92b33bd37fdf/docs/_prebuilt/static/armasuisse.jpg" alt="armasuisse" width="200" height="60">
+	</a>
+	<a href="https://www.uzh.ch/">
+	<img src="https://raw.githubusercontent.com/CyberDataLab/nebula/5b44d54eec9186f7c9f6351f26cd92b33bd37fdf/docs/_prebuilt/static/uzh.jpg" alt="University of Zurich" width="200" height="60">
+	</a>
+</p>
 
 ## 🚀 Key Components
 
@@ -47,28 +61,14 @@ NEBULA boasts a **modular architecture** that consists of three core elements:
 - 🚗 **Vehicular scenarios**: Utilize in vehicles including cars, trucks, and drones.
 
 <p align="center">
-  <img src="docs/_static/nebula-mockup.png" alt="NEBULA Mockup">
-</p>
-
-NEBULA is developed by [Enrique Tomás Martínez Beltrán](https://enriquetomasmb.com) in collaboration with the [University of Murcia](https://www.um.es/en), [armasuisse](https://www.armasuisse.ch/en), and the [University of Zurich (UZH)](https://www.uzh.ch/).
-
-<p align="center">
-	<a href="https://um.es">
-	<img src="docs/_static/umu.jpg" alt="University of Murcia" width="200" height="60">
-	</a>
-	<a href="https://www.armasuisse.ch/en">
-	<img src="docs/_static/armasuisse.jpg" alt="armasuisse" width="200" height="60">
-	</a>
-	<a href="https://www.uzh.ch/">
-	<img src="docs/_static/uzh.jpg" alt="University of Zurich" width="200" height="60">
-	</a>
+  <img src="https://raw.githubusercontent.com/CyberDataLab/nebula/5b44d54eec9186f7c9f6351f26cd92b33bd37fdf/docs/_prebuilt/static/nebula-mockup.png" alt="NEBULA Mockup">
 </p>
 
 [^1]: Fedstellar was our first version of the platform. We have redesigned the previous functionalities and added new capabilities based on our research. The platform is now called NEBULA and is available as an open-source project.
 
 ## 🎯 Get Started
 
-To start using NEBULA, follow our detailed [Installation Guide](https://nebula.enriquetomasmb.com/installation.html) and [User Manual](https://nebula.enriquetomasmb.com/user-manual.html). For any queries or contributions, check out our [Contribution Guide](https://nebula.enriquetomasmb.com/contributing.html).
+To start using NEBULA, follow our detailed [Installation Guide](https://nebula.enriquetomasmb.com/installation/) and [User Manual](https://nebula.enriquetomasmb.com/usage/). For any queries or contributions, check out our [Contribution Guide](https://nebula.enriquetomasmb.com/contributing/).
 
 ## 🤝 Contributing
 
@@ -148,9 +148,9 @@ We would like to thank the following projects for their contributions which have
 
 - [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning) for the training loop and model management
 - [Tensorboard](https://github.com/tensorflow/tensorboard) and [Aim](https://github.com/aimhubio/aim) for the visualization tools and monitoring capabilities
-- Different datasets ([nebula/core/datasets](https://github.com/enriquetomasmb/nebula/tree/main/nebula/core/datasets)) and models ([nebula/core/models](https://github.com/enriquetomasmb/nebula/tree/main/nebula/core/models)) for testing and validation purposes
-- [FastAPI](https://github.com/tiangolo/fastapi) for the RESTful API 
+- Different datasets ([nebula/core/datasets](https://github.com/CyberDataLab/nebula/tree/main/nebula/core/datasets)) and models ([nebula/core/models](https://github.com/CyberDataLab/nebula/tree/main/nebula/core/models)) for testing and validation purposes
+- [FastAPI](https://github.com/tiangolo/fastapi) for the RESTful API
 - [Web3](https://github.com/ethereum/web3.py) for the blockchain integration
-- [Fedstellar](https://github.com/enriquetomasmb/fedstellar) platform and [p2pfl](https://github.com/pguijas/p2pfl/) library
+- [Fedstellar](https://github.com/CyberDataLab/fedstellar) platform and [p2pfl](https://github.com/pguijas/p2pfl/) library
 - [Adversarial Robustness Toolbox (ART)](https://github.com/Trusted-AI/adversarial-robustness-toolbox) for the implementation of adversarial attacks
 - [D3.js](https://github.com/d3/d3-force) for the network visualizations

@@ -1,19 +1,20 @@
 import glob
 import json
-import os
-import numpy as np
 import logging
+import os
+
+import numpy as np
 import torch
-from nebula.core.datasets.nebuladataset import NebulaDataset
-from torchvision import transforms
 from torch.utils.data import Dataset
+from torchvision import transforms
+
 from nebula.config.config import TRAINING_LOGGER
+from nebula.core.datasets.nebuladataset import NebulaDataset
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
 
 
-class RandomCrop(object):
-
+class RandomCrop:
     def __init__(self, size):
         if isinstance(size, int):
             self.size = (size, size)
@@ -40,8 +41,7 @@ class RandomCrop(object):
         return _input[y : y + oh, x : x + ow, :]
 
 
-class CenterCrop(object):
-
+class CenterCrop:
     def __init__(self, size):
         if isinstance(size, int):
             self.size = (size, size)
@@ -64,7 +64,6 @@ class CenterCrop(object):
 
 
 class MilitarySAR(Dataset):
-
     def __init__(self, name="soc", is_train=False, transform=None):
         self.is_train = is_train
         self.name = name
@@ -95,7 +94,7 @@ class MilitarySAR(Dataset):
             idx = idx.tolist()
 
         _image = np.load(self.image_list[idx])
-        with open(self.label_list[idx], "r", encoding="utf-8") as f:
+        with open(self.label_list[idx], encoding="utf-8") as f:
             label_info = json.load(f)
         _label = label_info["class_id"]
         # serial_number = label_info['serial_number']
@@ -109,7 +108,7 @@ class MilitarySAR(Dataset):
         self.targets = []
         self.serial_numbers = []
         for label_path in self.label_list:
-            with open(label_path, "r", encoding="utf-8") as f:
+            with open(label_path, encoding="utf-8") as f:
                 label_info = json.load(f)
             self.targets.append(label_info["class_id"])
             self.serial_numbers.append(label_info["serial_number"])
@@ -190,7 +189,9 @@ class MilitarySARDataset(NebulaDataset):
             logging_training.info("Generating Non-IID partition - Train")
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
             logging_training.info("Generating Non-IID partition - Test")
-            self.local_test_indices_map = self.generate_non_iid_map(self.test_set, self.partition, self.partition_parameter)
+            self.local_test_indices_map = self.generate_non_iid_map(
+                self.test_set, self.partition, self.partition_parameter
+            )
 
         print(f"Length of train indices map: {len(self.train_indices_map)}")
         print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")
@@ -228,5 +229,5 @@ class MilitarySARDataset(NebulaDataset):
         if self.partition_id == 0:
             self.plot_data_distribution(dataset, partitions_map)
             self.plot_all_data_distribution(dataset, partitions_map)
-            
+
         return partitions_map[self.partition_id]

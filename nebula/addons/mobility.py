@@ -1,10 +1,11 @@
 import asyncio
 import logging
-import random
 import math
+import random
 import time
-from nebula.addons.functions import print_msg_box
 from typing import TYPE_CHECKING
+
+from nebula.addons.functions import print_msg_box
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
 class Mobility:
     def __init__(self, config, cm: "CommunicationsManager"):
-        logging.info(f"Starting mobility module...")
+        logging.info("Starting mobility module...")
         self.config = config
         self.cm = cm
         self.grace_time = self.config.participant["mobility_args"]["grace_time_mobility"]
@@ -28,7 +29,12 @@ class Mobility:
         self.max_movement_nearest_strategy = 100  # meters
         self.max_initiate_approximation = self.max_distance_with_direct_connections * 1.2
         # Network conditions based on distance
-        self.network_conditions = {100: {"bandwidth": "5Gbps", "delay": "5ms"}, 200: {"bandwidth": "2Gbps", "delay": "50ms"}, 300: {"bandwidth": "100Mbps", "delay": "200ms"}, float("inf"): {"bandwidth": "10Mbps", "delay": "1000ms"}}
+        self.network_conditions = {
+            100: {"bandwidth": "5Gbps", "delay": "5ms"},
+            200: {"bandwidth": "2Gbps", "delay": "50ms"},
+            300: {"bandwidth": "100Mbps", "delay": "200ms"},
+            float("inf"): {"bandwidth": "10Mbps", "delay": "1000ms"},
+        }
         # Current network conditions of each connection {addr: {bandwidth: "5Gbps", delay: "0ms"}}
         self.current_network_conditions = {}
         # Logging box with mobility information
@@ -38,7 +44,7 @@ class Mobility:
     @property
     def round(self):
         return self.cm.get_round()
-    
+
     async def start(self):
         asyncio.create_task(self.run_mobility())
 
@@ -52,7 +58,7 @@ class Mobility:
             await asyncio.sleep(self.period)
 
     async def change_geo_location_random_strategy(self, latitude, longitude):
-        logging.info(f"📍  Changing geo location randomly")
+        logging.info("📍  Changing geo location randomly")
         # radius_in_degrees = self.radius_federation / 111000
         max_radius_in_degrees = self.max_movement_random_strategy / 111000
         radius = random.uniform(0, max_radius_in_degrees)
@@ -61,14 +67,18 @@ class Mobility:
         longitude += radius * math.sin(angle)
         await self.set_geo_location(latitude, longitude)
 
-    async def change_geo_location_nearest_neighbor_strategy(self, distance, latitude, longitude, neighbor_latitude, neighbor_longitude):
-        logging.info(f"📍  Changing geo location towards the nearest neighbor")
+    async def change_geo_location_nearest_neighbor_strategy(
+        self, distance, latitude, longitude, neighbor_latitude, neighbor_longitude
+    ):
+        logging.info("📍  Changing geo location towards the nearest neighbor")
         scale_factor = min(1, self.max_movement_nearest_strategy / distance)
         # Calcular el ángulo hacia el vecino
         angle = math.atan2(neighbor_longitude - longitude, neighbor_latitude - latitude)
         # Conversión de movimiento máximo a grados
         max_lat_change = self.max_movement_nearest_strategy / 111000  # Cambio en grados para latitud
-        max_lon_change = self.max_movement_nearest_strategy / (111000 * math.cos(math.radians(latitude)))  # Cambio en grados para longitud
+        max_lon_change = self.max_movement_nearest_strategy / (
+            111000 * math.cos(math.radians(latitude))
+        )  # Cambio en grados para longitud
         # Aplicar escala y dirección
         delta_lat = max_lat_change * math.cos(angle) * scale_factor
         delta_lon = max_lon_change * math.sin(angle) * scale_factor
@@ -96,16 +106,25 @@ class Mobility:
             direct_connections = await self.cm.get_direct_connections()
             undirect_connection = await self.cm.get_undirect_connections()
             if len(undirect_connection) > len(direct_connections):
-                logging.info(f"📍  Undirect Connections is higher than Direct Connections")
+                logging.info("📍  Undirect Connections is higher than Direct Connections")
                 # Get neighbor closer to me
                 selected_neighbor = await self.cm.get_nearest_connections(top=1)
                 logging.info(f"📍  Selected neighbor: {selected_neighbor}")
                 try:
-                    neighbor_latitude, neighbor_longitude = selected_neighbor.get_geolocation()
+                    (
+                        neighbor_latitude,
+                        neighbor_longitude,
+                    ) = selected_neighbor.get_geolocation()
                     distance = selected_neighbor.get_neighbor_distance()
                     if distance > self.max_initiate_approximation:
                         # If the distance is too big, we move towards the neighbor
-                        await self.change_geo_location_nearest_neighbor_strategy(distance, latitude, longitude, neighbor_latitude, neighbor_longitude)
+                        await self.change_geo_location_nearest_neighbor_strategy(
+                            distance,
+                            latitude,
+                            longitude,
+                            neighbor_latitude,
+                            neighbor_longitude,
+                        )
                     else:
                         await self.change_geo_location_random_strategy(latitude, longitude)
                 except Exception as e:
@@ -133,13 +152,21 @@ class Mobility:
                         # If the distance is not found, we skip the node
                         continue
                     # logging.info(f"📍  Distance to node {addr}: {distance}")
-                    if not self.cm.connections[addr].get_direct() and distance < self.max_distance_with_direct_connections:
+                    if (
+                        not self.cm.connections[addr].get_direct()
+                        and distance < self.max_distance_with_direct_connections
+                    ):
                         logging.info(f"📍  Node {addr} is close enough [{distance}], adding to direct connections")
                         self.cm.connections[addr].set_direct(True)
                     else:
                         # 10% margin to avoid oscillations
-                        if self.cm.connections[addr].get_direct() and distance > self.max_distance_with_direct_connections * 1.1:
-                            logging.info(f"📍  Node {addr} is too far away [{distance}], removing from direct connections")
+                        if (
+                            self.cm.connections[addr].get_direct()
+                            and distance > self.max_distance_with_direct_connections * 1.1
+                        ):
+                            logging.info(
+                                f"📍  Node {addr} is too far away [{distance}], removing from direct connections"
+                            )
                             self.cm.connections[addr].set_direct(False)
                     # Adapt network conditions of the connection based on distance
                     for threshold in sorted(self.network_conditions.keys()):
@@ -147,26 +174,46 @@ class Mobility:
                             conditions = self.network_conditions[threshold]
                             break
                     # Only update the network conditions if they have changed
-                    if addr not in self.current_network_conditions or self.current_network_conditions[addr] != conditions:
+                    if (
+                        addr not in self.current_network_conditions
+                        or self.current_network_conditions[addr] != conditions
+                    ):
                         # eth1 is the interface of the container that connects to the node network - eth0 is the interface of the container that connects to the frontend/backend
-                        self.cm._set_network_conditions(interface="eth1", network=addr.split(":")[0], bandwidth=conditions["bandwidth"], delay=conditions["delay"], delay_distro="10ms", delay_distribution="normal", loss="0%", duplicate="0%", corrupt="0%", reordering="0%")
+                        self.cm._set_network_conditions(
+                            interface="eth1",
+                            network=addr.split(":")[0],
+                            bandwidth=conditions["bandwidth"],
+                            delay=conditions["delay"],
+                            delay_distro="10ms",
+                            delay_distribution="normal",
+                            loss="0%",
+                            duplicate="0%",
+                            corrupt="0%",
+                            reordering="0%",
+                        )
                         self.current_network_conditions[addr] = conditions
             except KeyError as e:
                 # Except when self.cm.connections[addr] is not found (disconnected during the process)
-                logging.error(f"📍  Connection {addr} not found: {e}")
+                logging.exception(f"📍  Connection {addr} not found: {e}")
                 return
             except Exception as e:
-                logging.error(f"📍  Error changing connections based on distance: {e}")
+                logging.exception(f"📍  Error changing connections based on distance: {e}")
                 return
 
     async def change_connections(self):
-        if self.mobility and (self.mobility_type == "topology" or self.mobility_type == "both") and self.round % self.round_frequency == 0:
-            logging.info(f"📍  Changing connections")
+        if (
+            self.mobility
+            and (self.mobility_type == "topology" or self.mobility_type == "both")
+            and self.round % self.round_frequency == 0
+        ):
+            logging.info("📍  Changing connections")
             current_connections = await self.cm.get_addrs_current_connections(only_direct=True)
             potential_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
-            logging.info(f"📍  Current connections: {current_connections} | Potential future connections: {potential_connections}")
+            logging.info(
+                f"📍  Current connections: {current_connections} | Potential future connections: {potential_connections}"
+            )
             if len(current_connections) < 1 or len(potential_connections) < 1:
-                logging.error(f"📍  Not enough connections for mobility")
+                logging.error("📍  Not enough connections for mobility")
                 return
 
             if self.scheme_mobility == "random":

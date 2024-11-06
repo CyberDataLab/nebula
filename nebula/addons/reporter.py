@@ -2,11 +2,12 @@ import asyncio
 import importlib
 import json
 import logging
-import aiohttp
-import sys
-import psutil
 import os
+import sys
 from typing import TYPE_CHECKING
+
+import aiohttp
+import psutil
 
 if TYPE_CHECKING:
     from nebula.core.network.communications import CommunicationsManager
@@ -14,22 +15,22 @@ if TYPE_CHECKING:
 
 class Reporter:
     def __init__(self, config, trainer, cm: "CommunicationsManager"):
-        logging.info(f"Starting reporter module")
+        logging.info("Starting reporter module")
         self.config = config
         self.trainer = trainer
         self.cm = cm
         self.frequency = self.config.participant["reporter_args"]["report_frequency"]
         self.grace_time = self.config.participant["reporter_args"]["grace_time_reporter"]
         self.data_queue = asyncio.Queue()
-        self.url = f'http://{self.config.participant["scenario_args"]["controller"]}/nebula/dashboard/{self.config.participant["scenario_args"]["name"]}/node/update'
+        self.url = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/update"
         self.counter = 0
-        
+
         self.first_net_metrics = True
         self.prev_bytes_sent = 0
         self.prev_bytes_recv = 0
         self.prev_packets_sent = 0
         self.prev_packets_recv = 0
-        
+
         self.acc_bytes_sent = 0
         self.acc_bytes_recv = 0
         self.acc_packets_sent = 0
@@ -51,29 +52,33 @@ class Reporter:
             await self.__report_resources()
             self.counter += 1
             if self.counter % 50 == 0:
-                logging.info(f"Reloading config file...")
+                logging.info("Reloading config file...")
                 self.cm.engine.config.reload_config_file()
             await asyncio.sleep(self.frequency)
 
     async def report_scenario_finished(self):
-        url = f'http://{self.config.participant["scenario_args"]["controller"]}/nebula/dashboard/{self.config.participant["scenario_args"]["name"]}/node/done'
+        url = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/done"
         data = json.dumps({"idx": self.config.participant["device_args"]["idx"]})
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": f'NEBULA Participant {self.config.participant["device_args"]["idx"]}',
+            "User-Agent": f"NEBULA Participant {self.config.participant['device_args']['idx']}",
         }
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, data=data, headers=headers) as response:
                     if response.status != 200:
-                        logging.error(f"Error received from controller: {response.status} (probably there is overhead in the controller, trying again in the next round)")
+                        logging.error(
+                            f"Error received from controller: {response.status} (probably there is overhead in the controller, trying again in the next round)"
+                        )
                         text = await response.text()
                         logging.debug(text)
                     else:
-                        logging.info(f"Participant {self.config.participant['device_args']['idx']} reported scenario finished")
+                        logging.info(
+                            f"Participant {self.config.participant['device_args']['idx']} reported scenario finished"
+                        )
                         return True
         except aiohttp.ClientError as e:
-            logging.error(f"Error connecting to the controller at {url}: {e}")
+            logging.exception(f"Error connecting to the controller at {url}: {e}")
         return False
 
     async def __report_data_queue(self):
@@ -90,17 +95,19 @@ class Reporter:
                     data=json.dumps(self.config.participant),
                     headers={
                         "Content-Type": "application/json",
-                        "User-Agent": f'NEBULA Participant {self.config.participant["device_args"]["idx"]}',
+                        "User-Agent": f"NEBULA Participant {self.config.participant['device_args']['idx']}",
                     },
                 ) as response:
                     if response.status != 200:
-                        logging.error(f"Error received from controller: {response.status} (probably there is overhead in the controller, trying again in the next round)")
+                        logging.error(
+                            f"Error received from controller: {response.status} (probably there is overhead in the controller, trying again in the next round)"
+                        )
                         text = await response.text()
                         logging.debug(text)
         except aiohttp.ClientError as e:
-            logging.error(f"Error connecting to the controller at {self.url}: {e}")
+            logging.exception(f"Error connecting to the controller at {self.url}: {e}")
         except Exception as e:
-            logging.error(f"Error sending status to controller, will try again in a few seconds: {e}")
+            logging.exception(f"Error sending status to controller, will try again in a few seconds: {e}")
             await asyncio.sleep(5)
 
     async def __report_resources(self):
@@ -110,7 +117,7 @@ class Reporter:
             if sys.platform == "linux":
                 sensors = await asyncio.to_thread(psutil.sensors_temperatures)
                 cpu_temp = sensors.get("coretemp")[0].current if sensors.get("coretemp") else 0
-        except Exception as e:
+        except Exception:
             pass
 
         pid = os.getpid()
@@ -130,7 +137,7 @@ class Reporter:
         bytes_recv = net_io_counters.bytes_recv
         packets_sent = net_io_counters.packets_sent
         packets_recv = net_io_counters.packets_recv
-        
+
         if self.first_net_metrics:
             bytes_sent_diff = 0
             bytes_recv_diff = 0
@@ -147,7 +154,7 @@ class Reporter:
         self.prev_bytes_recv = bytes_recv
         self.prev_packets_sent = packets_sent
         self.prev_packets_recv = packets_recv
-        
+
         self.acc_bytes_sent += bytes_sent_diff
         self.acc_bytes_recv += bytes_recv_diff
         self.acc_packets_sent += packets_sent_diff
@@ -164,8 +171,8 @@ class Reporter:
             "RAM/RAM process (%)": memory_percent_process,
             "RAM/RAM process (MB)": memory_process,
             "Disk/Disk (%)": disk_percent,
-            "Network/Network (bytes sent)": round(self.acc_bytes_sent / (1024 ** 2), 3),
-            "Network/Network (bytes received)": round(self.acc_bytes_recv / (1024 ** 2), 3),
+            "Network/Network (bytes sent)": round(self.acc_bytes_sent / (1024**2), 3),
+            "Network/Network (bytes received)": round(self.acc_bytes_recv / (1024**2), 3),
             "Network/Network (packets sent)": self.acc_packets_sent,
             "Network/Network (packets received)": self.acc_packets_recv,
             "Network/Connections": len(current_connections),
@@ -181,12 +188,18 @@ class Reporter:
                 for i in range(devices):
                     handle = await asyncio.to_thread(pynvml.nvmlDeviceGetHandleByIndex, i)
                     gpu_percent = (await asyncio.to_thread(pynvml.nvmlDeviceGetUtilizationRates, handle)).gpu
-                    gpu_temp = await asyncio.to_thread(pynvml.nvmlDeviceGetTemperature, handle, pynvml.NVML_TEMPERATURE_GPU)
+                    gpu_temp = await asyncio.to_thread(
+                        pynvml.nvmlDeviceGetTemperature,
+                        handle,
+                        pynvml.NVML_TEMPERATURE_GPU,
+                    )
                     gpu_mem = await asyncio.to_thread(pynvml.nvmlDeviceGetMemoryInfo, handle)
                     gpu_mem_percent = round(gpu_mem.used / gpu_mem.total * 100, 3)
                     gpu_power = await asyncio.to_thread(pynvml.nvmlDeviceGetPowerUsage, handle) / 1000.0
                     gpu_clocks = await asyncio.to_thread(pynvml.nvmlDeviceGetClockInfo, handle, pynvml.NVML_CLOCK_SM)
-                    gpu_memory_clocks = await asyncio.to_thread(pynvml.nvmlDeviceGetClockInfo, handle, pynvml.NVML_CLOCK_MEM)
+                    gpu_memory_clocks = await asyncio.to_thread(
+                        pynvml.nvmlDeviceGetClockInfo, handle, pynvml.NVML_CLOCK_MEM
+                    )
                     gpu_fan_speed = await asyncio.to_thread(pynvml.nvmlDeviceGetFanSpeed, handle)
                     gpu_info = {
                         f"GPU/GPU{i} (%)": gpu_percent,

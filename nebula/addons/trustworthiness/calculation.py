@@ -2,21 +2,20 @@ import logging
 import math
 import numbers
 import os.path
+import statistics
 from datetime import datetime
 from math import e
+from os.path import exists
 
 import numpy as np
+import pandas as pd
 import shap
 import torch.nn
 from art.estimators.classification import PyTorchClassifier
 from art.metrics import clever_u
+from codecarbon import EmissionsTracker
 from scipy.stats import variation
 from torch import nn, optim
-import statistics
-from codecarbon import EmissionsTracker
-import pandas as pd
-from os.path import exists
-
 
 dirname = os.path.dirname(__file__)
 logger = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ def get_mapped_score(score_key, score_map):
         keys = [key for key, value in score_map.items()]
         scores = [value for key, value in score_map.items()]
         normalized_scores = get_normalized_scores(scores)
-        normalized_score_map = dict(zip(keys, normalized_scores))
+        normalized_score_map = dict(zip(keys, normalized_scores, strict=False))
         score = normalized_score_map.get(score_key, np.nan)
 
     return score
@@ -154,7 +153,7 @@ def get_scaled_score(value, scale: list, direction: str):
     score = 0
     try:
         value_min, value_max = scale[0], scale[1]
-    except Exception as e:
+    except Exception:
         logger.warning("Score minimum or score maximum is missing. The minimum has been set to 0 and the maximum to 1")
         value_min, value_max = 0, 1
     if not value:
@@ -166,7 +165,6 @@ def get_scaled_score(value, scale: list, direction: str):
         elif value <= value_min:
             score = 0
         else:
-
             diff = value_max - value_min
             diffScale = high - low
             score = (float(value) - value_min) * (float(diffScale) / diff) + low
@@ -304,11 +302,11 @@ def get_bytes_sent_recv(bytes_sent_files, bytes_recv_files):
     total_download_bytes = 0
     number_files = len(bytes_sent_files)
 
-    for file_bytes_sent, file_bytes_recv in zip(bytes_sent_files, bytes_recv_files):
-        with open(file_bytes_sent, "r") as f:
+    for file_bytes_sent, file_bytes_recv in zip(bytes_sent_files, bytes_recv_files, strict=False):
+        with open(file_bytes_sent) as f:
             bytes_sent = f.read()
 
-        with open(file_bytes_recv, "r") as f:
+        with open(file_bytes_recv) as f:
             bytes_recv = f.read()
 
         total_upload_bytes += int(bytes_sent)
@@ -316,7 +314,12 @@ def get_bytes_sent_recv(bytes_sent_files, bytes_recv_files):
 
     avg_upload_bytes = total_upload_bytes / number_files
     avg_download_bytes = total_download_bytes / number_files
-    return total_upload_bytes, total_download_bytes, avg_upload_bytes, avg_download_bytes
+    return (
+        total_upload_bytes,
+        total_download_bytes,
+        avg_upload_bytes,
+        avg_download_bytes,
+    )
 
 
 def get_avg_loss_accuracy(loss_files, accuracy_files):
@@ -335,11 +338,11 @@ def get_avg_loss_accuracy(loss_files, accuracy_files):
     number_files = len(loss_files)
     accuracies = []
 
-    for file_loss, file_accuracy in zip(loss_files, accuracy_files):
-        with open(file_loss, "r") as f:
+    for file_loss, file_accuracy in zip(loss_files, accuracy_files, strict=False):
+        with open(file_loss) as f:
             loss = f.read()
 
-        with open(file_accuracy, "r") as f:
+        with open(file_accuracy) as f:
             accuracy = f.read()
 
         total_loss += float(loss)
@@ -415,13 +418,35 @@ def get_clever_score(model, test_sample, nb_classes, learning_rate):
     optimizer = optim.Adam(model.parameters(), learning_rate)
 
     # Create the ART classifier
-    classifier = PyTorchClassifier(model=model, loss=criterion, optimizer=optimizer, input_shape=(1, 28, 28), nb_classes=nb_classes)
+    classifier = PyTorchClassifier(
+        model=model,
+        loss=criterion,
+        optimizer=optimizer,
+        input_shape=(1, 28, 28),
+        nb_classes=nb_classes,
+    )
 
-    score_untargeted = clever_u(classifier, background.numpy(), 10, 5, R_L2, norm=2, pool_factor=3, verbose=False)
+    score_untargeted = clever_u(
+        classifier,
+        background.numpy(),
+        10,
+        5,
+        R_L2,
+        norm=2,
+        pool_factor=3,
+        verbose=False,
+    )
     return score_untargeted
 
 
-def stop_emissions_tracking_and_save(tracker: EmissionsTracker, outdir: str, emissions_file: str, role: str, workload: str, sample_size: int = 0):
+def stop_emissions_tracking_and_save(
+    tracker: EmissionsTracker,
+    outdir: str,
+    emissions_file: str,
+    role: str,
+    workload: str,
+    sample_size: int = 0,
+):
     """
     Stops emissions tracking object from CodeCarbon and saves relevant information to emissions.csv file.
 
@@ -441,26 +466,37 @@ def stop_emissions_tracking_and_save(tracker: EmissionsTracker, outdir: str, emi
     if exists(emissions_file):
         df = pd.read_csv(emissions_file)
     else:
-        df = pd.DataFrame(columns=["role", "energy_grid", "emissions", "workload", "CPU_model", "GPU_model"])
+        df = pd.DataFrame(
+            columns=[
+                "role",
+                "energy_grid",
+                "emissions",
+                "workload",
+                "CPU_model",
+                "GPU_model",
+            ]
+        )
     try:
         energy_grid = (tracker.final_emissions_data.emissions / tracker.final_emissions_data.energy_consumed) * 1000
         df = pd.concat(
             [
                 df,
-                pd.DataFrame(
-                    {
-                        "role": role,
-                        "energy_grid": [energy_grid],
-                        "emissions": [tracker.final_emissions_data.emissions],
-                        "workload": workload,
-                        "CPU_model": tracker.final_emissions_data.cpu_model if tracker.final_emissions_data.cpu_model else "None",
-                        "GPU_model": tracker.final_emissions_data.gpu_model if tracker.final_emissions_data.gpu_model else "None",
-                        "CPU_used": True if tracker.final_emissions_data.cpu_energy else False,
-                        "GPU_used": True if tracker.final_emissions_data.gpu_energy else False,
-                        "energy_consumed": tracker.final_emissions_data.energy_consumed,
-                        "sample_size": sample_size,
-                    }
-                ),
+                pd.DataFrame({
+                    "role": role,
+                    "energy_grid": [energy_grid],
+                    "emissions": [tracker.final_emissions_data.emissions],
+                    "workload": workload,
+                    "CPU_model": tracker.final_emissions_data.cpu_model
+                    if tracker.final_emissions_data.cpu_model
+                    else "None",
+                    "GPU_model": tracker.final_emissions_data.gpu_model
+                    if tracker.final_emissions_data.gpu_model
+                    else "None",
+                    "CPU_used": True if tracker.final_emissions_data.cpu_energy else False,
+                    "GPU_used": True if tracker.final_emissions_data.gpu_energy else False,
+                    "energy_consumed": tracker.final_emissions_data.energy_consumed,
+                    "sample_size": sample_size,
+                }),
             ],
             ignore_index=True,
         )

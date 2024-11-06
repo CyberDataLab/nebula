@@ -1,6 +1,7 @@
-from torch import nn
-from nebula.core.models.nebulamodel import NebulaModel
 import torch
+from torch import nn
+
+from nebula.core.models.nebulamodel import NebulaModel
 
 
 class FasterMobileNet(NebulaModel):

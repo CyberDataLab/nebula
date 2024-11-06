@@ -1,18 +1,15 @@
-from aim.pytorch_lightning import AimLogger
-from datetime import datetime
 import logging
-from lightning.pytorch.utilities import rank_zero_only
-from aim.sdk.run import Run
-from aim import Image
-from lightning.pytorch.loggers.logger import rank_zero_experiment
+from datetime import datetime
 from typing import TYPE_CHECKING
+
+from aim import Image
+from aim.pytorch_lightning import AimLogger
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
 
 class NebulaLogger(AimLogger):
-
     def __init__(self, config, engine: "Engine", scenario_start_time, *args, **kwargs):
         self.config = config
         self.engine = engine
@@ -34,7 +31,7 @@ class NebulaLogger(AimLogger):
             logging.debug(f"Logging data: {data}")
             super().log_metrics(data)
         except Exception as e:
-            logging.error(f"Error logging statistics data [{data}]: {e}")
+            logging.exception(f"Error logging statistics data [{data}]: {e}")
         logging.debug(f"Time taken to log data: {datetime.now() - time_start}")
 
     def log_figure(self, figure, step=None, name=None):
@@ -43,5 +40,5 @@ class NebulaLogger(AimLogger):
             logging.debug(f"Logging figure: {name}")
             self.experiment.track(Image(figure), name=name)
         except Exception as e:
-            logging.error(f"Error logging figure: {e}")
+            logging.exception(f"Error logging figure: {e}")
         logging.debug(f"Time taken to log figure: {datetime.now() - time_start}")

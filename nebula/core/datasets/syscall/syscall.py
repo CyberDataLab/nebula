@@ -1,11 +1,13 @@
+import ast
 import os
 import sys
 import zipfile
-import ast
+
 import pandas as pd
+import torch
 from sklearn.model_selection import train_test_split
 from torchvision.datasets import MNIST, utils
-import torch
+
 from nebula.core.datasets.nebuladataset import NebulaDataset
 
 
@@ -32,7 +34,9 @@ class SYSCALL(MNIST):
         self.training_file = f"{self.root}/syscall/processed/syscall_train.pt"
         self.test_file = f"{self.root}/syscall/processed/syscall_test.pt"
 
-        if not os.path.exists(f"{self.root}/syscall/processed/syscall_test.pt") or not os.path.exists(f"{self.root}/syscall/processed/syscall_train.pt"):
+        if not os.path.exists(f"{self.root}/syscall/processed/syscall_test.pt") or not os.path.exists(
+            f"{self.root}/syscall/processed/syscall_train.pt"
+        ):
             if self.download:
                 self.dataset_download()
                 self.process()
@@ -152,7 +156,9 @@ class SYSCALLDataset(NebulaDataset):
             self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
         else:
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(self.test_set, self.partition, self.partition_parameter)
+            self.local_test_indices_map = self.generate_non_iid_map(
+                self.test_set, self.partition, self.partition_parameter
+            )
 
         print(f"Length of train indices map: {len(self.train_indices_map)}")
         print(f"Lenght of test indices map: {len(self.test_indices_map)}")
@@ -198,5 +204,5 @@ class SYSCALLDataset(NebulaDataset):
         if self.partition_id == 0:
             self.plot_data_distribution(dataset, partitions_map)
             self.plot_all_data_distribution(dataset, partitions_map)
-            
+
         return partitions_map[self.partition_id]

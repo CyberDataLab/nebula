@@ -1,14 +1,16 @@
 import os
-import sys
-from datasets import load_dataset
-from torchvision.datasets import MNIST
-from sklearn.model_selection import train_test_split
-from torchtext import vocab
-import pandas as pd
-from torch.nn.functional import pad
-from string import punctuation
 import random
+import sys
+from string import punctuation
+
+import pandas as pd
 import torch
+from datasets import load_dataset
+from sklearn.model_selection import train_test_split
+from torch.nn.functional import pad
+from torchtext import vocab
+from torchvision.datasets import MNIST
+
 from nebula.core.datasets.nebuladataset import NebulaDataset
 
 
@@ -63,7 +65,9 @@ class SENTIMENT140(MNIST):
         tokenlized_text_data = [pad(i, [0, 0, 0, 64 - i.shape[0]], "constant", 0) for i in tokenlized_text_data]
         tokenlized_text_data = torch.stack(tokenlized_text_data)
         text_label = torch.Tensor(data_df["sentiment"].tolist())
-        X_train, X_test, y_train, y_test = train_test_split(tokenlized_text_data, text_label, test_size=0.15, random_state=False)
+        X_train, X_test, y_train, y_test = train_test_split(
+            tokenlized_text_data, text_label, test_size=0.15, random_state=False
+        )
         train = [X_train, y_train]
         test = [X_test, y_test]
         train_file = f"{self.root}/sentiment140/processed/sentiment140_train.pt"
@@ -117,7 +121,9 @@ class Sentiment140Dataset(NebulaDataset):
             self.local_test_indices_map = self.generate_iid_map(self.test_set, self.partition, self.partition_parameter)
         else:
             self.train_indices_map = self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-            self.local_test_indices_map = self.generate_non_iid_map(self.test_set, self.partition, self.partition_parameter)
+            self.local_test_indices_map = self.generate_non_iid_map(
+                self.test_set, self.partition, self.partition_parameter
+            )
 
         print(f"Length of train indices map: {len(self.train_indices_map)}")
         print(f"Lenght of test indices map (global): {len(self.test_indices_map)}")

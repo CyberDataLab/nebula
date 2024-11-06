@@ -1,4 +1,4 @@
-__version__ = "1.0.0"
+__version__ = "0.0.1"
 __description__ = "NEBULA: A Platform for Decentralized Federated Learning"
 __long_description__ = "NEBULA: A Platform for Decentralized Federated Learning"
 __author__ = "Enrique Tomás Martínez Beltrán"

@@ -1,25 +1,30 @@
 import time
-from functools import wraps
+from collections import OrderedDict
+from collections.abc import Mapping
 
 import requests
 import torch
-from typing import Dict, List, Tuple, OrderedDict, Mapping
-
 from eth_account import Account
-from web3 import Web3
-from web3.middleware import construct_sign_and_send_raw_middleware
-from web3.middleware import geth_poa_middleware
-
-from tabulate import tabulate
 from retry import retry
+from tabulate import tabulate
+from web3 import Web3
+from web3.middleware import construct_sign_and_send_raw_middleware, geth_poa_middleware
 
 from nebula.core.aggregation.aggregator import Aggregator
-from nebula.core.utils.helper import cosine_metric, euclidean_metric, minkowski_metric, manhattan_metric, \
-    pearson_correlation_metric, jaccard_metric
+from nebula.core.utils.helper import (
+    cosine_metric,
+    euclidean_metric,
+    jaccard_metric,
+    manhattan_metric,
+    minkowski_metric,
+    pearson_correlation_metric,
+)
 
 
 def cossim_euclidean(model1, model2, similarity):
-    return cosine_metric(model1, model2, similarity=similarity) * euclidean_metric(model1, model2, similarity=similarity)
+    return cosine_metric(model1, model2, similarity=similarity) * euclidean_metric(
+        model1, model2, similarity=similarity
+    )
 
 
 class BlockchainReputation(Aggregator):
@@ -36,11 +41,10 @@ class BlockchainReputation(Aggregator):
         "Minkowski": minkowski_metric,
         "Manhattan": manhattan_metric,
         "Jaccard": jaccard_metric,
-        "CossimEuclid": cossim_euclidean
+        "CossimEuclid": cossim_euclidean,
     }
 
     def __init__(self, similarity_metric: str = "CossimEuclid", config=None, **kwargs):
-
         # initialize parent class
         super().__init__(config, **kwargs)
 
@@ -59,7 +63,6 @@ class BlockchainReputation(Aggregator):
         self.__similarity_metric = similarity_metric
 
     def run_aggregation(self, model_buffer: OrderedDict[str, OrderedDict[torch.Tensor, int]]) -> torch.Tensor:
-
         print_with_frame("BLOCKCHAIN AGGREGATION: START")
 
         # track aggregation time for experiments
@@ -82,15 +85,29 @@ class BlockchainReputation(Aggregator):
 
         # compute similarity between local model and all buffered models
         metric_values = {
-            sender: max(min(round(self.__opinion_algo(local_model, current_models[sender], similarity=True), 5), 1), 0)
-            for sender in current_models.keys() if sender != self.node_name}
+            sender: max(
+                min(
+                    round(
+                        self.__opinion_algo(local_model, current_models[sender], similarity=True),
+                        5,
+                    ),
+                    1,
+                ),
+                0,
+            )
+            for sender in current_models
+            if sender != self.node_name
+        }
 
         # log similarity metric values
-        print_table("SIMILARITY METRIC", list(metric_values.items()),
-                    ["neighbour Node", f"{self.__similarity_metric} Similarity"])
+        print_table(
+            "SIMILARITY METRIC",
+            list(metric_values.items()),
+            ["neighbour Node", f"{self.__similarity_metric} Similarity"],
+        )
 
         # increase resolution of metric in upper half of interval
-        opinion_values = {sender: round(metric ** 3 * 100) for sender, metric in metric_values.items()}
+        opinion_values = {sender: round(metric**3 * 100) for sender, metric in metric_values.items()}
 
         # DEBUG
         if int(self.node_name[-7]) <= 1 and self.__blockchain.round >= 5:
@@ -100,26 +117,37 @@ class BlockchainReputation(Aggregator):
         self.__blockchain.push_opinions(opinion_values)
 
         # log pushed opinion values
-        print_table("REPORT LOCAL OPINION", list(opinion_values.items()),
-                    ["Node", f"Transformed {self.__similarity_metric} Similarity"])
+        print_table(
+            "REPORT LOCAL OPINION",
+            list(opinion_values.items()),
+            ["Node", f"Transformed {self.__similarity_metric} Similarity"],
+        )
 
         # request global reputation values from reputation system
-        reputation_values = self.__blockchain.get_reputations([sender for sender in current_models.keys()])
+        reputation_values = self.__blockchain.get_reputations([sender for sender in current_models])
 
         # log received global reputations
-        print_table("GLOBAL REPUTATION", list(reputation_values.items()), ["Node", "Global Reputation"])
+        print_table(
+            "GLOBAL REPUTATION",
+            list(reputation_values.items()),
+            ["Node", "Global Reputation"],
+        )
 
         # normalize all reputation values to sum() == 1
         sum_reputations = sum(reputation_values.values())
         if sum_reputations > 0:
-            normalized_reputation_values = {name: round(reputation_values[name] / sum_reputations, 3) for name in
-                                            reputation_values}
+            normalized_reputation_values = {
+                name: round(reputation_values[name] / sum_reputations, 3) for name in reputation_values
+            }
         else:
             normalized_reputation_values = reputation_values
 
         # log normalized aggregation weights
-        print_table("AGGREGATION WEIGHTS", list(normalized_reputation_values.items()),
-                    ["Node", "Aggregation Weight"])
+        print_table(
+            "AGGREGATION WEIGHTS",
+            list(normalized_reputation_values.items()),
+            ["Node", "Aggregation Weight"],
+        )
 
         # initialize empty model
         final_model = {layer: torch.zeros_like(param).float() for layer, param in local_model.items()}
@@ -135,7 +163,11 @@ class BlockchainReputation(Aggregator):
             final_model = local_model
 
         # report used gas to oracle and log cumulative gas used
-        print_table("TOTAL GAS USED", self.__blockchain.report_gas_oracle(), ["Node", "Cumulative Gas used"])
+        print_table(
+            "TOTAL GAS USED",
+            self.__blockchain.report_gas_oracle(),
+            ["Node", "Cumulative Gas used"],
+        )
         self.__blockchain.report_time_oracle(start)
 
         print_with_frame("BLOCKCHAIN AGGREGATION: FINISHED")
@@ -144,7 +176,7 @@ class BlockchainReputation(Aggregator):
         return final_model
 
 
-def print_table(title: str, values: list[Tuple | List], headers: list[str]) -> None:
+def print_table(title: str, values: list[tuple | list], headers: list[str]) -> None:
     """
     Prints a title, all values ordered in a table, with the headers as column titles.
     Args:
@@ -156,14 +188,7 @@ def print_table(title: str, values: list[Tuple | List], headers: list[str]) -> N
 
     """
     print(f"\n{'-' * 25} {title.upper()} {'-' * 25}", flush=True)
-    print(
-        tabulate(
-            sorted(values),
-            headers=headers,
-            tablefmt="grid"
-        ),
-        flush=True
-    )
+    print(tabulate(sorted(values), headers=headers, tablefmt="grid"), flush=True)
 
 
 def print_with_frame(message) -> None:
@@ -183,7 +208,7 @@ def print_with_frame(message) -> None:
 
 class BlockchainHandler:
     """
-        Handles interaction with Oracle and Non-Validator Node of Blockchain Network
+    Handles interaction with Oracle and Non-Validator Node of Blockchain Network
     """
 
     # static ip address of non-validator node with RPC-API
@@ -193,10 +218,7 @@ class BlockchainHandler:
     __oracle_url = "http://172.25.0.105:8081"
 
     # default REST header for interacting with oracle
-    __rest_header = {
-        'Content-type': 'application/json',
-        'Accept': 'application/json'
-    }
+    __rest_header = {"Content-type": "application/json", "Accept": "application/json"}
 
     def __init__(self, home_address):
         print_with_frame("BLOCKCHAIN INITIALIZATION: START")
@@ -205,15 +227,15 @@ class BlockchainHandler:
         self.__home_ip = home_address
 
         # randomly generated private key, needed to sign transaction
-        self.__private_key = str()
+        self.__private_key = ""
 
         # public wallet address generated from the private key
-        self.__acc_address = str()
+        self.__acc_address = ""
 
         # variables for experiment, not required for aggregation
-        self.__gas_used = int()
-        self.__gas_price = float(27.3)
-        self.round = int(1)
+        self.__gas_used = 0
+        self.__gas_price = 27.3
+        self.round = 1
 
         # generate randomized primary key
         self.__acc = self.__create_account()
@@ -237,11 +259,11 @@ class BlockchainHandler:
         # register public wallet address at reputation system
         print(f"{'-' * 25} CONNECT TO REPUTATION SYSTEM {'-' * 25}", flush=True)
         self.__register()
-        print(f"BLOCKCHAIN: Registered to reputation system", flush=True)
+        print("BLOCKCHAIN: Registered to reputation system", flush=True)
 
         # check if registration was successful
         self.verify_registration()
-        print(f"BLOCKCHAIN: Verified registration", flush=True)
+        print("BLOCKCHAIN: Verified registration", flush=True)
 
         print_with_frame("BLOCKCHAIN INITIALIZATION: FINISHED")
 
@@ -289,7 +311,7 @@ class BlockchainHandler:
         """
 
         # initialize Web3 object with ip of non-validator node
-        web3 = Web3(Web3.HTTPProvider(self.__rpc_url, request_kwargs={'timeout': 20}))  # 10
+        web3 = Web3(Web3.HTTPProvider(self.__rpc_url, request_kwargs={"timeout": 20}))  # 10
 
         # inject Proof-of-Authority settings to object
         web3.middleware_onion.inject(geth_poa_middleware, layer=0)
@@ -315,13 +337,13 @@ class BlockchainHandler:
         response = requests.get(
             url=f"{self.__oracle_url}/status",
             headers=self.__rest_header,
-            timeout=20  # 10
+            timeout=20,  # 10
         )
 
         # raise Exception if status is not successful
         response.raise_for_status()
 
-        return print(f"ORACLE: Blockchain is ready", flush=True)
+        return print("ORACLE: Blockchain is ready", flush=True)
 
     @retry((Exception, requests.exceptions.HTTPError), tries=3, delay=4)
     def __request_funds_from_oracle(self) -> None:
@@ -334,15 +356,15 @@ class BlockchainHandler:
         # call oracle's faucet by Http post request
         response = requests.post(
             url=f"{self.__oracle_url}/faucet",
-            json={f"address": self.__acc_address},
+            json={"address": self.__acc_address},
             headers=self.__rest_header,
-            timeout=20  # 10
+            timeout=20,  # 10
         )
 
         # raise Exception if status is not successful
         response.raise_for_status()
 
-        return print(f"ORACLE: Received 500 ETH", flush=True)
+        return print("ORACLE: Received 500 ETH", flush=True)
 
     def verify_balance(self) -> None:
         """
@@ -356,7 +378,10 @@ class BlockchainHandler:
 
         # convert wei to ether
         balance_eth = self.__web3.from_wei(balance, "ether")
-        print(f"BLOCKCHAIN: Successfully verified balance of {balance_eth} ETH", flush=True)
+        print(
+            f"BLOCKCHAIN: Successfully verified balance of {balance_eth} ETH",
+            flush=True,
+        )
 
         # if node ran out of funds, it requests ether from the oracle
         if balance_eth <= 1:
@@ -375,7 +400,7 @@ class BlockchainHandler:
         response = requests.get(
             url=f"{self.__oracle_url}/contract",
             headers=self.__rest_header,
-            timeout=20  # 10
+            timeout=20,  # 10
         )
 
         # raise Exception if status is not successful
@@ -384,13 +409,13 @@ class BlockchainHandler:
         # convert response to json to extract the abi and address
         json_response = response.json()
 
-        print(f"ORACLE: Initialized chain code: {json_response.get('address')}", flush=True)
+        print(
+            f"ORACLE: Initialized chain code: {json_response.get('address')}",
+            flush=True,
+        )
 
         # return an initialized web3 contract object
-        return self.__web3.eth.contract(
-            abi=json_response.get("abi"),
-            address=json_response.get("address")
-        )
+        return self.__web3.eth.contract(abi=json_response.get("abi"), address=json_response.get("address"))
 
     @retry((Exception, requests.exceptions.HTTPError), tries=3, delay=4)
     def report_gas_oracle(self) -> list:
@@ -405,7 +430,7 @@ class BlockchainHandler:
             url=f"{self.__oracle_url}/gas",
             json={"amount": self.__gas_used, "round": self.round},
             headers=self.__rest_header,
-            timeout=20  # 10
+            timeout=20,  # 10
         )
 
         # raise Exception if status is not successful
@@ -428,9 +453,9 @@ class BlockchainHandler:
         # method used for experiments, not needed for aggregation
         response = requests.post(
             url=f"{self.__oracle_url}/reputation",
-            json={"records": records, "round": self.round, "sender":self.__home_ip},
+            json={"records": records, "round": self.round, "sender": self.__home_ip},
             headers=self.__rest_header,
-            timeout=20  # 10
+            timeout=20,  # 10
         )
 
         # raise Exception if status is not successful
@@ -474,18 +499,14 @@ class BlockchainHandler:
         """
 
         # create raw transaction object to call rate_neighbors() from the reputation system
-        unsigned_trx = self.__contract_obj.functions.rate_neighbours(
-            list(opinion_dict.items())).build_transaction(
-            {
-                "chainId": self.__web3.eth.chain_id,
-                "from": self.__acc_address,
-                "nonce": self.__web3.eth.get_transaction_count(
-                    self.__web3.to_checksum_address(self.__acc_address),
-                    'pending'
-                ),
-                "gasPrice": self.__web3.to_wei(self.__gas_price, "gwei")
-            }
-        )
+        unsigned_trx = self.__contract_obj.functions.rate_neighbours(list(opinion_dict.items())).build_transaction({
+            "chainId": self.__web3.eth.chain_id,
+            "from": self.__acc_address,
+            "nonce": self.__web3.eth.get_transaction_count(
+                self.__web3.to_checksum_address(self.__acc_address), "pending"
+            ),
+            "gasPrice": self.__web3.to_wei(self.__gas_price, "gwei"),
+        })
 
         # sign and execute the transaction
         conf = self.__sign_and_deploy(unsigned_trx)
@@ -509,26 +530,65 @@ class BlockchainHandler:
         stats_to_print = list()
 
         # call get_reputations() from reputation system
-        raw_reputation = self.__contract_obj.functions.get_reputations(ip_addresses).call(
-            {"from": self.__acc_address})
+        raw_reputation = self.__contract_obj.functions.get_reputations(ip_addresses).call({"from": self.__acc_address})
 
         # loop list with tuples from reputation system
-        for name, reputation, weighted_reputation, stddev_count, divisor, final_reputation, avg, median, stddev, index, avg_deviation, avg_avg_deviation, malicious_opinions in raw_reputation:
-
+        for (
+            name,
+            reputation,
+            weighted_reputation,
+            stddev_count,
+            divisor,
+            final_reputation,
+            avg,
+            median,
+            stddev,
+            index,
+            avg_deviation,
+            avg_avg_deviation,
+            malicious_opinions,
+        ) in raw_reputation:
             # list elements with an empty name can be ignored
-            if not name: continue
+            if not name:
+                continue
 
             # print statistical values
-            stats_to_print.append(
-                [name, reputation / 10, weighted_reputation / 10, stddev_count / 10, divisor / 10, final_reputation / 10, avg / 10, median / 10,
-                 stddev / 10, avg_deviation / 10, avg_avg_deviation / 10, malicious_opinions])
+            stats_to_print.append([
+                name,
+                reputation / 10,
+                weighted_reputation / 10,
+                stddev_count / 10,
+                divisor / 10,
+                final_reputation / 10,
+                avg / 10,
+                median / 10,
+                stddev / 10,
+                avg_deviation / 10,
+                avg_avg_deviation / 10,
+                malicious_opinions,
+            ])
 
             # assign the final reputation to a dict for later aggregation
             final_reputations[name] = final_reputation / 10
 
-        print_table("REPUTATION SYSTEM STATE", stats_to_print,
-                    ["Name", "Reputation", "Weighted Rep. by local Node", "Stddev Count", "Divisor", "Final Reputation", "Mean", "Median",
-                     "Stddev", "Avg Deviation in Opinion", "Avg of all Avg Deviations in Opinions", "Malicious Opinions"])
+        print_table(
+            "REPUTATION SYSTEM STATE",
+            stats_to_print,
+            [
+                "Name",
+                "Reputation",
+                "Weighted Rep. by local Node",
+                "Stddev Count",
+                "Divisor",
+                "Final Reputation",
+                "Mean",
+                "Median",
+                "Stddev",
+                "Avg Deviation in Opinion",
+                "Avg of all Avg Deviations in Opinions",
+                "Malicious Opinions",
+            ],
+        )
 
         # if sum(final_reputations.values()):
         #     self.report_reputation_oracle(list(final_reputations.items()))
@@ -544,17 +604,14 @@ class BlockchainHandler:
         """
 
         # build raw transaction object to call public method register() from reputation system
-        unsigned_trx = self.__contract_obj.functions.register(self.__home_ip).build_transaction(
-            {
-                "chainId": self.__web3.eth.chain_id,
-                "from": self.__acc_address,
-                "nonce": self.__web3.eth.get_transaction_count(
-                    self.__web3.to_checksum_address(self.__acc_address),
-                    'pending'
-                ),
-                "gasPrice": self.__web3.to_wei(self.__gas_price, "gwei")
-            }
-        )
+        unsigned_trx = self.__contract_obj.functions.register(self.__home_ip).build_transaction({
+            "chainId": self.__web3.eth.chain_id,
+            "from": self.__acc_address,
+            "nonce": self.__web3.eth.get_transaction_count(
+                self.__web3.to_checksum_address(self.__acc_address), "pending"
+            ),
+            "gasPrice": self.__web3.to_wei(self.__gas_price, "gwei"),
+        })
 
         # sign and execute created transaction
         conf = self.__sign_and_deploy(unsigned_trx)
@@ -580,7 +637,7 @@ class BlockchainHandler:
             self.__register()
 
             # raise Exception to check again
-            raise Exception(f"EXCEPTION: _verify_registration() => Could not be confirmed)")
+            raise Exception("EXCEPTION: _verify_registration() => Could not be confirmed)")
 
         return None
 
@@ -595,9 +652,9 @@ class BlockchainHandler:
         # report aggregation time and round to oracle
         response = requests.post(
             url=f"{BlockchainHandler.oracle_url}/time",
-            json={"time": (time.time_ns() - start) / (10 ** 9), "round": self.round},
+            json={"time": (time.time_ns() - start) / (10**9), "round": self.round},
             headers=self.__rest_header,
-            timeout=20  # 10
+            timeout=20,  # 10
         )
 
         # raise Exception if status is not successful

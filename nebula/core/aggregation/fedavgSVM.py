@@ -1,6 +1,7 @@
 import numpy as np
-from nebula.core.aggregation.aggregator import Aggregator
 from sklearn.svm import LinearSVC
+
+from nebula.core.aggregation.aggregator import Aggregator
 
 
 class FedAvgSVM(Aggregator):

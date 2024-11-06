@@ -1,3 +1,0 @@
-Sphinx==8.0.2
-sphinx-autoapi==3.3.1
-sphinx-book-theme==1.1.3

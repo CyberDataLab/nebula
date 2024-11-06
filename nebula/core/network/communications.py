@@ -1,35 +1,34 @@
+import asyncio
+import collections
 import hashlib
 import logging
-import sys
 import os
-import traceback
-import collections
-from datetime import datetime
-import requests
-import asyncio
 import subprocess
+import sys
+import traceback
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+import requests
 import time
 import torch
 
 from nebula.addons.mobility import Mobility
+from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
 from nebula.core.network.forwarder import Forwarder
-from nebula.core.network.health import Health
+from nebula.core.network.messages import MessagesManager
 from nebula.core.network.propagator import Propagator
 from nebula.core.pb import nebula_pb2
-from nebula.core.network.messages import MessagesManager
-from nebula.core.network.connection import Connection
-
-from nebula.core.utils.locker import Locker
 from nebula.core.utils.helper import (
     cosine_metric,
     euclidean_metric,
-    minkowski_metric,
-    manhattan_metric,
-    pearson_correlation_metric,
     jaccard_metric,
+    manhattan_metric,
+    minkowski_metric,
+    pearson_correlation_metric,
 )
-from typing import TYPE_CHECKING
+from nebula.core.utils.locker import Locker
 from nebula.core.reputation.Reputation import (
     Reputation,
     save_data,
@@ -40,7 +39,6 @@ if TYPE_CHECKING:
 
 
 class CommunicationsManager:
-
     def __init__(self, engine: "Engine"):
         logging.info("🌐  Initializing Communications Manager")
         self._engine = engine
@@ -50,8 +48,8 @@ class CommunicationsManager:
         self.config = engine.get_config()
         self.id = str(self.config.participant["device_args"]["idx"])
 
-        self.register_endpoint = f'http://{self.config.participant["scenario_args"]["controller"]}/nebula/dashboard/{self.config.participant["scenario_args"]["name"]}/node/register'
-        self.wait_endpoint = f'http://{self.config.participant["scenario_args"]["controller"]}/nebula/dashboard/{self.config.participant["scenario_args"]["name"]}/node/wait'
+        self.register_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/register"
+        self.wait_endpoint = f"http://{self.config.participant['scenario_args']['controller']}/nebula/dashboard/{self.config.participant['scenario_args']['name']}/node/wait"
 
         self._connections = {}
         self.connections_lock = Locker(name="connections_lock", async_lock=True)
@@ -65,7 +63,9 @@ class CommunicationsManager:
         self.ready_connections = set()
 
         self._mm = MessagesManager(addr=self.addr, config=self.config, cm=self)
-        self.received_messages_hashes = collections.deque(maxlen=self.config.participant["message_args"]["max_local_messages"])
+        self.received_messages_hashes = collections.deque(
+            maxlen=self.config.participant["message_args"]["max_local_messages"]
+        )
         self.receive_messages_lock = Locker(name="receive_messages_lock", async_lock=True)
 
         self._discoverer = Discoverer(addr=self.addr, config=self.config, cm=self)
@@ -133,7 +133,9 @@ class CommunicationsManager:
 
     async def check_federation_ready(self):
         # Check if all my connections are in ready_connections
-        logging.info(f"🔗  check_federation_ready | Ready connections: {self.ready_connections} | Connections: {self.connections.keys()}")
+        logging.info(
+            f"🔗  check_federation_ready | Ready connections: {self.ready_connections} | Connections: {self.connections.keys()}"
+        )
         if set(self.connections.keys()) == self.ready_connections:
             return True
 
@@ -161,7 +163,11 @@ class CommunicationsManager:
                 await self.handle_control_message(source, message_wrapper.control_message)
             elif message_wrapper.HasField("federation_message"):
                 if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    if self.config.participant["device_args"]["proxy"] or message_wrapper.federation_message.action == nebula_pb2.FederationMessage.Action.Value("FEDERATION_START"):
+                    if self.config.participant["device_args"][
+                        "proxy"
+                    ] or message_wrapper.federation_message.action == nebula_pb2.FederationMessage.Action.Value(
+                        "FEDERATION_START"
+                    ):
                         await self.forwarder.forward(data, addr_from=addr_from)
                     await self.handle_federation_message(source, message_wrapper.federation_message)
             elif message_wrapper.HasField("model_message"):
@@ -186,35 +192,45 @@ class CommunicationsManager:
             else:
                 logging.info(f"Unknown handler for message: {message_wrapper}")
         except Exception as e:
-            logging.error(f"📥  handle_incoming_message | Error while processing: {e}")
-            logging.error(traceback.format_exc())
+            logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
+            logging.exception(traceback.format_exc())
 
     async def handle_discovery_message(self, source, message):
-        logging.info(f"🔍  handle_discovery_message | Received [Action {message.action}] from {source} (network propagation)")
+        logging.info(
+            f"🔍  handle_discovery_message | Received [Action {message.action}] from {source} (network propagation)"
+        )
         try:
             await self.engine.event_manager.trigger_event(source, message)
         except Exception as e:
-            logging.error(f"🔍  handle_discovery_message | Error while processing: {e}")
+            logging.exception(f"🔍  handle_discovery_message | Error while processing: {e}")
 
     async def handle_control_message(self, source, message):
         current_round = self.engine.get_round()
         if current_round is not None:
             logging.info(f"🔧 handle_control_message | Received message from {source} with round {current_round}")
 
-        logging.info(f"🔧  handle_control_message | Received [Action {message.action}] from {source} with log {message.log}")
+        logging.info(
+            f"🔧  handle_control_message | Received [Action {message.action}] from {source} with log {message.log}"
+        )
         try:
             await self.engine.event_manager.trigger_event(source, message)
         except Exception as e:
-            logging.error(f"🔧  handle_control_message | Error while processing: {message.action} {message.log} | {e}")
+            logging.exception(
+                f"🔧  handle_control_message | Error while processing: {message.action} {message.log} | {e}"
+            )
 
     async def handle_federation_message(self, source, message):
-        logging.info(f"📝  handle_federation_message | Received [Action {message.action}] from {source} with arguments {message.arguments}")
+        logging.info(
+            f"📝  handle_federation_message | Received [Action {message.action}] from {source} with arguments {message.arguments}"
+        )
         try:
             await self.engine.event_manager.trigger_event(source, message)
             self.store_receive_timestamp(source, "federation", message.round)
             #self.calculate_latency(source, "federation")
         except Exception as e:
-            logging.error(f"📝  handle_federation_message | Error while processing: {message.action} {message.arguments} | {e}")
+            logging.exception(
+                f"📝  handle_federation_message | Error while processing: {message.action} {message.arguments} | {e}"
+            )
     
     async def handle_model_message(self, source, message):
         logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
@@ -247,9 +263,13 @@ class CommunicationsManager:
             self.fraction_of_parameters_changed(source, parameters_local, decoded_model, current_round)
             
             if message.round != current_round and message.round != -1:
-                logging.info(f"❗️  handle_model_message | Received a model from a different round | Model round: {message.round} | Current round: {current_round}")
+                logging.info(
+                    f"❗️  handle_model_message | Received a model from a different round | Model round: {message.round} | Current round: {current_round}"
+                )
                 # if message.round > current_round:
-                #     logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
+                #     logging.info(
+                        f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
+                    )
                 #     await self.engine.aggregator.include_next_model_in_buffer(
                 #         message.parameters,
                 #         message.weight,
@@ -260,7 +280,7 @@ class CommunicationsManager:
                 #     logging.info(f"❗️  handle_model_message | Ignoring model from {source} from a previous round")
                 # return
             if not self.engine.get_federation_ready_lock().locked() and len(self.engine.get_federation_nodes()) == 0:
-                logging.info(f"🤖  handle_model_message | There are no defined federation nodes")
+                logging.info("🤖  handle_model_message | There are no defined federation nodes")
                 return
             try:
                 # get_federation_ready_lock() is locked when the model is being initialized (first round)
@@ -312,7 +332,9 @@ class CommunicationsManager:
                 else:
                     if message.round != -1:
                         # Be sure that the model message is from the initialization round (round = -1)
-                        logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
+                        logging.info(
+                            f"🤖  handle_model_message | Saving model from {source} for future round {message.round}"
+                        )
                         await self.engine.aggregator.include_next_model_in_buffer(
                             message.parameters,
                             message.weight,
@@ -324,22 +346,26 @@ class CommunicationsManager:
                     try:
                         model = self.engine.trainer.deserialize_model(message.parameters)
                         self.engine.trainer.set_model_parameters(model, initialize=True)
-                        logging.info(f"🤖  handle_model_message | Model Parameters Initialized")
+                        logging.info("🤖  handle_model_message | Model Parameters Initialized")
                         self.engine.set_initialization_status(True)
-                        await self.engine.get_federation_ready_lock().release_async()  # Enable learning cycle once the initialization is done
+                        await (
+                            self.engine.get_federation_ready_lock().release_async()
+                        )  # Enable learning cycle once the initialization is done
                         try:
-                            await self.engine.get_federation_ready_lock().release_async()  # Release the lock acquired at the beginning of the engine
+                            await (
+                                self.engine.get_federation_ready_lock().release_async()
+                            )  # Release the lock acquired at the beginning of the engine
                         except RuntimeError:
                             pass
                     except RuntimeError:
                         pass
 
             except Exception as e:
-                logging.error(f"🤖  handle_model_message | Unknown error adding model: {e}")
-                logging.error(traceback.format_exc())
+                logging.exception(f"🤖  handle_model_message | Unknown error adding model: {e}")
+                logging.exception(traceback.format_exc())
 
         else:
-            logging.info(f"🤖  handle_model_message | Tried to add a model while learning is not running")
+            logging.info("🤖  handle_model_message | Tried to add a model while learning is not running")
             if message.round != -1:
                 # Be sure that the model message is from the initialization round (round = -1)
                 logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
@@ -461,11 +487,11 @@ class CommunicationsManager:
         return self.engine.get_round()
 
     async def start(self):
-        logging.info(f"🌐  Starting Communications Manager...")
+        logging.info("🌐  Starting Communications Manager...")
         await self.deploy_network_engine()
 
     async def deploy_network_engine(self):
-        logging.info(f"🌐  Deploying Network engine...")
+        logging.info("🌐  Deploying Network engine...")
         self.network_engine = await asyncio.start_server(self.handle_connection_wrapper, self.host, self.port)
         self.network_task = asyncio.create_task(self.network_engine.serve_forever(), name="Network Engine")
         logging.info(f"🌐  Network engine deployed at host {self.host} and port {self.port}")
@@ -474,7 +500,6 @@ class CommunicationsManager:
         asyncio.create_task(self.handle_connection(reader, writer))
 
     async def handle_connection(self, reader, writer):
-
         async def process_connection(reader, writer):
             try:
                 addr = writer.get_extra_info("peername")
@@ -487,11 +512,13 @@ class CommunicationsManager:
                 direct = await reader.readline()
                 direct = direct.decode("utf-8").strip()
                 direct = True if direct == "True" else False
-                logging.info(f"🔗  [incoming] Connection from {addr} - {connection_addr} [id {connected_node_id} | port {connected_node_port} | direct {direct}] (incoming)")
+                logging.info(
+                    f"🔗  [incoming] Connection from {addr} - {connection_addr} [id {connected_node_id} | port {connected_node_port} | direct {direct}] (incoming)"
+                )
 
                 if self.id == connected_node_id:
                     logging.info("🔗  [incoming] Connection with yourself is not allowed")
-                    writer.write("CONNECTION//CLOSE\n".encode("utf-8"))
+                    writer.write(b"CONNECTION//CLOSE\n")
                     await writer.drain()
                     writer.close()
                     await writer.wait_closed()
@@ -501,7 +528,7 @@ class CommunicationsManager:
                     if len(self.connections) >= self.max_connections:
                         logging.info("🔗  [incoming] Maximum number of connections reached")
                         logging.info(f"🔗  [incoming] Sending CONNECTION//CLOSE to {addr}")
-                        writer.write("CONNECTION//CLOSE\n".encode("utf-8"))
+                        writer.write(b"CONNECTION//CLOSE\n")
                         await writer.drain()
                         writer.close()
                         await writer.wait_closed()
@@ -511,7 +538,7 @@ class CommunicationsManager:
                     if connection_addr in self.connections:
                         logging.info(f"🔗  [incoming] Already connected with {self.connections[connection_addr]}")
                         logging.info(f"🔗  [incoming] Sending CONNECTION//EXISTS to {addr}")
-                        writer.write("CONNECTION//EXISTS\n".encode("utf-8"))
+                        writer.write(b"CONNECTION//EXISTS\n")
                         await writer.drain()
                         writer.close()
                         await writer.wait_closed()
@@ -520,17 +547,21 @@ class CommunicationsManager:
                     if connection_addr in self.pending_connections:
                         logging.info(f"🔗  [incoming] Connection with {connection_addr} is already pending")
                         if int(self.host.split(".")[3]) < int(addr[0].split(".")[3]):
-                            logging.info(f"🔗  [incoming] Closing incoming connection since self.host < host  (from {connection_addr})")
-                            writer.write("CONNECTION//CLOSE\n".encode("utf-8"))
+                            logging.info(
+                                f"🔗  [incoming] Closing incoming connection since self.host < host  (from {connection_addr})"
+                            )
+                            writer.write(b"CONNECTION//CLOSE\n")
                             await writer.drain()
                             writer.close()
                             await writer.wait_closed()
                             return
                         else:
-                            logging.info(f"🔗  [incoming] Closing outgoing connection since self.host >= host (from {connection_addr})")
+                            logging.info(
+                                f"🔗  [incoming] Closing outgoing connection since self.host >= host (from {connection_addr})"
+                            )
                             if connection_addr in self.outgoing_connections:
                                 out_reader, out_writer = self.outgoing_connections.pop(connection_addr)
-                                out_writer.write("CONNECTION//CLOSE\n".encode("utf-8"))
+                                out_writer.write(b"CONNECTION//CLOSE\n")
                                 await out_writer.drain()
                                 out_writer.close()
                                 await out_writer.wait_closed()
@@ -555,26 +586,30 @@ class CommunicationsManager:
                     logging.info(f"🔗  [incoming] Including {connection_addr} in connections")
                     self.connections[connection_addr] = connection
                     logging.info(f"🔗  [incoming] Sending CONNECTION//NEW to {addr}")
-                    writer.write("CONNECTION//NEW\n".encode("utf-8"))
+                    writer.write(b"CONNECTION//NEW\n")
                     await writer.drain()
-                    writer.write(f"{self.id}\n".encode("utf-8"))
+                    writer.write(f"{self.id}\n".encode())
                     await writer.drain()
                     await connection.start()
 
             except Exception as e:
-                logging.error(f"❗️  [incoming] Error while handling connection with {addr}: {e}")
+                logging.exception(f"❗️  [incoming] Error while handling connection with {addr}: {e}")
             finally:
                 if connection_addr in self.pending_connections:
-                    logging.info(f"🔗  [incoming] Removing {connection_addr} from pending connections: {self.pending_connections}")
+                    logging.info(
+                        f"🔗  [incoming] Removing {connection_addr} from pending connections: {self.pending_connections}"
+                    )
                     self.pending_connections.remove(connection_addr)
                 if connection_addr in self.incoming_connections:
-                    logging.info(f"🔗  [incoming] Removing {connection_addr} from incoming connections: {self.incoming_connections.keys()}")
+                    logging.info(
+                        f"🔗  [incoming] Removing {connection_addr} from incoming connections: {self.incoming_connections.keys()}"
+                    )
                     self.incoming_connections.pop(connection_addr)
 
         await process_connection(reader, writer)
 
     async def stop(self):
-        logging.info(f"🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")
+        logging.info("🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")
         connections = list(self.connections.values())
         for node in connections:
             await node.stop()
@@ -602,10 +637,10 @@ class CommunicationsManager:
         await self.stop_network_engine.wait()
 
     async def deploy_additional_services(self):
-        logging.info(f"🌐  Deploying additional services...")
+        logging.info("🌐  Deploying additional services...")
         self._generate_network_conditions()
         await self._forwarder.start()
-        await self._discoverer.start()
+        # await self._discoverer.start()
         # await self._health.start()
         self._propagator.start()
         await self._mobility.start()
@@ -622,7 +657,9 @@ class CommunicationsManager:
             duplicate = self.config.participant["network_args"]["duplicate"]
             corrupt = self.config.participant["network_args"]["corrupt"]
             reordering = self.config.participant["network_args"]["reordering"]
-            logging.info(f"🌐  Network simulation is enabled | Interface: {interface} | Bandwidth: {bandwidth} | Delay: {delay} | Delay Distro: {delay_distro} | Delay Distribution: {delay_distribution} | Loss: {loss} | Duplicate: {duplicate} | Corrupt: {corrupt} | Reordering: {reordering}")
+            logging.info(
+                f"🌐  Network simulation is enabled | Interface: {interface} | Bandwidth: {bandwidth} | Delay: {delay} | Delay Distro: {delay_distro} | Delay Distribution: {delay_distribution} | Loss: {loss} | Duplicate: {duplicate} | Corrupt: {corrupt} | Reordering: {reordering}"
+            )
             try:
                 results = subprocess.run(
                     [
@@ -651,14 +688,14 @@ class CommunicationsManager:
                     text=True,
                 )
             except Exception as e:
-                logging.error(f"🌐  Network simulation error: {e}")
+                logging.exception(f"🌐  Network simulation error: {e}")
                 return
         else:
             logging.info("🌐  Network simulation is disabled. Using default network conditions...")
 
     def _reset_network_conditions(self):
         interface = self.config.participant["network_args"]["interface"]
-        logging.info(f"🌐  Resetting network conditions")
+        logging.info("🌐  Resetting network conditions")
         try:
             results = subprocess.run(
                 ["tcdel", str(interface), "--all"],
@@ -668,7 +705,7 @@ class CommunicationsManager:
                 text=True,
             )
         except Exception as e:
-            logging.error(f"❗️  Network simulation error: {e}")
+            logging.exception(f"❗️  Network simulation error: {e}")
             return
 
     def _set_network_conditions(
@@ -718,7 +755,7 @@ class CommunicationsManager:
                 text=True,
             )
         except Exception as e:
-            logging.error(f"❗️  Network simulation error: {e}")
+            logging.exception(f"❗️  Network simulation error: {e}")
             return
 
     async def include_received_message_hash(self, hash_message):
@@ -728,11 +765,11 @@ class CommunicationsManager:
                 # logging.info(f"❗️  handle_incoming_message | Ignoring message already received.")
                 return False
             self.received_messages_hashes.append(hash_message)
-            if len(self.received_messages_hashes) % 100 == 0:
+            if len(self.received_messages_hashes) % 10000 == 0:
                 logging.info(f"📥  Received {len(self.received_messages_hashes)} messages")
             return True
         except Exception as e:
-            logging.error(f"❗️  handle_incoming_message | Error including message hash: {e}")
+            logging.exception(f"❗️  handle_incoming_message | Error including message hash: {e}")
             return False
         finally:
             await self.receive_messages_lock.release_async()
@@ -748,14 +785,14 @@ class CommunicationsManager:
         for neighbor in neighbors:
             asyncio.create_task(self.send_message(neighbor, message))
             if interval > 0:
-                await asyncio.sleep(interval) 
+                await asyncio.sleep(interval)
 
     async def send_message(self, dest_addr, message):
         try:
             conn = self.connections[dest_addr]
             await conn.send(data=message)
         except Exception as e:
-            logging.error(f"❗️  Cannot send message {message} to {dest_addr}. Error: {str(e)}")
+            logging.exception(f"❗️  Cannot send message {message} to {dest_addr}. Error: {e!s}")
             await self.disconnect(dest_addr, mutual_disconnection=False)
 
     def store_send_timestamp(self, dest_addr, round_number, type_message):
@@ -808,12 +845,14 @@ class CommunicationsManager:
                 if round_number != -1:
                     self.store_send_timestamp(dest_addr, round_number, "model")
 
-                logging.info(f"Sending model to {dest_addr} with round {round_number}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024 ** 2) if serialized_model is not None else 0} MB")
+                logging.info(
+                    f"Sending model to {dest_addr} with round {round_number}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
+                )
                 message = self.mm.generate_model_message(round_number, serialized_model, weight)
                 await conn.send(data=message, is_compressed=True)
                 logging.info(f"Model sent to {dest_addr} with round {round_number}")
             except Exception as e:
-                logging.error(f"❗️  Cannot send model to {dest_addr}: {str(e)}")
+                logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
                 await self.disconnect(dest_addr, mutual_disconnection=False)
 
     async def establish_connection(self, addr, direct=True, reconnect=False):
@@ -834,13 +873,17 @@ class CommunicationsManager:
                     if addr in self.pending_connections:
                         logging.info(f"🔗  [outgoing] Connection with {addr} is already pending")
                         if int(self.host.split(".")[3]) >= int(host.split(".")[3]):
-                            logging.info(f"🔗  [outgoing] Closing outgoing connection since self.host >= host (from {addr})")
+                            logging.info(
+                                f"🔗  [outgoing] Closing outgoing connection since self.host >= host (from {addr})"
+                            )
                             return False
                         else:
-                            logging.info(f"🔗  [outgoing] Closing incoming connection since self.host < host (from {addr})")
+                            logging.info(
+                                f"🔗  [outgoing] Closing incoming connection since self.host < host (from {addr})"
+                            )
                             if addr in self.incoming_connections:
                                 inc_reader, inc_writer = self.incoming_connections.pop(addr)
-                                inc_writer.write("CONNECTION//CLOSE\n".encode("utf-8"))
+                                inc_writer.write(b"CONNECTION//CLOSE\n")
                                 await inc_writer.drain()
                                 inc_writer.close()
                                 await inc_writer.wait_closed()
@@ -855,9 +898,9 @@ class CommunicationsManager:
                 async with self.connections_manager_lock:
                     self.outgoing_connections[addr] = (reader, writer)
 
-                writer.write(f"{self.id}:{self.port}\n".encode("utf-8"))
+                writer.write(f"{self.id}:{self.port}\n".encode())
                 await writer.drain()
-                writer.write(f"{direct}\n".encode("utf-8"))
+                writer.write(f"{direct}\n".encode())
                 await writer.drain()
 
                 connection_status = await reader.readline()
@@ -869,13 +912,19 @@ class CommunicationsManager:
                 if connection_status == "CONNECTION//CLOSE":
                     logging.info(f"🔗  [outgoing] Connection with {addr} closed")
                     if addr in self.pending_connections:
-                        logging.info(f"🔗  [outgoing] Removing {addr} from pending connections: {self.pending_connections}")
+                        logging.info(
+                            f"🔗  [outgoing] Removing {addr} from pending connections: {self.pending_connections}"
+                        )
                         self.pending_connections.remove(addr)
                     if addr in self.outgoing_connections:
-                        logging.info(f"🔗  [outgoing] Removing {addr} from outgoing connections: {self.outgoing_connections.keys()}")
+                        logging.info(
+                            f"🔗  [outgoing] Removing {addr} from outgoing connections: {self.outgoing_connections.keys()}"
+                        )
                         self.outgoing_connections.pop(addr)
                     if addr in self.incoming_connections:
-                        logging.info(f"🔗  [outgoing] Removing {addr} from incoming connections: {self.incoming_connections.keys()}")
+                        logging.info(
+                            f"🔗  [outgoing] Removing {addr} from incoming connections: {self.incoming_connections.keys()}"
+                        )
                         self.incoming_connections.pop(addr)
                     writer.close()
                     await writer.wait_closed()
@@ -895,8 +944,19 @@ class CommunicationsManager:
                         connected_node_id = await reader.readline()
                         connected_node_id = connected_node_id.decode("utf-8").strip()
                         logging.info(f"🔗  [outgoing] Received connected node id: {connected_node_id} (from {addr})")
-                        logging.info(f"🔗  [outgoing] Creating new connection with {host}:{port} (id {connected_node_id})")
-                        connection = Connection(self, reader, writer, connected_node_id, host, port, direct=direct, config=self.config)
+                        logging.info(
+                            f"🔗  [outgoing] Creating new connection with {host}:{port} (id {connected_node_id})"
+                        )
+                        connection = Connection(
+                            self,
+                            reader,
+                            writer,
+                            connected_node_id,
+                            host,
+                            port,
+                            direct=direct,
+                            config=self.config,
+                        )
                         self.connections[addr] = connection
                         await connection.start()
                 else:
@@ -912,17 +972,21 @@ class CommunicationsManager:
                 self.config.add_neighbor_from_config(addr)
                 return True
             except Exception as e:
-                logging.info(f"❗️  [outgoing] Error adding direct connected neighbor {addr}: {str(e)}")
+                logging.info(f"❗️  [outgoing] Error adding direct connected neighbor {addr}: {e!s}")
                 return False
             finally:
                 if addr in self.pending_connections:
                     logging.info(f"🔗  [outgoing] Removing {addr} from pending connections: {self.pending_connections}")
                     self.pending_connections.remove(addr)
                 if addr in self.outgoing_connections:
-                    logging.info(f"🔗  [outgoing] Removing {addr} from outgoing connections: {self.outgoing_connections.keys()}")
+                    logging.info(
+                        f"🔗  [outgoing] Removing {addr} from outgoing connections: {self.outgoing_connections.keys()}"
+                    )
                     self.outgoing_connections.pop(addr)
                 if addr in self.incoming_connections:
-                    logging.info(f"🔗  [outgoing] Removing {addr} from incoming connections: {self.incoming_connections.keys()}")
+                    logging.info(
+                        f"🔗  [outgoing] Removing {addr} from incoming connections: {self.incoming_connections.keys()}"
+                    )
                     self.incoming_connections.pop(addr)
 
         asyncio.create_task(process_establish_connection(addr, direct, reconnect))
@@ -961,10 +1025,10 @@ class CommunicationsManager:
         while True:
             response = requests.get(self.wait_endpoint)
             if response.status_code == 200:
-                logging.info(f"Continue signal received from controller")
+                logging.info("Continue signal received from controller")
                 break
             else:
-                logging.info(f"Waiting for controller signal...")
+                logging.info("Waiting for controller signal...")
             await asyncio.sleep(1)
 
     async def disconnect(self, dest_addr, mutual_disconnection=True):
@@ -974,11 +1038,13 @@ class CommunicationsManager:
             return
         try:
             if mutual_disconnection:
-                await self.connections[dest_addr].send(data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT))
+                await self.connections[dest_addr].send(
+                    data=self.mm.generate_connection_message(nebula_pb2.ConnectionMessage.Action.DISCONNECT)
+                )
                 await asyncio.sleep(1)
                 self.connections[dest_addr].stop()
         except Exception as e:
-            logging.error(f"❗️  Error while disconnecting {dest_addr}: {str(e)}")
+            logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
         if dest_addr in self.connections:
             logging.info(f"Removing {dest_addr} from connections")
             del self.connections[dest_addr]
@@ -1000,7 +1066,9 @@ class CommunicationsManager:
             await self.get_connections_lock().release_async()
 
     async def get_addrs_current_connections(self, only_direct=False, only_undirected=False, myself=False):
-        current_connections = await self.get_all_addrs_current_connections(only_direct=only_direct, only_undirected=only_undirected)
+        current_connections = await self.get_all_addrs_current_connections(
+            only_direct=only_direct, only_undirected=only_undirected
+        )
         current_connections = set(current_connections)
         if myself:
             current_connections.add(self.addr)
@@ -1014,7 +1082,7 @@ class CommunicationsManager:
                     return conn
             return None
         except Exception as e:
-            logging.error(f"Error getting connection by address: {e}")
+            logging.exception(f"Error getting connection by address: {e}")
             return None
         finally:
             await self.get_connections_lock().release_async()
@@ -1038,7 +1106,9 @@ class CommunicationsManager:
             await self.get_connections_lock().acquire_async()
             sorted_connections = sorted(
                 self.connections.values(),
-                key=lambda conn: (conn.get_neighbor_distance() if conn.get_neighbor_distance() is not None else float("inf")),
+                key=lambda conn: (
+                    conn.get_neighbor_distance() if conn.get_neighbor_distance() is not None else float("inf")
+                ),
             )
             if top == 1:
                 return sorted_connections[0]
@@ -1051,7 +1121,10 @@ class CommunicationsManager:
         return {addr for addr, conn in self.connections.items() if conn.get_ready()}
 
     def check_finished_experiment(self):
-        return all(conn.get_federated_round() == self.config.participant["scenario_args"]["rounds"] - 1 for conn in self.connections.values())
+        return all(
+            conn.get_federated_round() == self.config.participant["scenario_args"]["rounds"] - 1
+            for conn in self.connections.values()
+        )
 
     def __str__(self):
         return f"Connections: {[str(conn) for conn in self.connections.values()]}"

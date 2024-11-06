@@ -1,19 +1,21 @@
-from abc import ABC, abstractmethod
 import logging
-import torch
-from nebula.addons.functions import print_msg_box
+from abc import ABC, abstractmethod
+
 import lightning as pl
-from torchmetrics.classification import (
-    MulticlassAccuracy,
-    MulticlassRecall,
-    MulticlassPrecision,
-    MulticlassF1Score,
-    MulticlassConfusionMatrix,
-)
-from torchmetrics import MetricCollection
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
+from torchmetrics import MetricCollection
+from torchmetrics.classification import (
+    MulticlassAccuracy,
+    MulticlassConfusionMatrix,
+    MulticlassF1Score,
+    MulticlassPrecision,
+    MulticlassRecall,
+)
+
+from nebula.addons.functions import print_msg_box
 
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
@@ -77,14 +79,21 @@ class NebulaModel(pl.LightningModule, ABC):
         else:
             raise NotImplementedError
 
-        output = {f"{phase}/{key.replace('Multiclass', '').split('/')[-1]}": value.detach() for key, value in output.items()}
+        output = {
+            f"{phase}/{key.replace('Multiclass', '').split('/')[-1]}": value.detach() for key, value in output.items()
+        }
 
         self.logger.log_data(output, step=self.global_number[phase])
 
         metrics_str = ""
         for key, value in output.items():
             metrics_str += f"{key}: {value:.4f}\n"
-        print_msg_box(metrics_str, indent=2, title=f"{phase} Metrics | Epoch: {self.global_number[phase]} | Round: {self.round}", logger_name=TRAINING_LOGGER)
+        print_msg_box(
+            metrics_str,
+            indent=2,
+            title=f"{phase} Metrics | Epoch: {self.global_number[phase]} | Round: {self.round}",
+            logger_name=TRAINING_LOGGER,
+        )
 
     def generate_confusion_matrix(self, phase, print_cm=False, plot_cm=False):
         """
@@ -110,7 +119,16 @@ class NebulaModel(pl.LightningModule, ABC):
             cm_numpy = cm.numpy().astype(int)
             classes = [i for i in range(self.num_classes)]
             fig, ax = plt.subplots(figsize=(12, 12))
-            sns.heatmap(cm_numpy, annot=False, fmt="", cmap="Blues", ax=ax, xticklabels=classes, yticklabels=classes, square=True)
+            sns.heatmap(
+                cm_numpy,
+                annot=False,
+                fmt="",
+                cmap="Blues",
+                ax=ax,
+                xticklabels=classes,
+                yticklabels=classes,
+                square=True,
+            )
             ax.set_xlabel("Predicted labels", fontsize=12)
             ax.set_ylabel("True labels", fontsize=12)
             ax.set_title(f"{phase} Confusion Matrix", fontsize=16)
@@ -146,14 +164,12 @@ class NebulaModel(pl.LightningModule, ABC):
         self.learning_rate = learning_rate
 
         if metrics is None:
-            metrics = MetricCollection(
-                [
-                    MulticlassAccuracy(num_classes=num_classes),
-                    MulticlassPrecision(num_classes=num_classes),
-                    MulticlassRecall(num_classes=num_classes),
-                    MulticlassF1Score(num_classes=num_classes),
-                ]
-            )
+            metrics = MetricCollection([
+                MulticlassAccuracy(num_classes=num_classes),
+                MulticlassPrecision(num_classes=num_classes),
+                MulticlassRecall(num_classes=num_classes),
+                MulticlassF1Score(num_classes=num_classes),
+            ])
         self.train_metrics = metrics.clone(prefix="Train/")
         self.val_metrics = metrics.clone(prefix="Validation/")
         self.test_metrics = metrics.clone(prefix="Test (Local)/")
@@ -170,7 +186,12 @@ class NebulaModel(pl.LightningModule, ABC):
         self.round = 0
 
         # Epochs counter
-        self.global_number = {"Train": 0, "Validation": 0, "Test (Local)": 0, "Test (Global)": 0}
+        self.global_number = {
+            "Train": 0,
+            "Validation": 0,
+            "Test (Local)": 0,
+            "Test (Global)": 0,
+        }
 
         # Communication manager for sending messages from the model (e.g., prototypes, gradients)
         # Model parameters are sent by default using network.propagator
@@ -215,10 +236,10 @@ class NebulaModel(pl.LightningModule, ABC):
         return self.step(batch, batch_idx=batch_idx, phase="Train")
 
     def on_train_start(self):
-        logging_training.info(f"{'='*10} [Training] Started {'='*10}")
+        logging_training.info(f"{'=' * 10} [Training] Started {'=' * 10}")
 
     def on_train_end(self):
-        logging_training.info(f"{'='*10} [Training] Done {'='*10}")
+        logging_training.info(f"{'=' * 10} [Training] Done {'=' * 10}")
 
     def on_train_epoch_end(self):
         self.log_metrics_end("Train")
@@ -260,10 +281,10 @@ class NebulaModel(pl.LightningModule, ABC):
             return self.step(batch, batch_idx=batch_idx, phase="Test (Global)")
 
     def on_test_start(self):
-        logging_training.info(f"{'='*10} [Testing] Started {'='*10}")
+        logging_training.info(f"{'=' * 10} [Testing] Started {'=' * 10}")
 
     def on_test_end(self):
-        logging_training.info(f"{'='*10} [Testing] Done {'='*10}")
+        logging_training.info(f"{'=' * 10} [Testing] Done {'=' * 10}")
 
     def on_test_epoch_end(self):
         # In general, the test phase is done in one epoch

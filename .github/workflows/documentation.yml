@@ -1,10 +1,5 @@
 name: Update documentation
 on:
-  push:
-    branches:
-    - main
-    paths:
-    - docs/**
   workflow_dispatch:
     inputs:
       logLevel:
@@ -20,24 +15,25 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.11.7' 
+        python-version: '3.11.7'
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # otherwise, you will failed to push refs to dest repo
-    - name: Install dependencies
+    - name: Set up the environment
+      uses: ./.github/actions/setup-env
+    - name: Install doc dependencies
       run: |
-          pip install -r docs/requirements.txt
+        poetry install --with docs --no-interaction
     - name: List directories
       run: |
           ls -la
-    - name: Build Sphinx Documentation
+    - name: Build Documentation
       run: |
-          cd docs
-          make html
+          poetry run mkdocs build -f docs/mkdocs.yml -d _build
     - name: Add files
       run: |
           echo "nebula.enriquetomasmb.com" > docs/_build/CNAME

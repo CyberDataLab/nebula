@@ -1,6 +1,7 @@
 import torch
-from nebula.core.models.nebulamodel import NebulaModel
+
 from nebula.core.models.militarysar import _blocks
+from nebula.core.models.nebulamodel import NebulaModel
 
 
 class MilitarySARModelCNN(NebulaModel):
@@ -23,9 +24,27 @@ class MilitarySARModelCNN(NebulaModel):
         self.criterion = torch.nn.CrossEntropyLoss()
 
         self.model = torch.nn.Sequential(
-            _blocks.Conv2DBlock(shape=[5, 5, self.input_channels, 16], stride=1, padding="valid", activation="relu", max_pool=True),
-            _blocks.Conv2DBlock(shape=[5, 5, 16, 32], stride=1, padding="valid", activation="relu", max_pool=True),
-            _blocks.Conv2DBlock(shape=[6, 6, 32, 64], stride=1, padding="valid", activation="relu", max_pool=True),
+            _blocks.Conv2DBlock(
+                shape=[5, 5, self.input_channels, 16],
+                stride=1,
+                padding="valid",
+                activation="relu",
+                max_pool=True,
+            ),
+            _blocks.Conv2DBlock(
+                shape=[5, 5, 16, 32],
+                stride=1,
+                padding="valid",
+                activation="relu",
+                max_pool=True,
+            ),
+            _blocks.Conv2DBlock(
+                shape=[6, 6, 32, 64],
+                stride=1,
+                padding="valid",
+                activation="relu",
+                max_pool=True,
+            ),
             _blocks.Conv2DBlock(shape=[5, 5, 64, 128], stride=1, padding="valid", activation="relu"),
             torch.nn.Dropout(p=self.dropout_rate),
             _blocks.Conv2DBlock(shape=[3, 3, 128, self.num_classes], stride=1, padding="valid"),
@@ -38,7 +57,12 @@ class MilitarySARModelCNN(NebulaModel):
         return logits
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=self.momentum, weight_decay=self.weight_decay)
+        optimizer = torch.optim.SGD(
+            self.parameters(),
+            lr=self.learning_rate,
+            momentum=self.momentum,
+            weight_decay=self.weight_decay,
+        )
         # optimizer = torch.optim.Adam(
         #     self.parameters(),
         #     lr=self.learning_rate,

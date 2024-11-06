@@ -1,18 +1,16 @@
 import asyncio
 import logging
-
-from collections import deque
 from abc import ABC, abstractmethod
+from collections import deque
+from typing import TYPE_CHECKING, Any
+
 from nebula.addons.functions import print_msg_box
 
-from typing import TYPE_CHECKING
-from typing import List, Tuple, Any, Optional
-
 if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
     from nebula.config.config import Config
     from nebula.core.aggregation.aggregator import Aggregator
     from nebula.core.engine import Engine
+    from nebula.core.network.communications import CommunicationsManager
     from nebula.core.training.lightning import Lightning
 
 
@@ -22,7 +20,7 @@ class PropagationStrategy(ABC):
         pass
 
     @abstractmethod
-    def prepare_model_payload(self, node: str) -> Optional[Tuple[Any, float]]:
+    def prepare_model_payload(self, node: str) -> tuple[Any, float] | None:
         pass
 
 
@@ -38,8 +36,11 @@ class InitialModelPropagation(PropagationStrategy):
     def is_node_eligible(self, node: str) -> bool:
         return node not in self.engine.cm.get_ready_connections()
 
-    def prepare_model_payload(self, node: str) -> Optional[Tuple[Any, float]]:
-        return self.trainer.get_model_parameters(initialize=True), self.trainer.DEFAULT_MODEL_WEIGHT
+    def prepare_model_payload(self, node: str) -> tuple[Any, float] | None:
+        return (
+            self.trainer.get_model_parameters(initialize=True),
+            self.trainer.DEFAULT_MODEL_WEIGHT,
+        )
 
 
 class StableModelPropagation(PropagationStrategy):
@@ -53,9 +54,11 @@ class StableModelPropagation(PropagationStrategy):
         return self.engine.get_round()
 
     def is_node_eligible(self, node: str) -> bool:
-        return (node not in self.aggregator.get_nodes_pending_models_to_aggregate()) or (self.engine.cm.connections[node].get_federated_round() < self.get_round())
+        return (node not in self.aggregator.get_nodes_pending_models_to_aggregate()) or (
+            self.engine.cm.connections[node].get_federated_round() < self.get_round()
+        )
 
-    def prepare_model_payload(self, node: str) -> Optional[Tuple[Any, float]]:
+    def prepare_model_payload(self, node: str) -> tuple[Any, float] | None:
         return self.trainer.get_model_parameters(), self.trainer.get_model_weight()
 
 
@@ -64,9 +67,9 @@ class Propagator:
         self.engine: Engine = cm.engine
         self.config: Config = cm.get_config()
         self.addr = cm.get_addr()
-        self.cm: "CommunicationsManager" = cm
-        self.aggregator: "Aggregator" = self.engine.aggregator
-        self.trainer: "Lightning" = self.engine._trainer
+        self.cm: CommunicationsManager = cm
+        self.aggregator: Aggregator = self.engine.aggregator
+        self.trainer: Lightning = self.engine._trainer
 
         self.status_history = deque(maxlen=self.config.participant["propagator_args"]["history_size"])
 
@@ -76,10 +79,17 @@ class Propagator:
         self.stable_rounds_count = 0
 
         # Propagation strategies (adapt to the specific use case)
-        self.strategies = {"initialization": InitialModelPropagation(self.aggregator, self.trainer, self.engine), "stable": StableModelPropagation(self.aggregator, self.trainer, self.engine)}
+        self.strategies = {
+            "initialization": InitialModelPropagation(self.aggregator, self.trainer, self.engine),
+            "stable": StableModelPropagation(self.aggregator, self.trainer, self.engine),
+        }
 
     def start(self):
-        print_msg_box(msg=f"Starting propagator functionality...\nModel propagation through the network", indent=2, title="Propagator")
+        print_msg_box(
+            msg="Starting propagator functionality...\nModel propagation through the network",
+            indent=2,
+            title="Propagator",
+        )
 
     def get_round(self):
         return self.engine.get_round()
@@ -90,7 +100,9 @@ class Propagator:
 
         # Check if the deque is full and the new status is different from the last one
         if self.status_history and current_status != self.status_history[-1]:
-            logging.info(f"Status History deque is full and the new status is different from the last one: {list(self.status_history)}")
+            logging.info(
+                f"Status History deque is full and the new status is different from the last one: {list(self.status_history)}"
+            )
             self.status_history.append(current_status)
             return True
 
@@ -99,8 +111,12 @@ class Propagator:
         self.status_history.append(current_status)
 
         # If the deque is full and all elements are the same, stop propagation
-        if len(self.status_history) == self.status_history.maxlen and all(s == self.status_history[0] for s in self.status_history):
-            logging.info(f"Propagator exited for {self.status_history.maxlen} equal rounds: {list(self.status_history)}")
+        if len(self.status_history) == self.status_history.maxlen and all(
+            s == self.status_history[0] for s in self.status_history
+        ):
+            logging.info(
+                f"Propagator exited for {self.status_history.maxlen} equal rounds: {list(self.status_history)}"
+            )
             return False
 
         return True
@@ -121,23 +137,24 @@ class Propagator:
         logging.info(f"Starting model propagation with strategy: {strategy_id}")
 
         current_connections = await self.cm.get_addrs_current_connections(only_direct=True)
-        eligible_neighbors = [neighbor_addr for neighbor_addr in current_connections 
-                              if strategy.is_node_eligible(neighbor_addr)]
+        eligible_neighbors = [
+            neighbor_addr for neighbor_addr in current_connections 
+                              if strategy.is_node_eligible(neighbor_addr)
+        ]
         logging.info(f"Eligible neighbors for model propagation: {eligible_neighbors}")
         if not eligible_neighbors:
             logging.info("Propagation complete: No eligible neighbors.")
             return False
 
-        logging.info(f"Checking repeated statuses during propagation")
+        logging.info("Checking repeated statuses during propagation")
         if not self.update_and_check_neighbors(strategy, eligible_neighbors):
             logging.info("Exiting propagation due to repeated statuses.")
             return False
-        
+
         model_params, weight = strategy.prepare_model_payload(None)
         if model_params:
             serialized_model = (
-                model_params if isinstance(model_params, bytes)
-                else self.trainer.serialize_model(model_params)
+                model_params if isinstance(model_params, bytes) else self.trainer.serialize_model(model_params)
             )
         else:
             serialized_model = None
@@ -145,9 +162,7 @@ class Propagator:
         round_number = -1 if strategy_id == "initialization" else self.get_round()
 
         for neighbor_addr in eligible_neighbors:
-            asyncio.create_task(
-                self.cm.send_model(neighbor_addr, round_number, serialized_model, weight)
-            )
+            asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
 
         if len(self.aggregator.get_nodes_pending_models_to_aggregate()) >= len(self.aggregator._federation_nodes):
             return False

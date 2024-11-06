@@ -1,15 +1,15 @@
-import logging
-from collections import OrderedDict
-import traceback
 import hashlib
 import io
+import logging
+import traceback
+from collections import OrderedDict
+
 import torch
 from lightning import Trainer
-from lightning.pytorch.callbacks import RichProgressBar, RichModelSummary
+from lightning.pytorch.callbacks import RichModelSummary, RichProgressBar
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
-from nebula.core.utils.deterministic import enable_deterministic
 
-from torch.nn import functional as F
+from nebula.core.utils.deterministic import enable_deterministic
 
 
 class Siamese:
@@ -40,7 +40,11 @@ class Siamese:
         self.data = data
 
     def create_trainer(self):
-        logging.info("[Trainer] Creating trainer with accelerator: {}".format(self.config.participant["device_args"]["accelerator"]))
+        logging.info(
+            "[Trainer] Creating trainer with accelerator: {}".format(
+                self.config.participant["device_args"]["accelerator"]
+            )
+        )
         progress_bar = RichProgressBar(
             theme=RichProgressBarTheme(
                 description="green_yellow",
@@ -95,7 +99,7 @@ class Siamese:
 
     def set_parameter_second_aggregation(self, params):
         try:
-            logging.info(f"Setting parameters in second aggregation...")
+            logging.info("Setting parameters in second aggregation...")
             self.model.load_state_dict(params)
         except:
             raise Exception("Error setting parameters")
@@ -161,19 +165,19 @@ class Siamese:
             # Save local model as historical model (previous round)
             # It will be compared the next round during training local model (constrantive loss)
             # When aggregation in global model (first) and aggregation with similarities and weights (second), the historical model keeps inmutable
-            logging.info(f"Saving historical model...")
+            logging.info("Saving historical model...")
             self.model.save_historical_model()
         except Exception as e:
-            logging.error(f"Error training model: {e}")
-            logging.error(traceback.format_exc())
+            logging.exception(f"Error training model: {e}")
+            logging.exception(traceback.format_exc())
 
     def test(self):
         try:
             self.create_trainer()
             self.__trainer.test(self.model, self.data, verbose=True)
         except Exception as e:
-            logging.error(f"Error testing model: {e}")
-            logging.error(traceback.format_exc())
+            logging.exception(f"Error testing model: {e}")
+            logging.exception(traceback.format_exc())
 
     def get_model_weight(self):
         return (

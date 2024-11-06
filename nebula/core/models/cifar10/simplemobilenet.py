@@ -3,14 +3,13 @@ import matplotlib.pyplot as plt
 
 matplotlib.use("Agg")
 plt.switch_backend("Agg")
-from torch import nn
 import torch
+from torch import nn
 
 from nebula.core.models.nebulamodel import NebulaModel
 
 
 class SimpleMobileNetV1(NebulaModel):
-
     def __init__(
         self,
         input_channels=3,

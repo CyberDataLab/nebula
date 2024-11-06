@@ -1,15 +1,14 @@
 import asyncio
-from collections import defaultdict
-from functools import wraps
 import inspect
 import logging
+from collections import defaultdict
+from functools import wraps
 
 
 def event_handler(message_type, action):
     """Decorator for registering an event handler."""
 
     def decorator(func):
-
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
             return await func(*args, **kwargs)
@@ -74,7 +73,7 @@ class EventManager:
                     else:
                         callback(source, message, *args, **kwargs)
                 except Exception as e:
-                    logging.error(f"Error executing callback for {handler_info}: {e}")
+                    logging.exception(f"Error executing callback for {handler_info}: {e}")
         else:
             logging.error(f"No callbacks registered for event {handler_info}")
 

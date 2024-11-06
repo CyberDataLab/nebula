@@ -20,7 +20,7 @@ L.Marker.MovingMarker = L.Marker.extend({
         autostart: false,
         loop: false,
     },
-    
+
     setIcon: function(icon) {
         // Call the original setIcon method on L.Marker
         L.Marker.prototype.setIcon.call(this, icon);

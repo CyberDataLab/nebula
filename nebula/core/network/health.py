@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import time
-from nebula.addons.functions import print_msg_box
 from typing import TYPE_CHECKING
 
+from nebula.addons.functions import print_msg_box
 from nebula.core.pb import nebula_pb2
 
 if TYPE_CHECKING:
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 class Health:
     def __init__(self, addr, config, cm: "CommunicationsManager"):
-        print_msg_box(msg=f"Starting health module...", indent=2, title="Health module")
+        print_msg_box(msg="Starting health module...", indent=2, title="Health module")
         self.addr = addr
         self.config = config
         self.cm = cm
@@ -20,7 +20,7 @@ class Health:
         self.alive_interval = self.config.participant["health_args"]["send_alive_interval"]
         self.check_alive_interval = self.config.participant["health_args"]["check_alive_interval"]
         self.timeout = self.config.participant["health_args"]["alive_timeout"]
-    
+
     async def start(self):
         asyncio.create_task(self.run_send_alive())
         asyncio.create_task(self.run_check_alive())
@@ -32,7 +32,9 @@ class Health:
             conn.set_active(True)
         while True:
             if len(self.cm.connections) > 0:
-                message = self.cm.mm.generate_control_message(nebula_pb2.ControlMessage.Action.ALIVE, log="Alive message")
+                message = self.cm.mm.generate_control_message(
+                    nebula_pb2.ControlMessage.Action.ALIVE, log="Alive message"
+                )
                 current_connections = list(self.cm.connections.values())
                 for conn in current_connections:
                     if conn.get_direct():
@@ -40,10 +42,10 @@ class Health:
                             logging.info(f"🕒  Sending alive message to {conn.get_addr()}...")
                             await conn.send(data=message)
                         except Exception as e:
-                            logging.error(f"❗️  Cannot send alive message to {conn.get_addr()}. Error: {str(e)}")
+                            logging.exception(f"❗️  Cannot send alive message to {conn.get_addr()}. Error: {e!s}")
                     await asyncio.sleep(self.alive_interval)
             await asyncio.sleep(self.period)
-            
+
     async def run_check_alive(self):
         await asyncio.sleep(self.config.participant["health_args"]["grace_time_health"] + self.check_alive_interval)
         while True:
