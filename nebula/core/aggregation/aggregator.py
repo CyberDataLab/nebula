@@ -222,11 +222,10 @@ class Aggregator(ABC):
                 logging.error(f"🔄  get_aggregation | Timeout reached for aggregation")
             finally:
                 if self._aggregation_done_lock.locked():
-                    logging.info(f"🔄  get_aggregation | Isaac release")
+                    logging.info(f"🔄  get_aggregation | Release")
                     await self._aggregation_done_lock.release_async()
         else:
             logging.info(f"🔄 get_aggregation | Nodes rejected: {self.engine.rejected_nodes}")
-            #await self._aggregation_done_lock.release_async()
 
         if self._waiting_global_update and len(self._pending_models_to_aggregate) == 1:
             logging.info(f"🔄  get_aggregation | Received an global model. Overwriting my model with the aggregated model.")

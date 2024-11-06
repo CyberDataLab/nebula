@@ -720,7 +720,7 @@ class MaliciousNode(Engine):
 
     #     await AggregatorNode._extended_learning_cycle(self)
 
-    async def flood_attack(self, message, repetitions=10, interval=0.15):
+    async def flood_attack(self, message, repetitions=10, interval=0.05):
         neighbors = set(await self.cm.get_addrs_current_connections(only_direct=True))
         for nei in neighbors:
             for i in range(repetitions):
@@ -730,7 +730,7 @@ class MaliciousNode(Engine):
                     duration=int(interval*1000),
                     target_node=nei,
                 )
-                await self.cm.send_message_to_neighbors(message_data)
+                await self.cm.send_message_to_neighbors(message_data, neighbors={nei})
                 logging.info(f"Flood attack message sent to {nei} - Attempt {i + 1}/{repetitions}.")
                 await asyncio.sleep(interval)
                 self.cm.store_send_timestamp(nei, self.round, "flood_attack")
@@ -738,8 +738,8 @@ class MaliciousNode(Engine):
     async def _extended_learning_cycle(self):
         if self.round in range(self.round_start_attack, self.round_stop_attack):
             logging.info(f"Changing aggregation function maliciously...")
+            await self.flood_attack("flood_attack", repetitions=10, interval=0.05)
             self._aggregator = create_malicious_aggregator(self._aggregator, self.attack)
-            await self.flood_attack(message="Flood attack message", repetitions=10, interval=0.15)
         elif self.round == self.round_stop_attack:
             logging.info(f"Changing aggregation function benignly...")
             self._aggregator = self.aggregator_bening

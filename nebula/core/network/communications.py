@@ -178,9 +178,9 @@ class CommunicationsManager:
                         self.forwarder.forward(data, addr_from=addr_from)
                         await self.handle_reputation_message(source, message_wrapper.reputation_message)
             elif message_wrapper.HasField("flood_attack_message"):
-                if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    await self.forwarder.forward(data, addr_from=addr_from)
-                    await self.handle_flooding_attack_message(source, message_wrapper.flood_attack_message)
+                # if await self.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                #     await self.forwarder.forward(data, addr_from=addr_from)
+                await self.handle_flooding_attack_message(source, message_wrapper.flood_attack_message)
             elif message_wrapper.HasField("connection_message"):
                 await self.handle_connection_message(source, message_wrapper.connection_message)
             else:
@@ -248,17 +248,17 @@ class CommunicationsManager:
             
             if message.round != current_round and message.round != -1:
                 logging.info(f"❗️  handle_model_message | Received a model from a different round | Model round: {message.round} | Current round: {current_round}")
-                if message.round > current_round:
-                    logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
-                    await self.engine.aggregator.include_next_model_in_buffer(
-                        message.parameters,
-                        message.weight,
-                        source=source,
-                        round=message.round,
-                    )
-                else:
-                    logging.info(f"❗️  handle_model_message | Ignoring model from {source} from a previous round")
-                return
+                # if message.round > current_round:
+                #     logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
+                #     await self.engine.aggregator.include_next_model_in_buffer(
+                #         message.parameters,
+                #         message.weight,
+                #         source=source,
+                #         round=message.round,
+                #     )
+                # else:
+                #     logging.info(f"❗️  handle_model_message | Ignoring model from {source} from a previous round")
+                # return
             if not self.engine.get_federation_ready_lock().locked() and len(self.engine.get_federation_nodes()) == 0:
                 logging.info(f"🤖  handle_model_message | There are no defined federation nodes")
                 return
@@ -293,6 +293,14 @@ class CommunicationsManager:
                             logging.info(f"🤖  handle_model_message | Model similarity is below 0.5 {cosine_value} with source {source}")
                             if source not in self.engine.rejected_nodes:
                                 self.engine.rejected_nodes.add(source) 
+                            
+                            models_added = await self.engine.aggregator.include_model_in_buffer(
+                                None,
+                                None,
+                                source=source,
+                                round=message.round,
+                            )
+                            logging.info(f"🤖  handle_model_message | Model added: {models_added}")
                         else:
                             logging.info(f"🤖  handle_model_message | Model similarity is above 0.5 {cosine_value} with source {source}")
                             models_added = await self.engine.aggregator.include_model_in_buffer(
@@ -301,66 +309,8 @@ class CommunicationsManager:
                                 source=source,
                                 round=message.round,
                             )
-                       
-                        # Manage add model in buffer
-                        """models_added = None
-                        reputation = self.engine.get_reputation()  
-                        reputation_data = reputation.get(source, None) 
-
-
-                        if reputation_data is None:
-                            logging.info(f"🤖  handle_model_message | No reputation data for node {source}. Aggregating model.")
-
-                            models_added = await self.engine.aggregator.include_model_in_buffer(
-                                decoded_model,
-                                message.weight,
-                                source=source,
-                                round=message.round,
-                            )
-
-                            if models_added is not None:
-                                logging.info(f"🤖  handle_model_message | Model aggregated from {source}")
-                            else:
-                                logging.info(f"🤖  handle_model_message | Model not aggregated from {source}")
-                        else:
-                            logging.info(f"🤖  handle_model_message | Reputation for node {source}: {reputation_data}")
-                            reputation_value = reputation_data.get("reputation", None)
-
-                            if reputation_value is not None and reputation_value < 0.6:
-                                logging.info(f"🤖  handle_model_message | Reputation below 0.6. Rejecting model from {source}")
-                                if source not in self.engine.rejected_nodes:
-                                    self.engine.rejected_nodes[source] = (current_round, 1)
-                                    logging.info(f"🤖  handle_model_message | Penalizing node {source} with 1 round")
-                                else:
-                                    penalization_round, penalized_rounds = self.engine.rejected_nodes[source]
-                                    logging.info(f"🤖 handle_model_message | penalization_round {penalization_round} | current_round {current_round}")
-                                    if penalization_round == current_round:
-                                        logging.info(f"🤖 handle_model_message | Node {source} penalized in the current round {penalization_round}. Increasing penalized rounds to {penalized_rounds + 1}.")
-                                    else:
-                                        logging.info(f"🤖 handle_model_message | Node {source} penalized in a previous round {penalization_round}. Increasing penalized rounds to {penalized_rounds + 1}.")
-                                        self.engine.rejected_nodes[source] = (penalization_round, penalized_rounds + 1)
-
-                                if self.engine.get_federation_ready_lock().locked():
-                                    logging.info("Releasing federation lock.")
-                                    self.engine.get_federation_ready_lock().release_async()
-                            else:
-                                logging.info(f"🤖  handle_model_message | Reputation above 0.6. Aggregating model from {source}")
-
-                                models_added = await self.engine.aggregator.include_model_in_buffer(
-                                    decoded_model,
-                                    message.weight,
-                                    source=source,
-                                    round=message.round,
-                                )
-
-                                if models_added is not None:
-                                    logging.info(f"🤖  handle_model_message | Model aggregated from {source}")
-                                else:
-                                    logging.info(f"🤖  handle_model_message | Model not aggregated from {source}")"""
-
                 else:
                     if message.round != -1:
-                        logging.info(f"Isaac else")
                         # Be sure that the model message is from the initialization round (round = -1)
                         logging.info(f"🤖  handle_model_message | Saving model from {source} for future round {message.round}")
                         await self.engine.aggregator.include_next_model_in_buffer(

@@ -149,12 +149,6 @@ class Reputation:
                             changes_record = metric["fraction_of_params_changed"]["changes_record"]
                             if round == current_round:
                                 Reputation.analyze_anomalies(addr, nei, round, current_round, fraction_changed, threshold, changes_record, changed_params, total_params)
-                                key = (addr, nei, round)
-                                if key not in Reputation.fraction_changed_history:
-                                    key = (addr, nei, round - 1)
-                                fraction_score = Reputation.fraction_changed_history[key].get("fraction_score")
-                                fraction_score_asign = fraction_score if fraction_score is not None else 0
-                                #logging.info(f"Fraction score: {fraction_score_asign}")
                                 #logging.info(f"Reputation.fraction_changed_history: {Reputation.fraction_changed_history}")
 
                     similarity_file = os.path.join(log_dir, f"participant_{id_node}_similarity.csv")
@@ -163,14 +157,30 @@ class Reputation:
 
                     if communication_time_normalized is not None:
                         avg_communication_time_normalized = Reputation.save_communication_history(addr, nei, communication_time_normalized, current_round)
+                        if avg_communication_time_normalized is None and current_round >= 5:
+                            avg_communication_time_normalized = Reputation.communication_history[(addr, nei)][current_round - 1]["avg_communication"]
+                            logging.info(f"Avg communication is None and current_round = {current_round}, avg_communication_time_normalized: {avg_communication_time_normalized}")
 
                     if Reputation.messages_frequency is not None:
                         messages_frequency_normalized, messages_frequency_count = Reputation.manage_metric_frequency(Reputation.messages_frequency, addr, nei, current_round)
                         avg_messages_frequency_normalized = Reputation.save_frequency_history(addr, nei, messages_frequency_normalized, current_round)
+                        if avg_messages_frequency_normalized is None and current_round >= 4:
+                            avg_messages_frequency_normalized = Reputation.frequency_history[(addr, nei)][current_round - 1]["avg_frequency"] 
+                            logging.info(f"Avg messages frequency is None and curret_round = {current_round}, avg_messages_frequency_normalized: {avg_messages_frequency_normalized}")
 
+                    if Reputation.fraction_changed_history is not None:
+                        key = (addr, nei, current_round)
+                        if key not in Reputation.fraction_changed_history:
+                            key = (addr, nei, current_round - 1) if current_round > 0 else None 
+                            logging.info(f"Key prev: {key}")
+                        fraction_score = Reputation.fraction_changed_history[key].get("fraction_score")
+                        logging.info(f"Fraction score: {fraction_score} | key: {key}")
+                        fraction_score_asign = fraction_score if fraction_score is not None else 0
+                        logging.info(f"Fraction score asign: {fraction_score_asign}")
+        
                     # Weights for each metric
                     if current_round is not None:
-                        if current_round >= 2:
+                        if current_round >= 4:
                             weight_to_similarity = 0.5
                             weight_to_communication = 0.0
                             weight_to_fraction = 0.0
@@ -318,13 +328,10 @@ class Reputation:
                 std_dev_fraction_prev = Reputation.fraction_changed_history[prev_key]["std_dev_fraction"]
                 mean_threshold_prev = Reputation.fraction_changed_history[prev_key]["mean_threshold"]
                 std_dev_threshold_prev = Reputation.fraction_changed_history[prev_key]["std_dev_threshold"]
-
                 # logging.info(f"Round: {round_num}, Mean fraction: {mean_fraction_prev}, Std dev fraction: {std_dev_fraction_prev}, Mean threshold: {mean_threshold_prev}, Std dev threshold: {std_dev_threshold_prev}")
 
-                
                 current_fraction = Reputation.fraction_changed_history[key]["fraction_changed"]
                 current_threshold = Reputation.fraction_changed_history[key]["threshold"]
-
                 # logging.info(f"Round: {round_num}, Current fraction: {current_fraction}, Current threshold: {current_threshold}")
 
                 #low_mean_fraction_prev = mean_fraction_prev - std_dev_fraction_prev
@@ -341,7 +348,7 @@ class Reputation:
                 Reputation.fraction_changed_history[key]["fraction_anomaly"] = fraction_anomaly
                 Reputation.fraction_changed_history[key]["threshold_anomaly"] = threshold_anomaly
 
-                # Calcular el puntaje
+                # Calculate the fraction score
                 k_fraction = 1 / std_dev_fraction_prev if std_dev_fraction_prev != 0 else 1
                 # logging.info(f"Round: {round_num}, K fraction: {k_fraction}")
                 k_threshold = 1 / std_dev_threshold_prev if std_dev_threshold_prev != 0 else 1
@@ -362,16 +369,15 @@ class Reputation:
                     threshold_weight = 0.5
 
                 fraction_score = 1 - (fraction_weight * fraction_value + threshold_weight * threshold_value)
-
                 Reputation.fraction_changed_history[key]["fraction_score"] = fraction_score
 
-                # Actualizar la media y desviación estándar
+                # Upload the values to the history
                 Reputation.fraction_changed_history[key]["mean_fraction"] = (current_fraction + mean_fraction_prev) / 2
                 Reputation.fraction_changed_history[key]["std_dev_fraction"] = np.sqrt(((current_fraction - mean_fraction_prev) ** 2 + std_dev_fraction_prev ** 2) / 2)
                 Reputation.fraction_changed_history[key]["mean_threshold"] = (current_threshold + mean_threshold_prev) / 2
                 Reputation.fraction_changed_history[key]["std_dev_threshold"] = np.sqrt(((0.1 * (current_threshold - mean_threshold_prev) ** 2) + std_dev_threshold_prev ** 2) / 2)
 
-                # Asegurar que el puntaje no sea negativo
+                # Score not negative
                 Reputation.fraction_changed_history[key]["fraction_score"] = max(fraction_score, 0)
         except Exception as e:
             logging.error(f"Error analyzing anomalies: {e}")
@@ -397,23 +403,27 @@ class Reputation:
             if key not in Reputation.frequency_history:
                 Reputation.frequency_history[key] = {}
 
-            Reputation.frequency_history[key][current_round] = messages_frequency_normalized
+            Reputation.frequency_history[key][current_round] = {
+                "frequency": messages_frequency_normalized
+            }
+
+            # logging.info(f"Frequency: {messages_frequency_normalized}")
+            # logging.info(f"Frequency history: {Reputation.frequency_history}")
 
             rounds = Reputation.frequency_history[key]
-            #recent_rounds = sorted(rounds.keys(), reverse=True)[:2]
-            recent_rounds = [round_num for round_num in rounds.keys() if round_num >= 3]
-            total_frequency = 0
-            count_frequency = 0
+            if messages_frequency_normalized != 0 and current_round > 3:
+                previous_avg = Reputation.frequency_history[key].get(current_round - 1, {}).get("avg_frequency", None)
+                # logging.info(f"Previous avg frequency: {previous_avg}")
+                if previous_avg is not None:
+                    avg_frequency = (messages_frequency_normalized + previous_avg) / 2
+                else:
+                    avg_frequency = messages_frequency_normalized
+                
+                Reputation.frequency_history[key][current_round]["avg_frequency"] = avg_frequency
+            else:
+                avg_frequency = 0
 
-            for round_num in recent_rounds:
-                freq = rounds[round_num]
-                logging.info(f"Round: {round_num}, Frequency: {freq}")
-                if freq is not None:
-                    total_frequency += freq
-                    count_frequency += 1
-
-            avg_frequency = total_frequency / count_frequency if count_frequency > 0 else 0
-
+            # logging.info(f"Avg frequency: {avg_frequency}")
             return avg_frequency
         except Exception as e:
             logging.error(f"Error saving frequency history: {e}")
@@ -428,7 +438,7 @@ class Reputation:
             previous_threshold = Reputation.previous_threshold_freq.get(current_addr_nei, 0)
             relevant_messages = [msg for msg in messages_frequency if msg["key"] == current_addr_nei and msg["current_round"] == current_round]
             messages_count = len(relevant_messages) if relevant_messages else 0
-            logging.info(f"Round {current_round}. Relevant messages: {relevant_messages}, Messages count: {messages_count}")
+            # logging.info(f"Round {current_round}. Relevant messages: {relevant_messages}, Messages count: {messages_count}")
 
             if current_round >= 0 and current_round <= 2:
                 previous_counts = [
@@ -437,24 +447,24 @@ class Reputation:
                 ]
                 threshold = np.mean(previous_counts) if previous_counts else 0
                 Reputation.previous_threshold_freq[current_addr_nei] = threshold
-                logging.info(f"Round {current_round}. Previous counts: {previous_counts}, Threshold: {threshold}")
+                # logging.info(f"Round {current_round}. Previous counts: {previous_counts}, Threshold: {threshold}")
                 normalized_messages = 0.0
             elif current_round >= 3:
                 threshold = previous_threshold
-                logging.info(f"Round {current_round}. Prev threshold: {threshold}")
+                # logging.info(f"Round {current_round}. Prev threshold: {threshold}")
 
                 if messages_count > threshold:
                     excess = messages_count - threshold
                     normalized_messages = 1 - (excess / messages_count) if messages_count > 0 else 0
-                    logging.info(f"Round {current_round}. Excess: {excess}, Normalized messages: {normalized_messages}")
+                    # logging.info(f"Round {current_round}. Excess: {excess}, Normalized messages: {normalized_messages}")
                 else:
                     normalized_messages = 1 - ((threshold - messages_count) / (threshold + messages_count)) if threshold > 0 else 0
-                    logging.info(f"Round {current_round}. Normalized messages: {normalized_messages}")
+                    # logging.info(f"Round {current_round}. Normalized messages: {normalized_messages}")
 
                 if previous_threshold > 0:
                     threshold = (messages_count + previous_threshold) / 2
                 Reputation.previous_threshold_freq[current_addr_nei] = threshold
-                logging.info(f"Round {current_round}. New threshold: {threshold}")
+                # logging.info(f"Round {current_round}. New threshold: {threshold}")
             else:
                 normalized_messages = 0.0
             
@@ -502,14 +512,14 @@ class Reputation:
                     Reputation.mean_time_communication = np.mean(model_times)
                     #logging.info(f"Round {current_round}. Mean time communication: {Reputation.mean_time_communication}")
 
-                    desviation = abs(time - Reputation.mean_time_communication)
-                    #logging.info(f"Round {current_round}. Time: {time} Desviation: {desviation}")
+                    difference = abs(time - Reputation.mean_time_communication)
+                    #logging.info(f"Round {current_round}. Time: {time} difference: {difference}")
 
-                    penalty_range = desviation / Reputation.mean_time_communication
+                    penalty_range = difference / Reputation.mean_time_communication
                     #logging.info(f"Round {current_round}. Penalty range: {penalty_range}")
 
                     if time < Reputation.mean_time_communication:
-                        reduction_factor = 1 - (desviation / Reputation.mean_time_communication)
+                        reduction_factor = 1 - (difference / Reputation.mean_time_communication)
                         penalty_range *= reduction_factor
                         #logging.info(f"Round {current_round}. Normal penalty reduction: {penalty_range}")
 
@@ -532,17 +542,17 @@ class Reputation:
                 Reputation.mean_time_communication = (previous_mean  + time) / 2
                 #logging.info(f"Round {current_round}. Update mean time communication: {Reputation.mean_time_communication}")
 
-                desviation = abs(time - Reputation.mean_time_communication)
-                #logging.info(f"Round {current_round}. Time: {time} Desviation: {desviation}")
+                difference = abs(time - Reputation.mean_time_communication)
+                #logging.info(f"Round {current_round}. Time: {time} difference: {difference}")
 
                 # max_time = max(comm["time"] for comm in Reputation.communication_data if comm["type_message"] == "model" and comm["key"] == (addr, nei))
                 # logging.info(f"Round {current_round}. Max time for score calculation: {max_time}")
 
-                penalty_range = desviation / Reputation.mean_time_communication
+                penalty_range = difference / Reputation.mean_time_communication
                 #logging.info(f"Round {current_round}. Penalty range: {penalty_range}")
 
                 if time < Reputation.mean_time_communication:
-                    reduction_factor = 1 - (desviation / Reputation.mean_time_communication)
+                    reduction_factor = 1 - (difference / Reputation.mean_time_communication)
                     penalty_range *= reduction_factor
                     #logging.info(f"Round {current_round}. Normal penalty reduction: {penalty_range}")
 
@@ -584,24 +594,29 @@ class Reputation:
             if key not in Reputation.communication_history:
                 Reputation.communication_history[key] = {}
 
-            Reputation.communication_history[key][current_round] = communication
+            Reputation.communication_history[key][current_round] = {
+                "communication": communication
+            }
 
-            logging.info(f"Communication history: {Reputation.communication_history}")
+            # logging.info(f"Communication: {communication}")
+            # logging.info(f"Communication history: {Reputation.communication_history}")
 
             rounds = Reputation.communication_history[key]
             #recent_rounds = sorted(rounds.keys(), reverse=True) #[:2]
-            recent_rounds = [round_num for round_num in rounds.keys() if round_num >= 5]
-            total_communication = 0
-            count_communication = 0
+            if communication != 0 and current_round > 4:
+                previous_avg = Reputation.communication_history[key].get(current_round - 1, {}).get("avg_communication", None)
+                # logging.info(f"Previous avg communication: {previous_avg}")
 
-            for round_num in recent_rounds:
-                comm = rounds[round_num]
-                if comm is not None:
-                    total_communication += comm
-                    count_communication += 1
+                if previous_avg is not None:
+                    avg_communication = (communication + previous_avg) / 2
+                else:
+                    avg_communication = communication
+                
+                Reputation.communication_history[key][current_round]["avg_communication"] = avg_communication
+            else:
+                avg_communication = 0
 
-            avg_communication = total_communication / count_communication if count_communication > 0 else 0
-            logging.info(f"Avg communication: {avg_communication}")
+            # logging.info(f"Avg communication: {avg_communication}")
             return avg_communication
         except Exception as e:
             logging.error(f"Error saving communication history: {e}")
@@ -638,7 +653,7 @@ class Reputation:
                 decay_factor = Reputation.calculate_decay_rate(rep) ** (i * 2) # Aument the decay factor * 2
                 total_reputation += rep * decay_factor
                 total_weights += decay_factor
-                logging.info(f"Round: {round}, Reputation: {rep}, Decay: {decay_factor}, Total reputation: {total_reputation}")
+                # logging.info(f"Round: {round}, Reputation: {rep}, Decay: {decay_factor}, Total reputation: {total_reputation}")
 
             if total_weights > 0:
                 avg_reputation = total_reputation / total_weights
@@ -713,7 +728,7 @@ class Reputation:
         return similarity
 
     @staticmethod
-    def callback_normalized_value (array, metric=None, key=None):
+    def callback_normalized_value(array, metric=None, key=None):
         """
         Calculate the reputation of a node based on the normalized values.
 
