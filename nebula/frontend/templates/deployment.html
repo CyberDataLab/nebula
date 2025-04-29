@@ -2749,17 +2749,12 @@
 
     <script>
         // Update attacks configuration
-
-        var manualMalicious = false
-
         document.getElementById("malicious-nodes-select").addEventListener("change", function(){
             if(this.value == "Manual"){
                 document.getElementById("poisoned-node-percent").value = 0;
                 document.getElementById("poisoned-node-percent").disabled = true;
-                manualMalicious = true;
             }else{
                 document.getElementById("poisoned-node-percent").disabled = false;
-                manualMalicious = false;
             }
         });
 
@@ -3503,21 +3498,14 @@
                 const changeMalicious = document.createElement("a");
                 changeMalicious.innerHTML = "<i class=\"fa fa-exclamation-triangle\" aria-hidden=\"true\"></i> Change malicious";
                 changeMalicious.style.display = "block";
-                if(!manualMalicious){
-                    changeMalicious.style.opacity = "0.5";
-                    changeMalicious.style.cursor = "not-allowed";
-                }
-                else{
-                    changeMalicious.style.cursor = "pointer";
-                }
                 changeMalicious.style.padding = "5px";
                 changeMalicious.style.borderRadius = "5px";
                 changeMalicious.style.marginBottom = "5px";
                 changeMalicious.classList.add("dropdown-item");
                 changeMalicious.addEventListener("click", function () {
-                    if(!manualMalicious){
-                        return;
-                    }
+                    document.getElementById("malicious-nodes-select").value = "Manual"
+                    document.getElementById("malicious-nodes-select").dispatchEvent(new Event('change'));
+
                     console.log("Change malicious");
                     node.malicious = !node.malicious;
                     updateGraph();

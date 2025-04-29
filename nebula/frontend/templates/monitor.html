@@ -57,13 +57,14 @@
                                 <th>IP</th>
                                 <th>Role</th>
                                 <th>Round</th>
+                                <th>Behaviour</th>
                                 <th>Status</th>
                                 <th>Logs</th>
 
                             </tr>
                         </thead>
                         {% for uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round,
-                        scenario, hash, status
+                        scenario, hash, malicious, status
                         in nodes %}
                         <tr id="node-{{ uid }}">
                             <td id="uid"> {{ uid }}</td>
@@ -71,6 +72,11 @@
                             <td id="ip"> {{ ip }}</td>
                             <td id="role"> {{ role }}</td>
                             <td id="round"> {{ round }}</td>
+                            {% if malicious == "True" %}
+                            <td id="malicious"><span class="badge text-bg-dark">Malicious</span></td>
+                            {% else %}
+                            <td id="malicious"><span class="badge text-bg-secondary"  style="width: 60px;">Benign</span></td>
+                            {% endif %}
                             {% if status %}
                             <td id="status"><span class="badge text-bg-success">Online</span></td>
                             {% else %}
@@ -536,6 +542,7 @@
                     var idx = node_row.querySelector("#idx");
                     var ip = node_row.querySelector("#ip");
                     var round = node_row.querySelector("#round");
+                    var malicious = node_row.querySelector("#malicious");
                     var status = node_row.querySelector("#status");
 
                     if (!idx) {
@@ -553,6 +560,11 @@
                         round.id = "round";
                         node_row.appendChild(round);
                     }
+                    if (!malicious) {
+                        malicious = document.createElement("td");
+                        malicious.id = "malicious";
+                        node_row.appendChild(malicious);
+                    }
                     if (!status) {
                         status = document.createElement("td");
                         status.id = "status";
@@ -563,7 +575,15 @@
                     ip.innerHTML = node[2];
                     round.innerHTML = node[10];
 
-                    if (node[13]) {
+                    console.log("malicious: ", node[13])
+
+                    if (node[13] == "True") {
+                        status.innerHTML = '<span class="badge text-bg-dark">Malicious</span>';
+                    } else {
+                        status.innerHTML = '<span class="badge text-bg-secondary">Benign</span>';
+                    }
+
+                    if (node[14]) {
                         status.innerHTML = '<span class="badge text-bg-success">Online</span>';
                         if (offlineNodes.has(node[2] + ":" + node[3])) {
                             offlineNodes.delete(node[2] + ":" + node[3]);
@@ -581,7 +601,8 @@
                         latitude: node[6],
                         longitude: node[7],
                         neighbors: node[5],
-                        status: node[13],
+                        malicious: node[13],
+                        status: node[14],
                     };
                     updateQueue.push(data_json);
                 });
@@ -692,7 +713,7 @@
                 response.json().then(function (data) {
                     data['nodes_table'].forEach(function (node) {
                         // Detect if a node has status offline and emit node_remove to the WebSocket
-                        if (!node[13]) {
+                        if (!node[14]) {
                             if (!offlineNodes.has(node[2] + ":" + node[3])) {
                                 console.log("Node " + node[2] + ":" + node[3] + " is just offline");
                                 offlineNodes.add(node[2] + ":" + node[3]);
@@ -709,6 +730,7 @@
                                     timestamp: node[8],
                                     federation: node[9],
                                     round: node[10],
+                                    malicious: node[13],
                                     status: false,
                                     scenario_name: nodeData.scenario_name,
                                 }

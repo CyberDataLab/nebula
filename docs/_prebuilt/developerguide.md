@@ -813,3 +813,96 @@ The new aggregator must inherit from the **Aggregator** class. You can use **Fed
             # self.print_model_size(accum)
             return accum
     ```
+
+### **Adding new messages**
+To add a new message to the application, follow these steps:
+
+**1.** Create your message in the **nebula.proto** file inside the **nebula/core/network/pb**. Follow the structure used by other messages. For example:
+
+??? quote "New message example"
+    ```python linenums="56"
+    message FederationMessage {
+      enum Action {
+        FEDERATION_START = 0;
+        REPUTATION = 1;
+        FEDERATION_MODELS_INCLUDED = 2;
+        FEDERATION_READY = 3;
+      }
+      Action action = 1;
+      repeated string arguments = 2;  
+      int32 round = 3;                
+    }
+    ```
+
+Even if your message only has one “type,” define it in this manner so that subsequent steps stay consistent.
+
+**2.** Once the message is created in **nebula.proto**, run the protobuf protocol as indicated in the file to generate the **nebula_2pb.py** file.
+
+**3.** In the file **/core/network/actions.py**, add the class that represents your message, following the structure of the others, and include it in the dictionary ACTION_CLASSES as a key-value pair (message_name, created_class). The message_name should be in lowercase.
+
+**4.** In the file **/core/network/messages.py**, add your message template in the dictionary inside the _define_message_templates() function.
+Follow the existing structure, indicating in parameters the different parameters of your message.
+In defaults, you can provide default values for your parameters to simplify message creation.
+It is important to use the exact same parameter names you defined in nebula.proto.
+
+**5.** In the file **core/engine.py**, define your callback that will be executed when the message is received.
+Use the same naming convention used in the other callbacks:
+
+??? quote "Naming convention example"
+    ```python linenums="1"
+    <message_name>_<message_action>_callback(self, source, message)
+    ```
+
+**If you have followed all the previous steps, at runtime, the events and callbacks associated with your message will automatically be registered.** The system will run the callback you defined whenever the new message is received. There is nothing else to do—your message is now implemented in the messaging protocol!
+
+### **Event System**
+An **Event-Driven Architecture (EDA)** is a design model in which system components communicate through events instead of direct calls. In this architecture, producers generate events that are consumed by other services in an asynchronous manner, allowing a high degree of decoupling, scalability, and flexibility.
+
+#### **Events**
+There are currently three different event types defined in the file **/core/nebulaevents.py**:
+
+- **NodeEvent**: Events associated with the training-aggregation process that comprises FL.
+- **MessageEvent**: Events associated with Nebula’s communication protocol.
+- **AddonEvent**: Events associated with additional components that can be added to scenarios.
+
+Each event type has a different internal structure and is managed independently by the event handler, including maintaining a separate queue for each event type. Moreover, for **NodeEvent**, there is an option to define whether the subscribed listeners should be run concurrently or not.
+
+Meanwhile, we have the **EventManager**, which controls how events are subscribed to and published. We will first look at how to use this functionality with Nebula’s native events and then go through the steps for creating new events.
+
+??? quote "Import"
+    ```python linenums="1"
+    from nebula.core.eventmanager import EventManager
+    ```
+
+Once it is imported, we can subscribe to and publish events in our **.py** files:
+
+??? quote "Subscribing to an event"
+    ```python linenums="1"
+    await EventManager.get_instance().subscribe(EventType, callback_used_on_trigger)
+    ```
+
+Note that **EventType** is the class that represents the event (not a specific instance) and **callback_used_on_trigger** is a coroutine (defined with **async**). To specify **EventType**, you need to import it from **nebulaevents.py**
+
+??? quote "Import"
+    ```python linenums="1"
+    from nebula.core.nebulaevents import EventType
+    ```
+
+**Publishing an event:**
+
+1. **Import the event type you want to publish.**
+
+2. **Create an instance of that event, adhering to its definition.**
+
+3. **Use the corresponding publish function for that event type.**
+
+??? quote "Event example"
+    ```python linenums="1"
+    current_time = time.time()
+    rse = RoundStartEvent(self.round, current_time)
+    await EventManager.get_instance().publish_node_event(rse)
+    ```
+
+When the event is published, all subscribed listeners for that event type will be triggered. As mentioned, there are three different **publish** functions, each tied to a specific type of event.
+
+Finally, to **create a new event**, go to the file **/core/nebulaevents.py**. Depending on the type of event you wish to implement, create a class that extends one of the three native event types. After doing this, the usage of your new event is transparent to the rest of the system, and you can use the functions described above without any issues.

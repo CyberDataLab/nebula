@@ -72,6 +72,7 @@ async def initialize_databases():
                 ip TEXT,
                 port TEXT,
                 role TEXT,
+                malicious TEXT,
                 neighbors TEXT,
                 latitude TEXT,
                 longitude TEXT,
@@ -89,6 +90,7 @@ async def initialize_databases():
             "ip": "TEXT",
             "port": "TEXT",
             "role": "TEXT",
+            "malicious": "TEXT",
             "neighbors": "TEXT",
             "latitude": "TEXT",
             "longitude": "TEXT",
@@ -282,6 +284,7 @@ async def update_node_record(
     federation_round,
     scenario,
     run_hash,
+    malicious,
 ):
     # Check if the node record with node_uid and scenario already exists in the database
     # If it does, update the record
@@ -299,7 +302,7 @@ async def update_node_record(
             if result is None:
                 # Create a new record
                 await _c.execute(
-                    "INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         node_uid,
                         idx,
@@ -314,11 +317,12 @@ async def update_node_record(
                         federation_round,
                         scenario,
                         run_hash,
+                        malicious,
                     ),
                 )
             else:
                 # Update the record
-                command = "UPDATE nodes SET idx = ?, ip = ?, port = ?, role = ?, neighbors = ?, latitude = ?, longitude = ?, timestamp = ?, federation = ?, round = ?, hash = ? WHERE uid = ? AND scenario = ?;"
+                command = "UPDATE nodes SET idx = ?, ip = ?, port = ?, role = ?, malicious = ?, neighbors = ?, latitude = ?, longitude = ?, timestamp = ?, federation = ?, round = ?, hash = ? WHERE uid = ? AND scenario = ?;"
                 await _c.execute(
                     command,
                     (
@@ -326,6 +330,7 @@ async def update_node_record(
                         ip,
                         port,
                         role,
+                        malicious,
                         neighbors,
                         latitude,
                         longitude,

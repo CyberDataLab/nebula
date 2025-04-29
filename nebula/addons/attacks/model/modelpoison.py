@@ -49,7 +49,7 @@ class ModelPoisonAttack(ModelAttack):
             raise ValueError(f"Missing required attack parameter: {e}")
         except ValueError:
             raise ValueError("Invalid value in attack_params. Ensure all values are integers.")
-        
+
         super().__init__(engine, round_start, round_stop, attack_interval)
 
         self.poisoned_ratio = float(attack_params["poisoned_ratio"])
@@ -94,7 +94,7 @@ class ModelPoisonAttack(ModelAttack):
             if len(t.shape) == 0:
                 t = t.view(-1)
                 single_point = True
-            # print(t)
+
             if noise_type == "salt":
                 # Replaces random pixels with 1.
                 poisoned = torch.tensor(random_noise(t, mode=noise_type, amount=poisoned_ratio))
@@ -105,7 +105,7 @@ class ModelPoisonAttack(ModelAttack):
                 # Replaces random pixels with either 1 or low_val, where low_val is 0 for unsigned images or -1 for signed images.
                 poisoned = torch.tensor(random_noise(t, mode=noise_type, amount=poisoned_ratio))
             else:
-                print("ERROR: poison attack type not supported.")
+                logging.info(f"ERROR: noise_type '{noise_type}' not supported in model poison attack.")
                 poisoned = t
             if single_point:
                 poisoned = poisoned[0]

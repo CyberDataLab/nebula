@@ -11,6 +11,7 @@ Functions:
 """
 
 import copy
+import logging
 import random
 
 import numpy as np
@@ -61,7 +62,7 @@ class SamplePoisoningAttack(DatasetAttack):
         self.poisoned_ratio = float(attack_params["poisoned_ratio"])
         self.targeted = attack_params["targeted"]
         self.target_label = int(attack_params["target_label"])
-        self.noise_type = attack_params["noise_type"]
+        self.noise_type = attack_params["noise_type"].lower()
 
     def apply_noise(self, t, noise_type, poisoned_ratio):
         """
@@ -88,16 +89,18 @@ class SamplePoisoningAttack(DatasetAttack):
            - Noise for types "salt", "gaussian", and "s&p" is generated using `random_noise` from
              the `skimage.util` package, and returned as a `torch.Tensor`.
         """
+        arr = t.detach().cpu().numpy() if isinstance(t, torch.Tensor) else np.array(t)
+
         if noise_type == "salt":
-            return torch.tensor(random_noise(t, mode=noise_type, amount=poisoned_ratio))
+            return torch.tensor(random_noise(arr, mode=noise_type, amount=poisoned_ratio))
         elif noise_type == "gaussian":
-            return torch.tensor(random_noise(t, mode=noise_type, mean=0, var=poisoned_ratio, clip=True))
+            return torch.tensor(random_noise(arr, mode=noise_type, mean=0, var=poisoned_ratio, clip=True))
         elif noise_type == "s&p":
-            return torch.tensor(random_noise(t, mode=noise_type, amount=poisoned_ratio))
+            return torch.tensor(random_noise(arr, mode=noise_type, amount=poisoned_ratio))
         elif noise_type == "nlp_rawdata":
-            return self.poison_to_nlp_rawdata(t, poisoned_ratio)
+            return self.poison_to_nlp_rawdata(arr, poisoned_ratio)
         else:
-            print("ERROR: poison attack type not supported.")
+            logging.info(f"ERROR: noise_type '{noise_type}' not supported in data poison attack.")
             return t
 
     def datapoison(
@@ -143,8 +146,11 @@ class SamplePoisoningAttack(DatasetAttack):
             - Targeted poisoning modifies only samples with `target_label` by adding an 'X' pattern, regardless of `poisoned_ratio`.
         """
         new_dataset = copy.deepcopy(dataset)
-        train_data = new_dataset.data
-        targets = new_dataset.targets
+        if not isinstance(new_dataset.targets, np.ndarray):
+            new_dataset.targets = np.array(new_dataset.targets)
+        else:
+            new_dataset.targets = new_dataset.targets.copy()
+
         num_indices = len(indices)
         if not isinstance(noise_type, str):
             noise_type = noise_type[0]
@@ -156,18 +162,34 @@ class SamplePoisoningAttack(DatasetAttack):
             if num_poisoned > num_indices:
                 return new_dataset
             poisoned_indice = random.sample(indices, num_poisoned)
+            logging.info(f"Number of poisoned samples: {num_poisoned}")
 
             for i in poisoned_indice:
-                t = train_data[i]
+                t = new_dataset.data[i]
+                if isinstance(t, tuple):
+                    t = t[0]
                 poisoned = self.apply_noise(t, noise_type, poisoned_ratio)
-                train_data[i] = poisoned
+                if isinstance(t, tuple):
+                    poisoned = (poisoned, t[1])
+                if isinstance(poisoned, torch.Tensor):
+                    poisoned = poisoned.detach().clone()
+                if len(poisoned.shape) == 0:
+                    poisoned = poisoned.view(-1)
+                new_dataset.data[i] = poisoned
         else:
             for i in indices:
-                if int(targets[i]) == int(target_label):
-                    t = train_data[i]
+                if int(new_dataset.targets[i]) == int(target_label):
+                    t = new_dataset.data[i]
+                    if isinstance(t, tuple):
+                        t = t[0]
+                    if isinstance(t, torch.Tensor):
+                        t = t.detach().clone()
+                    if len(t.shape) == 0:
+                        t = t.view(-1)
                     poisoned = self.add_x_to_image(t)
-                    train_data[i] = poisoned
-        new_dataset.data = train_data
+                    if isinstance(t, tuple):
+                        poisoned = (poisoned, t[1])
+                    new_dataset.data[i] = poisoned
         return new_dataset
 
     def add_x_to_image(self, img):

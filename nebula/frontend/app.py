@@ -639,6 +639,7 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                 [x[10] for x in nodes_list],  # Round
                 [x[11] for x in nodes_list],  # Scenario name
                 [x[12] for x in nodes_list],  # Run hash
+                [x[13] for x in nodes_list],  # Malicious
                 nodes_status,
                 strict=False,  # Status
             )
@@ -766,6 +767,7 @@ async def nebula_update_node(scenario_name: str, request: Request):
                 str(config["federation_args"]["round"]),
                 str(config["scenario_args"]["name"]),
                 str(config["tracking_args"]["run_hash"]),
+                str(config["device_args"]["malicious"]),
             )
 
             neighbors_distance = config["mobility_args"]["neighbors_distance"]
@@ -778,6 +780,7 @@ async def nebula_update_node(scenario_name: str, request: Request):
                 "ip": config["network_args"]["ip"],
                 "port": str(config["network_args"]["port"]),
                 "role": config["device_args"]["role"],
+                "malicious": config["device_args"]["malicious"],
                 "neighbors": config["network_args"]["neighbors"],
                 "latitude": config["mobility_args"]["latitude"],
                 "longitude": config["mobility_args"]["longitude"],
