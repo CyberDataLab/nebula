@@ -395,6 +395,7 @@ class Reputation:
             self.reputation[nei]["round"] = self._engine.get_round()
 
         logging.info(f"Reputation of node {nei}: {self.reputation[nei]['reputation']}")
+        # if self.reputation[nei]["reputation"] < 0.75:
         if self.reputation[nei]["reputation"] < 0.6:
             self.rejected_nodes.add(nei)
             logging.info(f"Rejected node {nei} at round {self._engine.get_round()}")
@@ -535,7 +536,7 @@ class Reputation:
         messages_number_message_normalized = 0
         messages_number_message_count = 0
         avg_messages_number_message_normalized = 0
-        fraction_score_normalized = 0
+        score_fraction = 0
         fraction_score_asign = 0
         messages_model_arrival_latency_normalized = 0
         avg_model_arrival_latency = 0
@@ -581,7 +582,7 @@ class Reputation:
                     fraction_changed = metrics_instance.fraction_of_params_changed.get("fraction_changed")
                     threshold = metrics_instance.fraction_of_params_changed.get("threshold")
                     round_num = metrics_instance.fraction_of_params_changed.get("round")
-                    fraction_score_normalized = self.analyze_anomalies(
+                    score_fraction = self.analyze_anomalies(
                         addr,
                         nei,
                         round_num,
@@ -591,50 +592,47 @@ class Reputation:
                     )
 
                 if current_round >= 5:
-                    if fraction_score_normalized > 0:
-                        key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
-                        fraction_previous_round = None
+                    key_current = (addr, nei, current_round)
 
-                        if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
-                            fraction_score_prev = self.fraction_changed_history[key_previous_round].get(
-                                "fraction_score"
-                            )
-                            fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
+                    if score_fraction > 0:
+                        past_scores = []
+                        for i in range(1, 5):
+                            key_prev = (addr, nei, current_round - i)
+                            score_prev = self.fraction_changed_history.get(key_prev, {}).get("finally_fraction_score")
+                            if score_prev is not None and score_prev > 0:
+                                past_scores.append(score_prev)
 
-                        if fraction_previous_round is not None:
-                            fraction_score_asign = fraction_score_normalized * 0.8 + fraction_previous_round * 0.2
-                            self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = (
-                                fraction_score_asign
-                            )
+                        if past_scores:
+                            avg_past = sum(past_scores) / len(past_scores)
+                            fraction_score_asign = score_fraction * 0.2 + avg_past * 0.8
                         else:
-                            fraction_score_asign = fraction_score_normalized
-                            self.fraction_changed_history[(addr, nei, current_round)]["fraction_score"] = (
-                                fraction_score_asign
-                            )
-                    else:
-                        fraction_previous_round = None
-                        key_previous_round = (addr, nei, current_round - 1) if current_round - 1 > 0 else None
-                        if key_previous_round is not None and key_previous_round in self.fraction_changed_history:
-                            fraction_score_prev = self.fraction_changed_history[key_previous_round].get(
-                                "fraction_score"
-                            )
-                            fraction_previous_round = fraction_score_prev if fraction_score_prev is not None else None
+                            fraction_score_asign = score_fraction
 
-                        if fraction_previous_round is not None:
-                            fraction_score_asign = fraction_previous_round - (fraction_previous_round * 0.5)
+                        self.fraction_changed_history[key_current]["finally_fraction_score"] = fraction_score_asign
+
+                    else:
+                        key_prev = (addr, nei, current_round - 1)
+                        prev_score = self.fraction_changed_history.get(key_prev, {}).get("finally_fraction_score")
+
+                        if prev_score is not None:
+                            fraction_score_asign = prev_score * 0.2
                         else:
                             if fraction_neighbors_scores is None:
                                 fraction_neighbors_scores = {}
 
                             for key, value in self.fraction_changed_history.items():
-                                score = value.get("fraction_score")
+                                score = value.get("finally_fraction_score")
                                 if score is not None:
                                     fraction_neighbors_scores[key] = score
 
-                            if fraction_neighbors_scores:
-                                fraction_score_asign = np.mean(list(fraction_neighbors_scores.values()))
-                            else:
-                                fraction_score_asign = 0
+                            fraction_score_asign = (
+                                np.mean(list(fraction_neighbors_scores.values())) if fraction_neighbors_scores else 0
+                            )
+
+                        if key_current not in self.fraction_changed_history:
+                            self.fraction_changed_history[key_current] = {}
+
+                        self.fraction_changed_history[key_current]["finally_fraction_score"] = fraction_score_asign
                 else:
                     fraction_score_asign = 0
 
@@ -680,6 +678,7 @@ class Reputation:
             )
         except Exception as e:
             logging.exception(f"Error calculating reputation. Type: {type(e).__name__}")
+            return 0, 0, 0, 0
 
     def create_graphics_to_metrics(
         self,
@@ -766,9 +765,9 @@ class Reputation:
                 if round_num > 0 and prev_key in self.fraction_changed_history:
                     previous_data = self.fraction_changed_history[prev_key]
                     fraction_changed = (
-                        fraction_changed if fraction_changed is not None else previous_data["fraction_changed"]
+                        fraction_changed if fraction_changed is not None else previous_data.get("fraction_changed", 0)
                     )
-                    threshold = threshold if threshold is not None else previous_data["threshold"]
+                    threshold = threshold if threshold is not None else previous_data.get("threshold", 0)
                 else:
                     fraction_changed = fraction_changed if fraction_changed is not None else 0
                     threshold = threshold if threshold is not None else 0
@@ -792,8 +791,8 @@ class Reputation:
                 for r in range(round_num):
                     past_key = (addr, nei, r)
                     if past_key in self.fraction_changed_history:
-                        past_fractions.append(self.fraction_changed_history[past_key]["fraction_changed"])
-                        past_thresholds.append(self.fraction_changed_history[past_key]["threshold"])
+                        past_fractions.append(self.fraction_changed_history[past_key].get("fraction_changed", 0))
+                        past_thresholds.append(self.fraction_changed_history[past_key].get("threshold", 0))
 
                 if past_fractions:
                     mean_fraction = np.mean(past_fractions)
@@ -808,127 +807,100 @@ class Reputation:
                     self.fraction_changed_history[key]["std_dev_threshold"] = std_dev_threshold
 
                 return 0
+
+            prev_key = None
+            for i in range(1, round_num):
+                candidate_key = (addr, nei, round_num - i)
+                candidate_data = self.fraction_changed_history.get(candidate_key, {})
+                if all(
+                    candidate_data.get(k) is not None
+                    for k in ["mean_fraction", "std_dev_fraction", "mean_threshold", "std_dev_threshold"]
+                ):
+                    prev_key = candidate_key
+                    break
+
+            if prev_key is None:
+                logging.warning(f"No valid previous stats found for {addr}, {nei}, round {round_num}")
+                return -1
+
+            prev_data = self.fraction_changed_history[prev_key]
+            mean_fraction_prev = prev_data.get("mean_fraction")
+            std_dev_fraction_prev = prev_data.get("std_dev_fraction")
+            mean_threshold_prev = prev_data.get("mean_threshold")
+            std_dev_threshold_prev = prev_data.get("std_dev_threshold")
+
+            current_fraction = self.fraction_changed_history[key].get("fraction_changed", 0)
+            current_threshold = self.fraction_changed_history[key].get("threshold", 0)
+
+            upper_mean_fraction_prev = (mean_fraction_prev + std_dev_fraction_prev) * 1.20
+            upper_mean_threshold_prev = (mean_threshold_prev + std_dev_threshold_prev) * 1.15
+
+            fraction_anomaly = current_fraction > upper_mean_fraction_prev
+            threshold_anomaly = current_threshold > upper_mean_threshold_prev
+
+            self.fraction_changed_history[key]["fraction_anomaly"] = fraction_anomaly
+            self.fraction_changed_history[key]["threshold_anomaly"] = threshold_anomaly
+
+            if fraction_anomaly:
+                penalization_factor_fraction = (
+                    abs(current_fraction - mean_fraction_prev) / mean_fraction_prev if mean_fraction_prev else 1
+                )
+                fraction_value = 1 - (1 / (1 + np.exp(-penalization_factor_fraction)))
             else:
-                fraction_value = 0
-                threshold_value = 0
-                prev_key = (addr, nei, round_num - 1)
-                if prev_key not in self.fraction_changed_history:
-                    for i in range(0, round_num + 1):
-                        potential_prev_key = (addr, nei, round_num - i)
-                        if potential_prev_key in self.fraction_changed_history:
-                            mean_fraction_prev = self.fraction_changed_history[potential_prev_key]["mean_fraction"]
-                            std_dev_fraction_prev = self.fraction_changed_history[potential_prev_key][
-                                "std_dev_fraction"
-                            ]
-                            mean_threshold_prev = self.fraction_changed_history[potential_prev_key]["mean_threshold"]
-                            std_dev_threshold_prev = self.fraction_changed_history[potential_prev_key][
-                                "std_dev_threshold"
-                            ]
-                            if (
-                                mean_fraction_prev is not None
-                                and std_dev_fraction_prev is not None
-                                and mean_threshold_prev is not None
-                                and std_dev_threshold_prev is not None
-                            ):
-                                prev_key = potential_prev_key
-                                break
+                fraction_value = 1
 
-                if prev_key:
-                    mean_fraction_prev = self.fraction_changed_history[prev_key]["mean_fraction"]
-                    std_dev_fraction_prev = self.fraction_changed_history[prev_key]["std_dev_fraction"]
-                    mean_threshold_prev = self.fraction_changed_history[prev_key]["mean_threshold"]
-                    std_dev_threshold_prev = self.fraction_changed_history[prev_key]["std_dev_threshold"]
+            if threshold_anomaly:
+                penalization_factor_threshold = (
+                    abs(current_threshold - mean_threshold_prev) / mean_threshold_prev if mean_threshold_prev else 1
+                )
+                threshold_value = 1 - (1 / (1 + np.exp(-penalization_factor_threshold)))
+            else:
+                threshold_value = 1
 
-                    current_fraction = self.fraction_changed_history[key]["fraction_changed"]
-                    current_threshold = self.fraction_changed_history[key]["threshold"]
+            fraction_weight = 0.5
+            threshold_weight = 0.5
+            fraction_score = fraction_weight * fraction_value + threshold_weight * threshold_value
 
-                    upper_mean_fraction_prev = (mean_fraction_prev + std_dev_fraction_prev) * 1.20
-                    upper_mean_threshold_prev = (mean_threshold_prev + std_dev_threshold_prev) * 1.15
+            self.fraction_changed_history[key]["mean_fraction"] = (current_fraction + mean_fraction_prev) / 2
+            self.fraction_changed_history[key]["std_dev_fraction"] = np.sqrt(
+                ((current_fraction - mean_fraction_prev) ** 2 + std_dev_fraction_prev**2) / 2
+            )
+            self.fraction_changed_history[key]["mean_threshold"] = (current_threshold + mean_threshold_prev) / 2
+            self.fraction_changed_history[key]["std_dev_threshold"] = np.sqrt(
+                ((0.1 * (current_threshold - mean_threshold_prev) ** 2) + std_dev_threshold_prev**2) / 2
+            )
 
-                    fraction_anomaly = current_fraction > upper_mean_fraction_prev
-                    threshold_anomaly = current_threshold > upper_mean_threshold_prev
+            data = {
+                "addr": addr,
+                "nei": nei,
+                "round": current_round,
+                "fraction_changed": current_fraction,
+                "threshold": current_threshold,
+                "mean_fraction": mean_fraction_prev,
+                "std_dev_fraction": std_dev_fraction_prev,
+                "mean_threshold": mean_threshold_prev,
+                "std_dev_threshold": std_dev_threshold_prev,
+                "upper_mean_fraction": upper_mean_fraction_prev,
+                "upper_mean_threshold": upper_mean_threshold_prev,
+                "fraction_anomaly": fraction_anomaly,
+                "threshold_anomaly": threshold_anomaly,
+                "penalization_factor_fraction": penalization_factor_fraction or 0,
+                "penalization_factor_threshold": penalization_factor_threshold or 0,
+                "fraction_value": fraction_value,
+                "threshold_value": threshold_value,
+                "fraction_score": fraction_score,
+            }
+            self.metrics(data, addr, nei, type="fraction_changed")
 
-                    self.fraction_changed_history[key]["fraction_anomaly"] = fraction_anomaly
-                    self.fraction_changed_history[key]["threshold_anomaly"] = threshold_anomaly
+            return max(fraction_score, 0)
 
-                    if fraction_anomaly:
-                        penalization_factor_fraction = (
-                            abs(current_fraction - mean_fraction_prev) / mean_fraction_prev
-                            if mean_fraction_prev != 0
-                            else 1
-                        )
-                        fraction_value = (
-                            1 - (1 / (1 + np.exp(-penalization_factor_fraction)))
-                            if current_fraction is not None and mean_fraction_prev is not None
-                            else 0
-                        )
-                    else:
-                        fraction_value = 1
-
-                    if threshold_anomaly:
-                        penalization_factor_threshold = (
-                            abs(current_threshold - mean_threshold_prev) / mean_threshold_prev
-                            if mean_threshold_prev != 0
-                            else 1
-                        )
-                        threshold_value = (
-                            1 - (1 / (1 + np.exp(-penalization_factor_threshold)))
-                            if current_threshold is not None and mean_threshold_prev is not None
-                            else 0
-                        )
-                    else:
-                        threshold_value = 1
-
-                    fraction_weight = 0.5
-                    threshold_weight = 0.5
-
-                    fraction_score = fraction_weight * fraction_value + threshold_weight * threshold_value
-
-                    self.fraction_changed_history[key]["mean_fraction"] = (current_fraction + mean_fraction_prev) / 2
-                    self.fraction_changed_history[key]["std_dev_fraction"] = np.sqrt(
-                        ((current_fraction - mean_fraction_prev) ** 2 + std_dev_fraction_prev**2) / 2
-                    )
-                    self.fraction_changed_history[key]["mean_threshold"] = (current_threshold + mean_threshold_prev) / 2
-                    self.fraction_changed_history[key]["std_dev_threshold"] = np.sqrt(
-                        ((0.1 * (current_threshold - mean_threshold_prev) ** 2) + std_dev_threshold_prev**2) / 2
-                    )
-
-                    data = {
-                        "addr": addr,
-                        "nei": nei,
-                        "round": current_round,
-                        "fraction_changed": current_fraction,
-                        "threshold": current_threshold,
-                        "mean_fraction": mean_fraction_prev,
-                        "std_dev_fraction": std_dev_fraction_prev,
-                        "mean_threshold": mean_threshold_prev,
-                        "std_dev_threshold": std_dev_threshold_prev,
-                        "upper_mean_fraction": upper_mean_fraction_prev,
-                        "upper_mean_threshold": upper_mean_threshold_prev,
-                        "fraction_anomaly": fraction_anomaly,
-                        "threshold_anomaly": threshold_anomaly,
-                        "penalization_factor_fraction": penalization_factor_fraction
-                        if penalization_factor_fraction != 0
-                        else 0,
-                        "penalization_factor_threshold": penalization_factor_threshold
-                        if penalization_factor_threshold != 0
-                        else 0,
-                        "fraction_value": fraction_value,
-                        "threshold_value": threshold_value,
-                        "fraction_score": fraction_score,
-                    }
-                    self.metrics(data, addr, nei, type="fraction_changed")
-
-                    return max(fraction_score, 0)
-                else:
-                    return -1
         except Exception:
             logging.exception("Error analyzing anomalies")
             return -1
 
     def manage_model_arrival_latency(self, addr, nei, latency, current_round, round_num):
         """
-        Manage the model_arrival_latency metric with persistent storage of mean latency.
+        Manage the model_arrival_latency metric using latency.
 
         Args:
             addr (str): Source IP address.
@@ -938,7 +910,7 @@ class Reputation:
             round_num (int): The round number of the model_arrival_latency.
 
         Returns:
-            float: Normalized model_arrival_latency latency value between 0 and 1.
+            float: Normalized score between 0 and 1 for model_arrival_latency.
         """
         try:
             current_key = nei
@@ -960,17 +932,20 @@ class Reputation:
                     for r in self.model_arrival_latency_history
                     if r > 0
                     for key, data in self.model_arrival_latency_history[r].items()
-                    if "latency" in data and data["latency"] != 0
+                    if "latency" in data and data["latency"] not in (None, 0.0)
                 ]
 
                 mean_latency = np.mean(all_latencies) if all_latencies else 0
-                aument_mean_latency = mean_latency * 1.9
-                difference = latency - mean_latency
-
-                if latency <= aument_mean_latency:
-                    score = 1.0
+                aument_mean = mean_latency * 1.5
+                if latency is not None:
+                    difference = latency - mean_latency
+                    if latency <= aument_mean:
+                        score = 1.0
+                    else:
+                        score = 1 / (1 + np.exp(abs(difference) / mean_latency))
                 else:
-                    score = 1 / (1 + np.exp(abs(difference) / mean_latency))
+                    logging.info(f"latency is none in round {current_round} for nei {nei}")
+                    score = -0.5
 
                 self.model_arrival_latency_history[current_round][current_key].update({
                     "mean_latency": mean_latency,
@@ -986,10 +961,11 @@ class Reputation:
                 "current_round": current_round,
                 "latency": latency,
                 "mean_latency": mean_latency if current_round >= 5 else None,
-                "aument_mean_latency": aument_mean_latency if current_round >= 5 else None,
+                "aument_latency": aument_mean if current_round >= 5 else None,
                 "difference": difference if current_round >= 5 else None,
                 "score": score,
             }
+
             self.metrics(data, addr, nei, type="model_arrival_latency")
 
             return score
@@ -1001,15 +977,14 @@ class Reputation:
     def save_model_arrival_latency_history(self, nei, model_arrival_latency, round_num):
         """
         Save the model_arrival_latency history of a participant (addr) regarding its neighbor (nei) in memory.
-
+        Use 3 rounds for the average.
         Args:
-            addr (str): The identifier of the node whose model_arrival_latency history is being saved.
             nei (str): The neighboring node involved.
             model_arrival_latency (float): The model_arrival_latency value to be saved.
             round_num (int): The current round number.
 
         Returns:
-            float: The cumulative model_arrival_latency including the current round.
+            float: The smoothed average model_arrival_latency including the current round.
         """
         try:
             current_key = nei
@@ -1024,30 +999,33 @@ class Reputation:
                 "score": model_arrival_latency,
             })
 
-            if model_arrival_latency > 0 and round_num > 5:
-                previous_avg = (
-                    self.model_arrival_latency_history.get(round_num - 1, {})
-                    .get(current_key, {})
-                    .get("avg_model_arrival_latency", None)
-                )
-
-                if previous_avg is not None:
-                    avg_model_arrival_latency = (
-                        model_arrival_latency * 0.8 + previous_avg * 0.2
-                        if previous_avg is not None
-                        else model_arrival_latency
+            if model_arrival_latency > 0 and round_num > 4:
+                past_values = []
+                for r in range(round_num - 3, round_num):
+                    val = (
+                        self.model_arrival_latency_history.get(r, {})
+                        .get(current_key, {})
+                        .get("avg_model_arrival_latency", None)
                     )
+                    if val is not None and val != 0:
+                        past_values.append(val)
+
+                if past_values:
+                    avg_past = sum(past_values) / len(past_values)
+                    avg_model_arrival_latency = model_arrival_latency * 0.2 + avg_past * 0.8
                 else:
-                    avg_model_arrival_latency = model_arrival_latency - (model_arrival_latency * 0.05)
-            elif model_arrival_latency == 0 and round_num > 5:
+                    avg_model_arrival_latency = model_arrival_latency
+            elif model_arrival_latency == 0 and round_num > 4:
                 previous_avg = (
                     self.model_arrival_latency_history.get(round_num - 1, {})
                     .get(current_key, {})
                     .get("avg_model_arrival_latency", None)
                 )
-                avg_model_arrival_latency = previous_avg - (previous_avg * 0.5)
+                avg_model_arrival_latency = previous_avg * 0.1 if previous_avg is not None else 0
+            elif model_arrival_latency < 0 and round_num > 4:
+                avg_model_arrival_latency = abs(model_arrival_latency) * 0.3
             else:
-                avg_model_arrival_latency = model_arrival_latency
+                avg_model_arrival_latency = 0
 
             self.model_arrival_latency_history[round_num][current_key]["avg_model_arrival_latency"] = (
                 avg_model_arrival_latency
@@ -1194,28 +1172,32 @@ class Reputation:
                 self.reputation_history[key] = {}
 
             self.reputation_history[key][self._engine.get_round()] = reputation
-
             avg_reputation = 0
-            current_round = self._engine.get_round()
-            rounds = sorted(self.reputation_history[key].keys(), reverse=True)[:2]
-            # logging.info(f"Rounds in save_reputation_history: {rounds}")
 
-            if len(rounds) >= 2:
-                current_round = rounds[0]
-                previous_round = rounds[1]
-
-                current_rep = self.reputation_history[key][current_round]
-                previous_rep = self.reputation_history[key][previous_round]
-                logging.info(f"Current reputation: {current_rep}, Previous reputation: {previous_rep}")
-
-                avg_reputation = (current_rep * 0.8) + (previous_rep * 0.2)
-                logging.info(f"Reputation ponderated: {avg_reputation}")
-            else:
-                # logging.info(f"Reputation history: {self.reputation_history}")
-                avg_reputation = self.reputation_history[key][current_round]
-                # logging.info(f"Current reputation: {avg_reputation}")
+            # With the last 3 rounds
+            rounds = sorted(self.reputation_history[key].keys(), reverse=True)[:3]
+            weights = [0.5, 0.3, 0.2][: len(rounds)]
+            avg_reputation = sum(self.reputation_history[key][r] * w for r, w in zip(rounds, weights, strict=False))
 
             return avg_reputation
+
+            # With the last 2 rounds
+            # rounds = sorted(self.reputation_history[key].keys(), reverse=True)[:2]
+            # current_round = self._engine.get_round()
+            # logging.info(f"Rounds in save_reputation_history: {rounds}")
+            # if len(rounds) >= 2:
+            #     current_round = rounds[0]
+            #     previous_round = rounds[1]
+
+            #     current_rep = self.reputation_history[key][current_round]
+            #     previous_rep = self.reputation_history[key][previous_round]
+            #     logging.info(f"Current reputation: {current_rep}, Previous reputation: {previous_rep}")
+
+            #     avg_reputation = (current_rep * 0.8) + (previous_rep * 0.2)
+            #     logging.info(f"Reputation ponderated: {avg_reputation}")
+            # else:
+            #     avg_reputation = self.reputation_history[key][current_round]
+            # return avg_reputation
 
             # for i, n_round in enumerate(rounds, start=1):
             #     rep = self.reputation_history[key][n_round]
@@ -1281,7 +1263,8 @@ class Reputation:
             source_ip = metric.get("nei")
             round_in_metric = metric.get("round")
 
-            if source_ip == nei and round_in_metric == current_round:
+            # if source_ip == nei and round_in_metric == current_round:
+            if source_ip == nei:
                 weight_cosine = 0.25
                 weight_euclidean = 0.25
                 weight_manhattan = 0.25
@@ -1367,6 +1350,8 @@ class Reputation:
             logging.info(f"Calculating reputation at round {self._engine.get_round()}")
             logging.info(f"Active metrics: {self._reputation_metrics}")
             logging.info(f"rejected nodes at round {self._engine.get_round()}: {self.rejected_nodes}")
+            self.rejected_nodes.clear()
+            logging.info(f"Rejected nodes clear: {self.rejected_nodes}")
 
             neighbors = set(await self._engine._cm.get_addrs_current_connections(only_direct=True))
             history_data = self.history_data
@@ -1521,8 +1506,7 @@ class Reputation:
                         logging.info(f"⛔ Nei {nei} with reputation {rep:.4f}, model rejected")
 
         logging.info(f"Updates after rejected nodes: {list(updates.keys())}")
-        self.rejected_nodes.clear()
-        logging.info(f"rejected nodes after clear at round {self._engine.get_round()}: {self.rejected_nodes}")
+        logging.info(f"Nodes rejected: {self.rejected_nodes}")
 
     async def include_feedback_in_reputation(self):
         """
@@ -1585,6 +1569,8 @@ class Reputation:
             self.round_timing_info[round_id] = {}
         self.round_timing_info[round_id]["start_time"] = start_time
         expected_nodes.difference_update(self.rejected_nodes)
+        expected_nodes = list(expected_nodes)
+        self._recalculate_pending_latencies(round_id)
 
     async def recollect_model_arrival_latency(self, ure: UpdateReceivedEvent):
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
@@ -1596,12 +1582,10 @@ class Reputation:
 
         if round_num == current_round:
             self._process_current_round(round_num, source)
-
         elif round_num > current_round:
             self.round_timing_info[round_num]["pending_recalculation"] = True
             self.round_timing_info[round_num].setdefault("pending_sources", set()).add(source)
             logging.info(f"Model from future round {round_num} stored, pending recalculation.")
-
         else:
             self._process_past_round(round_num, source)
 
@@ -1614,7 +1598,9 @@ class Reputation:
         if "start_time" in self.round_timing_info[round_num]:
             current_time = time.time()
             self.round_timing_info[round_num].setdefault("model_received_time", {})
-            self.round_timing_info[round_num]["model_received_time"][source] = current_time
+            existing_time = self.round_timing_info[round_num]["model_received_time"].get(source)
+            if existing_time is None or current_time < existing_time:
+                self.round_timing_info[round_num]["model_received_time"][source] = current_time
 
             start_time = self.round_timing_info[round_num]["start_time"]
             duration = current_time - start_time
@@ -1637,10 +1623,13 @@ class Reputation:
         """
         Process models that arrive in past rounds.
         """
+        logging.info(f"Model from past round {round_num} received, storing for recalculation.")
         current_time = time.time()
         self.round_timing_info.setdefault(round_num, {})
         self.round_timing_info[round_num].setdefault("model_received_time", {})
-        self.round_timing_info[round_num]["model_received_time"][source] = current_time
+        existing_time = self.round_timing_info[round_num]["model_received_time"].get(source)
+        if existing_time is None or current_time < existing_time:
+            self.round_timing_info[round_num]["model_received_time"][source] = current_time
 
         prev_start_time = self.round_timing_info.get(round_num, {}).get("start_time")
         if prev_start_time:
@@ -1667,18 +1656,18 @@ class Reputation:
         logging.info("Recalculating latencies for rounds with pending recalculation.")
         for r_num, r_data in self.round_timing_info.items():
             new_time = time.time()
-            # logging.info(f"Round {r_num} data: {r_data}")
             if r_data.get("pending_recalculation"):
                 if "start_time" in r_data and "model_received_time" in r_data:
-                    # logging.info(f"Recalculating latency for round {r_num}.")
-
                     r_data.setdefault("model_received_time", {})
 
                     for src in list(r_data["pending_sources"]):
-                        r_data["model_received_time"][src] = new_time
+                        existing_time = r_data["model_received_time"].get(src)
+                        if existing_time is None or new_time < existing_time:
+                            r_data["model_received_time"][src] = new_time
                         duration = new_time - r_data["start_time"]
                         r_data["duration"] = duration
 
+                        logging.info(f"[Recalc] Source {src}, round {r_num}, duration: {duration:.4f} s")
                         # logging.info(f"Source {src}, round {r_num}, recalculated duration: {duration:.4f} seconds")
 
                         self.save_data(
