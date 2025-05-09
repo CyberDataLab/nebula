@@ -1,137 +1,178 @@
 {% extends "layout.html" %}
 {% block body %}
 {{ super() }}
+
 <section id="home" class="home">
     <div class="container" style="text-align: center">
-        <h1 class="logo" style="text-align: center">Monitor</h1>
-        {% if scenario %}
-        <p style="text-align: center" class="fst-italic"><b id="scenario_name">{{ scenario_name
-                }}</b>.</p>
-        <p style="text-align: center" class="fst-italic">Start time: <b>{{ scenario[1] }}</b></p>
-        {% else %}
+        {% if not scenario %}
         <p style="text-align: center" class="fst-italic">There is no scenario to monitor.</p>
         {% endif %}
     </div>
 </section>
 
 {% if scenario %}
-
 <section id="scenario-status" class="base">
     <div class="container">
-        <div class="row p-3">
+        <div class="row g-4">
+            <!-- Scenario Information Card -->
             <div class="col-md-4">
-                <h3>Scenario information</h3>
-                <h5>Title: <b id="scenario_title">{{ scenario[3] }}</b></h5>
-                <h5>Description: <b id="scenario_description">{{ scenario[4] }}</b></h5>
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="scenario-details">
+                            <div class="mb-3">
+                                <h5 class="text-muted mb-2">
+                                    <i class="fa fa-heading me-2"></i>Title
+                                </h5>
+                                <p class="lead" id="scenario_title">{{ scenario[3] }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h5 class="text-muted mb-2">
+                                    <i class="fa fa-align-left me-2"></i>Description
+                                </h5>
+                                <p class="lead" id="scenario_description">{{ scenario[4] }}</p>
+                            </div>
+                            <div class="mb-4">
+                                <h5 class="text-muted mb-2">
+                                    <i class="fa fa-signal me-2"></i>Status
+                                </h5>
                 {% if scenario[5] == "running" %}
-                <h5>Status: <span id="scenario_status" class="badge text-bg-warning">Running</span></h5>
+                                <span id="scenario_status" class="badge bg-warning-subtle text-warning px-3 py-2">
+                                    <i class="fa fa-spinner fa-spin me-2"></i>Running
+                                </span>
                 {% elif scenario[5] == "completed" %}
-                <h5>Status: <span id="scenario_status" class="badge text-bg-success">Completed</span></h5>
+                                <span id="scenario_status" class="badge bg-success-subtle text-success px-3 py-2">
+                                    <i class="fa fa-check-circle me-2"></i>Completed
+                                </span>
                 {% else %}
-                <h5>Status: <span id="scenario_status" class="badge text-bg-danger">Finished</span></h5>
+                                <span id="scenario_status" class="badge bg-danger-subtle text-danger px-3 py-2">
+                                    <i class="fa fa-times-circle me-2"></i>Finished
+                                </span>
                 {% endif %}
-                <div class="row" style="justify-content: center">
+                            </div>
+                        </div>
+                        
+                        <div class="scenario-actions">
                     {% if scenario[5] == "running" or scenario[5] == "completed" %}
                     <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario[0], stop_all = False) }}"
-                        class="col-md-5 btn btn-danger" style="margin: 5px">Stop scenario</a>
+                                class="btn btn-danger w-100 mb-2">
+                                <i class="fa fa-stop-circle me-2"></i>Stop scenario
+                            </a>
                     {% endif %}
                     <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=scenario[0]) }}"
-                        class="col-md-5 btn btn-dark" style="margin: 5px">Real-time
-                        metrics</a>
+                                class="btn btn-primary w-100 mb-2">
+                                <i class="fa fa-bar-chart me-2"></i>Real-time metrics
+                            </a>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
+                                        class="btn btn-outline-primary w-100">
+                                        <i class="fa fa-file-alt me-2"></i>Logs
+                                    </a>
                 </div>
-                <div class="row mt-2" style="justify-content: center">
+                                <div class="col-6">
                     <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
-                        class="col-md-5 btn btn-dark" style="margin: 5px">Download logs/metrics</a>
-                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
-                        class="col-md-5 btn btn-dark" style="margin: 5px">Download metrics</a>
+                                        class="btn btn-outline-primary w-100">
+                                        <i class="fa fa-chart-bar me-2"></i>Metrics
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-8">
-                <h3>Nodes in the database</h3>
-                <div class="table-responsive">
-                    <table id="table-nodes" class="table small">
-                        <thead>
-                            <tr>
-                                <th>UID</th>
-                                <th>IDX</th>
-                                <th>IP</th>
-                                <th>Role</th>
-                                <th>Round</th>
-                                <th>Behaviour</th>
-                                <th>Status</th>
-                                <th>Logs</th>
 
+            <!-- Nodes Table Card -->
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    
+                    <div class="card-body p-0">
+                <div class="table-responsive">
+                            <table id="table-nodes" class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><i class="fa fa-fingerprint me-2"></i>UID</th>
+                                        <th><i class="fa fa-hashtag me-2"></i>IDX</th>
+                                        <th><i class="fa fa-server me-2"></i>IP</th>
+                                        <th><i class="fa fa-community me-2"></i>Role</th>
+                                        <th><i class="fa fa-sync me-2"></i>Round</th>
+                                        <th><i class="fa fa-shield me-2"></i>Behaviour</th>
+                                        <th><i class="fa fa-signal me-2"></i>Status</th>
+                                        <th><i class="fa fa-cog me-2"></i>Actions</th>
                             </tr>
                         </thead>
+                                <tbody>
                         {% for uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round,
-                        scenario, hash, malicious, status
-                        in nodes %}
+                                    scenario, hash, malicious, status in nodes %}
                         <tr id="node-{{ uid }}">
-                            <td id="uid"> {{ uid }}</td>
-                            <td id="idx"> {{ idx }}</td>
-                            <td id="ip"> {{ ip }}</td>
-                            <td id="role"> {{ role }}</td>
-                            <td id="round"> {{ round }}</td>
+                                        <td>{{ uid }}</td>
+                                        <td>{{ idx }}</td>
+                                        <td>{{ ip }}</td>
+                                        <td>
+                                            <span class="badge bg-info-subtle text-info">
+                                                <i class="fa fa-server me-1"></i>{{ role }}
+                                            </span>
+                                        </td>
+                                        <td>{{ round }}</td>
+                                        <td>
                             {% if malicious == "True" %}
-                            <td id="malicious"><span class="badge text-bg-dark">Malicious</span></td>
+                                            <span class="badge bg-dark">
+                                                <i class="fa fa-skull me-1"></i>Malicious
+                                            </span>
                             {% else %}
-                            <td id="malicious"><span class="badge text-bg-secondary"  style="width: 60px;">Benign</span></td>
+                                            <span class="badge bg-secondary">
+                                                <i class="fa fa-shield-alt me-1"></i>Benign
+                                            </span>
                             {% endif %}
+                                        </td>
+                                        <td>
                             {% if status %}
-                            <td id="status"><span class="badge text-bg-success">Online</span></td>
+                                            <span class="badge bg-success">
+                                                <i class="fa fa-circle me-1"></i>Online
+                                            </span>
                             {% else %}
-                            <td id="status"><span class="badge text-bg-danger">Offline</span></td>
+                                            <span class="badge bg-danger">
+                                                <i class="fa fa-circle me-1"></i>Offline
+                                            </span>
                             {% endif %}
-                            <td class="td-icons" id="logs">
+                                        </td>
+                                        <td>
                                 <div class="dropdown">
-                                    <button class="label btn btn-dark dropdown-toggle" type="button"
-                                        id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fa fa-bars"></i>
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="fa fa-ellipsis-v"></i>
                                     </button>
-                                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                                                <ul class="dropdown-menu dropdown-menu-end">
                                         {% if hash %}
                                         <li>
-                                            <a class="dropdown-item"
-                                                href="/platform/dashboard/{{ scenario_name }}/node/{{ hash }}/metrics">
-                                                <i class="fa fa-bar-chart"></i>
-                                                Real-time metrics
+                                                        <a class="dropdown-item" href="/platform/dashboard/{{ scenario_name }}/node/{{ hash }}/metrics">
+                                                            <i class="fa fa-chart-bar me-2"></i>Real-time metrics
                                             </a>
                                         </li>
                                         {% endif %}
                                         <li>
-                                            <a class="dropdown-item download"
-                                                href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/infolog">
-                                                <i class="fa fa-download"></i>
-                                                Download INFO logs
+                                                        <a class="dropdown-item download" href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/infolog">
+                                                            <i class="fa fa-file-alt me-2"></i>Download INFO logs
                                             </a>
                                         </li>
                                         <li>
-                                            <a class="dropdown-item download"
-                                                href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/debuglog">
-                                                <i class="fa fa-download"></i>
-                                                Download DEBUG logs
+                                                        <a class="dropdown-item download" href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/debuglog">
+                                                            <i class="fa fa-bug me-2"></i>Download DEBUG logs
                                             </a>
                                         </li>
                                         <li>
-                                            <a class="dropdown-item download"
-                                                href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/errorlog">
-                                                <i class="fa fa-download"></i>
-                                                Download ERROR logs
+                                                        <a class="dropdown-item download" href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/errorlog">
+                                                            <i class="fa fa-exclamation-triangle me-2"></i>Download ERROR logs
                                             </a>
                                         </li>
                                     </ul>
                                 </div>
                             </td>
                         </tr>
-                        <tr class="dropdown-content" style="display: none;">
-                            <td colspan="12">
-                                <div id="logscontainer" data-id="{{ idx }}" data-scenario="{{ scenario_name }}">
-                                    <p id="logstext" style="color: black; font-weight: bold"></p>
-                                </div>
-                            </td>
-                        </tr>
                         {% endfor %}
+                                </tbody>
                     </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -140,19 +181,35 @@
 
 <section id="map-status" class="base">
     <div class="container">
-        <div class="row p-3">
+        <div class="row g-4">
+            <!-- Map Card -->
             <div class="col-md-6">
-                <h3>Map</h3>
-                <p class="text-muted">This functionality enables you to visualize the nodes in a real-time map.</p>
-                <div id="map"></div>
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            <i class="fa fa-info-circle me-2"></i>
+                            Visualize nodes in real-time on the map
+                        </p>
+                        <div id="map" class="rounded"></div>
+                    </div>
+                </div>
             </div>
+
+            <!-- Topology Card -->
             <div class="col-md-6">
-                <h3>Topology</h3>
-                <p class="text-muted">This functionality enables you to visualize the topology of the scenario. Click <a
-                        href="{{ url_for('nebula_monitor_image', scenario_name=scenario[0]) }}">here</a> to download
-                    the topology.</p>
-                <div id="3d-graph-container" class="row" style="width: 100%">
-                    <div id="3d-graph" style="width: 100%"></div>
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            <i class="fa fa-info-circle me-2"></i>
+                            Visualize the scenario topology. 
+                            <a href="{{ url_for('nebula_monitor_image', scenario_name=scenario[0]) }}" class="text-primary">
+                                <i class="fa fa-download me-1"></i>Download topology
+                            </a>
+                        </p>
+                        <div id="3d-graph-container" class="rounded">
+                            <div id="3d-graph"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -161,22 +218,72 @@
 
 <style>
     #map {
-        position: relative;
-        border: 1px solid black;
-        border-radius: 8px;
         height: 600px;
-        /* or as desired */
-        width: 100%;
-        /* This means "100% of the width of its container", the .col-md-8 */
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.1);
     }
 
-    .dropdown-content {
-        background-color: #f9f9f9;
+    #3d-graph {
+        height: 600px;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.1);
     }
 
-    .ansi36 {
-        color: blue;
-        font-weight: bold;
+    .scenario-info {
+        background: rgba(255,255,255,0.9);
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .no-scenario-alert {
+        background: #f8f9fa;
+        padding: 3rem;
+        border-radius: 8px;
+        border: 2px dashed #dee2e6;
+    }
+
+    .table > :not(caption) > * > * {
+        padding: 1rem;
+    }
+
+    .badge {
+        font-weight: 500;
+    }
+
+    .btn {
+        font-weight: 500;
+    }
+
+    .card {
+        border: none;
+        transition: transform 0.2s;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+    }
+
+    .dropdown-menu {
+        border: none;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .dropdown-item {
+        padding: 0.5rem 1rem;
+    }
+
+    .dropdown-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .table th {
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .table td {
+        vertical-align: middle;
     }
 </style>
 
@@ -186,718 +293,8 @@
 </script>
 {% endif %}
 
-<script>
-    var downloadLinks = document.getElementsByClassName('download');
-    // Loop through the tags and add event listeners. When user click to a tag, do a fetch request to the link and get the response. If the response is 200, then the file exists and the link is enabled. If the response is 404, then the file does not exist and the link is disabled.
-    for (var i = 0; i < downloadLinks.length; i++) {
-        downloadLinks[i].addEventListener('click', function (e) {
-            e.preventDefault();
-            var link = this;
-            fetch(link.href)
-                .then(function (response) {
-                    if (!response.ok) {
-                        // If the file is not found, display the alert
-                        showAlert('danger', 'File not found');
-                    } else {
-                        // If the file is found, redirect to it
-                        window.location.href = link.href;
-                    }
-                });
-        });
-    }
-
-</script>
-
-<script>
-    var map = L.map('map', {
-        center: [44.194021, 12.397141],
-        zoom: 4,
-        minZoom: 2,
-        maxZoom: 18,
-        maxBounds: [
-            [-90, -180],
-            [90, 180]
-        ],
-        maxBoundsViscosity: 1.0,
-        zoomControl: true,
-        worldCopyJump: false,
-    });
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; <a href=\"https://enriquetomasmb.com\">enriquetomasmb.com</a>' }).addTo(map);
-
-    //{{ markers | safe }}
-
-</script>
-
-<script>
-    function createTextTexture(text) {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        context.font = '40px Arial';
-        context.fillStyle = 'black';
-        context.fillText(text, 0, 40);
-
-        const texture = new THREE.Texture(canvas);
-        texture.needsUpdate = true;
-        return texture;
-    }
-
-    const width = document.getElementById('3d-graph').offsetWidth;
-    // When resize the window, resize the graph
-    window.addEventListener("resize", function () {
-        Graph.width(document.getElementById('3d-graph').offsetWidth);
-    });
-
-    const offlineNodes = new Set();
-
-    const Graph = ForceGraph3D()
-        (document.getElementById('3d-graph'))
-        .width(width)
-        .height(600)
-        .backgroundColor('#ffffff')
-        .nodeId('ipport')
-        .nodeLabel(node => `<p style="color: black"><strong>ID:</strong> ${node.id}<br><strong>IP:</strong> ${node.ipport}<br><strong>Role:</strong> ${node.role}</p>`)
-        .onNodeClick(node => {
-            const distance = 40;
-            const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
-            const newPos = node.x || node.y || node.z
-                ? { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }
-                : { x: 0, y: 0, z: distance }; // special case if node is in (0,0,0)
-            Graph.cameraPosition(
-                newPos, // new position
-                node, // lookAt ({ x, y, z })
-                3000  // ms transition duration
-            )
-        })
-        .nodeThreeObject(node => {
-            const group = new THREE.Group();
-
-            const nodeColor = offlineNodes.has(node.ipport) ? 'grey' :
-                (node.role === "trainer" ? '#7570b3'
-                    : (node.role === "aggregator" ? '#d95f02'
-                        : (node.role === "server" ? '#1b9e77' : '#68B0AB')));
-
-            const sphereRadius = 5;
-
-            const material = new THREE.MeshBasicMaterial({
-                color: nodeColor,
-                transparent: true,
-                opacity: 0.5,
-            });
-            const sphere = new THREE.Mesh(new THREE.SphereGeometry(5, 32, 32), material);
-            group.add(sphere);
-
-            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-                map: createTextTexture(`NODE ${node.id}`),
-                depthWrite: false,
-                depthTest: false
-            }));
-
-            const spriteScale = 0.5 * sphereRadius;
-            sprite.scale.set(10, 10 * 0.7, 5);
-            sprite.position.set(0, 5, 0);
-            group.add(sprite);
-
-            return group;
-        })
-        .linkColor(link => link.color ? 'red' : 'black')
-        .linkOpacity(0.6)
-        .linkWidth(0.3)
-        .linkDirectionalParticles("value")
-        .linkDirectionalParticleSpeed(d => d.value * 0.001)
-        .linkDirectionalParticleWidth(1);
-
-    Graph.cameraPosition({ x: 0, y: 0, z: 500 }, { x: 0, y: 0, z: 0 }, 0);
-    document.getElementsByClassName("scene-nav-info")[0].innerHTML = "Only visualization purpose. Click on a node to zoom in.";
-
-</script>
-
-<script>
-    function updateGraph(gData) {
-        // Global update of the graph
-        //gDataUpdate(gData);
-        Graph.graphData(gData);
-    }
-
-    function gDataUpdate(gData) {
-        console.log("gDataUpdate");
-        console.log(gData);
-        // Remove duplicated links
-        for (var i = 0; i < gData.links.length; i++) {
-            for (var j = i + 1; j < gData.links.length; j++) {
-                if ((gData.links[i].source === gData.links[j].source && gData.links[i].target === gData.links[j].target) ||
-                    gData.links[i].source === gData.links[j].target && gData.links[i].target === gData.links[j].source) {
-                    gData.links.splice(j, 1);
-                }
-            }
-        }
-    }
-</script>
-
-<script>
-    function randomFloatFromInterval(min, max) { // min and max included
-        return Math.random() * (max - min + 1) + min;
-    }
-
-    let gData = {
-        nodes: [],
-        links: []
-    };
-
-</script>
-<script>
-    // Participants mobility in the map
-    var updateQueue = []; // Queue to store updates
-
-    var droneMarkers = {};
-    var lineLayer = L.layerGroup().addTo(map); // Layer to store all lines
-    var droneLines = {};
-
-    var droneIcon = L.icon({
-        iconUrl: '/platform/static/images/drone.svg',
-        iconSize: [38, 38], // Icon size
-        iconAnchor: [19, 19], // Icon point that will correspond to the marker coordinate
-        popupAnchor: [0, -19] // Where the popup will be displayed in relation to the icon
-    });
-
-    var droneIconOffline = L.icon({
-        iconUrl: '/platform/static/images/drone_offline.svg',
-        iconSize: [38, 38], // Icon size
-        iconAnchor: [19, 19], // Icon point that will correspond to the marker coordinate
-        popupAnchor: [0, -19] // Where the popup will be displayed in relation to the icon
-    });
-
-    function findMarkerByIP(ip) {
-        for (var id in droneMarkers) {
-            if (droneMarkers[id].ip === ip) {
-                return droneMarkers[id];
-            }
-        }
-        return null;
-    }
-
-    function updateNeighborLines(droneId, droneLatLng, neighborsIPs, condition) {
-        // console.log("Updating neighbor lines of drone " + droneMarkers[droneId].ip);
-        //console.log("Neighbors IPs: " + neighborsIPs);
-        if (!droneLines[droneId]) {
-            droneLines[droneId] = [];
-        } else {
-            droneLines[droneId].forEach(function (line) {
-                lineLayer.removeLayer(line);
-            });
-
-            droneLines[droneId] = [];
-        }
-
-        //console.log("Updating neighbor lines");
-        //console.log(droneLines);
-        //console.log(neighborsIPs);
-
-        neighborsIPs.forEach(function (neighborIP) {
-            var neighborMarker = findMarkerByIP(neighborIP);
-            if (neighborMarker) {
-                var neighborLatLng = neighborMarker.getLatLng();
-                if (offlineNodes.has(droneMarkers[droneId].ip) || offlineNodes.has(neighborIP)) {
-                    var line = L.polyline([droneLatLng, neighborLatLng], { color: 'red' }).addTo(lineLayer);
-                } else {
-                    var line = L.polyline([droneLatLng, neighborLatLng], { color: 'blue' }).addTo(lineLayer);
-                }
-                try {
-                    // If condition is true, then the distance is calculated from the drone to the neighbor. Otherwise, the distance is calculated from the neighbor to the drone (this is because the distance is the same in both directions, avoiding concurrency problems)
-                    if (condition) {
-                        var distance = droneMarkers[droneId].neighbors_distance[neighborIP];
-                    } else {
-                        var distance = neighborMarker.neighbors_distance[droneMarkers[droneId].ip];
-                    }
-                    if (distance === undefined) {
-                        line.bindPopup(`Distance: Calculating...`);
-                    } else {
-                        line.bindPopup(`Distance: ${distance} m`);
-                    }
-                } catch (err) {
-                    line.bindPopup(`Distance: Calculating...`);
-                }
-                line.on('mouseover', function (e) {
-                    this.openPopup();
-                });
-                droneLines[droneId].push(line);
-            }
-        });
-    }
-
-    function updateAllRelatedLines(droneId) {
-        //console.log("Updating all related lines");
-        for (var id in droneMarkers) {
-            if (id !== droneId) {
-                var neighborIPs = droneMarkers[id].neighbors;
-                if (neighborIPs.includes(droneMarkers[droneId].ip)) {
-                    // console.log("Updating neighbor lines of drone " + id);
-                    updateNeighborLines(id, droneMarkers[id].getLatLng(), neighborIPs, false);
-                }
-            }
-        }
-    }
-
-    function updateDronePosition(uid, ip, lat, lng, neighborIPs, neighborsDistance) {
-        var droneId = uid;
-        var newLatLng = new L.LatLng(lat, lng);
-        var popupContent = `<p><strong>UID:</strong> ${uid}<br><strong>IP:</strong> ${ip}<br><strong>Neighbors:</strong> ${neighborIPs}<br><strong>Latitude:</strong> ${lat}<br><strong>Longitude:</strong> ${lng}</p>`;
-        console.log("Offline nodes (updateDronePosition)");
-        console.log(offlineNodes);
-        console.log(droneMarkers[droneId]);
-        if (!droneMarkers[droneId]) {
-            // If not present, it creates a new marker
-            if (offlineNodes.has(ip)) {
-                var marker = new L.Marker.movingMarker([[lat, lng], [lat, lng]], [1000], { icon: droneIconOffline, autostart: true, loop: false })
-                    .addTo(map)
-                    .bindPopup(popupContent);
-            } else {
-                var marker = new L.Marker.movingMarker([[lat, lng], [lat, lng]], [1000], { icon: droneIcon, autostart: true, loop: false })
-                    .addTo(map)
-                    .bindPopup(popupContent);
-            }
-            marker.on('mouseover', function (e) {
-                this.openPopup();
-            });
-            marker.ip = ip;
-            marker.neighbors = neighborIPs;
-            marker.neighbors_distance = neighborsDistance;
-            droneMarkers[droneId] = marker
-        } else {
-            // Change the icon if the node is offline
-            if (offlineNodes.has(ip)) {
-                droneMarkers[droneId].setIcon(droneIconOffline);
-            } else {
-                droneMarkers[droneId].setIcon(droneIcon);
-            }
-            // If present, it moves the marker with a smooth animation.
-            console.log("Moving drone marker");
-            //var oldLatLng = droneMarkers[droneId].getLatLng();
-            //var duration = oldLatLng.distanceTo(newLatLng) * 1;
-            droneMarkers[droneId].moveTo(newLatLng, 5);
-            droneMarkers[droneId].getPopup().setContent(popupContent);
-            droneMarkers[droneId].neighbors = neighborIPs
-            droneMarkers[droneId].neighbors_distance = neighborsDistance
-        }
-    }
-
-    // Function for processing queue updates
-    function processQueue() {
-        while (updateQueue.length > 0) {
-            console.log("Processing queue...");
-            var data = updateQueue.shift(); // Obtain and remove the oldest update
-            processUpdate(data); // Process the update
-        }
-    }
-
-    setInterval(processQueue, 100);
-
-    function processUpdate(data) {
-        var newLatLng = new L.LatLng(data.latitude, data.longitude);
-        neighborsIPs = data.neighbors.split(" ");
-
-        updateDronePosition(data.uid, data.ip, data.latitude, data.longitude, neighborsIPs, data.neighbors_distance);
-
-        setTimeout(function () {
-            updateNeighborLines(data.uid, newLatLng, neighborsIPs, true);
-            updateAllRelatedLines(data.uid);
-        }, 100);
-    }
-
-</script>
-<script>
-
-    // Get all divs with id "node-vars" and update them with value returned by async GET request
-    var scenario_name = document.getElementById('scenario_name').innerHTML;
-
-    // Get the table
-    fetch('/platform/api/dashboard/' + scenario_name + '/monitor')
-        .then(function (response) {
-            if (!response.ok) {
-                showAlert("danger", "Error: " + response.status + " " + response.statusText);
-                console.log("Error: " + response.status);
-                return;
-            }
-            // Examine the json in the response
-            response.json().then(function (data) {
-                // Update the table with the values of the json and maintain the style of HTML
-                var markers = Array();
-                var markers_neighborhood = Array();
-                var latlngs = Array();
-
-                data['nodes_table'].forEach(function (node) {
-                    var node_row = document.querySelector("#node-" + node[0]);
-                    if (!node_row) {
-                        node_row = document.createElement("tr");
-                        node_row.id = "node-" + node[0];
-                        document.querySelector("#table-nodes").appendChild(node_row);
-                    }
-                    var uid_row = node_row.querySelector("#uid");
-                    if (!uid_row) {
-                        uid_row = document.createElement("td");
-                        uid_row.id = "uid";
-                        node_row.appendChild(uid_row);
-                    }
-                    uid_row.innerHTML = node[0].trim();
-
-                    var idx = node_row.querySelector("#idx");
-                    var ip = node_row.querySelector("#ip");
-                    var round = node_row.querySelector("#round");
-                    var malicious = node_row.querySelector("#malicious");
-                    var status = node_row.querySelector("#status");
-
-                    if (!idx) {
-                        idx = document.createElement("td");
-                        idx.id = "idx";
-                        node_row.appendChild(idx);
-                    }
-                    if (!ip) {
-                        ip = document.createElement("td");
-                        ip.id = "ip";
-                        node_row.appendChild(ip);
-                    }
-                    if (!round) {
-                        round = document.createElement("td");
-                        round.id = "round";
-                        node_row.appendChild(round);
-                    }
-                    if (!malicious) {
-                        malicious = document.createElement("td");
-                        malicious.id = "malicious";
-                        node_row.appendChild(malicious);
-                    }
-                    if (!status) {
-                        status = document.createElement("td");
-                        status.id = "status";
-                        node_row.appendChild(status);
-                    }
-
-                    idx.innerHTML = node[1];
-                    ip.innerHTML = node[2];
-                    round.innerHTML = node[10];
-
-                    console.log("malicious: ", node[13])
-
-                    if (node[13] == "True") {
-                        status.innerHTML = '<span class="badge text-bg-dark">Malicious</span>';
-                    } else {
-                        status.innerHTML = '<span class="badge text-bg-secondary">Benign</span>';
-                    }
-
-                    if (node[14]) {
-                        status.innerHTML = '<span class="badge text-bg-success">Online</span>';
-                        if (offlineNodes.has(node[2] + ":" + node[3])) {
-                            offlineNodes.delete(node[2] + ":" + node[3]);
-                        }
-                    } else {
-                        offlineNodes.add(node[2] + ":" + node[3]);
-                        console.log("Offline nodes");
-                        console.log(offlineNodes);
-                        status.innerHTML = '<span class="badge text-bg-danger">Offline</span>';
-                    }
-
-                    data_json = {
-                        uid: node[0],
-                        ip: node[2] + ":" + node[3],
-                        latitude: node[6],
-                        longitude: node[7],
-                        neighbors: node[5],
-                        malicious: node[13],
-                        status: node[14],
-                    };
-                    updateQueue.push(data_json);
-                });
-
-                // Add data to the Graph topology
-
-                // Check if there are new nodes to add to the graph
-                gData = {
-                    // if data['nodes_table'][i][0] is not in nodes_offline, then add the node to the graph
-                    nodes: data['nodes_table'].map(node => ({
-                        id: node[1],
-                        ip: node[2],
-                        port: node[3],
-                        ipport: node[2] + ":" + node[3],
-                        role: node[4],
-                        color: offlineNodes.has(node[2] + ":" + node[3]) ? 'grey' :
-                            (node[4] === "trainer" ? '#7570b3'
-                                : (node[4] === "aggregator" ? '#d95f02'
-                                    : (node[4] === "server" ? '#1b9e77' : '#68B0AB'))),
-                    })),
-                    links: data['nodes_table'].map(node => {
-                        var links = [];
-                        if (node[5] !== "") {
-                            var neighbors = node[5].split(" ");
-                            neighbors.forEach(function (neighbor) {
-                                if (!offlineNodes.has(node[2] + ":" + node[3]) && !offlineNodes.has(neighbor)) {
-                                    links.push({
-                                        source: node[2] + ":" + node[3],
-                                        target: neighbor,
-                                        value: offlineNodes.has(node[2] + ":" + node[3]) || offlineNodes.has(neighbor) ? 0 : randomFloatFromInterval(1.0, 1.3),
-                                    });
-                                }
-                            });
-                        }
-                        return links;
-                    }).flat()
-                };
-                updateGraph(gData);
-            }).catch(function (error) {
-                console.log("Error: " + error);
-            });
-        })
-</script>
-
-<script>
-    function randomFloatFromInterval(min, max) { // min and max included
-        return Math.random() * (max - min + 1) + min;
-    }
-
-    function updateNode(nodeData) {
-        console.log("updateNode");
-        console.log(nodeData);
-        // Get row (node-{uid}) using nodeData.uid and update the row with the values of nodeData
-        var node_row = document.querySelector("#node-" + nodeData.uid);
-        if (!node_row) {
-            node_row = document.createElement("tr");
-            node_row.id = "node-" + nodeData.uid;
-            document.querySelector("#table-nodes").appendChild(node_row);
-        }
-
-        var uid_row = node_row.querySelector("#uid");
-        if (!uid_row) {
-            uid_row = document.createElement("td");
-            uid_row.id = "uid";
-            node_row.appendChild(uid_row);
-        }
-        uid_row.innerHTML = nodeData.uid;
-
-        var idx = node_row.querySelector("#idx");
-        if (!idx) {
-            idx = document.createElement("td");
-            idx.id = "idx";
-            node_row.appendChild(idx);
-        }
-        idx.innerHTML = nodeData.idx;
-
-        var ip = node_row.querySelector("#ip");
-        if (!ip) {
-            ip = document.createElement("td");
-            ip.id = "ip";
-            node_row.appendChild(ip);
-        }
-        ip.innerHTML = nodeData.ip;
-
-        var round = node_row.querySelector("#round");
-        if (!round) {
-            round = document.createElement("td");
-            round.id = "round";
-            node_row.appendChild(round);
-        }
-        round.innerHTML = nodeData.round;
-
-        var status = node_row.querySelector("#status");
-        if (!status) {
-            status = document.createElement("td");
-            status.id = "status";
-            node_row.appendChild(status);
-        }
-        status.innerHTML = nodeData.status ? '<span class="badge text-bg-success">Online</span>' : '<span class="badge text-bg-danger">Offline</span>';
-        // Request /platform/api/dashboard/{{ scenario_name }}/monitor to get only the status of the node
-        fetch('/platform/api/dashboard/' + nodeData.scenario_name + '/monitor')
-            .then(function (response) {
-                if (!response.ok) {
-                    showAlert("danger", "Error: " + response.status + " " + response.statusText);
-                    return;
-                }
-                // Examine the json in the response
-                response.json().then(function (data) {
-                    data['nodes_table'].forEach(function (node) {
-                        // Detect if a node has status offline and emit node_remove to the WebSocket
-                        if (!node[14]) {
-                            if (!offlineNodes.has(node[2] + ":" + node[3])) {
-                                console.log("Node " + node[2] + ":" + node[3] + " is just offline");
-                                offlineNodes.add(node[2] + ":" + node[3]);
-                                // Update the table and the map
-                                nodeOfflineData = {
-                                    uid: node[0],
-                                    idx: node[1],
-                                    ip: node[2],
-                                    port: node[3],
-                                    role: node[4],
-                                    neighbors: node[5],
-                                    latitude: node[6],
-                                    longitude: node[7],
-                                    timestamp: node[8],
-                                    federation: node[9],
-                                    round: node[10],
-                                    malicious: node[13],
-                                    status: false,
-                                    scenario_name: nodeData.scenario_name,
-                                }
-                                console.log("Sending node_remove to WebSocket")
-                                updateNode(nodeOfflineData);
-
-                                // Remove the link between the node and its neighbor
-                                for (var i = 0; i < gData.links.length; i++) {
-                                    if (gData.links[i].source.ipport === nodeOfflineData.ip + ":" + nodeOfflineData.port || gData.links[i].target.ipport === nodeOfflineData.ip + ":" + nodeOfflineData.port) {
-                                        gData.links.splice(i, 1);
-                                        showAlert("warning", "Link removed from the graph")
-                                        console.log("Link removed from the graph");
-                                    }
-                                }
-                                // Update the graph
-                                updateGraph(gData);
-                            }
-                        }
-                    });
-                });
-            });
-
-        console.log("Updating drone position via WebSocket");
-        updateQueue.push(nodeData);
-        console.log(droneMarkers);
-
-    }
-
-</script>
-
-<script type="text/javascript">
-    var scenario_name = document.getElementById('scenario_name').innerHTML;
-
-    socket.addEventListener("message", function (event) {
-        console.log("--> [!] Received message from WebSocket");
-        console.log(event.data);
-        try {
-            var data = JSON.parse(event.data);
-        } catch (e) {
-            console.log("Error parsing JSON data");
-            return;
-        }
-        if (data.scenario_name !== scenario_name) {
-            return;
-        }
-        if (data.type === "node_update") {
-            console.log("--> [!] Received node_update from WebSocket");
-            console.log(data);
-
-            // Update the table and the map
-            updateNode(data);
-
-            // Update the graph
-            // Add the new node to the gData and update the graph (if the node is not already in the graph)
-            var nodeExists = false;
-            for (var i = 0; i < gData.nodes.length; i++) {
-                // Check if the node is already in the graph (using ip:port)
-                if (gData.nodes[i].ipport === data.ip + ":" + data.port) {
-                    nodeExists = true;
-                    break;
-                }
-            }
-            if (!nodeExists) {
-                console.log("Adding new node to the graph")
-                showAlert("success", "New node (" + data.ip + ":" + data.port + ") added to the graph")
-                gData.nodes.push({
-                    id: data.idx,
-                    ip: data.ip,
-                    port: data.port,
-                    ipport: data.ip + ":" + data.port,
-                    role: data.role,
-                    color: offlineNodes.has(data.ip + ":" + data.port) ? 'grey' :
-                        (data.role === "trainer" ? '#7570b3'
-                            : (data.role === "aggregator" ? '#d95f02' : undefined)),
-                });
-                // Create a link between the new node and its neighbors
-                var links = [];
-                if (data.neighbors !== "") {
-                    var neighbors = data.neighbors.split(" ");
-                    neighbors.forEach(function (neighbor) {
-                        links.push({
-                            source: data.ip + ":" + data.port,
-                            target: neighbor,
-                            value: offlineNodes.has(data.ip + ":" + data.port) || offlineNodes.has(neighbor) ? 0 : randomFloatFromInterval(1.0, 1.3),
-                        });
-                    });
-                }
-                gData.links.push(links);
-                // Update the graph
-                //console.log("gData after adding the new node");
-                //console.log(gData);
-                updateGraph(gData);
-            } else {
-                console.log("Node already exists in the graph")
-            }
-
-            // Assuming gData is your graph data structure containing nodes and links
-            console.log("Updating node links based on new neighbors");
-
-            // Find the node in question based on data received
-            var node = gData.nodes.find(n => n.ipport === data.ip + ":" + data.port);
-
-            // Split the new neighbors list from the data
-            var newNeighbors = data.neighbors.split(" ");
-
-            // Step 1: Remove outdated links
-            // Filter out links that are no longer present in the new neighbors list
-            gData.links = gData.links.filter(link => {
-                // Check if the link involves the node in question
-                if (link.source.ipport === node.ipport) {
-                    return newNeighbors.includes(link.target.ipport);
-                } else if (link.target.ipport === node.ipport) {
-                    return newNeighbors.includes(link.source.ipport);
-                }
-                // Keep the link if it doesn't involve the node in question
-                return true;
-            });
-
-            // Step 2: Add new links
-            // For each neighbor, check if a link already exists, and if not, create it
-            newNeighbors.forEach(neighborIpPort => {
-                let neighborNode = gData.nodes.find(n => n.ipport === neighborIpPort);
-                // Proceed if the neighbor node exists in the graph
-                if (neighborNode) {
-                    let linkExists = gData.links.some(link =>
-                        (link.source.ipport === node.ipport && link.target.ipport === neighborNode.ipport) ||
-                        (link.source.ipport === neighborNode.ipport && link.target.ipport === node.ipport)
-                    );
-                    // If the link doesn't exist, create it
-                    if (!linkExists) {
-                        gData.links.push({
-                            source: node,
-                            target: neighborNode
-                        });
-                    }
-                }
-            });
-
-            // Finally, update the graph to reflect changes
-            updateGraph(gData);
-        }
-        else if (data.type === "node_remove") {
-            console.log("--> [!] Received node_remove from WebSocket");
-            console.log(data);
-
-            updateNode(data);
-
-            // Remove the link between the node and its neighbor
-            for (var i = 0; i < gData.links.length; i++) {
-                if (gData.links[i].source.ipport === data.ip + ":" + data.port || gData.links[i].target.ipport === data.ip + ":" + data.port) {
-                    gData.links.splice(i, 1);
-                    showAlert("warning", "Link removed from the graph")
-                    console.log("Link removed from the graph");
-                }
-            }
-            // Update the graph
-            updateGraph(gData);
-        }
-        else if (data.type === "control") {
-            console.log("--> [!] Received control from WebSocket");
-            console.log(data);
-        }
-        else {
-            console.log("Unknown message type: " + data.type);
-        }
-    });
-</script>
+<!-- Load monitor.js -->
+<script src="{{ url_for('static', path='js/monitor/monitor.js') }}"></script>
 
 {% endif %}
 {% endblock %}
