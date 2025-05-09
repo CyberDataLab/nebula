@@ -624,6 +624,12 @@ td {
     max-width: 500px !important;
 }
 
+.btn-danger {
+    color: #fff;
+    background-color: var(--bs-danger-bg-subtle)!important;
+    border-color: var(--bs-danger-border-subtle)!important;
+}
+
 .btn-cream {
     color: #000000;
     background-color: #FFEFCB;

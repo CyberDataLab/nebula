@@ -54,24 +54,24 @@
                         <div class="scenario-actions">
                     {% if scenario[5] == "running" or scenario[5] == "completed" %}
                     <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario[0], stop_all = False) }}"
-                                class="btn btn-danger w-100 mb-2">
+                                class="btn bg-danger-subtle text-danger w-100 mb-2">
                                 <i class="fa fa-stop-circle me-2"></i>Stop scenario
                             </a>
                     {% endif %}
                     <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=scenario[0]) }}"
-                                class="btn btn-primary w-100 mb-2">
+                                class="btn btn-dark w-100 mb-2">
                                 <i class="fa fa-bar-chart me-2"></i>Real-time metrics
                             </a>
                             <div class="row g-2">
                                 <div class="col-6">
                                     <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
-                                        class="btn btn-outline-primary w-100">
+                                        class="btn btn-outline-dark w-100">
                                         <i class="fa fa-file-alt me-2"></i>Logs
                                     </a>
                 </div>
                                 <div class="col-6">
                     <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
-                                        class="btn btn-outline-primary w-100">
+                                        class="btn btn-outline-dark w-100">
                                         <i class="fa fa-chart-bar me-2"></i>Metrics
                                     </a>
                                 </div>
@@ -130,7 +130,7 @@
                                                 <i class="fa fa-circle me-1"></i>Online
                                             </span>
                             {% else %}
-                                            <span class="badge bg-danger">
+                                            <span class="badge bg-danger-subtle text-danger">
                                                 <i class="fa fa-circle me-1"></i>Offline
                                             </span>
                             {% endif %}
