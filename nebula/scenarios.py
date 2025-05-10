@@ -531,6 +531,9 @@ class ScenarioManagement:
                     participant_config["mobility_args"]["latitude"],
                     participant_config["mobility_args"]["longitude"],
                 ) = TopologyManager.get_coordinates(random_geo=True)
+            else:
+                participant_config["mobility_args"]["latitude"] = self.scenario.latitude
+                participant_config["mobility_args"]["longitude"] = self.scenario.longitude
             # If not, use the given coordinates in the frontend
             participant_config["tracking_args"]["local_tracking"] = "advanced" if self.advanced_analytics else "basic"
             participant_config["tracking_args"]["log_dir"] = self.log_dir

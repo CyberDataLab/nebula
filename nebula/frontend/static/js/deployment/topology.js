@@ -1,6 +1,4 @@
 // Topology Management Module
-import '../graph.js';
-
 
 const TopologyManager = (function() {
     let gData = {
@@ -24,6 +22,12 @@ const TopologyManager = (function() {
         const customTopologyBtn = document.getElementById('custom-topology-btn');
         const predefinedTopologyBtn = document.getElementById('predefined-topology-btn');
 
+        // Set default topology
+        topologySelect.value = 'Fully';
+        nodesInput.value = '3';
+        predefinedTopologyBtn.checked = true;
+        predefinedTopology.style.display = 'block';
+
         // Add radio button listeners
         customTopologyBtn.addEventListener('change', () => {
             predefinedTopology.style.display = 'none';
@@ -31,6 +35,27 @@ const TopologyManager = (function() {
 
         predefinedTopologyBtn.addEventListener('change', () => {
             predefinedTopology.style.display = 'block';
+            generatePredefinedTopology();
+        });
+
+        // Add federation architecture change listener
+        document.getElementById('federationArchitecture').addEventListener('change', function() {
+            const federationType = this.value;
+            const topologySelect = document.getElementById('predefined-topology-select');
+            
+            if (federationType === 'CFL') {
+                // For CFL, only allow Star topology
+                topologySelect.value = 'Star';
+                topologySelect.disabled = true;
+                predefinedTopologyBtn.checked = true;
+                predefinedTopology.style.display = 'block';
+                customTopologyBtn.disabled = true;
+            } else {
+                // For DFL and SDFL, allow all topologies
+                topologySelect.disabled = false;
+                customTopologyBtn.disabled = false;
+            }
+            
             generatePredefinedTopology();
         });
 
@@ -142,6 +167,9 @@ const TopologyManager = (function() {
                 break;
         }
 
+        // After generating topology, assign roles based on federation architecture
+        assignRolesByFederationArchitecture();
+
         // Update graph visualization
         if (Graph) {
             updateGraph();
@@ -165,8 +193,6 @@ const TopologyManager = (function() {
                 .linkDirectionalParticles(2)
                 .linkDirectionalParticleWidth(2)
                 .linkDirectionalParticleSpeed(0.005)
-                .linkDirectionalArrowLength(3.5)
-                .linkDirectionalArrowRelPos(1)
                 .linkCurvature(0.25)
                 .linkDirectionalParticleResolution(2)
                 .linkDirectionalParticleColor(() => '#ff0000');
@@ -447,8 +473,6 @@ const TopologyManager = (function() {
                 .linkDirectionalParticles(2)
                 .linkDirectionalParticleWidth(3)
                 .linkDirectionalParticleSpeed(0.01)
-                .linkDirectionalArrowLength(3.5)
-                .linkDirectionalArrowRelPos(1)
                 .linkCurvature(0.25)
                 .linkDirectionalParticleResolution(2)
                 .linkDirectionalParticleColor(() => '#ff0000');
@@ -532,6 +556,50 @@ const TopologyManager = (function() {
         // Update graph to reflect changes
         updateGraph();
     }
+
+    function assignRolesByFederationArchitecture() {
+        const federationType = document.getElementById("federationArchitecture").value;
+        const nodes = gData.nodes;
+        
+        if (nodes.length === 0) return;
+
+        switch (federationType) {
+            case "CFL":
+                // First node as server, rest as trainers
+                nodes[0].role = "server";
+                for (let i = 1; i < nodes.length; i++) {
+                    nodes[i].role = "trainer";
+                }
+                break;
+                
+            case "SDFL":
+                // All as trainers except one random node as aggregator
+                const randomIndex = Math.floor(Math.random() * nodes.length);
+                for (let i = 0; i < nodes.length; i++) {
+                    nodes[i].role = i === randomIndex ? "aggregator" : "trainer";
+                }
+                break;
+                
+            case "DFL":
+                // All as aggregators
+                for (let i = 0; i < nodes.length; i++) {
+                    nodes[i].role = "aggregator";
+                }
+                break;
+        }
+        
+        // Force complete graph update
+        if (Graph) {
+            Graph.nodeThreeObject(node => createNodeObject(node));
+            Graph.graphData(gData);
+        }
+        updateGraph();
+    }
+
+    // Add event listener for federation architecture changes
+    document.getElementById("federationArchitecture").addEventListener("change", function() {
+        assignRolesByFederationArchitecture();
+    });
 
     return {
         initializeGraph,

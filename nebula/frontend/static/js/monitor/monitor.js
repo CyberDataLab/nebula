@@ -1,7 +1,9 @@
 // Monitor page functionality
 class Monitor {
     constructor() {
-        this.scenarioName = document.getElementById('scenario_name')?.innerHTML;
+        // Get scenario name from URL path
+        const pathParts = window.location.pathname.split('/');
+        this.scenarioName = pathParts[pathParts.indexOf('dashboard') + 1];
         this.offlineNodes = new Set();
         this.droneMarkers = {};
         this.droneLines = {};
@@ -92,8 +94,12 @@ class Monitor {
     }
 
     loadInitialData() {
-        if (!this.scenarioName) return;
+        if (!this.scenarioName) {
+            console.error('No scenario name found in URL');
+            return;
+        }
 
+        console.log('Loading initial data for scenario:', this.scenarioName);
         fetch(`/platform/api/dashboard/${this.scenarioName}/monitor`)
             .then(response => {
                 if (!response.ok) {
@@ -102,6 +108,7 @@ class Monitor {
                 return response.json();
             })
             .then(data => {
+                console.log('Received initial data:', data);
                 this.processInitialData(data);
             })
             .catch(error => {
@@ -116,6 +123,13 @@ class Monitor {
             console.warn('No nodes table in initial data');
             return;
         }
+
+        // Clear existing data
+        this.gData.nodes = [];
+        this.gData.links = [];
+        this.droneMarkers = {};
+        this.droneLines = {};
+        this.lineLayer.clearLayers();
 
         data.nodes_table.forEach(node => {
             try {
@@ -160,6 +174,9 @@ class Monitor {
             }
         });
 
+        // Process queue immediately
+        this.processQueue();
+        
         // Initial graph update
         this.updateGraph();
         console.log('Initial data processing complete');

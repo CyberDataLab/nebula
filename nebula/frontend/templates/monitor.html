@@ -23,28 +23,28 @@
                                 <h5 class="text-muted mb-2">
                                     <i class="fa fa-heading me-2"></i>Title
                                 </h5>
-                                <p class="lead" id="scenario_title">{{ scenario[3] }}</p>
+                                <p class="lead ms-3" id="scenario_title">{{ scenario[3] }}</p>
                             </div>
                             <div class="mb-3">
                                 <h5 class="text-muted mb-2">
                                     <i class="fa fa-align-left me-2"></i>Description
                                 </h5>
-                                <p class="lead" id="scenario_description">{{ scenario[4] }}</p>
+                                <p class="lead ms-3" id="scenario_description">{{ scenario[4] }}</p>
                             </div>
                             <div class="mb-4">
                                 <h5 class="text-muted mb-2">
                                     <i class="fa fa-signal me-2"></i>Status
                                 </h5>
                 {% if scenario[5] == "running" %}
-                                <span id="scenario_status" class="badge bg-warning-subtle text-warning px-3 py-2">
+                                <span id="scenario_status" class="badge bg-warning-subtle text-warning px-3 py-2 ms-3">
                                     <i class="fa fa-spinner fa-spin me-2"></i>Running
                                 </span>
                 {% elif scenario[5] == "completed" %}
-                                <span id="scenario_status" class="badge bg-success-subtle text-success px-3 py-2">
+                                <span id="scenario_status" class="badge bg-success-subtle text-success px-3 py-2 ms-3">
                                     <i class="fa fa-check-circle me-2"></i>Completed
                                 </span>
                 {% else %}
-                                <span id="scenario_status" class="badge bg-danger-subtle text-danger px-3 py-2">
+                                <span id="scenario_status" class="badge bg-danger-subtle text-danger px-3 py-2 ms-3">
                                     <i class="fa fa-times-circle me-2"></i>Finished
                                 </span>
                 {% endif %}
@@ -90,7 +90,6 @@
                             <table id="table-nodes" class="table table-hover mb-0">
                                 <thead class="table-light">
                                     <tr>
-                                        <th><i class="fa fa-fingerprint me-2"></i>UID</th>
                                         <th><i class="fa fa-hashtag me-2"></i>IDX</th>
                                         <th><i class="fa fa-server me-2"></i>IP</th>
                                         <th><i class="fa fa-community me-2"></i>Role</th>
@@ -104,11 +103,10 @@
                         {% for uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round,
                                     scenario, hash, malicious, status in nodes %}
                         <tr id="node-{{ uid }}">
-                                        <td>{{ uid }}</td>
                                         <td>{{ idx }}</td>
                                         <td>{{ ip }}</td>
                                         <td>
-                                            <span class="badge bg-info-subtle text-info">
+                                            <span class="badge bg-info-subtle text-black">
                                                 <i class="fa fa-server me-1"></i>{{ role }}
                                             </span>
                                         </td>
@@ -202,7 +200,7 @@
                         <p class="text-muted mb-3">
                             <i class="fa fa-info-circle me-2"></i>
                             Visualize the scenario topology. 
-                            <a href="{{ url_for('nebula_monitor_image', scenario_name=scenario[0]) }}" class="text-primary">
+                            <a href="{{ url_for('nebula_monitor_image', scenario_name=scenario[0]) }}">
                                 <i class="fa fa-download me-1"></i>Download topology
                             </a>
                         </p>
@@ -294,7 +292,7 @@
 {% endif %}
 
 <!-- Load monitor.js -->
-<script src="{{ url_for('static', path='js/monitor/monitor.js') }}"></script>
+<script type="module"src="{{ url_for('static', path='js/monitor/monitor.js') }}"></script>
 
 {% endif %}
 {% endblock %}

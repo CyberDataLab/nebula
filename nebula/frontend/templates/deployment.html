@@ -261,10 +261,6 @@
                     <div id="predefined-topology">
                         <select class="form-control" id="predefined-topology-select" name="predefined-topology"
                             style="display: inline; width: 40%">
-                            <option selected>Fully</option>
-                            <option>Ring</option>
-                            <option>Star</option>
-                            <option>Random</option>
                         </select>
                         <input type="number" class="form-control" id="predefined-topology-nodes"
                             placeholder="Number of nodes" min="1" value="3" oninput="greaterThan0(this)" style="display: inline; width: 40%">
@@ -767,4 +763,4 @@
         });
     </script>
 
-    {% endblock %}
+{% endblock %}
