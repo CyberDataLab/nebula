@@ -89,12 +89,6 @@ const TopologyManager = (function() {
             probability = parseFloat(probSelect.value);
         }
 
-        // Get mobility configuration for coordinates
-        const mobilityConfig = window.MobilityManager.getMobilityConfig();
-        const baseLat = mobilityConfig.location.latitude;
-        const baseLng = mobilityConfig.location.longitude;
-        const radius = mobilityConfig.radiusFederation || 1000;
-
         // Create nodes with roles based on topology type
         gData.nodes = [...Array(N).keys()].map(i => {
             let role;
@@ -115,12 +109,6 @@ const TopologyManager = (function() {
                     role = i === 0 ? "aggregator" : "trainer";
             }
 
-            // Calculate position within the federation radius
-            const angle = (i / N) * 2 * Math.PI;
-            const distance = Math.random() * radius;
-            const lat = baseLat + (distance * Math.cos(angle) / 111111); // Convert to degrees
-            const lng = baseLng + (distance * Math.sin(angle) / (111111 * Math.cos(baseLat * Math.PI / 180)));
-
             return {
                 id: i,
                 ip: "127.0.0.1",
@@ -131,8 +119,6 @@ const TopologyManager = (function() {
                 start: (i === 0),
                 neighbors: [],
                 links: [],
-                latitude: lat,
-                longitude: lng
             };
         });
 
@@ -391,39 +377,48 @@ const TopologyManager = (function() {
         document.getElementById("malicious-nodes-select").value = "Manual";
         document.getElementById("malicious-nodes-select").dispatchEvent(new Event('change'));
         node.malicious = !node.malicious;
+        // Force complete graph update
+        if (Graph) {
+            Graph.nodeThreeObject(node => createNodeObject(node));
+            Graph.graphData(gData);
+        }
         updateGraph();
     }
 
     function changeProxy(node) {
         node.proxy = !node.proxy;
+        // Force complete graph update
+        if (Graph) {
+            Graph.nodeThreeObject(node => createNodeObject(node));
+            Graph.graphData(gData);
+        }
         updateGraph();
     }
 
     function createNodeObject(node) {
         let geometry;
         let main_color;
-        let spriteMaterial;
-
-        switch (node.role) {
-            case 'aggregator':
-                geometry = new THREE.SphereGeometry(5);
-                main_color = "#d95f02";
-                break;
-            case 'trainer':
-                geometry = new THREE.ConeGeometry(5, 12);
-                main_color = "#7570b3";
-                break;
-            case 'server':
-                geometry = new THREE.BoxGeometry(10, 10, 10);
-                main_color = "#1b9e77";
-                break;
-            default:
-                break;
-        }
 
         if (node.malicious) {
             geometry = new THREE.TorusGeometry(5, 2, 16, 100);
             main_color = "#000000";
+        } else {
+            switch (node.role) {
+                case 'aggregator':
+                    geometry = new THREE.SphereGeometry(5);
+                    main_color = "#d95f02";
+                    break;
+                case 'trainer':
+                    geometry = new THREE.ConeGeometry(5, 12);
+                    main_color = "#7570b3";
+                    break;
+                case 'server':
+                    geometry = new THREE.BoxGeometry(10, 10, 10);
+                    main_color = "#1b9e77";
+                    break;
+                default:
+                    break;
+            }
         }
 
         const isSelected = selectedNodes.has(node);

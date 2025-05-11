@@ -308,6 +308,9 @@ const UIControls = (function() {
                 if (!scenario.scenario_title) {
                     scenario.scenario_title = "empty";
                 }
+                if (!scenario.scenario_description) {
+                    scenario.scenario_description = "empty";
+                }
             });
 
             modal.hide();

@@ -90,20 +90,20 @@ const ScenarioManager = (function() {
             weight_model_similarity: window.ReputationManager.getReputationConfig().weight_model_similarity || 0.25,
             weight_num_messages: window.ReputationManager.getReputationConfig().weight_num_messages || 0.25,
             weight_fraction_params_changed: window.ReputationManager.getReputationConfig().weight_fraction_params_changed || 0.25,
-            mobility: window.MobilityManager.getMobilityConfig().mobility || false,
-            mobility_type: window.MobilityManager.getMobilityConfig().mobility_type || "random",
-            radius_federation: window.MobilityManager.getMobilityConfig().radius_federation || 1000,
-            scheme_mobility: window.MobilityManager.getMobilityConfig().scheme_mobility || "random",
-            round_frequency: window.MobilityManager.getMobilityConfig().round_frequency || 1,
-            mobile_participants_percent: window.MobilityManager.getMobilityConfig().mobile_participants_percent || 0.5,
-            random_geo: window.MobilityManager.getMobilityConfig().random_geo || false,
-            latitude: window.MobilityManager.getMobilityConfig().latitude || 0,
-            longitude: window.MobilityManager.getMobilityConfig().longitude || 0,
-            random_topology_probability: window.MobilityManager.getMobilityConfig().random_topology_probability || 0.5,
+            mobility: window.MobilityManager.getMobilityConfig().enabled || false,
+            mobility_type: window.MobilityManager.getMobilityConfig().mobilityType || "random",
+            radius_federation: window.MobilityManager.getMobilityConfig().radiusFederation || 1000,
+            scheme_mobility: window.MobilityManager.getMobilityConfig().schemeMobility || "random",
+            round_frequency: window.MobilityManager.getMobilityConfig().roundFrequency || 1,
+            mobile_participants_percent: window.MobilityManager.getMobilityConfig().mobileParticipantsPercent || 0.5,
+            random_geo: window.MobilityManager.getMobilityConfig().randomGeo || false,
+            latitude: window.MobilityManager.getMobilityConfig().location.latitude || 0,
+            longitude: window.MobilityManager.getMobilityConfig().location.longitude || 0,
+            random_topology_probability: document.getElementById("random-probability").value || 0.5,
             network_subnet: "172.20.0.0/16",
             network_gateway: "172.20.0.1",
-            additional_participants: window.MobilityManager.getMobilityConfig().additional_participants || [],
-            schema_additional_participants: window.MobilityManager.getMobilityConfig().schema_additional_participants || "random",
+            additional_participants: window.MobilityManager.getMobilityConfig().additionalParticipants || [],
+            schema_additional_participants: document.getElementById("schemaAdditionalParticipantsSelect").value || "random",
             accelerator: "cpu",
             gpu_id: []
         };
@@ -175,16 +175,18 @@ const ScenarioManager = (function() {
         }
         if (scenario.mobility) {
             window.MobilityManager.setMobilityConfig({
-                mobility: scenario.mobility,
-                mobility_type: scenario.mobility_type,
-                radius_federation: scenario.radius_federation,
-                scheme_mobility: scenario.scheme_mobility,
-                round_frequency: scenario.round_frequency,
-                mobile_participants_percent: scenario.mobile_participants_percent,
-                random_geo: scenario.random_geo,
-                latitude: scenario.latitude,
-                longitude: scenario.longitude,
-                random_topology_probability: scenario.random_topology_probability
+                enabled: scenario.mobility,
+                mobilityType: scenario.mobility_type,
+                radiusFederation: scenario.radius_federation,
+                schemeMobility: scenario.scheme_mobility,
+                roundFrequency: scenario.round_frequency,
+                mobileParticipantsPercent: scenario.mobile_participants_percent,
+                randomGeo: scenario.random_geo,
+                location: {
+                    latitude: scenario.latitude,
+                    longitude: scenario.longitude
+                },
+                additionalParticipants: scenario.additional_participants
             });
         }
         if (scenario.with_reputation) {

@@ -24,8 +24,8 @@ class Monitor {
     initializeMap() {
         console.log('Initializing map...');
         this.map = L.map('map', {
-            center: [44.194021, 12.397141],
-            zoom: 4,
+            center: [38.023522, -1.174389],
+            zoom: 17,
             minZoom: 2,
             maxZoom: 18,
             maxBounds: [[-90, -180], [90, 180]],
@@ -39,13 +39,16 @@ class Monitor {
             attribution: '&copy; <a href="https://enriquetomasmb.com">enriquetomasmb.com</a>'
         }).addTo(this.map);
 
+        // Initialize line layer
+        console.log('Initializing line layer...');
         this.lineLayer = L.layerGroup().addTo(this.map);
+        console.log('Line layer added to map:', this.lineLayer);
         
         // Initialize drone icons
         console.log('Initializing drone icons...');
         this.droneIcon = L.icon({
             iconUrl: '/platform/static/images/drone.svg',
-            iconSize: [38, 38],
+            iconSize: [28, 28],
             iconAnchor: [19, 19],
             popupAnchor: [0, -19]
         });
@@ -536,8 +539,15 @@ class Monitor {
             console.log('Validated node data:', nodeData);
 
             const newLatLng = new L.LatLng(lat, lng);
-            const neighborsIPs = nodeData.neighbors ? nodeData.neighbors.split(" ") : [];
+            
+            // Parse neighbors string into array, handling both space and comma separators
+            const neighborsIPs = nodeData.neighbors 
+                ? nodeData.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
+                : [];
 
+            console.log('Parsed neighbor IPs:', neighborsIPs);
+
+            // First update the marker
             console.log('Updating drone position for node:', nodeData.uid);
             this.updateDronePosition(
                 nodeData.uid, 
@@ -548,13 +558,14 @@ class Monitor {
                 nodeData.neighbors_distance
             );
 
+            // Then immediately update the lines for this node
             if (neighborsIPs.length > 0) {
                 console.log('Updating neighbor lines for node:', nodeData.uid);
-                setTimeout(() => {
-                    this.updateNeighborLines(nodeData.uid, newLatLng, neighborsIPs, true);
-                    this.updateAllRelatedLines(nodeData.uid);
-                }, 100);
+                this.updateNeighborLines(nodeData.uid, newLatLng, neighborsIPs, true);
             }
+
+            // Finally update any related lines from other nodes
+            this.updateAllRelatedLines(nodeData.uid);
         } catch (error) {
             console.error('Error processing update:', error);
         }
@@ -569,10 +580,9 @@ class Monitor {
         const popupContent = `
             <div class="drone-popup">
                 <h6><i class="fa fa-drone me-2"></i>Node Information</h6>
-                <p class="mb-1"><strong>UID:</strong> ${uid}</p>
-                <p class="mb-1"><strong>IP:</strong> ${ip}</p>
-                <p class="mb-1"><strong>Location:</strong> ${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}</p>
-                ${neighborIPs.length > 0 ? `<p class="mb-1"><strong>Neighbors:</strong> ${neighborIPs.length}</p>` : ''}
+                <p><strong>IP:</strong> ${ip}</p>
+                <p><strong>Location:</strong> ${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}</p>
+                ${neighborIPs.length > 0 ? `<p><strong>Neighbors:</strong> ${neighborIPs.length}</p>` : ''}
             </div>`;
 
         if (!this.droneMarkers[droneId]) {
@@ -620,64 +630,142 @@ class Monitor {
     }
 
     updateNeighborLines(droneId, droneLatLng, neighborsIPs, condition) {
+        console.log('Updating neighbor lines for drone:', droneId, 'with neighbors:', neighborsIPs);
+        console.log('Current drone position:', droneLatLng);
+        
+        // Clean up existing lines for this drone
+        this.cleanupDroneLines(droneId);
+
+        if (!this.droneMarkers[droneId]) {
+            console.warn('No marker found for drone:', droneId);
+            return;
+        }
+
+        // Initialize droneLines array if it doesn't exist
         if (!this.droneLines[droneId]) {
-            this.droneLines[droneId] = [];
-        } else {
-            this.droneLines[droneId].forEach(line => {
-                this.lineLayer.removeLayer(line);
-            });
             this.droneLines[droneId] = [];
         }
 
+        // Create new lines
         neighborsIPs.forEach(neighborIP => {
-            const neighborMarker = this.findMarkerByIP(neighborIP);
+            // Extract IP from IP:port format if present
+            const neighborIPOnly = neighborIP.split(':')[0];
+            const neighborMarker = this.findMarkerByIP(neighborIPOnly);
+            
             if (neighborMarker) {
+                console.log('Found neighbor marker for IP:', neighborIPOnly);
                 const neighborLatLng = neighborMarker.getLatLng();
-                const isOffline = this.offlineNodes.has(this.droneMarkers[droneId].ip) || 
-                                this.offlineNodes.has(neighborIP);
+                console.log('Neighbor position:', neighborLatLng);
                 
-                const line = L.polyline(
-                    [droneLatLng, neighborLatLng],
-                    { 
-                        color: isOffline ? '#ff4444' : '#4CAF50',
-                        weight: 2,
-                        opacity: 0.8,
-                        dashArray: isOffline ? '5, 5' : null
-                    }
-                ).addTo(this.lineLayer);
-
+                const isOffline = this.offlineNodes.has(this.droneMarkers[droneId].ip) || 
+                                this.offlineNodes.has(neighborIPOnly);
+                
+                console.log('Creating line between:', droneLatLng, 'and', neighborLatLng);
+                
                 try {
-                    const distance = condition 
-                        ? this.droneMarkers[droneId].neighbors_distance[neighborIP]
-                        : neighborMarker.neighbors_distance[this.droneMarkers[droneId].ip];
-                    
-                    line.bindPopup(`
-                        <div class="line-popup">
-                            <p class="mb-1"><strong>Distance:</strong> ${distance ? distance + ' m' : 'Calculating...'}</p>
-                            <p class="mb-0"><strong>Status:</strong> ${isOffline ? 'Offline' : 'Online'}</p>
-                        </div>
-                    `);
-                } catch (err) {
-                    line.bindPopup('Distance: Calculating...');
+                    // Create the line with explicit coordinates
+                    const line = L.polyline(
+                        [
+                            [droneLatLng.lat, droneLatLng.lng],
+                            [neighborLatLng.lat, neighborLatLng.lng]
+                        ],
+                        { 
+                            color: isOffline ? '#ff4444' : '#4CAF50',
+                            weight: 3,
+                            opacity: 1.0,
+                            dashArray: isOffline ? '5, 5' : null,
+                            interactive: true
+                        }
+                    );
+
+                    // Add popup with distance information
+                    try {
+                        const distance = condition 
+                            ? (this.droneMarkers[droneId].neighbors_distance && 
+                               this.droneMarkers[droneId].neighbors_distance[neighborIP])
+                            : (neighborMarker.neighbors_distance && 
+                               neighborMarker.neighbors_distance[this.droneMarkers[droneId].ip]);
+                        
+                        line.bindPopup(`
+                            <div class="line-popup">
+                                <p><strong>Distance:</strong> ${distance ? distance + ' m' : 'Calculating...'}</p>
+                                <p><strong>Status:</strong> ${isOffline ? 'Offline' : 'Online'}</p>
+                            </div>
+                        `);
+                    } catch (err) {
+                        console.warn('Error binding popup to line:', err);
+                        line.bindPopup('Distance: Calculating...');
+                    }
+
+                    // Add hover behavior
+                    line.on('mouseover', function() {
+                        this.openPopup();
+                    });
+
+                    // Add the line to the layer group
+                    this.lineLayer.addLayer(line);
+                    console.log('Line added to line layer');
+
+                    // Store the line
+                    this.droneLines[droneId].push(line);
+                    console.log('Line stored in droneLines array');
+
+                } catch (error) {
+                    console.error('Error creating/adding line:', error);
                 }
-
-                line.on('mouseover', function() {
-                    this.openPopup();
-                });
-
-                this.droneLines[droneId].push(line);
+            } else {
+                console.warn('No marker found for neighbor IP:', neighborIPOnly);
             }
         });
     }
 
+    cleanupDroneLines(droneId) {
+        console.log('Cleaning up lines for drone:', droneId);
+        if (this.droneLines[droneId]) {
+            this.droneLines[droneId].forEach(line => {
+                if (line) {
+                    try {
+                        // Remove from layer group
+                        this.lineLayer.removeLayer(line);
+                        console.log('Line removed from layer');
+                    } catch (error) {
+                        console.error('Error removing line:', error);
+                    }
+                }
+            });
+        }
+        this.droneLines[droneId] = [];
+    }
+
     updateAllRelatedLines(droneId) {
-        Object.keys(this.droneMarkers).forEach(id => {
-            if (id !== droneId) {
-                const neighborIPs = this.droneMarkers[id].neighbors;
-                if (neighborIPs.includes(this.droneMarkers[droneId].ip)) {
+        // Get the current drone's IP
+        const currentDroneIP = this.droneMarkers[droneId]?.ip;
+        if (!currentDroneIP) {
+            console.warn('No IP found for drone:', droneId);
+            return;
+        }
+
+        console.log('Updating related lines for drone:', droneId, 'with IP:', currentDroneIP);
+
+        // Update lines for all drones that have this drone as a neighbor
+        Object.entries(this.droneMarkers).forEach(([id, marker]) => {
+            if (id !== droneId && marker.neighbors) {
+                console.log('Processing marker:', id, 'with neighbors:', marker.neighbors, 'type:', typeof marker.neighbors);
+                
+                // Handle both string and array formats for neighbors
+                const neighborIPs = Array.isArray(marker.neighbors) 
+                    ? marker.neighbors 
+                    : (typeof marker.neighbors === 'string' 
+                        ? marker.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
+                        : []);
+                
+                console.log('Processed neighbor IPs:', neighborIPs);
+                
+                if (neighborIPs.some(ip => ip.startsWith(currentDroneIP))) {
+                    console.log('Found matching neighbor, updating lines');
                     this.updateNeighborLines(
                         id,
-                        this.droneMarkers[id].getLatLng(),
+                        marker.getLatLng(),
                         neighborIPs,
                         false
                     );
@@ -687,7 +775,24 @@ class Monitor {
     }
 
     findMarkerByIP(ip) {
-        return Object.values(this.droneMarkers).find(marker => marker.ip === ip);
+        // Handle both IP and IP:port formats
+        const ipOnly = ip.split(':')[0];
+        console.log('Looking for marker with IP:', ipOnly);
+        console.log('Available markers:', Object.values(this.droneMarkers).map(m => m.ip));
+        
+        const marker = Object.values(this.droneMarkers).find(marker => {
+            const markerIP = marker.ip.split(':')[0];
+            const matches = markerIP === ipOnly;
+            if (matches) {
+                console.log('Found matching marker:', markerIP);
+            }
+            return matches;
+        });
+        
+        if (!marker) {
+            console.warn('No marker found for IP:', ipOnly);
+        }
+        return marker;
     }
 }
 

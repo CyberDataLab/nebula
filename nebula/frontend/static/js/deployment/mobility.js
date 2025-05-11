@@ -1,14 +1,14 @@
 // Mobility Configuration Module
-const MobilityManager = (function() {
-    let map = null;
+const MobilityManager = {
+    map: null,
 
-    function initializeMobility() {
-        setupLocationControls();
-        setupMobilityControls();
-        setupAdditionalParticipants();
-    }
+    initializeMobility() {
+        this.setupLocationControls();
+        this.setupMobilityControls();
+        this.setupAdditionalParticipants();
+    },
 
-    function setupLocationControls() {
+    setupLocationControls() {
         const customLocationDiv = document.getElementById("mobility-custom-location");
         
         document.getElementById("random-geo-btn").addEventListener("click", () => {
@@ -23,8 +23,8 @@ const MobilityManager = (function() {
             navigator.geolocation.getCurrentPosition(position => {
                 document.getElementById("latitude").value = position.coords.latitude;
                 document.getElementById("longitude").value = position.coords.longitude;
-                if (map) {
-                    updateMapMarker(position.coords.latitude, position.coords.longitude);
+                if (this.map) {
+                    this.updateMapMarker(position.coords.latitude, position.coords.longitude);
                 }
             });
         });
@@ -33,78 +33,78 @@ const MobilityManager = (function() {
             const mapContainer = document.getElementById("map-container");
             if (mapContainer.style.display === "none") {
                 mapContainer.style.display = "block";
-                initializeMap();
+                this.initializeMap();
             } else {
                 mapContainer.style.display = "none";
             }
         });
-    }
+    },
 
-    function setupMobilityControls() {
+    setupMobilityControls() {
         const mobilityOptionsDiv = document.getElementById("mobility-options");
         
         document.getElementById("without-mobility-btn").addEventListener("click", () => {
             mobilityOptionsDiv.style.display = "none";
-            if (map) {
-                removeMapCircle();
+            if (this.map) {
+                this.removeMapCircle();
             }
         });
 
         document.getElementById("mobility-btn").addEventListener("click", () => {
             mobilityOptionsDiv.style.display = "block";
-            if (map) {
-                addMapCircle();
+            if (this.map) {
+                this.addMapCircle();
             }
         });
 
         document.getElementById("radiusFederation").addEventListener("change", () => {
-            if (map && document.getElementById("mobility-btn").checked) {
-                updateMapCircle();
+            if (this.map && document.getElementById("mobility-btn").checked) {
+                this.updateMapCircle();
             }
         });
-    }
+    },
 
-    function initializeMap() {
-        if (!map) {
-            map = L.map('map').setView([38.023522, -1.174389], 13);
+    initializeMap() {
+        if (!this.map) {
+            this.map = L.map('map').setView([38.023522, -1.174389], 17);
             
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                 attribution: '&copy; <a href="https://enriquetomasmb.com">enriquetomasmb.com</a>',
                 maxZoom: 18,
-            }).addTo(map);
+            }).addTo(this.map);
 
-            addInitialMarker();
+            this.addInitialMarker();
             if (document.getElementById("mobility-btn").checked) {
-                addMapCircle();
+                this.addMapCircle();
             }
 
-            map.on('click', handleMapClick);
+            this.map.on('click', this.handleMapClick.bind(this));
         }
-    }
+    },
 
-    function addInitialMarker() {
+    addInitialMarker() {
         const lat = parseFloat(document.getElementById("latitude").value);
         const lng = parseFloat(document.getElementById("longitude").value);
-        updateMapMarker(lat, lng);
-    }
+        this.updateMapMarker(lat, lng);
+    },
 
-    function handleMapClick(e) {
-        updateMapMarker(e.latlng.lat, e.latlng.lng);
+    handleMapClick(e) {
+        this.updateMapMarker(e.latlng.lat, e.latlng.lng);
         document.getElementById("latitude").value = e.latlng.lat;
         document.getElementById("longitude").value = e.latlng.lng;
-    }
+    },
 
-    function updateMapMarker(lat, lng) {
-        map.eachLayer(layer => {
+    updateMapMarker(lat, lng) {
+        this.map.eachLayer(layer => {
             if (layer instanceof L.Marker) {
-                map.removeLayer(layer);
+                this.map.removeLayer(layer);
             }
         });
-        L.marker([lat, lng]).addTo(map);
-        updateMapCircle();
-    }
+        L.marker([lat, lng]).addTo(this.map);
+        this.updateMapCircle();
+    },
 
-    function addMapCircle() {
+    addMapCircle() {
         const lat = parseFloat(document.getElementById("latitude").value);
         const lng = parseFloat(document.getElementById("longitude").value);
         const radius = parseInt(document.getElementById("radiusFederation").value);
@@ -114,37 +114,37 @@ const MobilityManager = (function() {
             fillColor: '#f03',
             fillOpacity: 0.4,
             radius: radius
-        }).addTo(map);
-    }
+        }).addTo(this.map);
+    },
 
-    function updateMapCircle() {
-        removeMapCircle();
+    updateMapCircle() {
+        this.removeMapCircle();
         if (document.getElementById("mobility-btn").checked) {
-            addMapCircle();
+            this.addMapCircle();
         }
-    }
+    },
 
-    function removeMapCircle() {
-        map.eachLayer(layer => {
+    removeMapCircle() {
+        this.map.eachLayer(layer => {
             if (layer instanceof L.Circle) {
-                map.removeLayer(layer);
+                this.map.removeLayer(layer);
             }
         });
-    }
+    },
 
-    function setupAdditionalParticipants() {
+    setupAdditionalParticipants() {
         document.getElementById("additionalParticipants").addEventListener("change", function() {
             const container = document.getElementById("additional-participants-items");
             container.innerHTML = "";
 
             for (let i = 0; i < this.value; i++) {
-                const participantItem = createParticipantItem(i);
+                const participantItem = this.createParticipantItem(i);
                 container.appendChild(participantItem);
             }
-        });
-    }
+        }.bind(this));
+    },
 
-    function createParticipantItem(index) {
+    createParticipantItem(index) {
         const participantItem = document.createElement("div");
         participantItem.style.marginLeft = "20px";
         participantItem.classList.add("additional-participant-item");
@@ -166,9 +166,9 @@ const MobilityManager = (function() {
         participantItem.appendChild(input);
 
         return participantItem;
-    }
+    },
 
-    function getMobilityConfig() {
+    getMobilityConfig() {
         const config = {
             enabled: document.getElementById("mobility-btn").checked,
             randomGeo: document.getElementById("random-geo-btn").checked,
@@ -192,10 +192,26 @@ const MobilityManager = (function() {
         }
 
         return config;
-    }
+    },
 
-    function setMobilityConfig(config) {
+    setMobilityConfig(config) {
         if (!config) return;
+
+        // Validate required properties
+        if (typeof config.enabled !== 'boolean') {
+            console.warn('Invalid mobility config: enabled must be a boolean');
+            return;
+        }
+
+        if (typeof config.randomGeo !== 'boolean') {
+            console.warn('Invalid mobility config: randomGeo must be a boolean');
+            return;
+        }
+
+        if (config.location && (typeof config.location.latitude !== 'number' || typeof config.location.longitude !== 'number')) {
+            console.warn('Invalid mobility config: location must have numeric latitude and longitude');
+            return;
+        }
 
         // Set mobility enabled/disabled
         document.getElementById("mobility-btn").checked = config.enabled;
@@ -210,61 +226,63 @@ const MobilityManager = (function() {
         if (config.location) {
             document.getElementById("latitude").value = config.location.latitude;
             document.getElementById("longitude").value = config.location.longitude;
-            if (map) {
-                updateMapMarker(config.location.latitude, config.location.longitude);
+            if (this.map) {
+                this.updateMapMarker(config.location.latitude, config.location.longitude);
             }
         }
 
         // Set mobility settings
         document.getElementById("mobilitySelect").value = config.mobilityType || "both";
-        document.getElementById("radiusFederation").value = config.radiusFederation || 1000;
+        document.getElementById("radiusFederation").value = config.radiusFederation || 100;
         document.getElementById("schemeMobilitySelect").value = config.schemeMobility || "random";
         document.getElementById("roundFrequency").value = config.roundFrequency || 1;
         document.getElementById("mobileParticipantsPercent").value = config.mobileParticipantsPercent || 100;
 
         // Set additional participants
         if (config.additionalParticipants) {
+            if (!Array.isArray(config.additionalParticipants)) {
+                console.warn('Invalid mobility config: additionalParticipants must be an array');
+                return;
+            }
+
             document.getElementById("additionalParticipants").value = config.additionalParticipants.length;
             const container = document.getElementById("additional-participants-items");
             container.innerHTML = "";
 
             config.additionalParticipants.forEach((participant, index) => {
-                const participantItem = createParticipantItem(index);
+                if (typeof participant.round !== 'number') {
+                    console.warn(`Invalid mobility config: participant ${index} round must be a number`);
+                    return;
+                }
+                const participantItem = this.createParticipantItem(index);
                 document.getElementById(`roundsAdditionalParticipant${index}`).value = participant.round;
                 container.appendChild(participantItem);
             });
         }
-    }
+    },
 
-    function resetMobilityConfig() {
+    resetMobilityConfig() {
         // Reset to default values
         document.getElementById("without-mobility-btn").checked = true;
         document.getElementById("mobility-options").style.display = "none";
-        document.getElementById("random-geo-btn").checked = true;
-        document.getElementById("mobility-custom-location").style.display = "none";
+        document.getElementById("random-geo-btn").checked = false;
+        document.getElementById("custom-location-btn").checked = true;
+        document.getElementById("mobility-custom-location").style.display = "block";
         document.getElementById("latitude").value = "38.023522";
         document.getElementById("longitude").value = "-1.174389";
         document.getElementById("mobilitySelect").value = "both";
-        document.getElementById("radiusFederation").value = "1000";
+        document.getElementById("radiusFederation").value = "100";
         document.getElementById("schemeMobilitySelect").value = "random";
         document.getElementById("roundFrequency").value = "1";
         document.getElementById("mobileParticipantsPercent").value = "100";
         document.getElementById("additionalParticipants").value = "0";
         document.getElementById("additional-participants-items").innerHTML = "";
 
-        if (map) {
-            updateMapMarker(38.023522, -1.174389);
-            removeMapCircle();
+        if (this.map) {
+            this.updateMapMarker(38.023522, -1.174389);
+            this.removeMapCircle();
         }
     }
-
-    return {
-        initializeMobility,
-        getMap: () => map,
-        getMobilityConfig,
-        setMobilityConfig,
-        resetMobilityConfig
-    };
-})();
+};
 
 export default MobilityManager; 

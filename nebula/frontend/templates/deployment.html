@@ -631,16 +631,15 @@
                     </h5>
                     <h5 class="step-title">Select the default location for the participants</h5>
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="locationRadioOptions" id="random-geo-btn"
-                            checked>
-                        <label class="form-check-label" for="random-geo-btn">Random location</label>
-                    </div>
-                    <div class="form-check form-check-inline">
                         <input class="form-check-input" type="radio" name="locationRadioOptions"
-                            id="custom-location-btn">
+                            id="custom-location-btn" checked>
                         <label class="form-check-label" for="custom-location-btn">Custom location</label>
                     </div>
-                    <div id="mobility-custom-location" style="display: none; margin-left: 20px">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="locationRadioOptions" id="random-geo-btn">
+                        <label class="form-check-label" for="random-geo-btn">Random location</label>
+                    </div>
+                    <div id="mobility-custom-location" style="display: block; margin-left: 20px">
                         <h5 class="step-title">Latitude and longitude</h5>
                         <div class="form-check form-check-inline">
                             <input type="number" class="form-control" id="latitude" placeholder="Latitude" min="-90"
@@ -677,7 +676,7 @@
                         <h5 class="step-title">Radius of federation (m)</h5>
                         <div class="form-check form-check-inline">
                             <input type="number" class="form-control" id="radiusFederation" placeholder="meters" min="0"
-                                value="1000" style="display: inline; width: 80%">
+                                value="100" style="display: inline; width: 80%">
                         </div>
                         <h5 class="step-title">Scheme of mobility</h5>
                         <div class="form-check form-check-inline">
