@@ -60,6 +60,15 @@ class Monitor {
             popupAnchor: [0, -19]
         });
 
+        // Add CSS to style the offline drone icon
+        const style = document.createElement('style');
+        style.textContent = `
+            .leaflet-marker-icon.drone-offline {
+                filter: brightness(0) saturate(100%) invert(15%) sepia(100%) saturate(5000%) hue-rotate(350deg) brightness(90%) contrast(100%);
+            }
+        `;
+        document.head.appendChild(style);
+
         console.log('Map initialization complete');
     }
 
@@ -76,7 +85,12 @@ class Monitor {
             .nodeThreeObject(node => this.createNodeObject(node))
             .linkSource('source')
             .linkTarget('target')
-            .linkColor(link => link.color ? 'red' : '#999')
+            .linkColor(link => {
+                const sourceNode = this.gData.nodes.find(n => n.ipport === link.source);
+                const targetNode = this.gData.nodes.find(n => n.ipport === link.target);
+                return (sourceNode && this.offlineNodes.has(sourceNode.ipport)) || 
+                       (targetNode && this.offlineNodes.has(targetNode.ipport)) ? '#ff0000' : '#999';
+            })
             .linkOpacity(0.6)
             .linkWidth(2)
             .linkDirectionalParticles(2)
@@ -206,8 +220,16 @@ class Monitor {
             });
         }
 
+        // Remove all links for offline nodes
+        if (!data.status) {
+            this.gData.links = this.gData.links.filter(link => 
+                link.source !== nodeId && link.target !== nodeId
+            );
+            return;
+        }
+
         // Update links only if the node is online
-        if (!this.offlineNodes.has(nodeId) && data.neighbors) {
+        if (data.neighbors) {
             const neighbors = data.neighbors.split(" ");
             const currentLinks = this.gData.links.filter(link => 
                 link.source === nodeId || link.target === nodeId
@@ -224,9 +246,10 @@ class Monitor {
                 return true;
             });
 
-            // Add new links
+            // Add new links only if both nodes are online
             neighbors.forEach(neighbor => {
-                if (!this.offlineNodes.has(neighbor)) {
+                const neighborNode = this.gData.nodes.find(n => n.ipport === neighbor);
+                if (neighborNode && !this.offlineNodes.has(neighbor.split(':')[0])) {
                     const linkExists = this.gData.links.some(link => 
                         (link.source === nodeId && link.target === neighbor) ||
                         (link.source === neighbor && link.target === nodeId)
@@ -299,7 +322,12 @@ class Monitor {
     }
 
     getNodeColor(node) {
-        if (this.offlineNodes.has(node.ipport)) return 'grey';
+        // Check if the node is offline using the IP
+        const nodeIP = node.ipport.split(':')[0];
+        if (this.offlineNodes.has(nodeIP)) {
+            console.log('Node is offline:', nodeIP);
+            return '#ff0000';
+        }
         
         switch(node.role) {
             case 'trainer': return '#7570b3';
@@ -409,6 +437,17 @@ class Monitor {
         const nodeRow = document.querySelector(`#node-${data.uid}`);
         if (!nodeRow) return;
 
+        const nodeId = data.ip;  // Use just the IP since that's what we store in offlineNodes
+
+        // Update offlineNodes set based on status
+        if (!data.status) {
+            this.offlineNodes.add(nodeId);
+            console.log('Node marked as offline:', nodeId);
+        } else {
+            this.offlineNodes.delete(nodeId);
+            console.log('Node marked as online:', nodeId);
+        }
+
         // Update status badge
         const statusCell = nodeRow.querySelector('#status');
         if (statusCell) {
@@ -433,6 +472,9 @@ class Monitor {
 
         // Update map position
         this.updateQueue.push(data);
+
+        // Force graph update when node status changes
+        this.updateGraph();
     }
 
     removeNodeLinks(data) {
@@ -591,7 +633,8 @@ class Monitor {
             const marker = L.marker(newLatLng, {
                 icon: this.offlineNodes.has(ip) ? this.droneIconOffline : this.droneIcon,
                 title: `Node ${uid}`,
-                alt: `Node ${uid}`
+                alt: `Node ${uid}`,
+                className: this.offlineNodes.has(ip) ? 'drone-offline' : ''
             }).addTo(this.map);
 
             marker.bindPopup(popupContent, {
@@ -617,8 +660,10 @@ class Monitor {
             // Update existing marker
             if (this.offlineNodes.has(ip)) {
                 this.droneMarkers[droneId].setIcon(this.droneIconOffline);
+                this.droneMarkers[droneId].getElement().classList.add('drone-offline');
             } else {
                 this.droneMarkers[droneId].setIcon(this.droneIcon);
+                this.droneMarkers[droneId].getElement().classList.remove('drone-offline');
             }
 
             this.droneMarkers[droneId].setLatLng(newLatLng);
@@ -670,7 +715,7 @@ class Monitor {
                             [neighborLatLng.lat, neighborLatLng.lng]
                         ],
                         { 
-                            color: isOffline ? '#ff4444' : '#4CAF50',
+                            color: isOffline ? '#ff0000' : '#4CAF50',
                             weight: 3,
                             opacity: 1.0,
                             dashArray: isOffline ? '5, 5' : null,

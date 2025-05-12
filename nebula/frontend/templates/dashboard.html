@@ -39,9 +39,9 @@
 
 <section id="scenario-status" class="base">
     <div class="container">
-        <div class="row p-3">
-            {% if scenario_running %}
-            <div class="col-12">
+        {% if scenario_running %}
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-body p-4">
                         {% if scenario_completed %}
@@ -118,8 +118,10 @@
                     </div>
                 </div>
             </div>
-            {% else %}
-            <div class="col-12 text-center">
+        </div>
+        {% else %}
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
                 <div class="card shadow-sm border-0">
                     <div class="card-body p-5">
                         <div class="empty-state-container mb-4">
@@ -142,32 +144,32 @@
                     </div>
                 </div>
             </div>
-            {% endif %}
         </div>
+        {% endif %}
     </div>
 </section>
 
 {% if scenarios %}
 <section id="scenarios" class="base">
     <div class="container">
-        <div class="row p-3">
+        <div class="row">
             <div class="col-12">
                 <div class="card shadow-sm border-0">
                     <div class="card-body p-0">
-                        <div class="table-responsive d-flex justify-content-center">
-                            <table id="table-scenarios" class="table table-hover align-middle mb-0" style="width: 95%;">
+                        <div class="table-responsive">
+                            <table id="table-scenarios" class="table table-hover align-middle mb-0 text-center">
                                 <thead class="bg-light">
                                     <tr>
                                         {% if user_role == "admin" %}
-                                        <th class="py-3 text-center"><i class="fa fa-user me-2"></i>User</th>
+                                        <th class="py-3"><i class="fa fa-user me-2"></i>User</th>
                                         {% endif %}
-                                        <th class="py-3 text-center"><i class="fa fa-heading me-2"></i>Title</th>
-                                        <th class="py-3 text-center"><i class="fa fa-clock-o me-2"></i>Start Time</th>
-                                        <th class="py-3 text-center"><i class="fa fa-microchip me-2"></i>Model</th>
-                                        <th class="py-3 text-center"><i class="fa fa-database me-2"></i>Dataset</th>
-                                        <th class="py-3 text-center"><i class="fa fa-sync me-2"></i>Rounds</th>
-                                        <th class="py-3 text-center"><i class="fa fa-info-circle me-2"></i>Status</th>
-                                        <th class="py-3 text-center"><i class="fa fa-cogs me-2"></i>Actions</th>
+                                        <th class="py-3"><i class="fa fa-heading me-2"></i>Title</th>
+                                        <th class="py-3"><i class="fa fa-clock-o me-2"></i>Start Time</th>
+                                        <th class="py-3"><i class="fa fa-microchip me-2"></i>Model</th>
+                                        <th class="py-3"><i class="fa fa-database me-2"></i>Dataset</th>
+                                        <th class="py-3"><i class="fa fa-sync me-2"></i>Rounds</th>
+                                        <th class="py-3"><i class="fa fa-info-circle me-2"></i>Status</th>
+                                        <th class="py-3"><i class="fa fa-cogs me-2"></i>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -198,7 +200,7 @@
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <div class="d-flex gap-2">
+                                            <div class="d-flex justify-content-center gap-2">
                                                 <a href="{{ url_for('nebula_dashboard_monitor', scenario_name=name) }}"
                                                     class="btn btn-sm btn-outline-dark" title="Monitor">
                                                     <i class="fa fa-desktop"></i>

@@ -380,13 +380,18 @@ section {
 
 .alerts {
     z-index: 100;
-    position: fixed;
+    position: absolute;
     max-width: 100% !important;
     text-align: center;
 }
 
 .container {
-    max-width: 90%;
+    max-width: 95%;
+    width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+    margin-right: auto;
+    margin-left: auto;
 }
 
 .colaboration {
@@ -576,7 +581,24 @@ hr.styled {
 }
 
 .table {
-    display: block !important;
+    width: 100% !important;
+    margin-bottom: 1rem;
+    color: #212529;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+    text-align: center;
+}
+
+.table .d-flex {
+    justify-content: center;
+}
+
+.table .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .table-centered td,
@@ -589,13 +611,15 @@ hr.styled {
     display: inline-block;
 }
 
-.table-responsive>.table>thead>tr>th,
-.table-responsive>.table>tbody>tr>th,
-.table-responsive>.table>tfoot>tr>th,
-.table-responsive>.table>thead>tr>td,
-.table-responsive>.table>tbody>tr>td,
-.table-responsive>.table>tfoot>tr>td {
-    white-space: nowrap;
+.table-responsive {
+    width: 100%;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive>.table {
+    margin-bottom: 0;
 }
 
 @media screen and (max-width: 1530px) {
@@ -605,6 +629,12 @@ hr.styled {
         overflow-x: auto;
         -ms-overflow-style: -ms-autohiding-scrollbar;
         -webkit-overflow-scrolling: touch;
+    }
+    
+    .container {
+        max-width: 100%;
+        padding-right: 10px;
+        padding-left: 10px;
     }
 }
 

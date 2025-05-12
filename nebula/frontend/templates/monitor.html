@@ -87,31 +87,31 @@
                     
                     <div class="card-body p-0">
                 <div class="table-responsive">
-                            <table id="table-nodes" class="table table-hover mb-0">
-                                <thead class="table-light">
+                            <table id="table-nodes" class="table table-hover align-middle mb-0 text-center">
+                                <thead class="bg-light">
                                     <tr>
-                                        <th><i class="fa fa-hashtag me-2"></i>IDX</th>
-                                        <th><i class="fa fa-server me-2"></i>IP</th>
-                                        <th><i class="fa fa-community me-2"></i>Role</th>
-                                        <th><i class="fa fa-sync me-2"></i>Round</th>
-                                        <th><i class="fa fa-shield me-2"></i>Behaviour</th>
-                                        <th><i class="fa fa-signal me-2"></i>Status</th>
-                                        <th><i class="fa fa-cog me-2"></i>Actions</th>
+                                        <th class="py-3"><i class="fa fa-hashtag me-2"></i>IDX</th>
+                                        <th class="py-3"><i class="fa fa-server me-2"></i>IP</th>
+                                        <th class="py-3"><i class="fa fa-community me-2"></i>Role</th>
+                                        <th class="py-3"><i class="fa fa-sync me-2"></i>Round</th>
+                                        <th class="py-3"><i class="fa fa-shield me-2"></i>Behaviour</th>
+                                        <th class="py-3"><i class="fa fa-signal me-2"></i>Status</th>
+                                        <th class="py-3"><i class="fa fa-cog me-2"></i>Actions</th>
                             </tr>
                         </thead>
                                 <tbody>
                         {% for uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round,
                                     scenario, hash, malicious, status in nodes %}
                         <tr id="node-{{ uid }}">
-                                        <td>{{ idx }}</td>
-                                        <td>{{ ip }}</td>
-                                        <td>
+                                        <td class="py-3">{{ idx }}</td>
+                                        <td class="py-3">{{ ip }}</td>
+                                        <td class="py-3">
                                             <span class="badge bg-info-subtle text-black">
                                                 <i class="fa fa-server me-1"></i>{{ role }}
                                             </span>
                                         </td>
-                                        <td>{{ round }}</td>
-                                        <td>
+                                        <td class="py-3">{{ round }}</td>
+                                        <td class="py-3">
                             {% if malicious == "True" %}
                                             <span class="badge bg-dark">
                                                 <i class="fa fa-skull me-1"></i>Malicious
@@ -122,7 +122,7 @@
                                             </span>
                             {% endif %}
                                         </td>
-                                        <td>
+                                        <td class="py-3">
                             {% if status %}
                                             <span class="badge bg-success">
                                                 <i class="fa fa-circle me-1"></i>Online
@@ -133,8 +133,8 @@
                                             </span>
                             {% endif %}
                                         </td>
-                                        <td>
-                                <div class="dropdown">
+                                        <td class="py-3">
+                                <div class="dropdown d-flex justify-content-center">
                                                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
                                                     data-bs-toggle="dropdown" aria-expanded="false">
                                                     <i class="fa fa-ellipsis-v"></i>
@@ -225,6 +225,10 @@
         height: 600px;
         border-radius: 8px;
         border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .drone-offline {
+        filter: hue-rotate(320deg) saturate(1.5) brightness(0.9);
     }
 
     .scenario-info {
