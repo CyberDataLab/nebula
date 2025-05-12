@@ -334,12 +334,14 @@ const UIControls = (function() {
             } catch (error) {
                 console.error('Error:', error);
                 hideLoadingIndicators();
-                showErrorModal("An unexpected error occurred while deploying the scenario. Please try again.");
+                handleDeploymentError(500, error);
+            } finally {
+                hideLoadingIndicators();
             }
         };
     }
 
-    function handleDeploymentError(status) {
+    function handleDeploymentError(status, error = null) {
         hideLoadingIndicators();
         let errorMessage;
         
@@ -351,9 +353,11 @@ const UIControls = (function() {
                 errorMessage = "Not enough resources to run a scenario. Please try again later.";
                 break;
             default:
-                errorMessage = "An unexpected error occurred. Please try again.";
+                errorMessage = "An unexpected error occurred. See console for more details.";
         }
-
+        if (error) {
+            console.error('Error:', error);
+        }
         showErrorModal(errorMessage);
     }
 
@@ -362,6 +366,21 @@ const UIControls = (function() {
         const infoModalBody = document.getElementById('info-modal-body');
         infoModalBody.innerHTML = message;
         const modal = new bootstrap.Modal(infoModal);
+        
+        // Add event listener for when modal is hidden
+        infoModal.addEventListener('hidden.bs.modal', function () {
+            document.querySelector(".overlay").style.display = "none";
+            // Remove the modal backdrop
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.remove();
+            }
+            // Remove the modal-open class from body
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        });
+        
         modal.show();
     }
 

@@ -164,19 +164,37 @@ class ConnectionManager:
             pass
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     def add_message(self, message):
         current_timestamp = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         self.historic_messages.update({current_timestamp: json.loads(message)})
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
+        try:
+            await websocket.send_text(message)
+        except RuntimeError:
+            # Connection was closed, remove it from active connections
+            self.disconnect(websocket)
 
     async def broadcast(self, message: str):
         self.add_message(message)
+        disconnected_websockets = []
+        
         for connection in self.active_connections:
-            await connection.send_text(message)
+            try:
+                await connection.send_text(message)
+            except RuntimeError:
+                # Mark connection for removal
+                disconnected_websockets.append(connection)
+            except Exception as e:
+                logging.error(f"Error broadcasting message: {e}")
+                disconnected_websockets.append(connection)
+        
+        # Remove disconnected websockets
+        for websocket in disconnected_websockets:
+            self.disconnect(websocket)
 
     def get_historic(self):
         return self.historic_messages
@@ -195,12 +213,20 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
                 "type": "control",
                 "message": f"Client #{client_id} says: {data}",
             }
-            await manager.broadcast(json.dumps(message))
-            # await manager.send_personal_message(f"You wrote: {data}", websocket)
+            try:
+                await manager.broadcast(json.dumps(message))
+            except Exception as e:
+                logging.error(f"Error broadcasting message: {e}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        message = {"type": "control", "message": f"Client #{client_id} left the chat"}
-        await manager.broadcast(json.dumps(message))
+        try:
+            message = {"type": "control", "message": f"Client #{client_id} left the chat"}
+            await manager.broadcast(json.dumps(message))
+        except Exception as e:
+            logging.error(f"Error broadcasting disconnect message: {e}")
+    except Exception as e:
+        logging.error(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
 
 
 templates = Jinja2Templates(directory=settings.templates_dir)
@@ -917,7 +943,7 @@ async def nebula_monitor_log_error(scenario_name: str, id: str):
 async def nebula_monitor_image(scenario_name: str):
     topology_image = FileUtils.check_path(settings.config_dir, os.path.join(scenario_name, "topology.png"))
     if os.path.exists(topology_image):
-        return FileResponse(topology_image, media_type="image/png")
+        return FileResponse(topology_image, media_type="image/png", filename=f"{scenario_name}_topology.png")
     else:
         raise HTTPException(status_code=404, detail="Topology image not found")
 

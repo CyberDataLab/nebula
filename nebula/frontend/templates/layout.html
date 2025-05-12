@@ -87,8 +87,10 @@
     </script>
 
     <script>
-        particlesJS.load('particles-js', "{{ url_for('static', path='js/particles.json') }}", function() {
-            console.log('Particles loaded in NEBULA');
+        document.addEventListener('DOMContentLoaded', function() {
+            particlesJS.load('particles-js', "{{ url_for('static', path='js/particles.json') }}", function() {
+                console.log('Particles loaded in NEBULA');
+            });
         });
     </script>
 

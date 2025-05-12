@@ -50,12 +50,6 @@
                                 <i class="fa fa-check-circle me-2"></i>Completed
                             </span>
                         </div>
-                        {% else %}
-                        <div class="text-center mb-4">
-                            <span class="badge bg-warning-subtle text-warning px-3 py-2 rounded-pill">
-                                <i class="fa fa-spinner fa-spin me-2"></i>Running
-                            </span>
-                        </div>
                         {% endif %}
                         
                         {% if scenario_running %}
@@ -68,7 +62,7 @@
                             </div>
                             {% if scenarios_finished != scenarios_list_length %}
                             <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario_running[0], stop_all=True) }}"
-                                class="btn btn-danger">
+                                class="btn btn-danger bg-danger-subtle text-danger">
                                 <i class="fa fa-stop-circle me-2"></i>Stop Queue
                             </a>
                             {% endif %}
@@ -99,6 +93,14 @@
                                     <div class="p-3 bg-light rounded">
                                         <h6 class="text-muted mb-2"><i class="fa fa-clock-o me-2"></i>Start Time</h6>
                                         <p class="mb-0" id="scenario_start_time">{{ scenario_running[1] }}</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-light rounded">
+                                        <h6 class="text-muted mb-2"><i class="fa fa-signal me-2"></i>Status</h6>
+                                        <span class="badge bg-warning-subtle text-warning px-3 py-2 rounded-pill">
+                                            <i class="fa fa-spinner fa-spin me-2"></i>Running
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -219,16 +221,16 @@
                                                 </button>
                                                 {% if status == "running" %}
                                                 <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
-                                                    class="btn btn-sm btn-danger" title="Stop scenario">
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario">
                                                     <i class="fa fa-stop"></i>
                                                 </a>
                                                 {% elif status == "completed" %}
                                                 <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
-                                                    class="btn btn-sm btn-danger" title="Stop scenario">
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario">
                                                     <i class="fa fa-stop"></i>
                                                 </a>
                                                 <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=True) }}"
-                                                    class="btn btn-sm btn-danger" title="Stop scenario queue">
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario queue">
                                                     <i class="fa fa-stop-circle"></i>
                                                 </a>
                                                 {% else %}
