@@ -10,6 +10,8 @@ const UIControls = (function() {
         setupParticipantDisplay();
         setupParticipantModal();
         setupConfigButtons();
+        // Initialize help icons
+        window.HelpContent.initializePopovers();
     }
 
     function setupModeButton() {
