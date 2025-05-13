@@ -55,7 +55,7 @@ class Monitor {
 
         this.droneIconOffline = L.icon({
             iconUrl: '/platform/static/images/drone_offline.svg',
-            iconSize: [38, 38],
+            iconSize: [28, 28],
             iconAnchor: [19, 19],
             popupAnchor: [0, -19]
         });
@@ -95,19 +95,41 @@ class Monitor {
             .linkWidth(2)
             .linkDirectionalParticles(2)
             .linkDirectionalParticleSpeed(0.005)
-            .linkDirectionalParticleWidth(2);
+            .linkDirectionalParticleWidth(2)
+            .d3AlphaDecay(0.01)  // Slower decay for smoother updates
+            .d3VelocityDecay(0.3)  // Less damping for more dynamic movement
+            .warmupTicks(100)  // Add warmup for better initial layout
+            .cooldownTicks(100)  // Add cooldown for smoother transitions
+            .d3Force('center', d3.forceCenter().strength(0))  // Even stronger center force
+            .d3Force('charge', d3.forceManyBody().strength(0))  // Reduced repulsion
+            .d3Force('link', d3.forceLink().id(d => d.ipport).distance(30));  // Reduced link distance
 
-        // Configure forces after initialization
-        this.Graph.d3Force('charge').strength(-100);
-        this.Graph.d3Force('link').distance(100);
+        this.Graph.cameraPosition({ x: 0, y: 0, z: 300 }, { x: 0, y: 0, z: 0 }, 0);
 
-        this.Graph.cameraPosition({ x: 0, y: 0, z: 500 }, { x: 0, y: 0, z: 0 }, 0);
-        document.getElementsByClassName("scene-nav-info")[0].innerHTML = 
-            "Only visualization purpose. Click on a node to zoom in.";
+        const navInfo = document.getElementsByClassName("scene-nav-info")[0];
+        if (navInfo) {
+            navInfo.style.display = 'none';
+        }
 
         window.addEventListener("resize", () => {
             this.Graph.width(document.getElementById('3d-graph').offsetWidth);
         });
+    }
+
+    layoutNodes(nodes) {
+        const radius = 50; // Radius of the circle
+        const center = { x: 0, y: 0, z: 0 };
+        
+        nodes.forEach((node, i) => {
+            const angle = (i / nodes.length) * 2 * Math.PI;
+            // Add a small offset to ensure nodes don't overlap at center
+            const offset = 5;
+            node.x = center.x + (radius + offset) * Math.cos(angle);
+            node.y = center.y + (radius + offset) * Math.sin(angle);
+            node.z = center.z;
+        });
+        
+        return nodes;
     }
 
     loadInitialData() {
@@ -267,7 +289,6 @@ class Monitor {
     updateGraphData(data) {
         const nodeId = `${data.ip}:${data.port}`;
         console.log('Updating graph data for node:', nodeId);
-        console.log('Current links before update:', this.gData.links);
         
         // Add or update node - ensure no duplication
         const existingNodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
@@ -339,29 +360,19 @@ class Monitor {
                 if (neighborNode) {
                     console.log('Adding links between', nodeId, 'and', normalizedNeighbor);
                     
-                    // Check if link already exists in preserved links
-                    const linkExists = preservedLinks.some(link => 
-                        (link.source === nodeId && link.target === normalizedNeighbor) ||
-                        (link.source === normalizedNeighbor && link.target === nodeId)
-                    );
+                    // Add link from this node to neighbor
+                    this.gData.links.push({
+                        source: nodeId,
+                        target: normalizedNeighbor,
+                        value: this.randomFloatFromInterval(1.0, 1.3)
+                    });
 
-                    if (!linkExists) {
-                        // Add link from this node to neighbor
-                        this.gData.links.push({
-                            source: nodeId,
-                            target: normalizedNeighbor,
-                            value: this.randomFloatFromInterval(1.0, 1.3)
-                        });
-
-                        // Add link from neighbor to this node (bidirectional)
-                        this.gData.links.push({
-                            source: normalizedNeighbor,
-                            target: nodeId,
-                            value: this.randomFloatFromInterval(1.0, 1.3)
-                        });
-                    } else {
-                        console.log('Link already exists between', nodeId, 'and', normalizedNeighbor);
-                    }
+                    // Add link from neighbor to this node (bidirectional)
+                    this.gData.links.push({
+                        source: normalizedNeighbor,
+                        target: nodeId,
+                        value: this.randomFloatFromInterval(1.0, 1.3)
+                    });
                 }
             });
         }
@@ -407,11 +418,11 @@ class Monitor {
         const material = new THREE.MeshBasicMaterial({
             color: nodeColor,
             transparent: true,
-            opacity: 0.5,
+            opacity: 0.8,
         });
         
         const sphere = new THREE.Mesh(
-            new THREE.SphereGeometry(5, 32, 32), 
+            new THREE.SphereGeometry(sphereRadius, 32, 32), 
             material
         );
         group.add(sphere);
@@ -425,17 +436,16 @@ class Monitor {
         );
 
         sprite.scale.set(10, 10 * 0.7, 5);
-        sprite.position.set(0, 5, 0);
+        sprite.position.set(0, sphereRadius + 2, 0);
         group.add(sprite);
 
         return group;
     }
 
     getNodeColor(node) {
-        // Check if the node is offline using the IP
-        const nodeIP = node.ipport.split(':')[0];
-        if (this.offlineNodes.has(nodeIP)) {
-            console.log('Node is offline:', nodeIP);
+        // Check if the node is offline using the full IP:port
+        if (this.offlineNodes.has(node.ipport)) {
+            console.log('Node is offline:', node.ipport);
             return '#ff0000';
         }
         
@@ -494,8 +504,36 @@ class Monitor {
                 return;
             }
 
+            // Get current neighbors before update
+            const nodeId = `${data.ip}:${data.port}`;
+            const currentLinks = this.gData.links.filter(link => 
+                link.source === nodeId || link.target === nodeId
+            );
+            
+            // Parse new neighbors
+            const newNeighbors = data.neighbors 
+                ? data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
+                : [];
+            
+            // Find neighbors to remove (those in current links but not in new neighbors)
+            const neighborsToRemove = currentLinks
+                .map(link => {
+                    const neighborId = link.source === nodeId ? link.target : link.source;
+                    return neighborId.split(':')[0]; // Get just the IP part
+                })
+                .filter(neighborIP => !newNeighbors.includes(neighborIP));
+
+            // Remove links to neighbors that are no longer in the list
+            neighborsToRemove.forEach(neighborIP => {
+                this.gData.links = this.gData.links.filter(link => {
+                    const sourceIP = link.source.split(':')[0];
+                    const targetIP = link.target.split(':')[0];
+                    return !(sourceIP === neighborIP || targetIP === neighborIP);
+                });
+            });
+
             this.updateNode(data);
-            // Update graph data first, then update the visualization
+            // Update graph data with the new neighbors list
             this.updateGraphData(data);
             // Only update the graph if there are actual changes
             if (this.hasGraphChanges(data)) {
@@ -507,6 +545,9 @@ class Monitor {
     }
 
     hasGraphChanges(data) {
+        // If no data is provided, return false
+        if (!data) return false;
+
         const nodeId = `${data.ip}:${data.port}`;
         const currentLinks = this.gData.links.filter(link => 
             link.source === nodeId || link.target === nodeId
@@ -561,7 +602,7 @@ class Monitor {
         const nodeRow = document.querySelector(`#node-${data.uid}`);
         if (!nodeRow) return;
 
-        const nodeId = data.ip;  // Use just the IP since that's what we store in offlineNodes
+        const nodeId = `${data.ip}:${data.port}`;  // Use full IP:port as nodeId
         const wasOffline = this.offlineNodes.has(nodeId);
         const isNowOffline = !data.status;
 
@@ -572,12 +613,25 @@ class Monitor {
             
             // Remove all links for this node
             this.removeNodeLinks(data);
-            // Update graph data after removing links
+            
+            // Force immediate graph update when node goes offline
             this.updateGraphData(data);
             this.updateGraph();
+            
+            // Update marker appearance
+            if (this.droneMarkers[data.uid]) {
+                this.droneMarkers[data.uid].setIcon(this.droneIconOffline);
+                this.droneMarkers[data.uid].getElement().classList.add('drone-offline');
+            }
         } else {
             this.offlineNodes.delete(nodeId);
             console.log('Node marked as online:', nodeId);
+            
+            // Update marker appearance
+            if (this.droneMarkers[data.uid]) {
+                this.droneMarkers[data.uid].setIcon(this.droneIcon);
+                this.droneMarkers[data.uid].getElement().classList.remove('drone-offline');
+            }
         }
 
         // Update status badge
@@ -604,16 +658,10 @@ class Monitor {
 
         // Update map position
         this.updateQueue.push(data);
-
-        // Force graph update when node status changes
-        if (wasOffline !== isNowOffline) {
-            this.updateGraph();
-        }
     }
 
     removeNodeLinks(data) {
         const nodeId = `${data.ip}:${data.port}`;
-        const nodeIP = data.ip;
         console.log('Removing links for node:', nodeId);
         
         // Remove links from graph data
@@ -621,9 +669,9 @@ class Monitor {
         
         // Remove all links where this node is either source or target
         this.gData.links = this.gData.links.filter(link => {
-            const sourceIP = link.source.split(':')[0];
-            const targetIP = link.target.split(':')[0];
-            return sourceIP !== nodeIP && targetIP !== nodeIP;
+            const sourceId = typeof link.source === 'object' ? link.source.ipport : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.ipport : link.target;
+            return sourceId !== nodeId && targetId !== nodeId;
         });
         
         console.log(`Removed ${previousLinkCount - this.gData.links.length} links for node ${nodeId}`);
@@ -645,9 +693,9 @@ class Monitor {
         
         // Filter out any links involving offline nodes
         this.gData.links = this.gData.links.filter(link => {
-            const sourceIP = link.source.split(':')[0];
-            const targetIP = link.target.split(':')[0];
-            return !this.offlineNodes.has(sourceIP) && !this.offlineNodes.has(targetIP);
+            const sourceId = typeof link.source === 'object' ? link.source.ipport : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.ipport : link.target;
+            return !this.offlineNodes.has(sourceId) && !this.offlineNodes.has(targetId);
         });
 
         // Ensure all links have valid source and target nodes
@@ -657,16 +705,20 @@ class Monitor {
             return sourceExists && targetExists;
         });
 
+        // Apply layout to nodes
+        const layoutedNodes = this.layoutNodes([...this.gData.nodes]);
+        
         // Update the graph with new data
         this.Graph.graphData({
-            nodes: this.gData.nodes,
+            nodes: layoutedNodes,
             links: this.gData.links
         });
 
-        // Force a re-render only if there are changes
-        if (this.gData.links.length > 0) {
-            this.Graph.d3ReheatSimulation();
-        }
+        // Reset the force simulation to ensure proper layout
+        this.Graph.d3ReheatSimulation();
+        
+        // Force a redraw
+        this.Graph.refresh();
     }
 
     initializeEventListeners() {

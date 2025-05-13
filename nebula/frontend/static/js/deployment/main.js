@@ -227,11 +227,11 @@ const DeploymentManager = (function() {
         switch(dataset.toLowerCase()) {
             case 'mnist':
             case 'fashionmnist':
-                return ['CNN', 'MLP'];
+                return ['MLP', 'CNN'];
             case 'cifar10':
                 return ['CNN', 'ResNet18'];
             default:
-                return ['CNN', 'MLP'];
+                return ['MLP', 'CNN'];
         }
     }
 
