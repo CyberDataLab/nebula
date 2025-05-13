@@ -12,6 +12,7 @@ class Monitor {
             nodes: [],
             links: []
         };
+        this.nodeTimestamps = new Map(); // Track last update time for each node
         
         this.initializeMap();
         this.initializeGraph();
@@ -19,6 +20,8 @@ class Monitor {
         this.initializeEventListeners();
         this.initializeDownloadHandlers();
         this.loadInitialData();
+        
+        this.startStaleNodeCheck();
     }
 
     initializeMap() {
@@ -170,6 +173,7 @@ class Monitor {
         this.droneLines = {};
         this.lineLayer.clearLayers();
         this.offlineNodes.clear(); // Clear offline nodes set
+        this.nodeTimestamps.clear(); // Clear node timestamps
 
         // Create a map to track unique nodes by IP:port
         const uniqueNodes = new Map();
@@ -210,6 +214,10 @@ class Monitor {
                     console.log('Node marked as offline during initialization:', nodeData.ip);
                 }
 
+                // Set initial timestamp
+                const initialNodeId = `${nodeData.ip}:${nodeData.port}`;
+                this.nodeTimestamps.set(initialNodeId, Date.now());
+
                 // Update table
                 this.updateNode(nodeData);
 
@@ -218,19 +226,19 @@ class Monitor {
                 console.log('Added node to update queue:', nodeData.uid);
 
                 // Add node to graph data - ensure uniqueness
-                const nodeId = `${nodeData.ip}:${nodeData.port}`;
-                if (!uniqueNodes.has(nodeId)) {
-                    uniqueNodes.set(nodeId, {
+                const uniqueNodeId = `${nodeData.ip}:${nodeData.port}`;
+                if (!uniqueNodes.has(uniqueNodeId)) {
+                    uniqueNodes.set(uniqueNodeId, {
                         id: nodeData.idx,
                         ip: nodeData.ip,
                         port: nodeData.port,
-                        ipport: nodeId,
+                        ipport: uniqueNodeId,
                         role: nodeData.role,
-                        color: this.getNodeColor({ ipport: nodeId, role: nodeData.role })
+                        color: this.getNodeColor({ ipport: uniqueNodeId, role: nodeData.role })
                     });
-                    console.log('Added unique node:', nodeId);
+                    console.log('Added unique node:', uniqueNodeId);
                 } else {
-                    console.log('Skipping duplicate node:', nodeId);
+                    console.log('Skipping duplicate node:', uniqueNodeId);
                 }
             } catch (error) {
                 console.error('Error processing node data:', error);
@@ -313,6 +321,16 @@ class Monitor {
             console.log('Updated existing node:', nodeId);
         }
 
+        // Helper function to get IP from source/target
+        const getIPFromLink = (linkEnd) => {
+            if (typeof linkEnd === 'string') {
+                return linkEnd.split(':')[0];
+            } else if (linkEnd && typeof linkEnd === 'object') {
+                return linkEnd.ipport ? linkEnd.ipport.split(':')[0] : linkEnd.ip;
+            }
+            return '';
+        };
+
         // Normalize all existing links to use string IDs
         this.gData.links = this.gData.links.map(link => ({
             source: typeof link.source === 'object' ? link.source.ipport : link.source,
@@ -320,69 +338,85 @@ class Monitor {
             value: link.value
         }));
 
-        // Store all existing links that don't involve this node
-        const preservedLinks = this.gData.links.filter(link => 
-            link.source !== nodeId && link.target !== nodeId
-        );
-        console.log('Preserved links:', preservedLinks);
-
-        // Start with preserved links
-        this.gData.links = [...preservedLinks];
-        console.log('Links after preserving:', this.gData.links);
-
-        // If node is offline, don't add any new links
+        // If node is offline, remove its links but preserve others
         if (!data.status || this.offlineNodes.has(data.ip)) {
-            console.log('Node is offline, not adding new links');
+            console.log('Node is offline, removing its links');
+            this.gData.links = this.gData.links.filter(link => {
+                const sourceIP = getIPFromLink(link.source);
+                const targetIP = getIPFromLink(link.target);
+                return sourceIP !== data.ip && targetIP !== data.ip;
+            });
             return;
         }
 
-        // Add links for this node's neighbors
+        // For online nodes, update their connections
         if (data.neighbors) {
             // Parse neighbors using consistent format
             const neighbors = data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '');
             console.log('Processing neighbors:', neighbors);
             
-            // Add new links only if both nodes are online
-            neighbors.forEach(neighbor => {
-                // Normalize neighbor ID to include port if not present
-                const normalizedNeighbor = neighbor.includes(':') ? neighbor : `${neighbor}:${data.port}`;
-                const neighborNode = this.gData.nodes.find(n => 
-                    n.ipport === normalizedNeighbor || 
-                    n.ipport.split(':')[0] === neighbor.split(':')[0]
-                );
+            // Get current links for this node
+            const currentLinks = this.gData.links.filter(link => {
+                const sourceIP = getIPFromLink(link.source);
+                const targetIP = getIPFromLink(link.target);
+                return sourceIP === data.ip || targetIP === data.ip;
+            });
+            
+            // Remove links to offline neighbors
+            this.gData.links = this.gData.links.filter(link => {
+                if (getIPFromLink(link.source) === data.ip || getIPFromLink(link.target) === data.ip) {
+                    const neighborId = getIPFromLink(link.source) === data.ip ? link.target : link.source;
+                    const neighborIP = getIPFromLink(neighborId);
+                    return !this.offlineNodes.has(neighborIP);
+                }
+                return true;
+            });
 
-                // Skip if neighbor is offline
-                if (this.offlineNodes.has(neighbor.split(':')[0])) {
-                    console.log('Skipping link creation - neighbor is offline:', neighbor);
+            // Add new links to online neighbors
+            neighbors.forEach(neighbor => {
+                const neighborIP = neighbor.split(':')[0];
+                if (this.offlineNodes.has(neighborIP)) {
+                    console.log('Skipping offline neighbor:', neighbor);
                     return;
                 }
 
+                const normalizedNeighbor = neighbor.includes(':') ? neighbor : `${neighbor}:${data.port}`;
+                const neighborNode = this.gData.nodes.find(n => 
+                    n.ipport === normalizedNeighbor || 
+                    n.ipport.split(':')[0] === neighborIP
+                );
+
                 if (neighborNode) {
-                    console.log('Adding links between', nodeId, 'and', normalizedNeighbor);
-                    
-                    // Add link from this node to neighbor
-                    this.gData.links.push({
-                        source: nodeId,
-                        target: normalizedNeighbor,
-                        value: this.randomFloatFromInterval(1.0, 1.3)
+                    // Check if link already exists
+                    const linkExists = this.gData.links.some(link => {
+                        const sourceIP = getIPFromLink(link.source);
+                        const targetIP = getIPFromLink(link.target);
+                        return (sourceIP === data.ip && targetIP === neighborIP) ||
+                               (sourceIP === neighborIP && targetIP === data.ip);
                     });
 
-                    // Add link from neighbor to this node (bidirectional)
-                    this.gData.links.push({
-                        source: normalizedNeighbor,
-                        target: nodeId,
-                        value: this.randomFloatFromInterval(1.0, 1.3)
-                    });
+                    if (!linkExists) {
+                        console.log('Adding new link between', nodeId, 'and', normalizedNeighbor);
+                        this.gData.links.push({
+                            source: nodeId,
+                            target: normalizedNeighbor,
+                            value: this.randomFloatFromInterval(1.0, 1.3)
+                        });
+                    }
                 }
             });
         }
 
-        // Remove duplicate links (in case they were added multiple times)
+        // Remove duplicate links
         this.gData.links = this.gData.links.filter((link, index, self) =>
-            index === self.findIndex((l) => 
-                (l.source === link.source && l.target === link.target) ||
-                (l.source === link.target && l.target === link.source)
-            )
+            index === self.findIndex((l) => {
+                const sourceIP1 = getIPFromLink(link.source);
+                const targetIP1 = getIPFromLink(link.target);
+                const sourceIP2 = getIPFromLink(l.source);
+                const targetIP2 = getIPFromLink(l.target);
+                return (sourceIP1 === sourceIP2 && targetIP1 === targetIP2) ||
+                       (sourceIP1 === targetIP2 && targetIP1 === sourceIP2);
+            })
         );
 
         console.log('Final links after update:', this.gData.links);
@@ -443,10 +477,9 @@ class Monitor {
     }
 
     getNodeColor(node) {
-        // Check if the node is offline using the full IP:port
-        if (this.offlineNodes.has(node.ipport)) {
-            console.log('Node is offline:', node.ipport);
-            return '#ff0000';
+        // Check if the node is offline using the IP
+        if (this.offlineNodes.has(node.ip)) {
+            return '#ff0000'; // Red color for offline nodes
         }
         
         switch(node.role) {
@@ -504,41 +537,66 @@ class Monitor {
                 return;
             }
 
-            // Get current neighbors before update
+            // Update timestamp for this node
             const nodeId = `${data.ip}:${data.port}`;
-            const currentLinks = this.gData.links.filter(link => 
-                link.source === nodeId || link.target === nodeId
-            );
-            
-            // Parse new neighbors
-            const newNeighbors = data.neighbors 
-                ? data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
-                : [];
-            
-            // Find neighbors to remove (those in current links but not in new neighbors)
-            const neighborsToRemove = currentLinks
-                .map(link => {
-                    const neighborId = link.source === nodeId ? link.target : link.source;
-                    return neighborId.split(':')[0]; // Get just the IP part
-                })
-                .filter(neighborIP => !newNeighbors.includes(neighborIP));
+            this.nodeTimestamps.set(nodeId, Date.now());
 
-            // Remove links to neighbors that are no longer in the list
-            neighborsToRemove.forEach(neighborIP => {
-                this.gData.links = this.gData.links.filter(link => {
-                    const sourceIP = link.source.split(':')[0];
-                    const targetIP = link.target.split(':')[0];
-                    return !(sourceIP === neighborIP || targetIP === neighborIP);
-                });
-            });
-
+            // Update node status
             this.updateNode(data);
-            // Update graph data with the new neighbors list
-            this.updateGraphData(data);
-            // Only update the graph if there are actual changes
-            if (this.hasGraphChanges(data)) {
-                this.updateGraph();
+
+            // Update graph data
+            const existingNodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
+            if (existingNodeIndex === -1) {
+                this.gData.nodes.push({
+                    id: data.idx,
+                    ip: data.ip,
+                    port: data.port,
+                    ipport: nodeId,
+                    role: data.role,
+                    color: this.getNodeColor({ ipport: nodeId, role: data.role })
+                });
+            } else {
+                this.gData.nodes[existingNodeIndex] = {
+                    ...this.gData.nodes[existingNodeIndex],
+                    role: data.role,
+                    color: this.getNodeColor({ ipport: nodeId, role: data.role })
+                };
             }
+
+            // Handle links
+            if (data.neighbors) {
+                const neighbors = data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '');
+                
+                // Remove existing links for this node
+                this.gData.links = this.gData.links.filter(link => {
+                    const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
+                    const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
+                    return sourceIP !== nodeId && targetIP !== nodeId;
+                });
+
+                // Add new links for online neighbors
+                neighbors.forEach(neighbor => {
+                    const neighborIP = neighbor.split(':')[0];
+                    if (!this.offlineNodes.has(neighborIP)) {
+                        const normalizedNeighbor = neighbor.includes(':') ? neighbor : `${neighbor}:${data.port}`;
+                        const neighborNode = this.gData.nodes.find(n => 
+                            n.ipport === normalizedNeighbor || 
+                            n.ipport.split(':')[0] === neighborIP
+                        );
+
+                        if (neighborNode) {
+                            this.gData.links.push({
+                                source: nodeId,
+                                target: normalizedNeighbor,
+                                value: this.randomFloatFromInterval(1.0, 1.3)
+                            });
+                        }
+                    }
+                });
+            }
+
+            // Update the graph
+            this.updateGraph();
         } catch (error) {
             console.error('Error handling node update:', error);
         }
@@ -634,26 +692,49 @@ class Monitor {
             }
         }
 
-        // Update status badge
-        const statusCell = nodeRow.querySelector('#status');
-        if (statusCell) {
-            statusCell.innerHTML = data.status 
-                ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
-                : '<span class="badge bg-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
+        // Update all table cells
+        // Update IDX
+        const idxCell = nodeRow.querySelector('td:nth-child(1)');
+        if (idxCell) {
+            idxCell.textContent = data.idx;
         }
 
-        // Update behavior badge
-        const behaviorCell = nodeRow.querySelector('#malicious');
+        // Update IP
+        const ipCell = nodeRow.querySelector('td:nth-child(2)');
+        if (ipCell) {
+            ipCell.textContent = data.ip;
+        }
+
+        // Update Role
+        const roleCell = nodeRow.querySelector('td:nth-child(3)');
+        if (roleCell) {
+            roleCell.innerHTML = `
+                <span class="badge bg-info-subtle text-black">
+                    <i class="fa fa-server me-1"></i>${data.role}
+                </span>
+            `;
+        }
+
+        // Update Round
+        const roundCell = nodeRow.querySelector('td:nth-child(4)');
+        if (roundCell) {
+            roundCell.textContent = data.round;
+        }
+
+        // Update Behavior
+        const behaviorCell = nodeRow.querySelector('td:nth-child(5)');
         if (behaviorCell) {
             behaviorCell.innerHTML = data.malicious === "True"
                 ? '<span class="badge bg-dark"><i class="fa fa-skull me-1"></i>Malicious</span>'
                 : '<span class="badge bg-secondary"><i class="fa fa-shield-alt me-1"></i>Benign</span>';
         }
 
-        // Update round
-        const roundCell = nodeRow.querySelector('#round');
-        if (roundCell) {
-            roundCell.textContent = data.round;
+        // Update Status
+        const statusCell = nodeRow.querySelector('td:nth-child(6)');
+        if (statusCell) {
+            statusCell.innerHTML = data.status 
+                ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
+                : '<span class="badge bg-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
         }
 
         // Update map position
@@ -661,6 +742,11 @@ class Monitor {
     }
 
     removeNodeLinks(data) {
+        if (!data || !data.ip) {
+            console.warn('Invalid data provided to removeNodeLinks:', data);
+            return;
+        }
+
         const nodeId = `${data.ip}:${data.port}`;
         console.log('Removing links for node:', nodeId);
         
@@ -677,12 +763,30 @@ class Monitor {
         console.log(`Removed ${previousLinkCount - this.gData.links.length} links for node ${nodeId}`);
         
         // Remove lines from map
-        if (this.droneLines[data.uid]) {
+        if (data.uid && this.droneLines[data.uid]) {
             this.cleanupDroneLines(data.uid);
         }
         
         // Update any related lines from other nodes
-        this.updateAllRelatedLines(data.uid);
+        if (data.uid) {
+            this.updateAllRelatedLines(data.uid);
+        }
+
+        // Also remove links from other nodes to this offline node
+        Object.entries(this.droneMarkers).forEach(([uid, marker]) => {
+            if (marker.neighbors) {
+                const neighbors = Array.isArray(marker.neighbors) 
+                    ? marker.neighbors 
+                    : (typeof marker.neighbors === 'string' 
+                        ? marker.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
+                        : []);
+                
+                // If this marker has the offline node as a neighbor, update its lines
+                if (neighbors.some(ip => ip.startsWith(data.ip))) {
+                    this.updateNeighborLines(uid, marker.getLatLng(), neighbors, true);
+                }
+            }
+        });
     }
 
     updateGraph(data) {
@@ -691,11 +795,29 @@ class Monitor {
             this.updateGraphData(data);
         }
         
-        // Filter out any links involving offline nodes
+        // Helper function to get IP from source/target
+        const getIPFromLink = (linkEnd) => {
+            if (typeof linkEnd === 'string') {
+                return linkEnd.split(':')[0];
+            } else if (linkEnd && typeof linkEnd === 'object') {
+                return linkEnd.ipport ? linkEnd.ipport.split(':')[0] : linkEnd.ip;
+            }
+            return '';
+        };
+
+        // First, remove all links involving offline nodes
         this.gData.links = this.gData.links.filter(link => {
-            const sourceId = typeof link.source === 'object' ? link.source.ipport : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.ipport : link.target;
-            return !this.offlineNodes.has(sourceId) && !this.offlineNodes.has(targetId);
+            const sourceIP = getIPFromLink(link.source);
+            const targetIP = getIPFromLink(link.target);
+            const sourceOffline = this.offlineNodes.has(sourceIP);
+            const targetOffline = this.offlineNodes.has(targetIP);
+            
+            // Remove link if either source or target is offline
+            if (sourceOffline || targetOffline) {
+                console.log(`Removing link between ${sourceIP} and ${targetIP} due to offline node`);
+                return false;
+            }
+            return true;
         });
 
         // Ensure all links have valid source and target nodes
@@ -703,6 +825,33 @@ class Monitor {
             const sourceExists = this.gData.nodes.some(n => n.ipport === link.source);
             const targetExists = this.gData.nodes.some(n => n.ipport === link.target);
             return sourceExists && targetExists;
+        });
+
+        // Add links only between online nodes
+        this.gData.nodes.forEach(node => {
+            if (!this.offlineNodes.has(node.ip)) {
+                const nodeId = node.ipport;
+                // Find all online neighbors
+                const onlineNeighbors = this.gData.nodes.filter(n => 
+                    !this.offlineNodes.has(n.ip) && n.ipport !== nodeId
+                );
+                
+                // Add links to online neighbors if they don't exist
+                onlineNeighbors.forEach(neighbor => {
+                    const linkExists = this.gData.links.some(link => 
+                        (link.source === nodeId && link.target === neighbor.ipport) ||
+                        (link.source === neighbor.ipport && link.target === nodeId)
+                    );
+                    
+                    if (!linkExists) {
+                        this.gData.links.push({
+                            source: nodeId,
+                            target: neighbor.ipport,
+                            value: this.randomFloatFromInterval(1.0, 1.3)
+                        });
+                    }
+                });
+            }
         });
 
         // Apply layout to nodes
@@ -1051,6 +1200,86 @@ class Monitor {
             console.warn('No marker found for IP:', ipOnly);
         }
         return marker;
+    }
+
+    startStaleNodeCheck() {
+        // Check for stale nodes every 5 seconds
+        setInterval(() => {
+            const currentTime = Date.now();
+            const staleThreshold = 20000; // 20 seconds in milliseconds
+            
+            // Check all nodes for staleness
+            this.nodeTimestamps.forEach((timestamp, nodeId) => {
+                const timeSinceLastUpdate = currentTime - timestamp;
+                if (timeSinceLastUpdate > staleThreshold) {
+                    console.log(`Node ${nodeId} is stale (${timeSinceLastUpdate}ms since last update)`);
+                    this.markNodeAsOffline(nodeId);
+                }
+            });
+        }, 5000); // Check every 5 seconds
+    }
+
+    markNodeAsOffline(nodeId) {
+        // Find the node data from our existing data structures
+        const node = this.gData.nodes.find(n => n.ipport === nodeId);
+        if (!node) {
+            console.warn(`Node ${nodeId} not found in graph data`);
+            return;
+        }
+
+        console.log(`Marking node ${nodeId} as offline`);
+        
+        // Add to offline nodes set
+        this.offlineNodes.add(node.ip);
+        
+        // Update node color in graph data
+        const nodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
+        if (nodeIndex !== -1) {
+            this.gData.nodes[nodeIndex].color = '#ff0000'; // Red color for offline nodes
+        }
+
+        // Remove all links involving this node
+        this.gData.links = this.gData.links.filter(link => {
+            const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
+            const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
+            return sourceIP !== nodeId && targetIP !== nodeId;
+        });
+
+        // Update marker appearance if it exists
+        const marker = Object.entries(this.droneMarkers).find(([_, m]) => m.ip === node.ip)?.[1];
+        if (marker) {
+            marker.setIcon(this.droneIconOffline);
+            marker.getElement().classList.add('drone-offline');
+            
+            // Remove all lines connected to this node
+            if (this.droneLines[marker.uid]) {
+                this.cleanupDroneLines(marker.uid);
+            }
+        }
+
+        // Find the node's UID from the markers
+        const nodeEntry = Object.entries(this.droneMarkers).find(([_, m]) => m.ip === node.ip);
+        if (!nodeEntry) {
+            console.warn(`No marker found for node ${nodeId}`);
+            return;
+        }
+
+        const [uid, _] = nodeEntry;
+        
+        // Update table status
+        const nodeRow = document.querySelector(`#node-${uid}`);
+        if (nodeRow) {
+            const statusCell = nodeRow.querySelector('td:nth-child(6)');
+            if (statusCell) {
+                statusCell.innerHTML = '<span class="badge bg-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
+            }
+        }
+        
+        // Update graph visualization
+        this.updateGraph();
+        
+        // Update map visualization
+        this.updateAllRelatedLines(uid);
     }
 }
 
