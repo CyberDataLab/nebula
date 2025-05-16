@@ -51,13 +51,11 @@ class ModelHandler(ABC):
     
 def factory_ModelHandler(model_handler) -> ModelHandler:
     from nebula.core.situationalawareness.discovery.modelhandlers.stdmodelhandler import STDModelHandler
-    from nebula.core.situationalawareness.discovery.modelhandlers.aggmodelhandler import AGGModelHandler
     from nebula.core.situationalawareness.discovery.modelhandlers.defaultmodelhandler import DefaultModelHandler
     
     options = {
         "std": STDModelHandler,
         "default": DefaultModelHandler,
-        "aggregator": AGGModelHandler,
     } 
     
     cs = options.get(model_handler, STDModelHandler)
