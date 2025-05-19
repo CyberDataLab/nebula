@@ -35,30 +35,30 @@
                                 <h5 class="text-muted mb-2">
                                     <i class="fa fa-signal me-2"></i>Status
                                 </h5>
-                {% if scenario[5] == "running" %}
+                                {% if scenario[43] == "running" %}
                                 <span id="scenario_status" class="badge bg-warning-subtle text-warning px-3 py-2 ms-3">
                                     <i class="fa fa-spinner fa-spin me-2"></i>Running
                                 </span>
-                {% elif scenario[5] == "completed" %}
+                                {% elif scenario[43] == "completed" %}
                                 <span id="scenario_status" class="badge bg-success-subtle text-success px-3 py-2 ms-3">
                                     <i class="fa fa-check-circle me-2"></i>Completed
                                 </span>
-                {% else %}
+                                {% else %}
                                 <span id="scenario_status" class="badge bg-danger-subtle text-danger px-3 py-2 ms-3">
                                     <i class="fa fa-times-circle me-2"></i>Finished
                                 </span>
-                {% endif %}
+                                {% endif %}
                             </div>
                         </div>
-                        
+
                         <div class="scenario-actions">
-                    {% if scenario[5] == "running" or scenario[5] == "completed" %}
-                    <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario[0], stop_all = False) }}"
+                            {% if scenario[43] == "running" or scenario[43] == "completed" %}
+                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario[0], stop_all = False) }}"
                                 class="btn btn-danger bg-danger-subtle text-danger w-100 mb-2">
                                 <i class="fa fa-stop-circle me-2"></i>Stop scenario
                             </a>
-                    {% endif %}
-                    <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=scenario[0]) }}"
+                            {% endif %}
+                            <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=scenario[0]) }}"
                                 class="btn btn-dark w-100 mb-2">
                                 <i class="fa fa-bar-chart me-2"></i>Real-time metrics
                             </a>
@@ -68,9 +68,9 @@
                                         class="btn btn-outline-dark w-100">
                                         <i class="fa fa-file-alt me-2"></i>Logs
                                     </a>
-                </div>
+                                </div>
                                 <div class="col-6">
-                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
+                                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
                                         class="btn btn-outline-dark w-100">
                                         <i class="fa fa-chart-bar me-2"></i>Metrics
                                     </a>
@@ -84,9 +84,9 @@
             <!-- Nodes Table Card -->
             <div class="col-md-8">
                 <div class="card shadow-sm">
-                    
+
                     <div class="card-body p-0">
-                <div class="table-responsive">
+                        <div class="table-responsive">
                             <table id="table-nodes" class="table table-hover align-middle mb-0 text-center">
                                 <thead class="bg-light">
                                     <tr>
@@ -97,12 +97,13 @@
                                         <th class="py-3"><i class="fa fa-shield me-2"></i>Behaviour</th>
                                         <th class="py-3"><i class="fa fa-signal me-2"></i>Status</th>
                                         <th class="py-3"><i class="fa fa-cog me-2"></i>Actions</th>
-                            </tr>
-                        </thead>
+                                    </tr>
+                                </thead>
                                 <tbody>
-                        {% for uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round,
+                                    {% for uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp,
+                                    federation, round,
                                     scenario, hash, malicious, status in nodes %}
-                        <tr id="node-{{ uid }}">
+                                    <tr id="node-{{ uid }}">
                                         <td class="py-3">{{ idx }}</td>
                                         <td class="py-3">{{ ip }}</td>
                                         <td class="py-3">
@@ -112,63 +113,68 @@
                                         </td>
                                         <td class="py-3">{{ round }}</td>
                                         <td class="py-3">
-                            {% if malicious == "True" %}
+                                            {% if malicious == "True" %}
                                             <span class="badge bg-dark">
                                                 <i class="fa fa-skull me-1"></i>Malicious
                                             </span>
-                            {% else %}
+                                            {% else %}
                                             <span class="badge bg-secondary">
                                                 <i class="fa fa-shield-alt me-1"></i>Benign
                                             </span>
-                            {% endif %}
+                                            {% endif %}
                                         </td>
                                         <td class="py-3">
-                            {% if status %}
+                                            {% if status %}
                                             <span class="badge bg-success">
                                                 <i class="fa fa-circle me-1"></i>Online
                                             </span>
-                            {% else %}
+                                            {% else %}
                                             <span class="badge bg-danger-subtle text-danger">
                                                 <i class="fa fa-circle me-1"></i>Offline
                                             </span>
-                            {% endif %}
+                                            {% endif %}
                                         </td>
                                         <td class="py-3">
-                                <div class="dropdown d-flex justify-content-center">
-                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                            <div class="dropdown d-flex justify-content-center">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                                                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                                     <i class="fa fa-ellipsis-v"></i>
-                                    </button>
+                                                </button>
                                                 <ul class="dropdown-menu dropdown-menu-end">
-                                        {% if hash %}
-                                        <li>
-                                                        <a class="dropdown-item" href="/platform/dashboard/{{ scenario_name }}/node/{{ hash }}/metrics">
+                                                    {% if hash %}
+                                                    <li>
+                                                        <a class="dropdown-item"
+                                                            href="/platform/dashboard/{{ scenario_name }}/node/{{ hash }}/metrics">
                                                             <i class="fa fa-chart-bar me-2"></i>Real-time metrics
-                                            </a>
-                                        </li>
-                                        {% endif %}
-                                        <li>
-                                                        <a class="dropdown-item download" href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/infolog">
+                                                        </a>
+                                                    </li>
+                                                    {% endif %}
+                                                    <li>
+                                                        <a class="dropdown-item download"
+                                                            href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/infolog">
                                                             <i class="fa fa-file-alt me-2"></i>Download INFO logs
-                                            </a>
-                                        </li>
-                                        <li>
-                                                        <a class="dropdown-item download" href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/debuglog">
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item download"
+                                                            href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/debuglog">
                                                             <i class="fa fa-bug me-2"></i>Download DEBUG logs
-                                            </a>
-                                        </li>
-                                        <li>
-                                                        <a class="dropdown-item download" href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/errorlog">
-                                                            <i class="fa fa-exclamation-triangle me-2"></i>Download ERROR logs
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item download"
+                                                            href="/platform/dashboard/{{ scenario_name }}/node/{{ idx }}/errorlog">
+                                                            <i class="fa fa-exclamation-triangle me-2"></i>Download
+                                                            ERROR logs
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
                                 </tbody>
-                    </table>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -199,7 +205,7 @@
                     <div class="card-body">
                         <p class="text-muted mb-3">
                             <i class="fa fa-info-circle me-2"></i>
-                            Visualize the scenario topology. 
+                            Visualize the scenario topology.
                             <a href="{{ url_for('nebula_monitor_image', scenario_name=scenario[0]) }}">
                                 <i class="fa fa-download me-1"></i>Download topology
                             </a>
@@ -218,13 +224,13 @@
     #map {
         height: 600px;
         border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 1px solid rgba(0, 0, 0, 0.1);
     }
 
     #3d-graph {
         height: 600px;
         border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 1px solid rgba(0, 0, 0, 0.1);
     }
 
     .drone-offline {
@@ -232,10 +238,10 @@
     }
 
     .scenario-info {
-        background: rgba(255,255,255,0.9);
+        background: rgba(255, 255, 255, 0.9);
         padding: 2rem;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
 
     .no-scenario-alert {
@@ -245,7 +251,7 @@
         border: 2px dashed #dee2e6;
     }
 
-    .table > :not(caption) > * > * {
+    .table> :not(caption)>*>* {
         padding: 1rem;
     }
 
@@ -296,7 +302,7 @@
 {% endif %}
 
 <!-- Load monitor.js -->
-<script type="module"src="{{ url_for('static', path='js/monitor/monitor.js') }}"></script>
+<script type="module" src="{{ url_for('static', path='js/monitor/monitor.js') }}"></script>
 
 {% endif %}
 {% endblock %}

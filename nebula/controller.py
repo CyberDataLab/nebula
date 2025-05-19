@@ -9,19 +9,20 @@ import subprocess
 import sys
 import threading
 import time
+from typing import Annotated
 
 import docker
 import psutil
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Body, FastAPI, status, HTTPException, Path
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from nebula.addons.env import check_environment
 from nebula.config.config import Config
 from nebula.config.mender import Mender
-from nebula.scenarios import ScenarioManagement
+from nebula.scenarios import Scenario, ScenarioManagement
 from nebula.tests import main as deploy_tests
 from nebula.utils import DockerUtils, SocketUtils
 
@@ -39,7 +40,6 @@ class TermEscapeCodeFormatter(logging.Formatter):
 
 # Initialize FastAPI app outside the Controller class
 app = FastAPI()
-
 
 # Define endpoints outside the Controller class
 @app.get("/")
@@ -142,6 +142,460 @@ async def get_available_gpu():
             }
         except Exception:  # noqa: S110
             pass
+
+
+@app.post("/scenarios/remove")
+async def remove_scenario(
+    scenario_name: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint to remove a scenario.
+    """
+    from nebula.frontend.database import remove_scenario_by_name
+
+    try:
+        remove_scenario_by_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error removing scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Scenario {scenario_name} removed successfully"}
+
+
+@app.get("/scenarios/{user}/{role}")
+async def get_scenarios(
+    user: Annotated[
+        str, 
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid username"
+        )
+    ],
+    role: Annotated[
+        str, 
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid role"
+        )
+    ]
+):
+    from nebula.frontend.database import get_all_scenarios_and_check_completed, get_running_scenario
+
+    try:
+        scenarios = get_all_scenarios_and_check_completed(username=user, role=role)
+        if role == "admin":
+            scenario_running = get_running_scenario()
+        else:
+            scenario_running = get_running_scenario(username=user)
+    except Exception as e:
+        logging.error(f"Error obtaining scenarios: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"scenarios": scenarios, "scenario_running": scenario_running}
+
+
+@app.post("/scenarios/update")
+async def update_scenario(
+    scenario_name: str = Body(..., embed=True),
+    start_time: str = Body(..., embed=True),
+    end_time: str = Body(..., embed=True),
+    scenario: dict = Body(..., embed=True),
+    status: str = Body(..., embed=True),
+    role: str = Body(..., embed=True),
+    username: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint to update a scenario.
+    """
+    from nebula.frontend.database import scenario_update_record
+
+    try:
+        scenario = Scenario.from_dict(scenario)
+        scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username)
+    except Exception as e:
+        logging.error(f"Error updating scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Scenario {scenario_name} updated successfully"}
+
+
+@app.post("/scenarios/set_status_to_finished")
+async def set_scenario_status_to_finished(
+    scenario_name: str = Body(..., embed=True),
+    all: bool = Body(False, embed=True)
+):
+    """
+    Controller endpoint to set the status of a scenario to finished.
+    """
+    from nebula.frontend.database import scenario_set_status_to_finished, scenario_set_all_status_to_finished
+
+    try:
+        if all:
+            scenario_set_all_status_to_finished()
+        else:
+            scenario_set_status_to_finished(scenario_name)
+    except Exception as e:
+        logging.error(f"Error setting scenario {scenario_name} to finished: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Scenario {scenario_name} status set to finished successfully"}
+
+
+@app.get("/scenarios/running")
+async def get_running_scenario(get_all: bool = False):
+    """
+    Controller endpoint to retrieve the running scenario.
+    """
+    from nebula.frontend.database import get_running_scenario
+
+    try:
+        return get_running_scenario(get_all=get_all)
+    except Exception as e:
+        logging.error(f"Error obtaining running scenario: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/nodes/{scenario_name}")
+async def list_nodes_by_scenario_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    """
+    Controller endpoint to retrieve nodes by scenario name.
+    """
+    from nebula.frontend.database import list_nodes_by_scenario_name
+
+    try:
+        nodes = list_nodes_by_scenario_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining nodes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return nodes
+
+
+@app.post("/nodes/update")
+async def update_nodes(
+    node_uid: str = Body(..., embed=True),
+    node_idx: str = Body(..., embed=True),
+    node_ip: str = Body(..., embed=True),
+    node_port: str = Body(..., embed=True),
+    node_role: str = Body(..., embed=True),
+    node_neighbors: str = Body(..., embed=True),
+    node_latitude: str = Body(..., embed=True),
+    node_longitude: str = Body(..., embed=True),
+    node_timestamp: str = Body(..., embed=True),
+    node_federation: str = Body(..., embed=True),
+    node_round: str = Body(..., embed=True),
+    node_scenario_name: str = Body(..., embed=True),
+    node_run_hash: str = Body(..., embed=True),
+    malicious: str = Body(..., embed=True),
+):
+    """
+    Controller endpoint to update nodes.
+    """
+    from nebula.frontend.database import update_node_record
+    try:
+        await update_node_record(
+            node_uid,
+            node_idx,
+            node_ip,
+            node_port,
+            node_role,
+            node_neighbors,
+            node_latitude,
+            node_longitude,
+            node_timestamp,
+            node_federation,
+            node_round,
+            node_scenario_name,
+            node_run_hash,
+            malicious,
+        )
+    except Exception as e:
+        logging.error(f"Error updating nodes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": "Nodes updated successfully"}
+
+
+@app.post("/nodes/remove")
+async def remove_nodes_by_scenario_name(
+    scenario_name: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint to remove nodes by scenario name.
+    """
+    from nebula.frontend.database import remove_nodes_by_scenario_name
+
+    try:
+        remove_nodes_by_scenario_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error removing nodes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    return {"message": f"Nodes for scenario {scenario_name} removed successfully"}
+
+
+@app.get("/scenarios/check")
+async def check_scenario(role: str, scenario_name: str):
+    """
+    Controller endpoint to check if a scenario is allowed for a specific role.
+    """
+    from nebula.frontend.database import check_scenario_with_role
+
+    try:
+        allowed = check_scenario_with_role(role, scenario_name)
+        return {"allowed": allowed}
+    except Exception as e:
+        logging.error(f"Error checking scenario with role: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/scenarios/{scenario_name}")
+async def get_scenario_by_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    from nebula.frontend.database import get_scenario_by_name
+
+    try:
+        scenario = get_scenario_by_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return scenario
+
+
+@app.get("/notes/{scenario_name}")
+async def get_notes_by_scenario_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    from nebula.frontend.database import get_notes
+
+    try:
+        notes = get_notes(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining notes {notes}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return notes
+
+
+@app.post("/notes/update")
+async def update_notes_by_scenario_name(
+    scenario_name: str = Body(..., embed=True),
+    notes: str = Body(..., embed=True)
+):
+    from nebula.frontend.database import save_notes
+
+    try:
+        save_notes(scenario_name, notes)
+    except Exception as e:
+        logging.error(f"Error updating notes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return {"message": f"Notes for scenario {scenario_name} updated successfully"}
+
+
+@app.post("/notes/remove")
+async def remove_notes_by_scenario_name(
+    scenario_name: str = Body(..., embed=True)
+):
+    from nebula.frontend.database import remove_note
+
+    try:
+        remove_note(scenario_name)
+    except Exception as e:
+        logging.error(f"Error removing notes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return {"message": f"Notes for scenario {scenario_name} removed successfully"}
+
+
+@app.get("/user/list")
+async def list_users_controller(all_info: bool = False):
+    """
+    Controller endpoint to retrieve the list of users.
+    If all_info is True, returns the complete information converted into dictionaries.
+    """
+    from nebula.frontend.database import list_users
+
+    try:
+        user_list = list_users(all_info)
+        if all_info:
+            # Convert each sqlite3.Row to a dictionary so that it is JSON serializable.
+            user_list = [dict(user) for user in user_list]
+        return {"users": user_list}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving users: {e}"
+        )
+    
+
+@app.get("/user/{scenario_name}")
+async def get_user_by_scenario_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    from nebula.frontend.database import get_user_by_scenario_name
+
+    try:
+        user = get_user_by_scenario_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining user {user}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return user
+
+
+@app.post("/user/add")
+async def add_user_controller(
+    user: str = Body(...),
+    password: str = Body(...),
+    role: str = Body(...)
+):
+    """
+    Controller endpoint that inserts a new user into the database.
+    
+    Parameters:
+    - user: The username for the new user.
+    - password: The user's password.
+    - role: The role assigned to the new user.
+    
+    Returns a success message if the user is added, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import add_user
+
+    try:
+        add_user(user, password, role)
+        return {"detail": "User added successfully"}
+    except Exception as e:
+        logging.error(f"Error adding user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error adding user: {e}"
+        )
+    
+
+@app.post("/user/delete")
+async def remove_user_controller(
+    user: str = Body(..., embed=True)
+):
+    """
+    Controller endpoint that inserts a new user into the database.
+    
+    Parameters:
+    - user: The username for the new user.
+    
+    Returns a success message if the user is deleted, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import delete_user_from_db
+
+    try:
+        delete_user_from_db(user)
+        return {"detail": "User deleted successfully"}
+    except Exception as e:
+        logging.error(f"Error deleting user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting user: {e}"
+        )
+    
+
+@app.post("/user/update")
+async def add_user_controller(
+    user: str = Body(...),
+    password: str = Body(...),
+    role: str = Body(...)
+):
+    """
+    Controller endpoint that modifies a user of the database.
+    
+    Parameters:
+    - user: The username of the user.
+    - password: The user's password.
+    - role: The role of the user.
+    
+    Returns a success message if the user is updated, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import update_user
+
+    try:
+        update_user(user, password, role)
+        return {"detail": "User updated successfully"}
+    except Exception as e:
+        logging.error(f"Error updating user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating user: {e}"
+        )
+    
+
+@app.post("/user/verify")
+async def add_user_controller(
+    user: str = Body(...),
+    password: str = Body(...)
+):
+    """
+    Controller endpoint that verifies if it's a valid user.
+    
+    Parameters:
+    - user: The username of the user.
+    - password: The user's password.
+    
+    Returns a success message if the user is verified, or an HTTP error if an exception occurs.
+    """
+    from nebula.frontend.database import list_users, verify, get_user_info
+
+    try:
+        user_submitted = user.upper()
+        if (user_submitted in list_users()) and verify(user_submitted, password):
+            user_info = get_user_info(user_submitted)
+            return {"user": user_submitted, "role": user_info[2]}
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    except Exception as e:
+        logging.error(f"Error verifying user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error verifying user: {e}"
+        )
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -450,6 +904,10 @@ class Controller:
         app_thread.start()
         logging.info(f"NEBULA Controller is running at port {self.controller_port}")
 
+        from nebula.frontend.database import initialize_databases
+
+        asyncio.run(initialize_databases(self.databases_dir))
+
         if self.production:
             self.run_waf()
             logging.info(f"NEBULA WAF is running at port {self.waf_port}")
@@ -689,7 +1147,6 @@ class Controller:
                 f"{self.root_path}:/nebula",
                 "/var/run/docker.sock:/var/run/docker.sock",
                 f"{self.root_path}/nebula/frontend/config/nebula:/etc/nginx/sites-available/default",
-                f"{self.databases_dir}:/nebula/nebula/frontend/databases",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={80: self.frontend_port, 8080: self.statistics_port},

@@ -70,9 +70,6 @@ class Scenario:
         weight_model_similarity,
         weight_num_messages,
         weight_fraction_params_changed,
-        # is_dynamic_topology,
-        # is_dynamic_aggregation,
-        # target_aggregation,
         random_geo,
         latitude,
         longitude,
@@ -90,8 +87,8 @@ class Scenario:
         Initialize the scenario.
 
         Args:
-            scenario_title (str): Title of the scenario.
-            scenario_description (str): Description of the scenario.
+            title (str): Title of the scenario.
+            description (str): Description of the scenario.
             deployment (str): Type of deployment (e.g., 'docker', 'process').
             federation (str): Type of federation.
             topology (str): Network topology.
@@ -129,9 +126,6 @@ class Scenario:
             weight_model_similarity (float): Weight of model similarity.
             weight_num_messages (float): Weight of number of messages.
             weight_fraction_params_changed (float): Weight of fraction of parameters changed.
-            # is_dynamic_topology (bool): Indicator if topology is dynamic.
-            # is_dynamic_aggregation (bool): Indicator if aggregation is dynamic.
-            # target_aggregation (str): Target aggregation method.
             random_geo (bool): Indicator if random geo is used.
             latitude (float): Latitude for mobility.
             longitude (float): Longitude for mobility.
@@ -181,9 +175,6 @@ class Scenario:
         self.weight_model_similarity = weight_model_similarity
         self.weight_num_messages = weight_num_messages
         self.weight_fraction_params_changed = weight_fraction_params_changed
-        # self.is_dynamic_topology = is_dynamic_topology
-        # self.is_dynamic_aggregation = is_dynamic_aggregation
-        # self.target_aggregation = target_aggregation
         self.random_geo = random_geo
         self.latitude = latitude
         self.longitude = longitude
@@ -533,9 +524,6 @@ class ScenarioManagement:
             participant_config["adversarial_args"]["attacks"] = node_config["attacks"]
             participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
             participant_config["defense_args"]["with_reputation"] = node_config["with_reputation"]
-            # participant_config["defense_args"]["is_dynamic_topology"] = self.scenario.is_dynamic_topology
-            # participant_config["defense_args"]["is_dynamic_aggregation"] = self.scenario.is_dynamic_aggregation
-            # participant_config["defense_args"]["target_aggregation"] = self.scenario.target_aggregation
             participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
             participant_config["defense_args"]["initial_reputation"] = self.scenario.initial_reputation
             participant_config["defense_args"]["weighting_factor"] = self.scenario.weighting_factor
