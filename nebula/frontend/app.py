@@ -295,6 +295,12 @@ async def get_least_memory_gpu():
     return await controller_get(url)
 
 
+async def deploy_scenario(scenario_data, role, user):
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/run"
+    data = {"scenario_data": scenario_data, "role": role, "user": user}
+    return await controller_post(url, data)
+
+
 async def get_scenarios(user, role):
     url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/{user}/{role}"
     return await controller_get(url)
@@ -1446,46 +1452,18 @@ async def assign_available_gpu(scenario_data, role):
 
 
 async def run_scenario(scenario_data, role, user):
-    import subprocess
-
-    from nebula.scenarios import ScenarioManagement
-
     user_data = user_data_store[user]
 
     scenario_data = await assign_available_gpu(scenario_data, role)
-    # Manager for the actual scenario
-    scenarioManagement = ScenarioManagement(scenario_data, user)
+     
+    scenario_name = await deploy_scenario(scenario_data, role, user)
 
-    await scenario_update_record(
-        scenario_name=scenarioManagement.scenario_name,
-        start_time=scenarioManagement.start_date_scenario,
-        end_time="",
-        scenario=scenario_data,
-        status="running",
-        role=role,
-        username=user
-    )
-
-    # Run the actual scenario
-    try:
-        if scenarioManagement.scenario.mobility:
-            additional_participants = scenario_data["additional_participants"]
-            schema_additional_participants = scenario_data["schema_additional_participants"]
-            scenarioManagement.load_configurations_and_start_nodes(
-                additional_participants, schema_additional_participants
-            )
-        else:
-            scenarioManagement.load_configurations_and_start_nodes()
-    except subprocess.CalledProcessError as e:
-        logging.exception(f"Error docker-compose up: {e}")
-        return
-
-    user_data.nodes_registration[scenarioManagement.scenario_name] = {
+    user_data.nodes_registration[scenario_name] = {
         "n_nodes": scenario_data["n_nodes"],
         "nodes": set(),
     }
 
-    user_data.nodes_registration[scenarioManagement.scenario_name]["condition"] = asyncio.Condition()
+    user_data.nodes_registration[scenario_name]["condition"] = asyncio.Condition()
 
 
 # Deploy the list of scenarios

@@ -37,6 +37,7 @@ class TermEscapeCodeFormatter(logging.Formatter):
         record.msg = re.sub(escape_re, "", str(record.msg))
         return super().format(record)
 
+os.environ["NEBULA_CONTROLLER_NAME"] = os.environ["USER"]
 
 # Initialize FastAPI app outside the Controller class
 app = FastAPI()
@@ -142,6 +143,46 @@ async def get_available_gpu():
             }
         except Exception:  # noqa: S110
             pass
+
+
+@app.post("/scenarios/run")
+async def run_scenario(
+    scenario_data: dict = Body(..., embed=True),
+    role: str = Body(..., embed=True),
+    user: str = Body(..., embed=True)
+):
+    import subprocess
+
+    from nebula.scenarios import ScenarioManagement
+
+    # Manager for the actual scenario
+    scenarioManagement = ScenarioManagement(scenario_data, user)
+
+    await update_scenario(
+        scenario_name=scenarioManagement.scenario_name,
+        start_time=scenarioManagement.start_date_scenario,
+        end_time="",
+        scenario=scenario_data,
+        status="running",
+        role=role,
+        username=user
+    )
+
+    # Run the actual scenario
+    try:
+        if scenarioManagement.scenario.mobility:
+            additional_participants = scenario_data["additional_participants"]
+            schema_additional_participants = scenario_data["schema_additional_participants"]
+            scenarioManagement.load_configurations_and_start_nodes(
+                additional_participants, schema_additional_participants
+            )
+        else:
+            scenarioManagement.load_configurations_and_start_nodes()
+    except subprocess.CalledProcessError as e:
+        logging.exception(f"Error docker-compose up: {e}")
+        return
+    
+    return scenarioManagement.scenario_name
 
 
 @app.post("/scenarios/remove")
@@ -259,6 +300,44 @@ async def get_running_scenario(get_all: bool = False):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@app.get("/scenarios/check")
+async def check_scenario(role: str, scenario_name: str):
+    """
+    Controller endpoint to check if a scenario is allowed for a specific role.
+    """
+    from nebula.frontend.database import check_scenario_with_role
+
+    try:
+        allowed = check_scenario_with_role(role, scenario_name)
+        return {"allowed": allowed}
+    except Exception as e:
+        logging.error(f"Error checking scenario with role: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/scenarios/{scenario_name}")
+async def get_scenario_by_name(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+):
+    from nebula.frontend.database import get_scenario_by_name
+
+    try:
+        scenario = get_scenario_by_name(scenario_name)
+    except Exception as e:
+        logging.error(f"Error obtaining scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    return scenario
+
+
 @app.get("/nodes/{scenario_name}")
 async def list_nodes_by_scenario_name(
     scenario_name: Annotated[
@@ -346,44 +425,6 @@ async def remove_nodes_by_scenario_name(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"message": f"Nodes for scenario {scenario_name} removed successfully"}
-
-
-@app.get("/scenarios/check")
-async def check_scenario(role: str, scenario_name: str):
-    """
-    Controller endpoint to check if a scenario is allowed for a specific role.
-    """
-    from nebula.frontend.database import check_scenario_with_role
-
-    try:
-        allowed = check_scenario_with_role(role, scenario_name)
-        return {"allowed": allowed}
-    except Exception as e:
-        logging.error(f"Error checking scenario with role: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@app.get("/scenarios/{scenario_name}")
-async def get_scenario_by_name(
-    scenario_name: Annotated[
-        str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        )
-    ]
-):
-    from nebula.frontend.database import get_scenario_by_name
-
-    try:
-        scenario = get_scenario_by_name(scenario_name)
-    except Exception as e:
-        logging.error(f"Error obtaining scenario {scenario_name}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-    
-    return scenario
 
 
 @app.get("/notes/{scenario_name}")
