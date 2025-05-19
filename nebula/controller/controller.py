@@ -22,8 +22,7 @@ from watchdog.observers import Observer
 from nebula.addons.env import check_environment
 from nebula.config.config import Config
 from nebula.config.mender import Mender
-from nebula.scenarios import Scenario, ScenarioManagement
-from nebula.tests import main as deploy_tests
+from nebula.controller.scenarios import Scenario, ScenarioManagement
 from nebula.utils import DockerUtils, SocketUtils
 
 
@@ -153,7 +152,7 @@ async def run_scenario(
 ):
     import subprocess
 
-    from nebula.scenarios import ScenarioManagement
+    from nebula.controller.scenarios import ScenarioManagement
 
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario_data, user)
@@ -192,7 +191,7 @@ async def remove_scenario(
     """
     Controller endpoint to remove a scenario.
     """
-    from nebula.frontend.database import remove_scenario_by_name
+    from nebula.controller.database import remove_scenario_by_name
 
     try:
         remove_scenario_by_name(scenario_name)
@@ -224,7 +223,7 @@ async def get_scenarios(
         )
     ]
 ):
-    from nebula.frontend.database import get_all_scenarios_and_check_completed, get_running_scenario
+    from nebula.controller.database import get_all_scenarios_and_check_completed, get_running_scenario
 
     try:
         scenarios = get_all_scenarios_and_check_completed(username=user, role=role)
@@ -252,7 +251,7 @@ async def update_scenario(
     """
     Controller endpoint to update a scenario.
     """
-    from nebula.frontend.database import scenario_update_record
+    from nebula.controller.database import scenario_update_record
 
     try:
         scenario = Scenario.from_dict(scenario)
@@ -272,7 +271,7 @@ async def set_scenario_status_to_finished(
     """
     Controller endpoint to set the status of a scenario to finished.
     """
-    from nebula.frontend.database import scenario_set_status_to_finished, scenario_set_all_status_to_finished
+    from nebula.controller.database import scenario_set_status_to_finished, scenario_set_all_status_to_finished
 
     try:
         if all:
@@ -291,7 +290,7 @@ async def get_running_scenario(get_all: bool = False):
     """
     Controller endpoint to retrieve the running scenario.
     """
-    from nebula.frontend.database import get_running_scenario
+    from nebula.controller.database import get_running_scenario
 
     try:
         return get_running_scenario(get_all=get_all)
@@ -305,7 +304,7 @@ async def check_scenario(role: str, scenario_name: str):
     """
     Controller endpoint to check if a scenario is allowed for a specific role.
     """
-    from nebula.frontend.database import check_scenario_with_role
+    from nebula.controller.database import check_scenario_with_role
 
     try:
         allowed = check_scenario_with_role(role, scenario_name)
@@ -327,7 +326,7 @@ async def get_scenario_by_name(
         )
     ]
 ):
-    from nebula.frontend.database import get_scenario_by_name
+    from nebula.controller.database import get_scenario_by_name
 
     try:
         scenario = get_scenario_by_name(scenario_name)
@@ -353,7 +352,7 @@ async def list_nodes_by_scenario_name(
     """
     Controller endpoint to retrieve nodes by scenario name.
     """
-    from nebula.frontend.database import list_nodes_by_scenario_name
+    from nebula.controller.database import list_nodes_by_scenario_name
 
     try:
         nodes = list_nodes_by_scenario_name(scenario_name)
@@ -384,7 +383,7 @@ async def update_nodes(
     """
     Controller endpoint to update nodes.
     """
-    from nebula.frontend.database import update_node_record
+    from nebula.controller.database import update_node_record
     try:
         await update_node_record(
             node_uid,
@@ -416,7 +415,7 @@ async def remove_nodes_by_scenario_name(
     """
     Controller endpoint to remove nodes by scenario name.
     """
-    from nebula.frontend.database import remove_nodes_by_scenario_name
+    from nebula.controller.database import remove_nodes_by_scenario_name
 
     try:
         remove_nodes_by_scenario_name(scenario_name)
@@ -439,7 +438,7 @@ async def get_notes_by_scenario_name(
         )
     ]
 ):
-    from nebula.frontend.database import get_notes
+    from nebula.controller.database import get_notes
 
     try:
         notes = get_notes(scenario_name)
@@ -455,7 +454,7 @@ async def update_notes_by_scenario_name(
     scenario_name: str = Body(..., embed=True),
     notes: str = Body(..., embed=True)
 ):
-    from nebula.frontend.database import save_notes
+    from nebula.controller.database import save_notes
 
     try:
         save_notes(scenario_name, notes)
@@ -470,7 +469,7 @@ async def update_notes_by_scenario_name(
 async def remove_notes_by_scenario_name(
     scenario_name: str = Body(..., embed=True)
 ):
-    from nebula.frontend.database import remove_note
+    from nebula.controller.database import remove_note
 
     try:
         remove_note(scenario_name)
@@ -487,7 +486,7 @@ async def list_users_controller(all_info: bool = False):
     Controller endpoint to retrieve the list of users.
     If all_info is True, returns the complete information converted into dictionaries.
     """
-    from nebula.frontend.database import list_users
+    from nebula.controller.database import list_users
 
     try:
         user_list = list_users(all_info)
@@ -514,7 +513,7 @@ async def get_user_by_scenario_name(
         )
     ]
 ):
-    from nebula.frontend.database import get_user_by_scenario_name
+    from nebula.controller.database import get_user_by_scenario_name
 
     try:
         user = get_user_by_scenario_name(scenario_name)
@@ -541,7 +540,7 @@ async def add_user_controller(
     
     Returns a success message if the user is added, or an HTTP error if an exception occurs.
     """
-    from nebula.frontend.database import add_user
+    from nebula.controller.database import add_user
 
     try:
         add_user(user, password, role)
@@ -566,7 +565,7 @@ async def remove_user_controller(
     
     Returns a success message if the user is deleted, or an HTTP error if an exception occurs.
     """
-    from nebula.frontend.database import delete_user_from_db
+    from nebula.controller.database import delete_user_from_db
 
     try:
         delete_user_from_db(user)
@@ -595,7 +594,7 @@ async def add_user_controller(
     
     Returns a success message if the user is updated, or an HTTP error if an exception occurs.
     """
-    from nebula.frontend.database import update_user
+    from nebula.controller.database import update_user
 
     try:
         update_user(user, password, role)
@@ -622,7 +621,7 @@ async def add_user_controller(
     
     Returns a success message if the user is verified, or an HTTP error if an exception occurs.
     """
-    from nebula.frontend.database import list_users, verify, get_user_info
+    from nebula.controller.database import list_users, verify, get_user_info
 
     try:
         user_submitted = user.upper()
@@ -841,7 +840,6 @@ class Controller:
         self.simulation = args.simulation
         self.config_dir = args.config
         self.databases_dir = args.databases if hasattr(args, "databases") else "/opt/nebula"
-        self.test = args.test if hasattr(args, "test") else False
         self.log_dir = args.logs
         self.cert_dir = args.certs
         self.env_path = args.env
@@ -851,7 +849,7 @@ class Controller:
         self.root_path = (
             args.root_path
             if hasattr(args, "root_path")
-            else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
         self.host_platform = "windows" if sys.platform == "win32" else "unix"
 
@@ -945,7 +943,7 @@ class Controller:
         app_thread.start()
         logging.info(f"NEBULA Controller is running at port {self.controller_port}")
 
-        from nebula.frontend.database import initialize_databases
+        from nebula.controller.database import initialize_databases
 
         asyncio.run(initialize_databases(self.databases_dir))
 
@@ -954,12 +952,9 @@ class Controller:
             logging.info(f"NEBULA WAF is running at port {self.waf_port}")
             logging.info(f"Grafana Dashboard is running at port {self.grafana_port}")
 
-        if self.test:
-            self.run_test()
-        else:
-            self.run_frontend()
-            logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
-            logging.info(f"NEBULA Databases created in {self.databases_dir}")
+        self.run_frontend()
+        logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
+        logging.info(f"NEBULA Databases created in {self.databases_dir}")
 
         # Watchdog for running additional scripts in the host machine (i.e. during the execution of a federation)
         event_handler = NebulaEventHandler()
@@ -1159,6 +1154,8 @@ class Controller:
         base = DockerUtils.create_docker_network(network_name)
 
         client = docker.from_env()
+        
+        logging.info(f"[FER] root_path: {self.root_path}")
 
         environment = {
             "NEBULA_CONTROLLER_NAME": os.environ["USER"],
@@ -1209,9 +1206,6 @@ class Controller:
         )
 
         client.api.start(container_id)
-
-    def run_test(self):
-        deploy_tests.start()
 
     @staticmethod
     def stop_waf():

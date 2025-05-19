@@ -15,7 +15,6 @@ import tensorboard_reducer as tbr
 
 from nebula.addons.blockchain.blockchain_deployer import BlockchainDeployer
 from nebula.addons.topologymanager import TopologyManager
-from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
 from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
 from nebula.core.datasets.emnist.emnist import EMNISTDataset
@@ -23,6 +22,7 @@ from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
 from nebula.core.datasets.mnist.mnist import MNISTDataset
 from nebula.core.utils.certificate import generate_ca_certificate, generate_certificate
 from nebula.utils import DockerUtils, FileUtils
+from nebula.config.config import Config
 
 
 # Definition of a scenario
@@ -495,7 +495,7 @@ class ScenarioManagement:
             shutil.copy(
                 os.path.join(
                     os.path.dirname(__file__),
-                    "./frontend/config/participant.json.example",
+                    "../frontend/config/participant.json.example",
                 ),
                 participant_file,
             )
@@ -950,7 +950,7 @@ class ScenarioManagement:
             command = [
                 "/bin/bash",
                 "-c",
-                f"{start_command} && ifconfig && echo '{base}.1 host.docker.internal' >> /etc/hosts && python /nebula/nebula/node.py /nebula/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json",
+                f"{start_command} && ifconfig && echo '{base}.1 host.docker.internal' >> /etc/hosts && python /nebula/nebula/core/node.py /nebula/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json",
             ]
 
             if self.use_blockchain:
@@ -1055,7 +1055,7 @@ class ScenarioManagement:
                     commands += f'$ERROR_FILE = "{self.root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.err"\n'
 
                     # Use Start-Process for executing Python in background and capture PID
-                    commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\node.py {self.root_path}\\app\\config\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
+                    commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\core\\node.py {self.root_path}\\app\\config\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
                 Add-Content -Path $PID_FILE -Value $process.Id
                 """
 
@@ -1078,7 +1078,7 @@ class ScenarioManagement:
                         commands += "sleep 2\n"
                     commands += f'echo "Running node {node["device_args"]["idx"]}..."\n'
                     commands += f"OUT_FILE={self.root_path}/app/logs/{self.scenario_name}/participant_{node['device_args']['idx']}.out\n"
-                    commands += f"python {self.root_path}/nebula/node.py {self.root_path}/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json > $OUT_FILE 2>&1 &\n"
+                    commands += f"python {self.root_path}/nebula/core/node.py {self.root_path}/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json > $OUT_FILE 2>&1 &\n"
                     commands += "echo $! >> $PID_FILE\n\n"
 
                 commands += 'echo "All nodes started. PIDs stored in $PID_FILE"\n'

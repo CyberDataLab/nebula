@@ -1042,7 +1042,7 @@ async def nebula_monitor_image(scenario_name: str):
 
 
 async def stop_scenario(scenario_name, user):
-    from nebula.scenarios import ScenarioManagement
+    from nebula.controller.scenarios import ScenarioManagement
 
     ScenarioManagement.stop_participants(scenario_name)
     DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{user}-participant")
@@ -1095,7 +1095,7 @@ async def nebula_stop_scenario(
 
 
 async def remove_scenario(scenario_name=None, user=None):
-    from nebula.scenarios import ScenarioManagement
+    from nebula.controller.scenarios import ScenarioManagement
     logging.info(f"[FER] remove_scenario {scenario_name} {user}")
 
     user_data = user_data_store[user]
