@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import importlib
 import json
 import logging
@@ -11,11 +12,12 @@ import threading
 import time
 from typing import Annotated
 
+import aiohttp
 import docker
 import psutil
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, status, HTTPException, Path
+from fastapi import Body, FastAPI, Request, status, HTTPException, Path
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
@@ -363,49 +365,88 @@ async def list_nodes_by_scenario_name(
     return nodes
 
 
-@app.post("/nodes/update")
+@app.post("/nodes/{scenario_name}/update")
 async def update_nodes(
-    node_uid: str = Body(..., embed=True),
-    node_idx: str = Body(..., embed=True),
-    node_ip: str = Body(..., embed=True),
-    node_port: str = Body(..., embed=True),
-    node_role: str = Body(..., embed=True),
-    node_neighbors: str = Body(..., embed=True),
-    node_latitude: str = Body(..., embed=True),
-    node_longitude: str = Body(..., embed=True),
-    node_timestamp: str = Body(..., embed=True),
-    node_federation: str = Body(..., embed=True),
-    node_round: str = Body(..., embed=True),
-    node_scenario_name: str = Body(..., embed=True),
-    node_run_hash: str = Body(..., embed=True),
-    malicious: str = Body(..., embed=True),
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        ),
+    ],
+    request: Request
 ):
     """
     Controller endpoint to update nodes.
     """
     from nebula.controller.database import update_node_record
     try:
+        config = await request.json()
+        timestamp = datetime.datetime.now()
+        # Update the node in database
         await update_node_record(
-            node_uid,
-            node_idx,
-            node_ip,
-            node_port,
-            node_role,
-            node_neighbors,
-            node_latitude,
-            node_longitude,
-            node_timestamp,
-            node_federation,
-            node_round,
-            node_scenario_name,
-            node_run_hash,
-            malicious,
+            str(config["device_args"]["uid"]),
+            str(config["device_args"]["idx"]),
+            str(config["network_args"]["ip"]),
+            str(config["network_args"]["port"]),
+            str(config["device_args"]["role"]),
+            str(config["network_args"]["neighbors"]),
+            str(config["mobility_args"]["latitude"]),
+            str(config["mobility_args"]["longitude"]),
+            str(timestamp),
+            str(config["scenario_args"]["federation"]),
+            str(config["federation_args"]["round"]),
+            str(config["scenario_args"]["name"]),
+            str(config["tracking_args"]["run_hash"]),
+            str(config["device_args"]["malicious"]),
         )
     except Exception as e:
         logging.error(f"Error updating nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    
+    port = os.environ["NEBULA_FRONTEND_PORT"]
+    url = f"http://localhost:{port}/platform/dashboard/{scenario_name}/node/update"
+    
+    config["timestamp"] = str(timestamp)
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=config) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                raise HTTPException(status_code=response.status, detail="Error posting data")
 
-    return {"message": "Nodes updated successfully"}
+    return {"message": "Nodes updated successfully in the database"}
+
+
+@app.post("/nodes/{scenario_name}/done")
+async def node_done(
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        ),
+    ],
+    request: Request
+):
+    port = os.environ["NEBULA_FRONTEND_PORT"]
+    url = f"http://localhost:{port}/platform/dashboard/{scenario_name}/node/done"
+    
+    data = await request.json()
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                raise HTTPException(status_code=response.status, detail="Error posting data")
+
+    return {"message": "Nodes done"}   
 
 
 @app.post("/nodes/remove")
@@ -934,9 +975,12 @@ class Controller:
         os.environ["NEBULA_LOGS_DIR"] = self.log_dir
         os.environ["NEBULA_CONFIG_DIR"] = self.config_dir
         os.environ["NEBULA_CERTS_DIR"] = self.cert_dir
-        os.environ["NEBULA_STATISTICS_PORT"] = str(self.statistics_port)
         os.environ["NEBULA_ROOT_HOST"] = self.root_path
         os.environ["NEBULA_HOST_PLATFORM"] = self.host_platform
+        os.environ["NEBULA_CONTROLLER_HOST"] = "host.docker.internal"
+        os.environ["NEBULA_STATISTICS_PORT"] = str(self.statistics_port)
+        os.environ["NEBULA_CONTROLLER_PORT"] = str(self.controller_port)
+        os.environ["NEBULA_FRONTEND_PORT"] = str(self.frontend_port)
 
         # Start the FastAPI app in a daemon thread
         app_thread = threading.Thread(target=self.run_controller_api, daemon=True)
@@ -1154,8 +1198,6 @@ class Controller:
         base = DockerUtils.create_docker_network(network_name)
 
         client = docker.from_env()
-        
-        logging.info(f"[FER] root_path: {self.root_path}")
 
         environment = {
             "NEBULA_CONTROLLER_NAME": os.environ["USER"],

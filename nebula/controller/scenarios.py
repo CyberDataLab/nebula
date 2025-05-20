@@ -429,9 +429,9 @@ class ScenarioManagement:
 
         # Assign the controller endpoint
         if self.scenario.deployment == "docker":
-            self.controller = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-frontend"
+            self.controller = f"{os.environ.get('NEBULA_CONTROLLER_HOST')}:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
         else:
-            self.controller = f"127.0.0.1:{os.environ.get('NEBULA_FRONTEND_PORT')}"
+            self.controller = f"127.0.0.1:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
 
         self.topologymanager = None
         self.env_path = None
