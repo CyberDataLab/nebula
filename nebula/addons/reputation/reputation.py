@@ -84,6 +84,16 @@ class Reputation:
 
         self._with_reputation = self._config.participant["defense_args"]["with_reputation"]
         self._reputation_metrics = self._config.participant["defense_args"]["reputation_metrics"]
+        if isinstance(self._reputation_metrics, list):
+            expected_metrics = [
+                "model_similarity",
+                "num_messages",
+                "model_arrival_latency",
+                "fraction_parameters_changed",
+            ]
+            self._reputation_metrics = {
+                key: key in self._reputation_metrics for key in expected_metrics
+        }
         self._initial_reputation = float(self._config.participant["defense_args"]["initial_reputation"])
         self._weighting_factor = self._config.participant["defense_args"]["weighting_factor"]
         self._weight_model_arrival_latency = float(
@@ -1045,8 +1055,8 @@ class Reputation:
             mean_messages_all_neighbors = (
                 np.mean(counts_all_neighbors) if counts_all_neighbors else 0
             )
-            #aument_mean = mean_messages_all_neighbors * 2 if current_round <= 3 else mean_messages_all_neighbors * 1.1
-            aument_mean =  mean_messages_all_neighbors * 1.8 if current_round <= 1 else mean_messages_all_neighbors * 1.1
+            aument_mean = mean_messages_all_neighbors * 2 if current_round <= 3 else mean_messages_all_neighbors * 1.1
+            #aument_mean =  mean_messages_all_neighbors * 1.8 if current_round <= 1 else mean_messages_all_neighbors * 1.1
 
             relative_increase = (
                 (messages_count - percentile_reference) / percentile_reference if percentile_reference > 0 else 0
@@ -1204,7 +1214,6 @@ class Reputation:
             # With the last 2 rounds
             rounds = sorted(self.reputation_history[key].keys(), reverse=True)[:2]
             current_round = self._engine.get_round()
-            logging.info(f"Rounds in save_reputation_history: {rounds}")
             if len(rounds) >= 2:
                 current_round = rounds[0]
                 previous_round = rounds[1]

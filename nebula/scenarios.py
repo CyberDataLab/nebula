@@ -533,10 +533,17 @@ class ScenarioManagement:
             participant_config["adversarial_args"]["attacks"] = node_config["attacks"]
             participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
             participant_config["defense_args"]["with_reputation"] = node_config["with_reputation"]
-            # participant_config["defense_args"]["is_dynamic_topology"] = self.scenario.is_dynamic_topology
-            # participant_config["defense_args"]["is_dynamic_aggregation"] = self.scenario.is_dynamic_aggregation
-            # participant_config["defense_args"]["target_aggregation"] = self.scenario.target_aggregation
-            participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
+            if isinstance(self.scenario.reputation_metrics, list):
+                metrics_list = self.scenario.reputation_metrics
+                metrics_dict = {
+                    "model_similarity": "model_similarity" in metrics_list,
+                    "num_messages": "num_messages" in metrics_list,
+                    "model_arrival_latency": "model_arrival_latency" in metrics_list,
+                    "fraction_parameters_changed": "fraction_parameters_changed" in metrics_list,
+                }
+                participant_config["defense_args"]["reputation_metrics"] = metrics_dict
+            else:
+                participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
             participant_config["defense_args"]["initial_reputation"] = self.scenario.initial_reputation
             participant_config["defense_args"]["weighting_factor"] = self.scenario.weighting_factor
             participant_config["defense_args"]["weight_model_arrival_latency"] = (
