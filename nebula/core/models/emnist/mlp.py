@@ -7,7 +7,7 @@ class EMNISTModelMLP(NebulaModel):
     def __init__(
         self,
         input_channels=1,
-        num_classes=10,
+        num_classes=47,
         learning_rate=1e-3,
         metrics=None,
         confusion_matrix=None,

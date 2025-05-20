@@ -1,0 +1,232 @@
+
+.btn {
+    outline: none !important;
+    text-decoration: none !important;
+}
+
+.row {
+    margin: 0;
+}
+
+.participant-item {
+    padding: 5px;
+}
+
+#form-configurations {
+    counter-reset: step;
+}
+
+.step-title {
+    font-size: 15px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+.step-number::before {
+    content: counter(step);
+    counter-increment: step;
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: 50%;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    margin-right: 10px;
+    font-size: 15px;
+}
+
+/* Lock icons */
+
+.icon-container {
+    cursor: pointer;
+}
+
+input[type="checkbox"][id$="-lock"]:checked + .icon-container i::before {
+    content: "\f023";
+}
+
+input[type="checkbox"][id$="-lock"]:not(:checked) + .icon-container i::before {
+    content: "\f09c";
+}
+
+/* Tooltips */
+button[title] {
+    position: relative;
+}
+
+button[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    top: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    white-space: nowrap;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, top 0.3s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+button[title]:hover::after {
+    opacity: 1;
+    top: -50px;
+}
+
+#expert-container .step-number::before {
+    background-color: #3333338a;
+    color: #fff;
+}
+
+.participant-started {
+    background-color: rgb(255 165 0 / 51%) !important;
+    font-weight: bold !important;
+}
+
+.participant-not-started {
+    background-color: #cecece !important;
+    font-weight: bold !important;
+}
+
+.btn-info-participant {
+    background-color: #cecece !important;
+    font-weight: bold !important;
+}
+
+#info-container {
+    padding: 10px;
+    margin-top: 5px;
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+}
+
+#legend-container {
+    border: 2px solid black;
+    background-color: #f2f2f2;
+    padding: 10px;
+    margin-top: 5px;
+    margin-left: 5px;
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+}
+
+#legend-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+#legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-right: 5px;
+}
+
+.legend-color {
+    display: block;
+    width: 10px;
+    height: 10px;
+    margin-right: 5px;
+}
+
+.legend-color.circle {
+    border-radius: 50%;
+    background-color: #d95f02;
+}
+
+.legend-color.triangle {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 10px solid #7570b3;
+    background-color: transparent;
+}
+
+.legend-color.square {
+    background-color: #1b9e77;
+}
+
+.legend-color.donut {
+    border: 3px solid #000000;
+    background-color: transparent;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+
+.legend-text {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.info-participants {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+.popover {
+    max-width: 800px;
+}
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    /* Semi-transparent black */
+    display: none;
+    z-index: 1000;
+}
+
+#spinner {
+    display: none;
+    border: 7px solid #f3f3f3;
+    /* Light grey */
+    border-top: 7px solid #3498db;
+    /* Blue */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    /* Spin animation with 1 second duration */
+
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    z-index: 1000;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}

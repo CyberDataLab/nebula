@@ -164,6 +164,10 @@ class Reporter:
             "User-Agent": f"NEBULA Participant {self.config.participant['device_args']['idx']}",
         }
         try:
+            await self.__report_status_to_controller()
+        except Exception as e:
+            logging.exception(f"Error reporting status before scenario finished: {e}")
+        try:
             async with aiohttp.ClientSession() as session, session.post(url, data=data, headers=headers) as response:
                 if response.status != 200:
                     logging.error(

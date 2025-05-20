@@ -4,7 +4,7 @@ html, body {
 }
 
 body {
-    font-family: "Inter", sans-serif;
+    font-family: 'JetBrains Mono';
     color: #444444;
     display: flex;
     flex-direction: column;
@@ -22,15 +22,6 @@ a {
 a:hover {
     color: #ff6940;
     text-decoration: none;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-    font-family: "Inter", sans-serif;
 }
 
 #preloader {
@@ -379,7 +370,7 @@ h6 {
 }
 
 section {
-    padding: 20px 0;
+    padding: 10px 0;
     overflow: hidden;
 }
 
@@ -389,13 +380,18 @@ section {
 
 .alerts {
     z-index: 100;
-    position: fixed;
+    position: absolute;
     max-width: 100% !important;
     text-align: center;
 }
 
 .container {
-    max-width: 90%;
+    max-width: 80%;
+    width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+    margin-right: auto;
+    margin-left: auto;
 }
 
 .colaboration {
@@ -423,10 +419,10 @@ section {
     }
 }
 
-.base .container {
+/*.base .container {
     box-shadow: 0px 2px 15px rgba(0, 0, 0, 0.1);
     padding-bottom: 15px;
-}
+} */
 
 .base .content {
     font-size: 15px;
@@ -491,7 +487,6 @@ section {
 .about .count-box p {
     padding: 5px 0 0 0;
     margin: 0 0 0 60px;
-    font-family: "Inter", sans-serif;
     font-weight: 600;
     font-size: 14px;
     color: #2e4b5e;
@@ -503,7 +498,6 @@ section {
     margin-top: 20px;
     color: #2e4b5e;
     font-size: 15px;
-    font-family: "Inter", sans-serif;
     transition: ease-in-out 0.3s;
 }
 
@@ -575,16 +569,6 @@ div {
     text-align: justify;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-    text-align: left;
-    font-family: "Inter", sans-serif;
-}
-
 hr.styled {
     border: 0;
     height: 1px;
@@ -597,7 +581,24 @@ hr.styled {
 }
 
 .table {
-    display: block !important;
+    width: 100% !important;
+    margin-bottom: 1rem;
+    color: #212529;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+    text-align: center;
+}
+
+.table .d-flex {
+    justify-content: center;
+}
+
+.table .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .table-centered td,
@@ -610,13 +611,15 @@ hr.styled {
     display: inline-block;
 }
 
-.table-responsive>.table>thead>tr>th,
-.table-responsive>.table>tbody>tr>th,
-.table-responsive>.table>tfoot>tr>th,
-.table-responsive>.table>thead>tr>td,
-.table-responsive>.table>tbody>tr>td,
-.table-responsive>.table>tfoot>tr>td {
-    white-space: nowrap;
+.table-responsive {
+    width: 100%;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive>.table {
+    margin-bottom: 0;
 }
 
 @media screen and (max-width: 1530px) {
@@ -626,6 +629,12 @@ hr.styled {
         overflow-x: auto;
         -ms-overflow-style: -ms-autohiding-scrollbar;
         -webkit-overflow-scrolling: touch;
+    }
+    
+    .container {
+        max-width: 100%;
+        padding-right: 10px;
+        padding-left: 10px;
     }
 }
 
@@ -645,7 +654,25 @@ td {
     max-width: 500px !important;
 }
 
+.btn-danger {
+    color: #fff;
+    background-color: var(--bs-danger-bg-subtle)!important;
+    border-color: var(--bs-danger-border-subtle)!important;
+}
+
+.btn-danger:hover {
+    color: #fff;
+    background-color: var(--bs-danger-border-subtle)!important;
+    border-color: var(--bs-danger-border-subtle)!important;
+}
+
 .btn-cream {
+    color: #000000;
+    background-color: #FFEFCB;
+    border-color: #FFEFCB;
+}
+
+.btn-cream:hover {
     color: #000000;
     background-color: #FFEFCB;
     border-color: #FFEFCB;
@@ -673,6 +700,18 @@ td {
     color: #ffffff;
     background-color: #1d2253d2;
     border-color: #1d2253d2;
+}
+
+.btn-dark-outline {
+    color: #1d2253;
+    background-color: transparent;
+    border-color: #1d2253;
+}
+
+.btn-dark-outline:hover {
+    color: #ffffff;
+    background-color: #1d2253;
+    border-color: #1d2253;
 }
 
 .form-group {
@@ -739,4 +778,156 @@ td {
 
 #form-configurations {
     padding: 10px;
+}
+
+/* Add new notification styles */
+#notification-container {
+    position: fixed;
+    top: 6rem;
+    right: 2rem;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 400px;
+    pointer-events: none;
+}
+
+#notification-container .notification {
+    pointer-events: auto;
+}
+
+.notification {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 1rem;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(8px);
+    animation: slideIn 0.3s ease-out;
+    border-left: 4px solid;
+}
+
+.notification.success {
+    border-color: #198754;
+}
+
+.notification.warning {
+    border-color: #ffc107;
+}
+
+.notification.danger {
+    border-color: #dc3545;
+}
+
+.notification.info {
+    border-color: #0dcaf0;
+}
+
+.notification .icon {
+    font-size: 1.25rem;
+}
+
+.notification.success .icon {
+    color: #198754;
+}
+
+.notification.warning .icon {
+    color: #ffc107;
+}
+
+.notification.danger .icon {
+    color: #dc3545;
+}
+
+.notification.info .icon {
+    color: #0dcaf0;
+}
+
+.notification .content {
+    flex: 1;
+}
+
+.notification .title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.notification .message {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.notification .close {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0.25rem;
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.notification .close:hover {
+    opacity: 1;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+.notification.closing {
+    animation: slideOut 0.3s ease-in forwards;
+}
+
+/* Update scenario-running-indicator to use new notification styles */
+.scenario-running-indicator {
+    position: fixed;
+    top: 6rem;
+    right: 2rem;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 1rem;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    border-left: 4px solid #ffc107;
+}
+
+.scenario-running-indicator .spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 3px solid rgba(255, 193, 7, 0.3);
+    border-top-color: #ffc107;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

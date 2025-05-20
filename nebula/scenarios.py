@@ -210,6 +210,49 @@ class Scenario:
         """Identify which nodes will be attacked"""
         import math
         import random
+        import logging
+
+        # Validate input parameters
+        def validate_percentage(value, name):
+            try:
+                value = float(value)
+                if not 0 <= value <= 100:
+                    raise ValueError(f"{name} must be between 0 and 100")
+                return value
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Invalid {name}: {str(e)}")
+
+        def validate_positive_int(value, name):
+            try:
+                value = int(value)
+                if value < 0:
+                    raise ValueError(f"{name} must be positive")
+                return value
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"Invalid {name}: {str(e)}")
+
+        # Validate attack type
+        valid_attacks = {
+            "No Attack", "Label Flipping", "Sample Poisoning", "Model Poisoning",
+            "GLL Neuron Inversion", "Swapping Weights", "Delayer", "Flooding"
+        }
+        
+        # Handle attack parameter which can be either a string or a list
+        if isinstance(attack, list):
+            if not attack:  # Empty list
+                attack = "No Attack"
+            else:
+                attack = attack[0]  # Take the first attack if it's a list
+        elif not isinstance(attack, str):
+            raise ValueError(f"Invalid attack type: {attack}. Expected string or list.")
+
+        if attack not in valid_attacks:
+            raise ValueError(f"Invalid attack type: {attack}")
+
+        # Validate percentage parameters
+        poisoned_node_percent = validate_percentage(poisoned_node_percent, "poisoned_node_percent")
+        poisoned_sample_percent = validate_percentage(poisoned_sample_percent, "poisoned_sample_percent")
+        poisoned_noise_percent = validate_percentage(poisoned_noise_percent, "poisoned_noise_percent")
 
         nodes_index = []
         # Get the nodes index
@@ -220,11 +263,16 @@ class Scenario:
                 if nodes[node]["role"] != "server":
                     nodes_index.append(node)
 
+        logging.info(f"Nodes index: {nodes_index}")
+        logging.info(f"Attack type: {attack}")
+        logging.info(f"Poisoned node percent: {poisoned_node_percent}")
+
         mal_nodes_defined = any(nodes[node]["malicious"] for node in nodes)
+        logging.info(f"Malicious nodes already defined: {mal_nodes_defined}")
 
         attacked_nodes = []
 
-        if not mal_nodes_defined:
+        if not mal_nodes_defined and attack != "No Attack":
             n_nodes = len(nodes_index)
             # Number of attacked nodes, round up
             num_attacked = int(math.ceil(poisoned_node_percent / 100 * n_nodes))
@@ -233,26 +281,116 @@ class Scenario:
 
             # Get the index of attacked nodes
             attacked_nodes = random.sample(nodes_index, num_attacked)
+            logging.info(f"Number of nodes to attack: {num_attacked}")
+            logging.info(f"Attacked nodes: {attacked_nodes}")
 
         # Assign the role of each node
         for node in nodes:
             node_att = "No Attack"
             malicious = False
             with_reputation = self.with_reputation
-            attack_sample_percent = 0
-            poisoned_ratio = 0
-            if (str(nodes[node]["id"]) in attacked_nodes) or (nodes[node]["malicious"]):
+            
+            if node in attacked_nodes or nodes[node]["malicious"]:
                 malicious = True
                 with_reputation = False
                 node_att = attack
-                attack_sample_percent = poisoned_sample_percent / 100
-                poisoned_ratio = poisoned_noise_percent / 100
-                attack_params["poisoned_percent"] = attack_sample_percent
-                attack_params["poisoned_ratio"] = poisoned_ratio
+                logging.info(f"Node {node} marked as malicious with attack {attack}")
+                
+                # Initialize attack parameters with defaults
+                attack_params = attack_params.copy() if attack_params else {}
+                
+                # Set attack-specific parameters
+                if attack == "Label Flipping":
+                    attack_params["poisonedNodePercent"] = poisoned_node_percent
+                    attack_params["poisonedSamplePercent"] = poisoned_sample_percent
+                    attack_params["targeted"] = attack_params.get("targeted", False)
+                    if attack_params["targeted"]:
+                        attack_params["targetLabel"] = validate_positive_int(
+                            attack_params.get("targetLabel", 4), "targetLabel"
+                        )
+                        attack_params["targetChangedLabel"] = validate_positive_int(
+                            attack_params.get("targetChangedLabel", 7), "targetChangedLabel"
+                        )
+                
+                elif attack == "Sample Poisoning":
+                    attack_params["poisonedNodePercent"] = poisoned_node_percent
+                    attack_params["poisonedSamplePercent"] = poisoned_sample_percent
+                    attack_params["poisonedNoisePercent"] = poisoned_noise_percent
+                    attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
+                    attack_params["targeted"] = attack_params.get("targeted", False)
+                
+                elif attack == "Model Poisoning":
+                    attack_params["poisonedNodePercent"] = poisoned_node_percent
+                    attack_params["poisonedNoisePercent"] = poisoned_noise_percent
+                    attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
+                
+                elif attack == "GLL Neuron Inversion":
+                    attack_params["poisonedNodePercent"] = poisoned_node_percent
+                
+                elif attack == "Swapping Weights":
+                    attack_params["poisonedNodePercent"] = poisoned_node_percent
+                    attack_params["layerIdx"] = validate_positive_int(
+                        attack_params.get("layerIdx", 0), "layerIdx"
+                    )
+                
+                elif attack == "Delayer":
+                    attack_params["poisonedNodePercent"] = poisoned_node_percent
+                    attack_params["delay"] = validate_positive_int(
+                        attack_params.get("delay", 10), "delay"
+                    )
+                    attack_params["targetPercentage"] = validate_percentage(
+                        attack_params.get("targetPercentage", 100), "targetPercentage"
+                    )
+                    attack_params["selectionInterval"] = validate_positive_int(
+                        attack_params.get("selectionInterval", 1), "selectionInterval"
+                    )
+                
+                elif attack == "Flooding":
+                    attack_params["poisonedNodePercent"] = poisoned_node_percent
+                    attack_params["floodingFactor"] = validate_positive_int(
+                        attack_params.get("floodingFactor", 100), "floodingFactor"
+                    )
+                    attack_params["targetPercentage"] = validate_percentage(
+                        attack_params.get("targetPercentage", 100), "targetPercentage"
+                    )
+                    attack_params["selectionInterval"] = validate_positive_int(
+                        attack_params.get("selectionInterval", 1), "selectionInterval"
+                    )
+                
+                # Add common attack parameters
+                attack_params["startRound"] = validate_positive_int(
+                    attack_params.get("startRound", 1), "startRound"
+                )
+                attack_params["stopRound"] = validate_positive_int(
+                    attack_params.get("stopRound", 10), "stopRound"
+                )
+                attack_params["attackInterval"] = validate_positive_int(
+                    attack_params.get("attackInterval", 1), "attackInterval"
+                )
+
+                # Validate round parameters
+                if attack_params["startRound"] >= attack_params["stopRound"]:
+                    raise ValueError("startRound must be less than stopRound")
+
             nodes[node]["malicious"] = malicious
             nodes[node]["with_reputation"] = with_reputation
             nodes[node]["attacks"] = node_att
             nodes[node]["attack_params"] = attack_params
+
+            # Ensure the attack type is properly set in the node configuration
+            if malicious and attack != "No Attack":
+                nodes[node]["adversarial_args"] = {
+                    "attacks": attack,
+                    "attack_params": attack_params
+                }
+            else:
+                nodes[node]["adversarial_args"] = {
+                    "attacks": "No Attack",
+                    "attack_params": {}
+                }
+
+            logging.info(f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attacks']}")
+
         return nodes
 
     def mobility_assign(self, nodes, mobile_participants_percent):
@@ -531,6 +669,9 @@ class ScenarioManagement:
                     participant_config["mobility_args"]["latitude"],
                     participant_config["mobility_args"]["longitude"],
                 ) = TopologyManager.get_coordinates(random_geo=True)
+            else:
+                participant_config["mobility_args"]["latitude"] = self.scenario.latitude
+                participant_config["mobility_args"]["longitude"] = self.scenario.longitude
             # If not, use the given coordinates in the frontend
             participant_config["tracking_args"]["local_tracking"] = "advanced" if self.advanced_analytics else "basic"
             participant_config["tracking_args"]["log_dir"] = self.log_dir
@@ -639,7 +780,7 @@ class ScenarioManagement:
             )
         elif dataset_name == "EMNIST":
             dataset = EMNISTDataset(
-                num_classes=10,
+                num_classes=47,
                 partitions_number=self.n_nodes,
                 iid=self.scenario.iid,
                 partition=self.scenario.partition_selection,
@@ -674,13 +815,17 @@ class ScenarioManagement:
         dataset.initialize_dataset()
         logging.info(f"Splitting {dataset_name} dataset... Done")
 
-        if self.scenario.deployment in ["docker", "process"]:
+        if self.scenario.deployment in ["docker", "process", "physical"]:
             if self.use_blockchain:
                 self.start_blockchain()
             if self.scenario.deployment == "docker":
                 self.start_nodes_docker()
-            else:
+            elif self.scenario.deployment == "physical":
+                self.start_nodes_physical()
+            elif self.scenario.deployment == "process":
                 self.start_nodes_process()
+            else:
+                raise ValueError(f"Unknown deployment type: {self.scenario.deployment}")
         else:
             logging.info(
                 f"Virtualization mode is disabled for scenario '{self.scenario_name}' with {self.n_nodes} nodes. Waiting for nodes to start manually..."
@@ -956,6 +1101,15 @@ class ScenarioManagement:
 
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
+        
+    def start_nodes_physical(self):
+        logging.info("Starting nodes as physical devices...")
+        logging.info(f"env path: {self.env_path}")
+
+        for idx, node in enumerate(self.config.participants):
+            pass
+
+        logging.info("Physical devices deployment is not implemented publicly. Please use docker or process deployment.")
 
     @classmethod
     def remove_files_by_scenario(cls, scenario_name):

@@ -2,18 +2,20 @@
 {% block body %}
 {{ super() }}
 
+<link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+
 <!-- Modal confirm -->
 <div class="modal fade" id="confirm-modal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"></h5>
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold"></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div id="confirm-modal-body" class="modal-body"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
-                <button type="button" id="yes-button" class="btn btn-dark" data-bs-dismiss="modal">Yes</button>
+            <div id="confirm-modal-body" class="modal-body px-4"></div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="yes-button" class="btn btn-dark" data-bs-dismiss="modal">Confirm</button>
             </div>
         </div>
     </div>
@@ -23,159 +25,251 @@
 <div class="modal fade" id="info-modal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Information</h5>
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold">Information</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div id="info-modal-body" class="modal-body"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-dark" data-bs-dismiss="modal">Understand</button>
+            <div id="info-modal-body" class="modal-body px-4"></div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-dark" data-bs-dismiss="modal">Got it</button>
             </div>
         </div>
     </div>
 </div>
 
-<section id="home" class="home">
-    <div class="container" style="text-align: center">
-        <h1 class="logo" style="text-align: center">Dashboard</h1>
-        <p style="text-align: center" class="fst-italic">Deploy, analyze and monitor scenarios</p>
-    </div>
-</section>
-
 <section id="scenario-status" class="base">
     <div class="container">
-        <div class="row p-3">
-            {% if scenario_running %}
-            {% if scenario_completed %}
-            <div style="text-align: center">
-                <h4 style="text-align: center"><strong>There is a scenario <span
-                            class="badge text-bg-success">completed</span></strong></h4>
-                <p style="color: #772953; font-weight: bold">The federation has reached the maximum number of rounds</p>
+        {% if scenario_running %}
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body p-4">
+                        {% if scenario_completed %}
+                        <div class="text-center mb-4">
+                            <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill">
+                                <i class="fa fa-check-circle me-2"></i>Completed
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if scenario_running %}
+                        <div class="d-flex justify-content-center align-items-center gap-3 mb-4">
+                            <div class="progress flex-grow-1" style="max-width: 300px;">
+                                <div class="progress-bar bg-primary" role="progressbar" 
+                                     data-width="{{ (scenarios_finished / scenarios_list_length) * 100 if scenarios_list_length > 0 else 0 }}">
+                                    {{ scenarios_finished }}/{{ scenarios_list_length }}
+                                </div>
+                            </div>
+                            {% if scenarios_finished != scenarios_list_length %}
+                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario_running[0], stop_all=True) }}"
+                                class="btn btn-danger bg-danger-subtle text-danger">
+                                <i class="fa fa-stop-circle me-2"></i>Stop Queue
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <div class="scenario-details">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-light rounded">
+                                        <h6 class="text-muted mb-2"><i class="fa fa-tag me-2"></i>Scenario Name</h6>
+                                        <p class="mb-0 fw-bold" id="scenario_name">{{ scenario_running[0] }}</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-light rounded">
+                                        <h6 class="text-muted mb-2"><i class="fa fa-heading me-2"></i>Title</h6>
+                                        <p class="mb-0 fw-bold" id="scenario_title">{{ scenario_running[3] }}</p>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="p-3 bg-light rounded">
+                                        <h6 class="text-muted mb-2"><i class="fa fa-align-left me-2"></i>Description</h6>
+                                        <p class="mb-0" id="scenario_description">{{ scenario_running[4] }}</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-light rounded">
+                                        <h6 class="text-muted mb-2"><i class="fa fa-clock-o me-2"></i>Start Time</h6>
+                                        <p class="mb-0" id="scenario_start_time">{{ scenario_running[1] }}</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="p-3 bg-light rounded">
+                                        <h6 class="text-muted mb-2"><i class="fa fa-signal me-2"></i>Status</h6>
+                                        <span class="badge bg-warning-subtle text-warning px-3 py-2 rounded-pill">
+                                            <i class="fa fa-spinner fa-spin me-2"></i>Running
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 mt-4">
+                            <a id="new-scenario-btn" href="{{ url_for('nebula_dashboard_deployment') }}"
+                                class="btn btn-dark">
+                                <i class="fa fa-plus-circle me-2"></i>Deploy New Scenario
+                            </a>
+                            {% if scenarios %}
+                            <a href="{{ url_for('nebula_dashboard_statistics') }}" class="btn btn-outline-dark">
+                                <i class="fa fa-bar-chart me-2"></i>Compare Scenarios
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
             </div>
-            {% else %}
-            <div style="text-align: center">
-                <h4 style="text-align: center"><strong>There is a scenario <span
-                            class="badge text-bg-warning">running</span></strong></h4>
-                <p style="color: #772953; font-weight: bold">The federation is currently running</p>
-            </div>
-            {% endif %}
-            {% if scenario_running %}
-            <div style="text-align: center; display: flex;justify-content: center;" class="col">
-                <p style="color: #772953; font-weight: bold; padding-top: 6px;">Scenarios queue {{ scenarios_finished
-                    }}/{{ scenarios_list_length }}</p>
-                {% if scenarios_finished != scenarios_list_length %}
-                <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario_running[0], stop_all=True) }}"
-                    class="label btn btn-danger" style="float: left; margin-left: 10px; margin-bottom: 10px;">Stop
-                    scenario queue</a>
-                {% endif %}
-            </div>
-            {% endif %}
-            <hr>
-            <h5>Scenario name: <b id="scenario_name">{{ scenario_running[0] }}</b></h5>
-            <h5>Scenario title: <b id="scenario_title">{{ scenario_running[3] }}</b></h5>
-            <h5>Scenario description: <b id="scenario_description">{{ scenario_running[4] }}</b></h5>
-            <h5>Scenario start time: <b id="scenario_start_time">{{ scenario_running[1] }}</b></h5>
-            <div class="d-flex flex-row justify-content-start p-3">
-                <a id="new-scenario-btn" href="{{ url_for('nebula_dashboard_deployment') }}"
-                    class="btn btn-dark me-2">Deploy new scenario</a>
-                {% if scenarios %}
-                <a href="{{ url_for('nebula_dashboard_statistics') }}" class="btn btn-dark">Compare scenarios</a>
-                {% endif %}
-            </div>
-            {% else %}
-            <h4>There are no deployed scenarios</h4>
-            <div class="col-md-6">
-                <a id="a-scenario-btn" href="{{ url_for('nebula_dashboard_deployment') }}" class="btn btn-dark">Deploy a
-                    scenario</a>
-                {% if scenarios %}
-                <a href="{{ url_for('nebula_dashboard_statistics') }}" class="btn btn-dark">Compare scenarios</a>
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
+        {% else %}
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-5">
+                        <div class="empty-state-container mb-4">
+                            <div class="loading-float">
+                                <i class="fa fa-rocket fa-4x text-primary mb-3" style="color: #1d2253 !important;"></i>
+                            </div>
+                            <p class="text-muted mb-4">Get started by deploying your first scenario to begin monitoring and analyzing your federated learning process.</p>
+                        </div>
+                        <div class="d-flex justify-content-center gap-3">
+                            <a id="a-scenario-btn" href="{{ url_for('nebula_dashboard_deployment') }}" 
+                               class="btn btn-dark btn-lg">
+                                <i class="fa fa-plus-circle me-2"></i>Deploy a Scenario
+                            </a>
+                            {% if scenarios %}
+                            <a href="{{ url_for('nebula_dashboard_statistics') }}" class="btn btn-outline-dark btn-lg">
+                                <i class="fa fa-bar-chart me-2"></i>Compare Scenarios
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </section>
 
 {% if scenarios %}
 <section id="scenarios" class="base">
     <div class="container">
-        <div class="row p-3">
-            <h3>Scenarios in the database</h3>
-            <div class="table-responsive">
-                <table id="table-scenarios" class="table small">
-                    <thead>
-                        <tr>
-                            {% if user_role == "admin" %}
-                            <th>User</th>
-                            {% endif %}
-                            <th>Title</th>
-                            <th>Start time</th>
-                            <th>Model</th>
-                            <th>Dataset</th>
-                            <th>Rounds</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    {% for name, start_time, end_time, title, description, status, network_subnet, model, dataset,
-                    rounds, role, username, gpu_id in scenarios %}
-                    <tr id="scenario-vars">
-                        {% if user_role == "admin" %}
-                        <td id="username">{{ username|lower }}</td>
-                        {% endif %}
-                        <td id="title">{{ title }}</td>
-                        <td id="start_time">{{ start_time }}</td>
-                        <td id="model">{{ model }}</td>
-                        <td id="dataset">{{ dataset }}</td>
-                        <td id="rounds">{{ rounds }}</td>
-                        {% if status == "running" %}
-                        <td id="status"><span class="badge text-bg-warning">Running</span></td>
-                        {% elif status == "completed" %}
-                        <td id="status"><span class="badge text-bg-success">Completed</span></td>
-                        {% else %}
-                        <td id="status"><span class="badge text-bg-danger">Finished</span></td>
-                        {% endif %}
-                        <td class="td-icons">
-                            <a href="{{ url_for('nebula_dashboard_monitor', scenario_name=name) }}"
-                                class="label btn btn-dark">Monitor</a>
-                            <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=name) }}"
-                                class="label btn btn-dark">Real-time metrics</a>
-                            <a id="note-btn-{{ name }}" title="Save Note" data-scenario-name="{{ name }}" class="label btn btn-dark"><i
-                                    class="fa fa-sticky-note" style="color: white;"></i></a>
-                            <a id="config-btn-{{ name }}" title="Scenario Config" data-scenario-name="{{ name }}" class="label btn btn-dark"><i
-                                class="fa fa-sliders" style="color: white;"></i></a>
-                            {% if status == "running" %}
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
-                                class="label btn btn-danger">Stop scenario</a>
-                            {% elif status == "completed" %}
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
-                                class="label btn btn-danger">Stop scenario</a>
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=True) }}"
-                                class="label btn btn-danger">Stop scenario queue</a>
-                            {% else %}
-                            <a id="relaunch-btn" title="Relaunch Scenario" data-scenario-name="{{ name }}" data-scenario-title="{{ title }}" class="label btn btn-dark"><i
-                                class="fa fa-rotate-right" style="color: white;"></i></a>
-                            <a id="remove-btn" title="Delete Scenario" data-scenario-name="{{ name }}" class="label btn btn-danger"><i
-                                    class="fa fa-trash"></i></a>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr id="notes-row-{{ name }}" class="notes-row" style="display: none;">
-                        <td colspan="4">
-                            <textarea id="notes-text-{{ name }}" class="form-control" rows="3"
-                                style="font-size: small; width: 100%;"></textarea>
-                            <button id="save-note-{{ name }}" data-scenario-name="{{ name }}"
-                                class="btn btn-dark mt-2 save-note-btn" style="float: right;">Save</button>
-                        </td>
-                    </tr>
-                    <tr id="config-row-{{ name }}" class="config-row" style="display: none;">
-                        <td colspan="4">
-                            <textarea id="config-text-{{ name }}" class="form-control" rows="20"
-                                style="font-size: small; width: 100%;"></textarea>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </table>
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table id="table-scenarios" class="table table-hover align-middle mb-0 text-center">
+                                <thead class="bg-light">
+                                    <tr>
+                                        {% if user_role == "admin" %}
+                                        <th class="py-3"><i class="fa fa-user me-2"></i>User</th>
+                                        {% endif %}
+                                        <th class="py-3"><i class="fa fa-heading me-2"></i>Title</th>
+                                        <th class="py-3"><i class="fa fa-clock-o me-2"></i>Start Time</th>
+                                        <th class="py-3"><i class="fa fa-microchip me-2"></i>Model</th>
+                                        <th class="py-3"><i class="fa fa-database me-2"></i>Dataset</th>
+                                        <th class="py-3"><i class="fa fa-sync me-2"></i>Rounds</th>
+                                        <th class="py-3"><i class="fa fa-info-circle me-2"></i>Status</th>
+                                        <th class="py-3"><i class="fa fa-cogs me-2"></i>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for name, start_time, end_time, title, description, status, network_subnet, model, dataset,
+                                    rounds, role, username, gpu_id in scenarios %}
+                                    <tr id="scenario-vars">
+                                        {% if user_role == "admin" %}
+                                        <td id="username">{{ username|lower }}</td>
+                                        {% endif %}
+                                        <td id="title">{{ title }}</td>
+                                        <td id="start_time">{{ start_time }}</td>
+                                        <td id="model">{{ model }}</td>
+                                        <td id="dataset">{{ dataset }}</td>
+                                        <td id="rounds">{{ rounds }}</td>
+                                        <td id="status">
+                                            {% if status == "running" %}
+                                            <span class="badge bg-warning-subtle text-warning px-3 py-2 rounded-pill">
+                                                <i class="fa fa-spinner fa-spin me-1"></i>Running
+                                            </span>
+                                            {% elif status == "completed" %}
+                                            <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill">
+                                                <i class="fa fa-check-circle me-1"></i>Completed
+                                            </span>
+                                            {% else %}
+                                            <span class="badge bg-danger-subtle text-danger px-3 py-2 rounded-pill">
+                                                <i class="fa fa-times-circle me-1"></i>Finished
+                                            </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="d-flex justify-content-center gap-2">
+                                                <a href="{{ url_for('nebula_dashboard_monitor', scenario_name=name) }}"
+                                                    class="btn btn-sm btn-outline-dark" title="Monitor">
+                                                    <i class="fa fa-desktop"></i>
+                                                </a>
+                                                <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=name) }}"
+                                                    class="btn btn-sm btn-outline-dark" title="Real-time metrics">
+                                                    <i class="fa fa-bar-chart"></i>
+                                                </a>
+                                                <button id="note-btn-{{ name }}" title="Save Note" data-scenario-name="{{ name }}" 
+                                                        class="btn btn-sm btn-outline-dark">
+                                                    <i class="fa fa-sticky-note"></i>
+                                                </button>
+                                                <button id="config-btn-{{ name }}" title="Scenario Config" data-scenario-name="{{ name }}" 
+                                                        class="btn btn-sm btn-outline-dark">
+                                                    <i class="fa fa-sliders"></i>
+                                                </button>
+                                                {% if status == "running" %}
+                                                <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario">
+                                                    <i class="fa fa-stop"></i>
+                                                </a>
+                                                {% elif status == "completed" %}
+                                                <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=False) }}"
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario">
+                                                    <i class="fa fa-stop"></i>
+                                                </a>
+                                                <a href="{{ url_for('nebula_stop_scenario', scenario_name=name, stop_all=True) }}"
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario queue">
+                                                    <i class="fa fa-stop-circle"></i>
+                                                </a>
+                                                {% else %}
+                                                <button id="relaunch-btn" title="Relaunch Scenario" data-scenario-name="{{ name }}" 
+                                                        data-scenario-title="{{ title }}" class="btn btn-sm btn-outline-dark">
+                                                    <i class="fa fa-rotate-left"></i>
+                                                </button>
+                                                <button id="remove-btn" title="Delete Scenario" data-scenario-name="{{ name }}" 
+                                                        class="btn btn-sm btn-outline-danger">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr id="notes-row-{{ name }}" class="notes-row" style="display: none;">
+                                        <td colspan="8" class="p-3 bg-light">
+                                            <div class="d-flex gap-2">
+                                                <textarea id="notes-text-{{ name }}" class="form-control" rows="3"
+                                                    style="font-size: small;"></textarea>
+                                                <button id="save-note-{{ name }}" data-scenario-name="{{ name }}"
+                                                    class="btn btn-dark save-note-btn">
+                                                    <i class="fa fa-save me-2"></i>Save
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr id="config-row-{{ name }}" class="config-row" style="display: none;">
+                                        <td colspan="8" class="p-3 bg-light">
+                                            <textarea id="config-text-{{ name }}" class="form-control" rows="20"
+                                                style="font-size: small;"></textarea>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -183,205 +277,33 @@
 {% endif %}
 
 <style>
-        /* Tooltips */
-        a[title] {
-            position: relative;
-        }
-
-        a[title]:hover::after {
-            content: attr(title);
-            position: absolute;
-            top: -35px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 14px;
-            white-space: nowrap;
-            z-index: 1000;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease, top 0.3s ease;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        a[title]:hover::after {
-            opacity: 1;
-            top: -50px;
-        }
+    /* Custom styles */
+    
 </style>
 
-
-{% if not user_logged_in %}
 <script>
-    showAlert('info', 'Some functionalities are disabled in the demo version. Please, log in to access all functionalities.');
+    // Pass user login status to JavaScript
+    window.userLoggedIn = "{% if user_logged_in %}true{% else %}false{% endif %}" === "true";
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const progressBars = document.querySelectorAll('.progress-bar[data-width]');
+        progressBars.forEach(bar => {
+            bar.style.setProperty('--progress-width', bar.dataset.width + '%');
+        });
+    });
 </script>
+
+<!-- Load dashboard modules -->
+<script type="module" src="{{ url_for('static', path='js/dashboard/dashboard.js') }}"></script>
+
+{% if scenario_running %}
+<div class="notification warning" style="position: fixed; top: 6rem; right: 2rem; z-index: 1000;">
+    <div class="spinner" style="width: 1.5rem; height: 1.5rem; border: 3px solid rgba(255, 193, 7, 0.3); border-top-color: #ffc107; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <div class="content">
+        <div class="title">Scenario Running</div>
+        <div class="message">{{ scenario_running[0] }}</div>
+    </div>
+</div>
 {% endif %}
-
-<!-- <script>
-    setInterval(function () {
-        fetch('/platform/api/dashboard/runningscenario')
-            .then(response => response.json())
-            .then(data => {
-                if (data.name) {
-                    location.reload();
-                }
-            })
-            .catch(error => console.error('Error:', error));
-    }, 10000);
-</script> -->
-
-<script>
-    $(document).on('click', '#relaunch-btn', function () {
-        var scenario_name = $(this).data('scenario-name');
-        var scenario_title = $(this).data('scenario-title');
-        $('#confirm-modal').modal('show');
-        $('#confirm-modal .modal-title').text('Relaunch scenario');
-        $('#confirm-modal #confirm-modal-body').html('Are you sure you want to relaunch the scenario ' + scenario_title + '?');
-
-        $('#confirm-modal #yes-button').off('click').on('click', function () {
-            const response = fetch('/platform/dashboard/' + scenario_name + '/relaunch', {
-                method: 'GET'
-            })
-                .then(response => {
-                    console.log(response)
-                    if (response.redirected) {
-                        window.location.href = response.url; // Manually redirect to the URL provided by the server
-                    } else {
-                        $('#confirm-modal').modal('hide');
-                        $('#confirm-modal').on('hidden.bs.modal', function () {
-                            $('#info-modal-body').html('You are not allowed to relaunch a scenario with demo role.');
-                            $('#info-modal').modal('show');
-                        });
-                    }
-                })
-                .catch(error => console.error('Error:', error));
-        });
-    });
-</script>
-
-<script>
-    $(document).on('click', '#remove-btn', function () {
-        var scenario_name = $(this).data('scenario-name');
-        $('#confirm-modal').modal('show');
-        $('#confirm-modal .modal-title').text('Remove scenario');
-        $('#confirm-modal #confirm-modal-body').html('Are you sure you want to remove the scenario ' + scenario_name + '?<br><br><p class="badge text-bg-danger">Warning: you will remove the scenario from the database</p>');
-
-        $('#confirm-modal #yes-button').off('click').on('click', function () {
-            const response = fetch('/platform/dashboard/' + scenario_name + '/remove', {
-                method: 'GET'
-            })
-                .then(response => {
-                    console.log(response)
-                    if (response.redirected) {
-                        window.location.href = response.url; // Manually redirect to the URL provided by the server
-                    } else {
-                        $('#confirm-modal').modal('hide');
-                        $('#confirm-modal').on('hidden.bs.modal', function () {
-                            $('#info-modal-body').html('You are not allowed to remove a scenario with demo role.');
-                            $('#info-modal').modal('show');
-                        });
-                    }
-                })
-                .catch(error => console.error('Error:', error));
-        });
-    });
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        document.querySelectorAll('[id^=note-btn]').forEach(button => {
-            button.addEventListener('click', function () {
-                toggleNotesRow(this.dataset.scenarioName);
-            });
-        });
-
-        document.querySelectorAll('[id^=save-note]').forEach(button => {
-            button.addEventListener('click', function () {
-                saveNotes(this.dataset.scenarioName);
-            });
-        });
-
-        document.querySelectorAll('[id^=config-btn]').forEach(button => {
-            button.addEventListener('click', function () {
-                toggleConfigRow(this.dataset.scenarioName);
-            });
-        });
-    });
-
-    async function toggleNotesRow(scenarioName) {
-        const notesRow = document.getElementById('notes-row-' + scenarioName);
-        const notesTextElement = document.getElementById('notes-text-' + scenarioName);
-
-        if (notesRow.style.display === 'none') {
-            try {
-                const response = await fetch('/platform/dashboard/' + scenarioName + '/notes');
-                const data = await response.json();
-                console.log(data);
-
-                if (data.status === 'success') {
-                    notesTextElement.value = data.notes;
-                } else {
-                    notesTextElement.value = '';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while retrieving the notes.');
-                return;
-            }
-        }
-
-        notesRow.style.display = notesRow.style.display === 'none' ? '' : 'none';
-    }
-
-    async function toggleConfigRow(scenarioName) {
-        const configRow = document.getElementById('config-row-' + scenarioName);
-        const configTextElement = document.getElementById('config-text-' + scenarioName);
-
-        if (configRow.style.display === 'none') {
-            try {
-                const response = await fetch(`/platform/dashboard/${scenarioName}/config`);
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    configTextElement.value = JSON.stringify(data.config, null, 2);
-                } else {
-                    configTextElement.value = 'No configuration available.';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while retrieving the configuration.');
-                return;
-            }
-        }
-        configRow.style.display = configRow.style.display === 'none' ? '' : 'none';
-    }
-
-    async function saveNotes(scenarioName) {
-        const notesText = document.getElementById('notes-text-' + scenarioName).value;
-
-        const response = await fetch('/platform/dashboard/' + scenarioName + '/save_note', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ notes: notesText }),
-        });
-
-        const data = await response.json();
-        // console.log(data);
-        if (data.status === 'success') {
-            showAlert('success', 'Notes saved successfully');
-        } else {
-            if (data.code === 401) {
-                showAlert('info', 'Some functionalities are disabled in the demo version. Please, log in to access all functionalities.');
-            } else {
-                showAlert('error', 'Failed to save notes');
-            }
-        }
-    }
-</script>
 
 {% endblock %}

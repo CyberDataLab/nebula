@@ -72,7 +72,6 @@ async def initialize_databases():
                 ip TEXT,
                 port TEXT,
                 role TEXT,
-                malicious TEXT,
                 neighbors TEXT,
                 latitude TEXT,
                 longitude TEXT,
@@ -80,7 +79,8 @@ async def initialize_databases():
                 federation TEXT,
                 round TEXT,
                 scenario TEXT,
-                hash TEXT
+                hash TEXT,
+                malicious TEXT
             );
             """
         )
@@ -90,7 +90,6 @@ async def initialize_databases():
             "ip": "TEXT",
             "port": "TEXT",
             "role": "TEXT",
-            "malicious": "TEXT",
             "neighbors": "TEXT",
             "latitude": "TEXT",
             "longitude": "TEXT",
@@ -99,6 +98,7 @@ async def initialize_databases():
             "round": "TEXT",
             "scenario": "TEXT",
             "hash": "TEXT",
+            "malicious": "TEXT",
         }
         await ensure_columns(conn, "nodes", desired_columns)
 
@@ -322,7 +322,7 @@ async def update_node_record(
                 )
             else:
                 # Update the record
-                command = "UPDATE nodes SET idx = ?, ip = ?, port = ?, role = ?, malicious = ?, neighbors = ?, latitude = ?, longitude = ?, timestamp = ?, federation = ?, round = ?, hash = ? WHERE uid = ? AND scenario = ?;"
+                command = "UPDATE nodes SET idx = ?, ip = ?, port = ?, role = ?, neighbors = ?, latitude = ?, longitude = ?, timestamp = ?, federation = ?, round = ?, hash = ?, malicious = ? WHERE uid = ? AND scenario = ?;"
                 await _c.execute(
                     command,
                     (
@@ -330,7 +330,6 @@ async def update_node_record(
                         ip,
                         port,
                         role,
-                        malicious,
                         neighbors,
                         latitude,
                         longitude,
@@ -338,6 +337,7 @@ async def update_node_record(
                         federation,
                         federation_round,
                         run_hash,
+                        malicious,
                         node_uid,
                         scenario,
                     ),

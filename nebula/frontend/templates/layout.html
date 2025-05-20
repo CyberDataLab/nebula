@@ -41,6 +41,8 @@
     <meta name="msapplication-config" content="{{ url_for('static', path='images/browserconfig.xml') }}">
     <meta name="theme-color" content="#ffffff">
 
+
+    <link href='https://fonts.googleapis.com/css?family=JetBrains Mono' rel='stylesheet'>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
         integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -49,6 +51,7 @@
         integrity="sha256-XoaMnoYC5TH6/+ihMEnospgm0J1PM/nioxbOUdnM8HY=" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/leaflet.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/particles.css') }}">
 
     <!-- <script src="{{ url_for('static', path='js/jquery.min.js') }}"></script> -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
@@ -57,35 +60,83 @@
         integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
         crossorigin="anonymous"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+
     <script src="{{ url_for('static', path='js/leaflet.js') }}"></script>
     <script src="{{ url_for('static', path='js/leaflet.moving.js') }}"></script>
     <script src="{{ url_for('static', path='js/dat.gui.js') }}"></script>
-    <script src="{{ url_for('static', path='js/graph.js') }}"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.157.0/three.min.js"
-        integrity="sha512-nogdM20cZX4FjsqU5H5ecK3vw8LjYN1AcUUWi7asLUVP3eJK5wldywvqFMW8CLd5/xoiJaIL3eXG82SlOWZkTA=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/3d-force-graph@1.67.0/dist/3d-force-graph.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-CJMRTGSHND"></script>
     <script>
-        function showAlert(category, message) {
-            // Create the alert element
-            const alert = document.createElement('div');
-            alert.classList.add('alert', `alert-${category}`, 'alert-dismissible', 'fade', 'show');
-            alert.setAttribute('role', 'alert');
-            alert.innerHTML = `
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                ${message}
+        function showAlert(category, message, title = null) {
+            // Create the notification element
+            const notification = document.createElement('div');
+            notification.classList.add('notification', category);
+            
+            // Set icon based on category
+            let icon = '';
+            switch(category) {
+                case 'success':
+                    icon = 'fa-check-circle';
+                    break;
+                case 'warning':
+                    icon = 'fa-exclamation-triangle';
+                    break;
+                case 'danger':
+                    icon = 'fa-times-circle';
+                    break;
+                case 'info':
+                    icon = 'fa-info-circle';
+                    break;
+            }
+            
+            // Create notification content
+            notification.innerHTML = `
+                <i class="fa ${icon} icon"></i>
+                <div class="content">
+                    ${title ? `<div class="title">${title}</div>` : ''}
+                    <div class="message">${message}</div>
+                </div>
+                <button class="close" aria-label="Close">
+                    <i class="fa fa-times"></i>
+                </button>
             `;
-
-            // Append the alert in the top of the page
-            const container = document.querySelector('.alerts');
-            container.insertBefore(alert, container.firstChild);
+            
+            // Add to container
+            const container = document.getElementById('notification-container');
+            container.appendChild(notification);
+            
+            // Add click handler for close button
+            const closeBtn = notification.querySelector('.close');
+            closeBtn.addEventListener('click', () => {
+                notification.classList.add('closing');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            });
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.classList.add('closing');
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }
+            }, 5000);
         }
     </script>
 
-    <!-- Google Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Raleway:300,300i,400,400i,500,500i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i"
-        rel="stylesheet">
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            particlesJS.load('particles-js', "{{ url_for('static', path='js/particles.json') }}", function() {
+                console.log('Particles loaded in NEBULA');
+            });
+        });
+    </script>
 
     <script>
         window.dataLayer = window.dataLayer || [];
@@ -117,6 +168,9 @@
 </head>
 
 <body>
+    <!-- particles.js container -->
+    <div id="particles-js"></div>
+
     <header id="header">
         <div class="container d-flex align-items-center justify-content-between">
 
@@ -181,7 +235,6 @@
                             {% if request.session.get("role", None) == "admin" %}
                             <li><a href="{{ url_for('nebula_admin') }}">Admin Dashboard</a></li>
                             {% endif %}
-                            <li><a href="#">Settings</a></li>
                             <li><a href="{{ url_for('nebula_logout') }}">Logout</a></li>
                         </ul>
                     </li>
@@ -197,8 +250,7 @@
     </header>
 
     <main id="main">
-        <div class="container alerts"></div>
-        <!-- <h1 id="page-title">{% block page_title %}{% endblock %}</h1> -->
+        <div id="notification-container"></div>
         {% block body %}{% endblock %}
         <button type="button" id="btn-up" class="btn btn-dark" title="Go to top"><i class="fa fa-arrow-up"></i></button>
     </main>
