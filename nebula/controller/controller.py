@@ -30,10 +30,45 @@ from nebula.utils import DockerUtils, SocketUtils
 
 # Setup controller logger
 class TermEscapeCodeFormatter(logging.Formatter):
+    """
+    Custom logging formatter that removes ANSI terminal escape codes from log messages.
+
+    This formatter is useful when you want to clean up log outputs by stripping out
+    any terminal color codes or formatting sequences before logging them to a file
+    or other non-terminal output.
+
+    Attributes:
+        fmt (str): Format string for the log message.
+        datefmt (str): Format string for the date in the log message.
+        style (str): Formatting style (default is '%').
+        validate (bool): Whether to validate the format string.
+
+    Methods:
+        format(record): Strips ANSI escape codes from the log message and formats it.
+    """
+
     def __init__(self, fmt=None, datefmt=None, style="%", validate=True):
+        """
+        Initializes the TermEscapeCodeFormatter.
+
+        Args:
+            fmt (str, optional): The format string for the log message.
+            datefmt (str, optional): The format string for the date.
+            style (str, optional): The formatting style. Defaults to '%'.
+            validate (bool, optional): Whether to validate the format string. Defaults to True.
+        """
         super().__init__(fmt, datefmt, style, validate)
 
     def format(self, record):
+        """
+        Formats the specified log record, stripping out any ANSI escape codes.
+
+        Args:
+            record (logging.LogRecord): The log record to be formatted.
+
+        Returns:
+            str: The formatted log message with escape codes removed.
+        """
         escape_re = re.compile(r"\x1b\[[0-9;]*m")
         record.msg = re.sub(escape_re, "", str(record.msg))
         return super().format(record)
@@ -46,16 +81,37 @@ app = FastAPI()
 # Define endpoints outside the Controller class
 @app.get("/")
 async def read_root():
+    """
+    Root endpoint of the NEBULA Controller API.
+
+    Returns:
+        dict: A welcome message indicating the API is accessible.
+    """
     return {"message": "Welcome to the NEBULA Controller API"}
 
 
 @app.get("/status")
 async def get_status():
+    """
+    Check the status of the NEBULA Controller API.
+
+    Returns:
+        dict: A status message confirming the API is running.
+    """
     return {"status": "NEBULA Controller API is running"}
 
 
 @app.get("/resources")
 async def get_resources():
+    """
+    Get system resource usage including RAM and GPU memory usage.
+
+    Returns:
+        dict: A dictionary containing:
+            - gpus (int): Number of GPUs detected.
+            - memory_percent (float): Percentage of used RAM.
+            - gpu_memory_percent (List[float]): List of GPU memory usage percentages.
+    """
     devices = 0
     gpu_memory_percent = []
 
@@ -89,6 +145,17 @@ async def get_resources():
 
 @app.get("/least_memory_gpu")
 async def get_least_memory_gpu():
+    """
+    Identify the GPU with the highest memory usage above a threshold (50%).
+
+    Note:
+        Despite the name, this function returns the GPU using the **most**
+        memory above 50% usage.
+
+    Returns:
+        dict: A dictionary with the index of the GPU using the most memory above the threshold,
+              or None if no such GPU is found.
+    """
     gpu_with_least_memory_index = None
 
     if importlib.util.find_spec("pynvml") is not None:
@@ -120,6 +187,12 @@ async def get_least_memory_gpu():
 
 @app.get("/available_gpus/")
 async def get_available_gpu():
+    """
+    Get the list of GPUs with memory usage below 5%.
+
+    Returns:
+        dict: A dictionary with a list of GPU indices that are mostly free (usage < 5%).
+    """
     available_gpus = []
 
     if importlib.util.find_spec("pynvml") is not None:
@@ -152,6 +225,18 @@ async def run_scenario(
     role: str = Body(..., embed=True),
     user: str = Body(..., embed=True)
 ):
+    """
+    Launches a new scenario based on the provided configuration.
+    
+    Args:
+        scenario_data (dict): The complete configuration of the scenario to be executed.
+        role (str): The role of the user initiating the scenario.
+        user (str): The username of the user initiating the scenario.
+    
+    Returns:
+        str: The name of the scenario that was started.
+    """
+
     import subprocess
 
     from nebula.controller.scenarios import ScenarioManagement
@@ -191,7 +276,13 @@ async def remove_scenario(
     scenario_name: str = Body(..., embed=True)
 ):
     """
-    Controller endpoint to remove a scenario.
+    Removes a scenario from the database by its name.
+
+    Args:
+        scenario_name (str): Name of the scenario to remove.
+
+    Returns:
+        dict: A message indicating successful removal.
     """
     from nebula.controller.database import remove_scenario_by_name
 
@@ -225,6 +316,16 @@ async def get_scenarios(
         )
     ]
 ):
+    """
+    Retrieves all scenarios associated with a given user and role.
+
+    Args:
+        user (str): Username to filter scenarios.
+        role (str): Role of the user (e.g., "admin").
+
+    Returns:
+        dict: A list of scenarios and the currently running scenario.
+    """
     from nebula.controller.database import get_all_scenarios_and_check_completed, get_running_scenario
 
     try:
@@ -251,7 +352,19 @@ async def update_scenario(
     username: str = Body(..., embed=True)
 ):
     """
-    Controller endpoint to update a scenario.
+    Updates the status and metadata of a scenario.
+
+    Args:
+        scenario_name (str): Name of the scenario.
+        start_time (str): Start time of the scenario.
+        end_time (str): End time of the scenario.
+        scenario (dict): Scenario configuration.
+        status (str): New status of the scenario (e.g., "running", "finished").
+        role (str): Role associated with the scenario.
+        username (str): User performing the update.
+
+    Returns:
+        dict: A message confirming the update.
     """
     from nebula.controller.database import scenario_update_record
 
@@ -271,7 +384,14 @@ async def set_scenario_status_to_finished(
     all: bool = Body(False, embed=True)
 ):
     """
-    Controller endpoint to set the status of a scenario to finished.
+    Sets the status of a scenario (or all scenarios) to 'finished'.
+
+    Args:
+        scenario_name (str): Name of the scenario to mark as finished.
+        all (bool): If True, sets all scenarios to finished.
+
+    Returns:
+        dict: A message confirming the operation.
     """
     from nebula.controller.database import scenario_set_status_to_finished, scenario_set_all_status_to_finished
 
@@ -290,7 +410,13 @@ async def set_scenario_status_to_finished(
 @app.get("/scenarios/running")
 async def get_running_scenario(get_all: bool = False):
     """
-    Controller endpoint to retrieve the running scenario.
+    Retrieves the currently running scenario(s).
+
+    Args:
+        get_all (bool): If True, retrieves all running scenarios.
+
+    Returns:
+        dict or list: Running scenario(s) information.
     """
     from nebula.controller.database import get_running_scenario
 
@@ -304,7 +430,14 @@ async def get_running_scenario(get_all: bool = False):
 @app.get("/scenarios/check")
 async def check_scenario(role: str, scenario_name: str):
     """
-    Controller endpoint to check if a scenario is allowed for a specific role.
+    Checks if a scenario is allowed for a specific role.
+    
+    Args:
+        role (str): Role to validate.
+        scenario_name (str): Name of the scenario.
+    
+    Returns:
+        dict: Whether the scenario is allowed for the role.
     """
     from nebula.controller.database import check_scenario_with_role
 
@@ -328,6 +461,15 @@ async def get_scenario_by_name(
         )
     ]
 ):
+    """
+    Fetches a scenario by its name.
+
+    Args:
+        scenario_name (str): The name of the scenario.
+
+    Returns:
+        dict: The scenario data.
+    """
     from nebula.controller.database import get_scenario_by_name
 
     try:
@@ -352,7 +494,13 @@ async def list_nodes_by_scenario_name(
     ]
 ):
     """
-    Controller endpoint to retrieve nodes by scenario name.
+    Lists all nodes associated with a specific scenario.
+
+    Args:
+        scenario_name (str): Name of the scenario.
+
+    Returns:
+        list: List of nodes.
     """
     from nebula.controller.database import list_nodes_by_scenario_name
 
@@ -379,7 +527,14 @@ async def update_nodes(
     request: Request
 ):
     """
-    Controller endpoint to update nodes.
+    Updates the configuration of a node in the database and notifies the frontend.
+
+    Args:
+        scenario_name (str): The scenario to which the node belongs.
+        request (Request): The HTTP request containing the node data.
+
+    Returns:
+        dict: Confirmation or response from the frontend.
     """
     from nebula.controller.database import update_node_record
     try:
@@ -434,6 +589,18 @@ async def node_done(
     ],
     request: Request
 ):
+    """
+    Endpoint to forward node status to the frontend.
+
+    Receives a JSON payload and forwards it to the frontend's /node/done route
+    for the given scenario.
+
+    Parameters:
+    - scenario_name: Name of the scenario.
+    - request: HTTP request with JSON body.
+
+    Returns the response from the frontend or raises an HTTPException if it fails.
+    """
     port = os.environ["NEBULA_FRONTEND_PORT"]
     url = f"http://localhost:{port}/platform/dashboard/{scenario_name}/node/done"
     
@@ -454,7 +621,12 @@ async def remove_nodes_by_scenario_name(
     scenario_name: str = Body(..., embed=True)
 ):
     """
-    Controller endpoint to remove nodes by scenario name.
+    Endpoint to remove all nodes associated with a scenario.
+
+    Body Parameters:
+    - scenario_name: Name of the scenario whose nodes should be removed.
+
+    Returns a success message or an error if something goes wrong.
     """
     from nebula.controller.database import remove_nodes_by_scenario_name
 
@@ -479,6 +651,14 @@ async def get_notes_by_scenario_name(
         )
     ]
 ):
+    """
+    Endpoint to retrieve notes associated with a scenario.
+
+    Path Parameters:
+    - scenario_name: Name of the scenario.
+
+    Returns the notes or raises an HTTPException on error.
+    """
     from nebula.controller.database import get_notes
 
     try:
@@ -495,6 +675,15 @@ async def update_notes_by_scenario_name(
     scenario_name: str = Body(..., embed=True),
     notes: str = Body(..., embed=True)
 ):
+    """
+    Endpoint to update notes for a given scenario.
+
+    Body Parameters:
+    - scenario_name: Name of the scenario.
+    - notes: Text content to store as notes.
+
+    Returns a success message or an error if something goes wrong.
+    """
     from nebula.controller.database import save_notes
 
     try:
@@ -510,6 +699,14 @@ async def update_notes_by_scenario_name(
 async def remove_notes_by_scenario_name(
     scenario_name: str = Body(..., embed=True)
 ):
+    """
+    Endpoint to remove notes associated with a scenario.
+
+    Body Parameters:
+    - scenario_name: Name of the scenario.
+
+    Returns a success message or an error if something goes wrong.
+    """
     from nebula.controller.database import remove_note
 
     try:
@@ -524,8 +721,12 @@ async def remove_notes_by_scenario_name(
 @app.get("/user/list")
 async def list_users_controller(all_info: bool = False):
     """
-    Controller endpoint to retrieve the list of users.
-    If all_info is True, returns the complete information converted into dictionaries.
+    Endpoint to list all users in the database.
+
+    Query Parameters:
+    - all_info (bool): If True, returns full user info as dictionaries.
+
+    Returns a list of users or raises an HTTPException on error.
     """
     from nebula.controller.database import list_users
 
@@ -554,6 +755,14 @@ async def get_user_by_scenario_name(
         )
     ]
 ):
+    """
+    Endpoint to retrieve the user assigned to a scenario.
+
+    Path Parameters:
+    - scenario_name: Name of the scenario.
+
+    Returns user info or raises an HTTPException on error.
+    """
     from nebula.controller.database import get_user_by_scenario_name
 
     try:
@@ -572,14 +781,14 @@ async def add_user_controller(
     role: str = Body(...)
 ):
     """
-    Controller endpoint that inserts a new user into the database.
-    
-    Parameters:
-    - user: The username for the new user.
-    - password: The user's password.
-    - role: The role assigned to the new user.
-    
-    Returns a success message if the user is added, or an HTTP error if an exception occurs.
+    Endpoint to add a new user to the database.
+
+    Body Parameters:
+    - user: Username.
+    - password: Password for the new user.
+    - role: Role assigned to the user (e.g., "admin", "user").
+
+    Returns a success message or an error if the user could not be added.
     """
     from nebula.controller.database import add_user
 
@@ -654,13 +863,13 @@ async def add_user_controller(
     password: str = Body(...)
 ):
     """
-    Controller endpoint that verifies if it's a valid user.
-    
-    Parameters:
-    - user: The username of the user.
-    - password: The user's password.
-    
-    Returns a success message if the user is verified, or an HTTP error if an exception occurs.
+    Endpoint to verify user credentials.
+
+    Body Parameters:
+    - user: Username.
+    - password: Password.
+
+    Returns the user role on success or raises an error on failure.
     """
     from nebula.controller.database import list_users, verify, get_user_info
 
@@ -868,6 +1077,42 @@ class NebulaEventHandler(PatternMatchingEventHandler):
 
 class Controller:
     def __init__(self, args):
+        """
+        Initializes the main controller class for the NEBULA system.
+
+        Parses and stores all configuration values from the provided `args` object,
+        which is expected to come from an argument parser (e.g., argparse).
+
+        Parameters (from `args`):
+        - scenario_name (str): Name of the current scenario.
+        - federation (str): Federation type used in the simulation.
+        - topology (str): Path to the topology file.
+        - controllerport (int): Port for the controller service (default: 5000).
+        - wafport (int): Port for the WAF service (default: 6000).
+        - webport (int): Port for the frontend (default: 6060).
+        - grafanaport (int): Port for Grafana (default: 6040).
+        - lokiport (int): Port for Loki logs (default: 6010).
+        - statsport (int): Port for the statistics module (default: 8080).
+        - simulation (bool): Whether the scenario runs in simulation mode.
+        - config (str): Path to the configuration directory.
+        - databases (str): Path to the databases directory (default: /opt/nebula).
+        - logs (str): Path to the log directory.
+        - certs (str): Path to the certificates directory.
+        - env (str): Path to the environment (venv, etc.).
+        - production (bool): Whether the system is running in production mode.
+        - advanced_analytics (bool): Whether advanced analytics are enabled.
+        - matrix (str): Path to the evaluation matrix file.
+        - root_path (str): Root path of the application.
+        - network_subnet (str): Custom Docker network subnet.
+        - network_gateway (str): Custom Docker network gateway.
+        - use_blockchain (bool): Whether the blockchain component is enabled.
+
+        This method also:
+        - Sets platform type (`windows` or `unix`)
+        - Configures logging
+        - Dynamically selects free ports if the specified ones are in use
+        - Initializes configuration and deployment objects
+        """
         self.scenario_name = args.scenario_name if hasattr(args, "scenario_name") else None
         self.start_date_scenario = None
         self.federation = args.federation if hasattr(args, "federation") else None
@@ -922,6 +1167,15 @@ class Controller:
         self.app = app
 
     def configure_logger(self):
+        """
+        Configures the logging system for the controller.
+
+        - Sets a format for console and file logging.
+        - Creates a console handler with INFO level.
+        - Creates a file handler for 'controller.log' with INFO level.
+        - Configures specific Uvicorn loggers to use the file handler
+          without duplicating log messages.
+        """
         log_console_format = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
@@ -946,6 +1200,22 @@ class Controller:
             logger.addHandler(handler)
 
     def start(self):
+        """
+        Starts the NEBULA controller.
+
+        - Displays the welcome banner.
+        - Loads environment variables from the `.env` file.
+        - Saves the process PID to 'controller.pid'.
+        - Checks the environment and saves configuration to environment variables.
+        - Launches the FastAPI app in a daemon thread.
+        - Initializes databases.
+        - In production mode, starts the WAF and logs WAF and Grafana ports.
+        - Runs the frontend and logs its URL.
+        - Starts a watchdog to monitor configuration directory changes.
+        - If enabled, initializes the Mender module for artifact deployment.
+        - Captures SIGTERM and SIGINT signals for graceful shutdown.
+        - Keeps the process running until termination signal or Ctrl+C.
+        """
         banner = """
                         ███╗   ██╗███████╗██████╗ ██╗   ██╗██╗      █████╗
                         ████╗  ██║██╔════╝██╔══██╗██║   ██║██║     ██╔══██╗
@@ -1048,12 +1318,29 @@ class Controller:
         observer.join()
 
     def signal_handler(self, sig, frame):
-        # Handle termination signals
+        """
+        Handler for termination signals (SIGTERM, SIGINT).
+
+        - Logs signal reception.
+        - Executes a graceful shutdown by calling self.stop().
+        - Exits the process with sys.exit(0).
+
+        Parameters:
+        - sig: The signal number received.
+        - frame: The current stack frame at signal reception.
+        """
         logging.info("Received termination signal, shutting down...")
         self.stop()
         sys.exit(0)
 
     def run_controller_api(self):
+        """
+        Runs the FastAPI controller application using Uvicorn.
+
+        - Binds to all network interfaces (0.0.0.0).
+        - Uses the port specified in self.controller_port.
+        - Disables Uvicorn's default logging configuration to use custom logging.
+        """
         uvicorn.run(
             self.app,
             host="0.0.0.0",
@@ -1062,6 +1349,18 @@ class Controller:
         )
 
     def run_waf(self):
+        """
+        Starts the Web Application Firewall (WAF) and related monitoring containers.
+
+        - Creates a Docker network named based on the current user.
+        - Starts the 'nebula-waf' container with logs volume and port mapping.
+        - Starts the 'nebula-waf-grafana' container for monitoring dashboards,
+          setting environment variables for Grafana configuration.
+        - Starts the 'nebula-waf-loki' container for log aggregation with a config file.
+        - Starts the 'nebula-waf-promtail' container to collect logs from nginx.
+
+        All containers are connected to the same Docker network with assigned static IPs.
+        """
         network_name = f"{os.environ['USER']}_nebula-net-base"
         base = DockerUtils.create_docker_network(network_name)
 
@@ -1175,6 +1474,17 @@ class Controller:
         client.api.start(container_id_promtail)
 
     def run_frontend(self):
+        """
+        Starts the NEBULA frontend Docker container.
+
+        - Checks if Docker is running (different checks for Windows and Unix).
+        - Detects if an NVIDIA GPU is available and sets a flag.
+        - Creates a Docker network named based on the current user.
+        - Prepares environment variables and volume mounts for the container.
+        - Binds ports for HTTP (80) and statistics (8080).
+        - Starts the 'nebula-frontend' container connected to the created network
+          with static IP assignment.
+        """
         if sys.platform == "win32":
             if not os.path.exists("//./pipe/docker_Engine"):
                 raise Exception(
@@ -1251,10 +1561,28 @@ class Controller:
 
     @staticmethod
     def stop_waf():
+        """
+        Stops all running Docker containers whose names start with
+        the pattern '<user>_nebula-waf'.
+
+        This is used to cleanly shut down the WAF-related containers.
+        """
         DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-waf")
 
     @staticmethod
     def stop():
+        """
+        Gracefully shuts down the entire NEBULA system by performing the following steps:
+        
+        - Logs the shutdown initiation.
+        - Removes all Docker containers with names starting with '<user>_'.
+        - Stops blockchain services and participant nodes via ScenarioManagement.
+        - Stops the WAF containers by calling stop_waf().
+        - Removes Docker networks with names starting with '<user>_'.
+        - Attempts to kill the controller process using its PID stored in 'controller.pid'.
+        - Handles any exceptions during PID reading or killing by logging them.
+        - Exits the program with status code 0.
+        """
         logging.info("Closing NEBULA (exiting from components)... Please wait")
         DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_")
         ScenarioManagement.stop_blockchain()
