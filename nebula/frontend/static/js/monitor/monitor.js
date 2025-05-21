@@ -657,8 +657,11 @@ class Monitor {
             // Queue the graph update
             this.updateGraph();
 
-            // Process map updates immediately
-            this.processUpdate(data);
+            // Process map updates immediately with neighbor distances
+            this.processUpdate({
+                ...data,
+                neighbors_distance: data.neighbors_distance || {}
+            });
 
             // Check if all nodes are offline
             this.checkAllNodesOffline();
@@ -1067,7 +1070,8 @@ class Monitor {
                 ...data,
                 latitude: parseFloat(data.latitude),
                 longitude: parseFloat(data.longitude),
-                neighbors: data.neighbors || ""
+                neighbors: data.neighbors || "",
+                neighbors_distance: data.neighbors_distance || {}
             };
 
             this.log('Validated node data:', nodeData);
@@ -1217,15 +1221,23 @@ class Monitor {
 
                     // Add popup with distance information
                     try {
-                        const distance = condition
-                            ? (this.droneMarkers[droneId].neighbors_distance &&
-                               this.droneMarkers[droneId].neighbors_distance[neighborIP])
-                            : (neighborMarker.neighbors_distance &&
-                               neighborMarker.neighbors_distance[this.droneMarkers[droneId].ip]);
+                        const currentMarker = this.droneMarkers[droneId];
+                        const neighborFullIP = neighborIP.includes(':') ? neighborIP : `${neighborIP}:${currentMarker.port}`;
+                        
+                        // Get distance from the current marker's neighbors_distance object
+                        const distance = currentMarker.neighbors_distance && 
+                                      currentMarker.neighbors_distance[neighborFullIP];
+
+                        this.log('Distance data:', {
+                            marker: currentMarker,
+                            neighborFullIP,
+                            neighbors_distance: currentMarker.neighbors_distance,
+                            distance
+                        });
 
                         line.bindPopup(`
                             <div class="line-popup">
-                                <p><strong>Distance:</strong> ${distance ? distance + ' m' : 'Calculating...'}</p>
+                                <p><strong>Distance:</strong> ${distance ? distance.toFixed(2) + ' m' : 'Calculating...'}</p>
                                 <p><strong>Status:</strong> Online</p>
                             </div>
                         `);
@@ -1466,13 +1478,17 @@ class Monitor {
 
                 // Update map marker if it exists
                 if (this.droneMarkers[nodeData.uid]) {
+                    // Preserve existing neighbor distances
+                    const existingMarker = this.droneMarkers[nodeData.uid];
+                    const neighborsDistance = existingMarker.neighbors_distance || {};
+                    
                     this.updateDronePosition(
                         nodeData.uid,
                         nodeData.ip,
                         parseFloat(nodeData.latitude),
                         parseFloat(nodeData.longitude),
                         nodeData.neighbors ? nodeData.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '') : [],
-                        null
+                        neighborsDistance
                     );
                 }
             });
