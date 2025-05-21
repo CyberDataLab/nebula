@@ -1,13 +1,15 @@
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
+
 from nebula.core.situationalawareness.awareness.sautils.sacommand import SACommand
+
 
 class SAModuleAgent(ABC):
     """
     Abstract base class representing a Situational Awareness (SA) module agent.
 
     This interface defines the essential methods that any SA agent must implement
-    to participate in the suggestion and arbitration pipeline. Agents are responsible 
-    for registering themselves, suggesting actions in the form of commands, and 
+    to participate in the suggestion and arbitration pipeline. Agents are responsible
+    for registering themselves, suggesting actions in the form of commands, and
     notifying when all suggestions related to an event are complete.
 
     Methods:
@@ -30,13 +32,13 @@ class SAModuleAgent(ABC):
     @abstractmethod
     async def register_sa_agent(self):
         """
-        Perform initialization logic required to register this SA agent 
+        Perform initialization logic required to register this SA agent
         within the system (e.g., announcing its presence or preparing state).
         """
         raise NotImplementedError
-    
+
     @abstractmethod
-    async def suggest_action(self, sac : SACommand):
+    async def suggest_action(self, sac: SACommand):
         """
         Submit a suggested action in the form of a SACommand for a given context.
 
@@ -44,7 +46,7 @@ class SAModuleAgent(ABC):
             sac (SACommand): The command proposed by the agent for execution.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     async def notify_all_suggestions_done(self, event_type):
         """

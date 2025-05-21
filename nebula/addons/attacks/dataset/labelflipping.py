@@ -10,6 +10,7 @@ Function:
 import copy
 import logging
 import random
+
 import numpy as np
 
 from nebula.addons.attacks.dataset.datasetattack import DatasetAttack

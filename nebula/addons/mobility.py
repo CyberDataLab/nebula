@@ -4,11 +4,12 @@ import math
 import random
 import time
 from functools import cached_property
-from nebula.core.network.communications import CommunicationsManager
-from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import GPSEvent, ChangeLocationEvent
-from nebula.core.utils.locker import Locker
+
 from nebula.addons.functions import print_msg_box
+from nebula.core.eventmanager import EventManager
+from nebula.core.nebulaevents import ChangeLocationEvent, GPSEvent
+from nebula.core.network.communications import CommunicationsManager
+from nebula.core.utils.locker import Locker
 
 
 class Mobility:
@@ -56,7 +57,7 @@ class Mobility:
         self.radius_federation = float(self.config.participant["mobility_args"]["radius_federation"])
         self.scheme_mobility = self.config.participant["mobility_args"]["scheme_mobility"]
         self.round_frequency = int(self.config.participant["mobility_args"]["round_frequency"])
-        # Protocol to change connections based on distance
+        # INFO: These values may change according to the needs of the federation
         self.max_distance_with_direct_connections = 150  # meters
         self.max_movement_random_strategy = 50  # meters
         self.max_movement_nearest_strategy = 50  # meters
@@ -105,7 +106,7 @@ class Mobility:
         task = asyncio.create_task(self.run_mobility())
         return task
 
-    async def update_nodes_distances(self, gpsevent : GPSEvent):
+    async def update_nodes_distances(self, gpsevent: GPSEvent):
         distances = await gpsevent.get_event_data()
         async with self._nodes_distances_lock:
             self._nodes_distances = dict(distances)
@@ -136,7 +137,7 @@ class Mobility:
         """
         if not self.mobility:
             return
-        #await asyncio.sleep(self.grace_time)
+        # await asyncio.sleep(self.grace_time)
         while True:
             await self.change_geo_location()
             await asyncio.sleep(self.period)
@@ -162,7 +163,8 @@ class Mobility:
             - The calculated radius is converted from meters to degrees based on an approximate
               conversion factor (1 degree is approximately 111 kilometers).
         """
-        if self._verbose: logging.info("📍  Changing geo location randomly")
+        if self._verbose:
+            logging.info("📍  Changing geo location randomly")
         # radius_in_degrees = self.radius_federation / 111000
         max_radius_in_degrees = self.max_movement_random_strategy / 111000
         radius = random.uniform(0, max_radius_in_degrees)  # noqa: S311
@@ -198,7 +200,8 @@ class Mobility:
               coordinates to determine the direction of movement.
             - The conversion from meters to degrees is based on approximate geographical conversion factors.
         """
-        if self._verbose: logging.info("📍  Changing geo location towards the nearest neighbor")
+        if self._verbose:
+            logging.info("📍  Changing geo location towards the nearest neighbor")
         scale_factor = min(1, self.max_movement_nearest_strategy / distance)
         # Calcular el ángulo hacia el vecino
         angle = math.atan2(neighbor_longitude - longitude, neighbor_latitude - latitude)
@@ -243,7 +246,8 @@ class Mobility:
 
         self.config.participant["mobility_args"]["latitude"] = latitude
         self.config.participant["mobility_args"]["longitude"] = longitude
-        if self._verbose: logging.info(f"📍  New geo location: {latitude}, {longitude}")
+        if self._verbose:
+            logging.info(f"📍  New geo location: {latitude}, {longitude}")
         cle = ChangeLocationEvent(latitude, longitude)
         asyncio.create_task(EventManager.get_instance().publish_addonevent(cle))
 
@@ -282,11 +286,12 @@ class Mobility:
 
                 selected_neighbor = result[0] if result else None
                 if selected_neighbor:
-                    #logging.info(f"📍  Selected neighbor: {selected_neighbor}")
+                    # logging.info(f"📍  Selected neighbor: {selected_neighbor}")
                     addr, dist, (lat, long) = selected_neighbor
                     if dist > self.max_initiate_approximation:
                         # If the distance is too big, we move towards the neighbor
-                        if self._verbose: logging.info(f"Moving towards nearest neighbor: {addr}")
+                        if self._verbose:
+                            logging.info(f"Moving towards nearest neighbor: {addr}")
                         await self.change_geo_location_nearest_neighbor_strategy(
                             dist,
                             latitude,

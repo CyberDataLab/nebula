@@ -88,7 +88,7 @@ class NebulaGPS(GPSModule):
                     if self._verbose:
                         logging.info(f"Received GPS from {addr[0]}: {lat}, {lon}")
             except Exception as e:
-                logging.error(f"Error receiving GPS update: {e}")
+                logging.exception(f"Error receiving GPS update: {e}")
 
     async def _notify_geolocs(self):
         while True:

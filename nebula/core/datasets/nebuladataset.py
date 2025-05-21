@@ -374,7 +374,7 @@ class NebulaDataset:
         logging.info(f"Scenario with data distribution IID: {self.iid}")
         if self.iid:
             self.train_indices_map = self.generate_iid_map(self.train_set)
-        else :
+        else:
             self.train_indices_map = self.generate_non_iid_map(
                 self.train_set, partition=self.partition, partition_parameter=self.partition_parameter
             )

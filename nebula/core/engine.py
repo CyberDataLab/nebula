@@ -8,6 +8,7 @@ import docker
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
+from nebula.addons.reputation.reputation import Reputation
 from nebula.core.addonmanager import AddondManager
 from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager
@@ -20,7 +21,6 @@ from nebula.core.nebulaevents import (
 )
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
-from nebula.addons.reputation.reputation import Reputation
 from nebula.core.utils.locker import Locker
 
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -62,8 +62,8 @@ def print_banner():
                     ╚═╝  ╚═══╝╚══════╝╚═════╝  ╚═════╝ ╚══════╝╚═╝  ╚═╝
                       A Platform for Decentralized Federated Learning
                         Created by Enrique Tomás Martínez Beltrán
-                        Featured by Alejandro Avilés Serrano
-                                Fernando Torres Vega
+                          Featured by Alejandro Avilés Serrano
+                            Featured by Fernando Torres Vega
                           https://github.com/CyberDataLab/nebula
                 """
     logging.info(f"\n{banner}\n")
@@ -148,7 +148,7 @@ class Engine:
         # Additional Components
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
-            
+
         if self.config.participant["defense_args"]["with_reputation"]:
             self._reputation = Reputation(engine=self, config=self.config)
 
@@ -171,7 +171,7 @@ class Engine:
     @property
     def sa(self):
         return self._situational_awareness
-    
+
     def get_aggregator_type(self):
         return type(self.aggregator)
 
@@ -184,7 +184,7 @@ class Engine:
     async def get_federation_nodes(self):
         async with self._federation_nodes_lock:
             return self.federation_nodes.copy()
-    
+
     async def update_federation_nodes(self, federation_nodes):
         async with self._federation_nodes_lock:
             self.federation_nodes = federation_nodes
@@ -555,7 +555,9 @@ class Engine:
                 title="Round information",
             )
             logging.info(f"Federation nodes: {self.federation_nodes}")
-            await self.update_federation_nodes(await self.cm.get_addrs_current_connections(only_direct=True, myself=True))
+            await self.update_federation_nodes(
+                await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
+            )
             expected_nodes = await self.get_federation_nodes()
             rse = RoundStartEvent(self.round, current_time, expected_nodes)
             await EventManager.get_instance().publish_node_event(rse)

@@ -6,7 +6,7 @@
   <h1 align="center">NEBULA: A Platform for Decentralized Federated Learning</h1>
 
   <p align="center">
-    <a href="https://nebula-dfl.com">nebula-dfl.com</a> | 
+    <a href="https://nebula-dfl.com">nebula-dfl.com</a> |
 	<a href="https://nebula-dfl.eu">nebula-dfl.eu</a> |
 	<a href="https://federeratedlearning.inf.um.es">federatedlearning.inf.um.es</a>
   </p>

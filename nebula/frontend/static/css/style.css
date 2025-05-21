@@ -630,7 +630,7 @@ hr.styled {
         -ms-overflow-style: -ms-autohiding-scrollbar;
         -webkit-overflow-scrolling: touch;
     }
-    
+
     .container {
         max-width: 100%;
         padding-right: 10px;

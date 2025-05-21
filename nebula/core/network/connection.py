@@ -7,8 +7,8 @@ import time
 import uuid
 import zlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
 import lz4.frame
 
@@ -22,6 +22,7 @@ class ConnectionPriority(Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
 
 @dataclass
 class MessageChunk:

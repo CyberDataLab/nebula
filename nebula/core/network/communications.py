@@ -260,7 +260,7 @@ class CommunicationsManager:
         if neighbors:
             addrs.difference_update(neighbors)
 
-        #logging.info(f"neighbors: {neighbors} | addr filtered: {addrs}")
+        # logging.info(f"neighbors: {neighbors} | addr filtered: {addrs}")
         discovers_sent = 0
         connections_made = set()
         if addrs:
@@ -548,7 +548,7 @@ class CommunicationsManager:
                 if host == self.host and port == self.port:
                     logging.info("🔗  [outgoing] Connection with yourself is not allowed")
                     return False
-                
+
                 blacklist = await self.bl.get_blacklist()
                 if blacklist:
                     logging.info(f"blacklist: {blacklist}, source trying to connect: {addr}")

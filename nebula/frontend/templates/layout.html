@@ -75,7 +75,7 @@
             // Create the notification element
             const notification = document.createElement('div');
             notification.classList.add('notification', category);
-            
+
             // Set icon based on category
             let icon = '';
             switch(category) {
@@ -92,7 +92,7 @@
                     icon = 'fa-info-circle';
                     break;
             }
-            
+
             // Create notification content
             notification.innerHTML = `
                 <i class="fa ${icon} icon"></i>
@@ -104,11 +104,11 @@
                     <i class="fa fa-times"></i>
                 </button>
             `;
-            
+
             // Add to container
             const container = document.getElementById('notification-container');
             container.appendChild(notification);
-            
+
             // Add click handler for close button
             const closeBtn = notification.querySelector('.close');
             closeBtn.addEventListener('click', () => {
@@ -117,7 +117,7 @@
                     notification.remove();
                 }, 300);
             });
-            
+
             // Auto remove after 5 seconds
             setTimeout(() => {
                 if (notification.parentElement) {

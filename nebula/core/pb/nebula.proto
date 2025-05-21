@@ -128,4 +128,3 @@ message ReputationMessage {
 message ResponseMessage {
   string response = 1;      // Outcome of the requested operation.
 }
-

@@ -22,7 +22,7 @@ const UIControls = (function() {
         if (modeBtn) {
             modeBtn.addEventListener('click', function() {
                 const isAdvancedMode = modeBtn.innerHTML.trim() === "Advanced mode";
-                
+
                 if (isAdvancedMode) {
                     // Switch to advanced mode
                     modeBtn.innerHTML = "User mode";
@@ -300,11 +300,11 @@ const UIControls = (function() {
         yesButton.disabled = false;
 
         const modal = new bootstrap.Modal(confirmModal);
-        
+
         confirmModal.addEventListener('hidden.bs.modal', function () {
             cleanupModal(confirmModal);
         });
-        
+
         modal.show();
 
         yesButton.onclick = async () => {
@@ -355,7 +355,7 @@ const UIControls = (function() {
     function handleDeploymentError(status, error = null) {
         hideLoadingIndicators();
         let errorMessage;
-        
+
         switch(status) {
             case 401:
                 errorMessage = "You are not authorized to run a scenario. Please log in.";
@@ -377,12 +377,12 @@ const UIControls = (function() {
         const infoModalBody = document.getElementById('info-modal-body');
         infoModalBody.innerHTML = message;
         const modal = new bootstrap.Modal(infoModal);
-        
+
         // Add event listener for when modal is hidden
         infoModal.addEventListener('hidden.bs.modal', function () {
             cleanupModal(infoModal);
         });
-        
+
         modal.show();
     }
 
@@ -423,7 +423,7 @@ const UIControls = (function() {
 
         const nodes = graph.graphData().nodes;
         const numberOfNodes = nodes.length;
-        
+
         // Update the info-participants number
         const infoParticipantsNumber = document.getElementById("info-participants-number");
         if (infoParticipantsNumber) {
@@ -532,7 +532,7 @@ const UIControls = (function() {
     function showParticipantDetails(node, index) {
         const modalTitle = document.getElementById("participant-modal-title");
         const modalContent = document.getElementById("participant-modal-content");
-        
+
         modalTitle.innerHTML = `Participant ${index}`;
         modalContent.innerHTML = "";
 
@@ -639,4 +639,4 @@ const UIControls = (function() {
     };
 })();
 
-export default UIControls; 
+export default UIControls;

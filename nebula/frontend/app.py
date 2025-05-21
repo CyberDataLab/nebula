@@ -181,7 +181,7 @@ class ConnectionManager:
     async def broadcast(self, message: str):
         self.add_message(message)
         disconnected_websockets = []
-        
+
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
@@ -189,9 +189,9 @@ class ConnectionManager:
                 # Mark connection for removal
                 disconnected_websockets.append(connection)
             except Exception as e:
-                logging.error(f"Error broadcasting message: {e}")
+                logging.exception(f"Error broadcasting message: {e}")
                 disconnected_websockets.append(connection)
-        
+
         # Remove disconnected websockets
         for websocket in disconnected_websockets:
             self.disconnect(websocket)
@@ -216,16 +216,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
             try:
                 await manager.broadcast(json.dumps(message))
             except Exception as e:
-                logging.error(f"Error broadcasting message: {e}")
+                logging.exception(f"Error broadcasting message: {e}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         try:
             message = {"type": "control", "message": f"Client #{client_id} left the chat"}
             await manager.broadcast(json.dumps(message))
         except Exception as e:
-            logging.error(f"Error broadcasting disconnect message: {e}")
+            logging.exception(f"Error broadcasting disconnect message: {e}")
     except Exception as e:
-        logging.error(f"WebSocket error: {e}")
+        logging.exception(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
 
@@ -653,7 +653,7 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                 # Calculate initial status based on timestamp
                 timestamp = datetime.datetime.strptime(node[8], "%Y-%m-%d %H:%M:%S.%f")
                 is_online = (datetime.datetime.now() - timestamp) <= datetime.timedelta(seconds=25)
-                
+
                 formatted_nodes.append({
                     "uid": node[0],
                     "idx": node[1],
@@ -669,7 +669,7 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                     "scenario_name": node[11],
                     "hash": node[12],
                     "malicious": node[13],
-                    "status": is_online
+                    "status": is_online,
                 })
 
             # For HTML response, return the template with basic data
@@ -805,7 +805,7 @@ async def nebula_update_node(scenario_name: str, request: Request):
                 "name": config["scenario_args"]["name"],
                 "status": True,
                 "neighbors_distance": neighbors_distance,
-                "malicious": str(config["device_args"]["malicious"])
+                "malicious": str(config["device_args"]["malicious"]),
             }
 
             try:

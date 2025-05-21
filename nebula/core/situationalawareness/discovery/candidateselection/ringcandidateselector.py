@@ -1,25 +1,26 @@
-from nebula.core.situationalawareness.discovery.candidateselection.candidateselector import CandidateSelector
-from nebula.core.utils.locker import Locker
 import random
 
-class RINGCandidateSelector(CandidateSelector):
+from nebula.core.situationalawareness.discovery.candidateselection.candidateselector import CandidateSelector
+from nebula.core.utils.locker import Locker
 
+
+class RINGCandidateSelector(CandidateSelector):
     def __init__(self):
         self._candidates = []
         self._rejected_candidates = []
         self.candidates_lock = Locker(name="candidates_lock")
-        
+
     async def set_config(self, config):
-        pass    
-    
+        pass
+
     async def add_candidate(self, candidate):
         """
-            To avoid topology problems select 1st candidate found
+        To avoid topology problems select 1st candidate found
         """
         self.candidates_lock.acquire()
         self._candidates.append(candidate)
         self.candidates_lock.release()
-      
+
     async def select_candidates(self):
         self.candidates_lock.acquire()
         cdts = []
@@ -38,7 +39,7 @@ class RINGCandidateSelector(CandidateSelector):
         not_cdts = self._rejected_candidates.copy()
         self.candidates_lock.release()
         return (cdts, not_cdts)
-    
+
     async def remove_candidates(self):
         self.candidates_lock.acquire()
         self._candidates = []

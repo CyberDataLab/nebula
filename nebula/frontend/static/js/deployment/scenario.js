@@ -7,14 +7,14 @@ const ScenarioManager = (function() {
     function initializeScenarios() {
         // Clear session storage
         sessionStorage.removeItem("ScenarioList");
-        
+
         // Reset the scenarios list
         scenariosList = [];
         actual_scenario = 0;
-        
+
         // Clear all fields and reset modules
         clearFields();
-        
+
         // Update UI
         updateScenariosPosition(true);
     }
@@ -23,7 +23,7 @@ const ScenarioManager = (function() {
         const topologyData = window.TopologyManager.getData();
         const nodes = {};
         const nodes_graph = {};
-        
+
         // Convert nodes array to objects with string IDs
         topologyData.nodes.forEach(node => {
             const nodeId = node.id.toString();
@@ -146,7 +146,7 @@ const ScenarioManager = (function() {
         // Load basic fields
         document.getElementById("scenario-title").value = scenario.scenario_title || "";
         document.getElementById("scenario-description").value = scenario.scenario_description || "";
-        
+
         // Load deployment
         const deploymentRadio = document.querySelector(`input[name="deploymentRadioOptions"][value="${scenario.deployment}"]`);
         if (deploymentRadio) deploymentRadio.checked = true;
@@ -161,7 +161,7 @@ const ScenarioManager = (function() {
                 nodes: Object.values(scenario.nodes),
                 links: []
             };
-            
+
             // Reconstruct links from the nodes' neighbors
             topologyData.nodes.forEach(node => {
                 if (node.neighbors) {
@@ -173,7 +173,7 @@ const ScenarioManager = (function() {
                     });
                 }
             });
-            
+
             window.TopologyManager.setData(topologyData);
         } else {
             window.TopologyManager.generatePredefinedTopology();
@@ -260,25 +260,25 @@ const ScenarioManager = (function() {
 
     function deleteScenario() {
         if (scenariosList.length === 0) return;
-        
+
         scenariosList.splice(actual_scenario, 1);
         if (actual_scenario >= scenariosList.length) {
             actual_scenario = Math.max(0, scenariosList.length - 1);
         }
-        
+
         if (scenariosList.length > 0) {
             loadScenarioData(scenariosList[actual_scenario]);
         } else {
             clearFields();
         }
-        
+
         sessionStorage.setItem("ScenarioList", JSON.stringify(scenariosList));
         updateScenariosPosition(scenariosList.length === 0);
     }
 
     function replaceScenario() {
         if (actual_scenario < 0 || actual_scenario >= scenariosList.length) return;
-        
+
         const scenarioData = collectScenarioData();
         scenariosList[actual_scenario] = scenarioData;
         sessionStorage.setItem("ScenarioList", JSON.stringify(scenariosList));
@@ -287,10 +287,10 @@ const ScenarioManager = (function() {
     function updateScenariosPosition(isEmptyScenario = false) {
         const container = document.getElementById("scenarios-position");
         if (!container) return;
-        
+
         // Clear existing content
         container.innerHTML = '';
-        
+
         if (isEmptyScenario) {
             container.innerHTML = '<span style="margin: 0 10px;">No scenarios</span>';
             return;
@@ -299,12 +299,12 @@ const ScenarioManager = (function() {
         // Create a single span for all scenarios
         const span = document.createElement("span");
         span.style.margin = "0 10px";
-        
+
         // Create the scenario indicators
-        const indicators = scenariosList.map((_, index) => 
+        const indicators = scenariosList.map((_, index) =>
             index === actual_scenario ? `●` : `○`
         ).join(' ');
-        
+
         span.textContent = indicators;
         container.appendChild(span);
     }
@@ -361,7 +361,7 @@ const ScenarioManager = (function() {
         initializeScenarios,
         getScenariosList: () => scenariosList,
         getActualScenario: () => actual_scenario,
-        setActualScenario: (index) => { 
+        setActualScenario: (index) => {
             actual_scenario = index;
             if (scenariosList[index]) {
                 loadScenarioData(scenariosList[index]);
@@ -377,4 +377,4 @@ const ScenarioManager = (function() {
     };
 })();
 
-export default ScenarioManager; 
+export default ScenarioManager;

@@ -50,7 +50,7 @@
                 {% endif %}
                             </div>
                         </div>
-                        
+
                         <div class="scenario-actions">
                     {% if scenario[5] == "running" or scenario[5] == "completed" %}
                     <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario[0], stop_all = False) }}"
@@ -84,7 +84,7 @@
             <!-- Nodes Table Card -->
             <div class="col-md-8">
                 <div class="card shadow-sm">
-                    
+
                     <div class="card-body p-0">
                 <div class="table-responsive">
                             <table id="table-nodes" class="table table-hover align-middle mb-0 text-center">
@@ -199,7 +199,7 @@
                     <div class="card-body">
                         <p class="text-muted mb-3">
                             <i class="fa fa-info-circle me-2"></i>
-                            Visualize the scenario topology. 
+                            Visualize the scenario topology.
                             <a href="{{ url_for('nebula_monitor_image', scenario_name=scenario[0]) }}">
                                 <i class="fa fa-download me-1"></i>Download topology
                             </a>

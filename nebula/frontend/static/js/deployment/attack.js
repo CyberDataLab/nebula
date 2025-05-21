@@ -229,4 +229,4 @@ const AttackManager = (function() {
     };
 })();
 
-export default AttackManager; 
+export default AttackManager;

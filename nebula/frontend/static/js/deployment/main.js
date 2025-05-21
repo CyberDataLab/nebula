@@ -12,12 +12,12 @@ const DeploymentManager = (function() {
     function initialize() {
         // First initialize all modules
         initializeModules();
-        
+
         // Then initialize event listeners and UI controls
         initializeEventListeners();
         setupDeploymentButtons();
         initializeSelectElements();
-        
+
         // Finally initialize scenarios after all modules are ready
         ScenarioManager.initializeScenarios();
     }
@@ -30,7 +30,7 @@ const DeploymentManager = (function() {
         ReputationManager.initializeReputationSystem();
         SaManager.initializeSa();
         GraphSettings.initializeDistanceControls();
-        
+
         // Make modules globally available
         window.ScenarioManager = ScenarioManager;
         window.TopologyManager = TopologyManager;
@@ -260,8 +260,8 @@ const DeploymentManager = (function() {
                 input.addEventListener('input', () => Utils.greaterThan0(input));
             }
             if(input.hasAttribute('min') && input.hasAttribute('max')) {
-                input.addEventListener('input', () => Utils.isInRange(input, 
-                    parseInt(input.getAttribute('min')), 
+                input.addEventListener('input', () => Utils.isInRange(input,
+                    parseInt(input.getAttribute('min')),
                     parseInt(input.getAttribute('max'))));
             }
         });
@@ -273,4 +273,4 @@ const DeploymentManager = (function() {
     };
 })();
 
-export default DeploymentManager; 
+export default DeploymentManager;

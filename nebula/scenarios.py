@@ -87,7 +87,7 @@ class Scenario:
         sad_candidate_selector,
         sad_model_handler,
         sar_arbitration_policy,
-        sar_neighbor_policy
+        sar_neighbor_policy,
     ):
         """
         Initialize the scenario.
@@ -148,7 +148,7 @@ class Scenario:
             schema_additional_participants (str): Schema for additional participants.
             random_topology_probability (float): Probability for random topology.
             with_sa (bool) : Indicator if Situational Awareness is used.
-            strict_topology (bool) : 
+            strict_topology (bool) :
             sad_candidate_selector (str) :
             sad_model_handler (str) :
             sar_arbitration_policy (str) :
@@ -224,9 +224,9 @@ class Scenario:
         attack_params,
     ):
         """Identify which nodes will be attacked"""
+        import logging
         import math
         import random
-        import logging
 
         # Validate input parameters
         def validate_percentage(value, name):
@@ -236,7 +236,7 @@ class Scenario:
                     raise ValueError(f"{name} must be between 0 and 100")
                 return value
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid {name}: {str(e)}")
+                raise ValueError(f"Invalid {name}: {e!s}")
 
         def validate_positive_int(value, name):
             try:
@@ -245,14 +245,20 @@ class Scenario:
                     raise ValueError(f"{name} must be positive")
                 return value
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid {name}: {str(e)}")
+                raise ValueError(f"Invalid {name}: {e!s}")
 
         # Validate attack type
         valid_attacks = {
-            "No Attack", "Label Flipping", "Sample Poisoning", "Model Poisoning",
-            "GLL Neuron Inversion", "Swapping Weights", "Delayer", "Flooding"
+            "No Attack",
+            "Label Flipping",
+            "Sample Poisoning",
+            "Model Poisoning",
+            "GLL Neuron Inversion",
+            "Swapping Weights",
+            "Delayer",
+            "Flooding",
         }
-        
+
         # Handle attack parameter which can be either a string or a list
         if isinstance(attack, list):
             if not attack:  # Empty list
@@ -305,16 +311,16 @@ class Scenario:
             node_att = "No Attack"
             malicious = False
             with_reputation = self.with_reputation
-            
+
             if node in attacked_nodes or nodes[node]["malicious"]:
                 malicious = True
                 with_reputation = False
                 node_att = attack
                 logging.info(f"Node {node} marked as malicious with attack {attack}")
-                
+
                 # Initialize attack parameters with defaults
                 attack_params = attack_params.copy() if attack_params else {}
-                
+
                 # Set attack-specific parameters
                 if attack == "Label Flipping":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
@@ -327,40 +333,36 @@ class Scenario:
                         attack_params["targetChangedLabel"] = validate_positive_int(
                             attack_params.get("targetChangedLabel", 7), "targetChangedLabel"
                         )
-                
+
                 elif attack == "Sample Poisoning":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
                     attack_params["poisonedSamplePercent"] = poisoned_sample_percent
                     attack_params["poisonedNoisePercent"] = poisoned_noise_percent
                     attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
                     attack_params["targeted"] = attack_params.get("targeted", False)
-                
+
                 elif attack == "Model Poisoning":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
                     attack_params["poisonedNoisePercent"] = poisoned_noise_percent
                     attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
-                
+
                 elif attack == "GLL Neuron Inversion":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
-                
+
                 elif attack == "Swapping Weights":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["layerIdx"] = validate_positive_int(
-                        attack_params.get("layerIdx", 0), "layerIdx"
-                    )
-                
+                    attack_params["layerIdx"] = validate_positive_int(attack_params.get("layerIdx", 0), "layerIdx")
+
                 elif attack == "Delayer":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["delay"] = validate_positive_int(
-                        attack_params.get("delay", 10), "delay"
-                    )
+                    attack_params["delay"] = validate_positive_int(attack_params.get("delay", 10), "delay")
                     attack_params["targetPercentage"] = validate_percentage(
                         attack_params.get("targetPercentage", 100), "targetPercentage"
                     )
                     attack_params["selectionInterval"] = validate_positive_int(
                         attack_params.get("selectionInterval", 1), "selectionInterval"
                     )
-                
+
                 elif attack == "Flooding":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
                     attack_params["floodingFactor"] = validate_positive_int(
@@ -372,14 +374,10 @@ class Scenario:
                     attack_params["selectionInterval"] = validate_positive_int(
                         attack_params.get("selectionInterval", 1), "selectionInterval"
                     )
-                
+
                 # Add common attack parameters
-                attack_params["startRound"] = validate_positive_int(
-                    attack_params.get("startRound", 1), "startRound"
-                )
-                attack_params["stopRound"] = validate_positive_int(
-                    attack_params.get("stopRound", 10), "stopRound"
-                )
+                attack_params["startRound"] = validate_positive_int(attack_params.get("startRound", 1), "startRound")
+                attack_params["stopRound"] = validate_positive_int(attack_params.get("stopRound", 10), "stopRound")
                 attack_params["attackInterval"] = validate_positive_int(
                     attack_params.get("attackInterval", 1), "attackInterval"
                 )
@@ -395,17 +393,13 @@ class Scenario:
 
             # Ensure the attack type is properly set in the node configuration
             if malicious and attack != "No Attack":
-                nodes[node]["adversarial_args"] = {
-                    "attacks": attack,
-                    "attack_params": attack_params
-                }
+                nodes[node]["adversarial_args"] = {"attacks": attack, "attack_params": attack_params}
             else:
-                nodes[node]["adversarial_args"] = {
-                    "attacks": "No Attack",
-                    "attack_params": {}
-                }
+                nodes[node]["adversarial_args"] = {"attacks": "No Attack", "attack_params": {}}
 
-            logging.info(f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attacks']}")
+            logging.info(
+                f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attacks']}"
+            )
 
         return nodes
 
@@ -580,19 +574,14 @@ class ScenarioManagement:
                     "sa_discovery": {
                         "candidate_selector": self.scenario.sad_candidate_selector,
                         "model_handler": self.scenario.sad_model_handler,
-                        "verbose": True
+                        "verbose": True,
                     },
                     "sa_reasoner": {
                         "arbitration_policy": self.scenario.sar_arbitration_policy,
                         "verbose": True,
-                        "sar_components": {
-                            "sa_network": True
-                        },
-                        "sa_network": {
-                            "neighbor_policy": self.scenario.sar_neighbor_policy,
-                            "verbose": True
-                        }
-                    }
+                        "sar_components": {"sa_network": True},
+                        "sa_network": {"neighbor_policy": self.scenario.sar_neighbor_policy, "verbose": True},
+                    },
                 }
 
             with open(participant_file, "w") as f:
@@ -1096,7 +1085,7 @@ class ScenarioManagement:
 
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
-        
+
     def start_nodes_physical(self):
         logging.info("Starting nodes as physical devices...")
         logging.info(f"env path: {self.env_path}")
@@ -1104,7 +1093,9 @@ class ScenarioManagement:
         for idx, node in enumerate(self.config.participants):
             pass
 
-        logging.info("Physical devices deployment is not implemented publicly. Please use docker or process deployment.")
+        logging.info(
+            "Physical devices deployment is not implemented publicly. Please use docker or process deployment."
+        )
 
     @classmethod
     def remove_files_by_scenario(cls, scenario_name):

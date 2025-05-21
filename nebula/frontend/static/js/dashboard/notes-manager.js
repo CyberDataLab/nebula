@@ -55,7 +55,7 @@ const NotesManager = {
             });
 
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 showAlert('success', 'Notes saved successfully');
             } else {
@@ -72,4 +72,4 @@ const NotesManager = {
     }
 };
 
-export default NotesManager; 
+export default NotesManager;

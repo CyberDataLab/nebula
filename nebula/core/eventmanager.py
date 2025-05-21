@@ -22,7 +22,7 @@ class EventManager:
 
     def _initialize(self, verbose=False):
         """Inicializa la instancia única (solo se ejecuta una vez)."""
-        if hasattr(self, "_initialized"):  
+        if hasattr(self, "_initialized"):
             return
         self._subscribers: dict[tuple[str, str], list] = {}
         self._message_events_lock = Locker("message_events_lock", async_lock=True)
@@ -33,7 +33,7 @@ class EventManager:
         self._global_message_subscribers: list[Callable] = []
         self._global_message_subscribers_lock = Locker("global_message_subscribers_lock", async_lock=True)
         self._verbose = verbose
-        self._initialized = True  
+        self._initialized = True
 
     @staticmethod
     def get_instance(verbose=False):

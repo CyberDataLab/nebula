@@ -51,7 +51,7 @@ const TopologyManager = (function() {
         document.getElementById('federationArchitecture').addEventListener('change', function() {
             const federationType = this.value;
             const topologySelect = document.getElementById('predefined-topology-select');
-            
+
             if (federationType === 'CFL') {
                 // For CFL, only allow Star topology
                 topologySelect.value = 'Star';
@@ -64,7 +64,7 @@ const TopologyManager = (function() {
                 topologySelect.disabled = false;
                 customTopologyBtn.disabled = false;
             }
-            
+
             generatePredefinedTopology();
         });
 
@@ -92,7 +92,7 @@ const TopologyManager = (function() {
         const topologyType = document.getElementById('predefined-topology-select').value;
         const N = parseInt(document.getElementById('predefined-topology-nodes').value) || 3;
         let probability = 0.5; // default value
-        
+
         if (topologyType === 'Random') {
             const probSelect = document.getElementById('random-probability');
             probability = parseFloat(probSelect.value);
@@ -319,24 +319,24 @@ const TopologyManager = (function() {
         // Find and remove both directional links
         const source = typeof link.source === 'object' ? link.source.id : link.source;
         const target = typeof link.target === 'object' ? link.target.id : link.target;
-        
+
         gData.links = gData.links.filter(l => {
             const lSource = typeof l.source === 'object' ? l.source.id : l.source;
             const lTarget = typeof l.target === 'object' ? l.target.id : l.target;
             return !((lSource === source && lTarget === target) || (lSource === target && lTarget === source));
         });
-        
+
         // Remove from neighbors
         gData.nodes[source].neighbors = gData.nodes[source].neighbors.filter(id => id !== target);
         gData.nodes[target].neighbors = gData.nodes[target].neighbors.filter(id => id !== source);
-        
+
         updateGraph();
     }
 
     function addNode(sourceNode) {
         document.getElementById("custom-topology-btn").checked = true;
         document.getElementById("predefined-topology").style.display = "none";
-        
+
         const newNode = {
             id: gData.nodes.length,
             ip: "127.0.0.1",
@@ -348,7 +348,7 @@ const TopologyManager = (function() {
             neighbors: [sourceNode.id],
             links: []
         };
-        
+
         sourceNode.neighbors.push(newNode.id);
         gData.nodes.push(newNode);
         gData.links.push({ source: newNode.id, target: sourceNode.id });
@@ -362,7 +362,7 @@ const TopologyManager = (function() {
         document.getElementById("predefined-topology").style.display = "none";
 
         // Remove links connected to this node
-        gData.links = gData.links.filter(l => 
+        gData.links = gData.links.filter(l =>
             l.source.id !== node.id && l.target.id !== node.id
         );
 
@@ -471,7 +471,7 @@ const TopologyManager = (function() {
         const sprite = new THREE.Sprite(spriteMaterial);
         sprite.scale.set(10, 10 * 0.7, 5);
         sprite.position.set(0, 5, 0);
-        
+
         return sprite;
     }
 
@@ -533,7 +533,7 @@ const TopologyManager = (function() {
     function updateIPsAndPorts() {
         const isProcess = document.getElementById("process-radio").checked;
         const baseIP = "192.168.50";
-        
+
         gData.nodes.forEach((node, index) => {
             node.ip = isProcess ? "127.0.0.1" : `${baseIP}.${index + 2}`;
             node.port = (45001 + index).toString();
@@ -542,7 +542,7 @@ const TopologyManager = (function() {
 
     function getMatrix() {
         const matrix = Array(gData.nodes.length).fill().map(() => Array(gData.nodes.length).fill(0));
-        
+
         gData.links.forEach(link => {
             const source = typeof link.source === 'object' ? link.source.id : link.source;
             const target = typeof link.target === 'object' ? link.target.id : link.target;
@@ -573,7 +573,7 @@ const TopologyManager = (function() {
     function assignRolesByFederationArchitecture() {
         const federationType = document.getElementById("federationArchitecture").value;
         const nodes = gData.nodes;
-        
+
         if (nodes.length === 0) return;
 
         switch (federationType) {
@@ -584,7 +584,7 @@ const TopologyManager = (function() {
                     nodes[i].role = "trainer";
                 }
                 break;
-                
+
             case "SDFL":
                 // All as trainers except one random node as aggregator
                 const randomIndex = Math.floor(Math.random() * nodes.length);
@@ -592,7 +592,7 @@ const TopologyManager = (function() {
                     nodes[i].role = i === randomIndex ? "aggregator" : "trainer";
                 }
                 break;
-                
+
             case "DFL":
                 // All as aggregators
                 for (let i = 0; i < nodes.length; i++) {
@@ -600,7 +600,7 @@ const TopologyManager = (function() {
                 }
                 break;
         }
-        
+
         // Force complete graph update
         if (Graph) {
             Graph.nodeThreeObject(node => createNodeObject(node));
@@ -626,7 +626,7 @@ const TopologyManager = (function() {
                 generatePredefinedTopology();
                 return;
             }
-            
+
             // Ensure each node has the required properties
             data.nodes = data.nodes.map(node => ({
                 id: node.id,
@@ -636,13 +636,13 @@ const TopologyManager = (function() {
                 neighbors: node.neighbors || [],
                 links: node.links || []
             }));
-            
+
             // Ensure each link has the required properties
             data.links = data.links.map(link => ({
                 source: link.source,
                 target: link.target
             }));
-            
+
             gData = data;
             updateGraph();
         },
@@ -652,4 +652,4 @@ const TopologyManager = (function() {
     };
 })();
 
-export default TopologyManager; 
+export default TopologyManager;

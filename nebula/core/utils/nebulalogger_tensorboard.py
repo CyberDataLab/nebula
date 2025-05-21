@@ -17,7 +17,7 @@ class NebulaTensorBoardLogger(TensorBoardLogger):
     def log_data(self, data, step=None):
         if step is None:
             step = self.get_step()
-        #logging.debug(f"Logging data for global step {step} | local step {self.local_step} | global step {self.global_step}")
+        # logging.debug(f"Logging data for global step {step} | local step {self.local_step} | global step {self.global_step}")
         try:
             super().log_metrics(data, step)
         except ValueError:
@@ -29,7 +29,7 @@ class NebulaTensorBoardLogger(TensorBoardLogger):
         if step is None:
             self.local_step += 1
             step = self.global_step + self.local_step
-        #logging.debug(f"Logging metrics for global step {step} | local step {self.local_step} | global step {self.global_step}")
+        # logging.debug(f"Logging metrics for global step {step} | local step {self.local_step} | global step {self.global_step}")
         if "epoch" in metrics:
             metrics.pop("epoch")
         try:
@@ -61,4 +61,3 @@ class NebulaTensorBoardLogger(TensorBoardLogger):
             self.global_step = logger_config["global_step"]
         except Exception as e:
             logging.exception(f"Error setting logger config: {e}")
-            

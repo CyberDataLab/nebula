@@ -21,14 +21,14 @@ class Monitor {
         this.processingUpdates = false; // Flag to prevent concurrent updates
         this.pendingGraphUpdate = false; // Flag to track pending graph updates
         this.updateTimeout = null; // Timeout for debounced graph updates
-        
+
         this.initializeMap();
         this.initializeGraph();
         this.initializeWebSocket();
         this.initializeEventListeners();
         this.initializeDownloadHandlers();
         this.loadInitialData();
-        
+
         this.startStaleNodeCheck();
         this.startPeriodicStatusCheck();
     }
@@ -82,7 +82,7 @@ class Monitor {
         this.log('Initializing line layer...');
         this.lineLayer = L.layerGroup().addTo(this.map);
         this.log('Line layer added to map:', this.lineLayer);
-        
+
         // Initialize drone icons
         this.log('Initializing drone icons...');
         this.droneIcon = L.icon({
@@ -113,7 +113,7 @@ class Monitor {
 
     initializeGraph() {
         const width = document.getElementById('3d-graph').offsetWidth;
-        
+
         // Initialize with basic configuration first
         this.Graph = ForceGraph3D()(document.getElementById('3d-graph'))
             .width(width)
@@ -127,7 +127,7 @@ class Monitor {
             .linkColor(link => {
                 const sourceNode = this.gData.nodes.find(n => n.ipport === link.source);
                 const targetNode = this.gData.nodes.find(n => n.ipport === link.target);
-                return (sourceNode && this.offlineNodes.has(sourceNode.ip)) || 
+                return (sourceNode && this.offlineNodes.has(sourceNode.ip)) ||
                        (targetNode && this.offlineNodes.has(targetNode.ip)) ? '#ff0000' : '#999';
             })
             .linkOpacity(0.6)
@@ -161,13 +161,13 @@ class Monitor {
     layoutNodes(nodes) {
         const radius = 50;
         const center = { x: 0, y: 0, z: 0 };
-        
+
         this.log('Layouting nodes:', nodes);
-        
+
         return nodes.map((node, i) => {
             // Calculate angle based on node index
             const angle = (2 * Math.PI * i) / nodes.length;
-            
+
             // Position nodes in a circle on the x-y plane
             const x = center.x + radius * Math.cos(angle);
             const y = center.y + radius * Math.sin(angle);
@@ -217,10 +217,10 @@ class Monitor {
                 if (data.nodes && data.nodes.length > 0) {
                     // Create a Set to track unique nodes
                     const uniqueNodes = new Set();
-                    
+
                     data.nodes.forEach(node => {
                         const nodeId = `${node.ip}:${node.port}`;
-                        
+
                         // Skip if we've already processed this node
                         if (uniqueNodes.has(nodeId)) {
                             this.log('Skipping duplicate node:', nodeId);
@@ -379,7 +379,7 @@ class Monitor {
         for (let i = 0; i < this.gData.nodes.length; i++) {
             const sourceNode = this.gData.nodes[i];
             const sourceIP = sourceNode.ip;
-            
+
             // Skip if source node is offline
             if (this.offlineNodes.has(sourceIP)) {
                 this.log('Skipping links for offline source node:', sourceIP);
@@ -389,20 +389,20 @@ class Monitor {
             for (let j = i + 1; j < this.gData.nodes.length; j++) {
                 const targetNode = this.gData.nodes[j];
                 const targetIP = targetNode.ip;
-                
+
                 // Skip if target node is offline
                 if (this.offlineNodes.has(targetIP)) {
                     this.log('Skipping link to offline target node:', targetIP);
                     continue;
                 }
-                
+
                 // Add bidirectional links only between online nodes
                 this.gData.links.push({
                     source: sourceNode.ipport,
                     target: targetNode.ipport,
                     value: this.randomFloatFromInterval(1.0, 1.3)
                 });
-                
+
                 this.gData.links.push({
                     source: targetNode.ipport,
                     target: sourceNode.ipport,
@@ -413,7 +413,7 @@ class Monitor {
 
         // Process queue immediately
         this.processQueue();
-        
+
         // Initial graph update
         this.updateGraph();
         this.log('Initial data processing complete. Total links:', this.gData.links.length);
@@ -422,7 +422,7 @@ class Monitor {
     updateGraphData(data) {
         const nodeId = `${data.ip}:${data.port}`;
         this.log('Updating graph data for node:', nodeId);
-        
+
         // Add or update node - ensure no duplication
         const existingNodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
         if (existingNodeIndex === -1) {
@@ -493,7 +493,7 @@ class Monitor {
             // Only update if there are actual changes in neighbors
             if (!this.areSetsEqual(currentNeighbors, newNeighbors)) {
                 this.log('Neighbor changes detected, updating links');
-                
+
                 // Remove existing links for this node
                 this.gData.links = this.gData.links.filter(link => {
                     const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
@@ -506,8 +506,8 @@ class Monitor {
                     const neighborIP = neighbor.split(':')[0];
                     if (!this.offlineNodes.has(neighborIP)) {
                         const normalizedNeighbor = neighbor.includes(':') ? neighbor : `${neighbor}:${data.port}`;
-                        const neighborNode = this.gData.nodes.find(n => 
-                            n.ipport === normalizedNeighbor || 
+                        const neighborNode = this.gData.nodes.find(n =>
+                            n.ipport === normalizedNeighbor ||
                             n.ipport.split(':')[0] === neighborIP
                         );
 
@@ -548,9 +548,9 @@ class Monitor {
             transparent: true,
             opacity: 0.8,
         });
-        
+
         const sphere = new THREE.Mesh(
-            new THREE.SphereGeometry(sphereRadius, 32, 32), 
+            new THREE.SphereGeometry(sphereRadius, 32, 32),
             material
         );
         group.add(sphere);
@@ -575,12 +575,12 @@ class Monitor {
         if (this.offlineNodes.has(node.ip)) {
             return '#ff0000'; // Red color for offline nodes
         }
-        
+
         // Check if the node is malicious
         if (node.malicious === "True" || node.malicious === "true") {
             return '#000000'; // Black color for malicious nodes
         }
-        
+
         switch(node.role) {
             case 'trainer': return '#7570b3';
             case 'aggregator': return '#d95f02';
@@ -674,15 +674,15 @@ class Monitor {
         if (!data) return false;
 
         const nodeId = `${data.ip}:${data.port}`;
-        const currentLinks = this.gData.links.filter(link => 
+        const currentLinks = this.gData.links.filter(link =>
             link.source === nodeId || link.target === nodeId
         );
-        
+
         if (!data.neighbors) return false;
-        
+
         // Parse neighbors using consistent format
         const neighbors = data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '');
-        
+
         // Create sets of current and new neighbors for comparison
         const currentNeighbors = new Set(
             currentLinks.map(link => {
@@ -690,18 +690,18 @@ class Monitor {
                 return neighborId.split(':')[0]; // Compare only IPs
             })
         );
-        
+
         const newNeighbors = new Set(
             neighbors.map(neighbor => neighbor.split(':')[0]) // Compare only IPs
         );
-        
+
         // Check if there are any differences in the sets
         if (currentNeighbors.size !== newNeighbors.size) return true;
-        
+
         for (const neighbor of newNeighbors) {
             if (!currentNeighbors.has(neighbor)) return true;
         }
-        
+
         return false;
     }
 
@@ -730,7 +730,7 @@ class Monitor {
         }
 
         let nodeRow = document.querySelector(`#node-${data.uid}`);
-        
+
         // If row doesn't exist, create it
         if (!nodeRow) {
             this.log('Creating new row for node:', data.uid);
@@ -743,7 +743,7 @@ class Monitor {
             // Create new row
             nodeRow = document.createElement('tr');
             nodeRow.id = `node-${data.uid}`;
-            
+
             // Create cells matching the HTML template structure
             const cells = [
                 { class: 'py-3', content: '' }, // IDX
@@ -776,14 +776,14 @@ class Monitor {
         if (isNowOffline) {
             this.offlineNodes.add(nodeId);
             this.log('Node marked as offline:', nodeId);
-            
+
             // Remove all links for this node
             this.removeNodeLinks(data);
-            
+
             // Force immediate graph update when node goes offline
             this.updateGraphData(data);
             this.updateGraph();
-            
+
             // Update marker appearance
             if (this.droneMarkers[data.uid]) {
                 this.droneMarkers[data.uid].setIcon(this.droneIconOffline);
@@ -792,7 +792,7 @@ class Monitor {
         } else {
             this.offlineNodes.delete(nodeId);
             this.log('Node marked as online:', nodeId);
-            
+
             // Update marker appearance
             if (this.droneMarkers[data.uid]) {
                 this.droneMarkers[data.uid].setIcon(this.droneIcon);
@@ -841,7 +841,7 @@ class Monitor {
             // Update Status
             const statusCell = nodeRow.querySelector('td:nth-child(6)');
             if (statusCell) {
-                statusCell.innerHTML = data.status 
+                statusCell.innerHTML = data.status
                     ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
                     : '<span class="badge bg-danger-subtle text-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
             }
@@ -856,7 +856,7 @@ class Monitor {
                         </a>
                     </li>
                 ` : '';
-                
+
                 actionsCell.innerHTML = `
                     <div class="dropdown d-flex justify-content-center">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
@@ -902,24 +902,24 @@ class Monitor {
 
         const nodeId = `${data.ip}:${data.port}`;
         this.log('Removing links for node:', nodeId);
-        
+
         // Remove links from graph data
         const previousLinkCount = this.gData.links.length;
-        
+
         // Remove all links where this node is either source or target
         this.gData.links = this.gData.links.filter(link => {
             const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
             const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
             return sourceIP !== nodeId && targetIP !== nodeId;
         });
-        
+
         this.log(`Removed ${previousLinkCount - this.gData.links.length} links for node ${nodeId}`);
-        
+
         // Remove lines from map
         if (data.uid && this.droneLines[data.uid]) {
             this.cleanupDroneLines(data.uid);
         }
-        
+
         // Update any related lines from other nodes
         if (data.uid) {
             this.updateAllRelatedLines(data.uid);
@@ -928,12 +928,12 @@ class Monitor {
         // Also remove links from other nodes to this offline node
         Object.entries(this.droneMarkers).forEach(([uid, marker]) => {
             if (marker.neighbors) {
-                const neighbors = Array.isArray(marker.neighbors) 
-                    ? marker.neighbors 
-                    : (typeof marker.neighbors === 'string' 
+                const neighbors = Array.isArray(marker.neighbors)
+                    ? marker.neighbors
+                    : (typeof marker.neighbors === 'string'
                         ? marker.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
                         : []);
-                
+
                 // If this marker has the offline node as a neighbor, update its lines
                 if (neighbors.some(ip => ip.startsWith(data.ip))) {
                     this.updateNeighborLines(uid, marker.getLatLng(), neighbors, true);
@@ -964,7 +964,7 @@ class Monitor {
                 const layoutedNodes = this.gData.nodes.map((node, index) => {
                     const angle = (2 * Math.PI * index) / this.gData.nodes.length;
                     const radius = 50;
-                    
+
                     return {
                         ...node,
                         x: radius * Math.cos(angle),
@@ -1042,7 +1042,7 @@ class Monitor {
     processUpdate(data) {
         try {
             this.log('Processing update for node:', data.uid);
-            
+
             // Validate required fields
             if (!data.uid || !data.ip) {
                 this.warn('Missing required fields for node update:', data);
@@ -1073,9 +1073,9 @@ class Monitor {
             this.log('Validated node data:', nodeData);
 
             const newLatLng = new L.LatLng(nodeData.latitude, nodeData.longitude);
-            
+
             // Parse neighbors string into array, handling both space and comma separators
-            const neighborsIPs = nodeData.neighbors 
+            const neighborsIPs = nodeData.neighbors
                 ? nodeData.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
                 : [];
 
@@ -1084,11 +1084,11 @@ class Monitor {
             // First update the marker
             this.log('Updating drone position for node:', nodeData.uid);
             this.updateDronePosition(
-                nodeData.uid, 
-                nodeData.ip, 
-                nodeData.latitude, 
-                nodeData.longitude, 
-                neighborsIPs, 
+                nodeData.uid,
+                nodeData.ip,
+                nodeData.latitude,
+                nodeData.longitude,
+                neighborsIPs,
                 nodeData.neighbors_distance
             );
 
@@ -1106,7 +1106,7 @@ class Monitor {
         this.log('Updating drone position:', { uid, ip, lat, lng });
         const droneId = uid;
         const newLatLng = new L.LatLng(lat, lng);
-        
+
         // Create popup content with node information
         const popupContent = `
             <div class="drone-popup">
@@ -1166,7 +1166,7 @@ class Monitor {
     updateNeighborLines(droneId, droneLatLng, neighborsIPs, condition) {
         this.log('Updating neighbor lines for drone:', droneId, 'with neighbors:', neighborsIPs);
         this.log('Current drone position:', droneLatLng);
-        
+
         // Clean up existing lines for this drone
         this.cleanupDroneLines(droneId);
 
@@ -1186,7 +1186,7 @@ class Monitor {
             // Extract IP from IP:port format if present
             const neighborIPOnly = neighborIP.split(':')[0];
             const neighborMarker = this.findMarkerByIP(neighborIPOnly);
-            
+
             if (neighborMarker) {
                 // Skip if neighbor is offline
                 if (this.offlineNodes.has(neighborIPOnly)) {
@@ -1197,9 +1197,9 @@ class Monitor {
                 this.log('Found neighbor marker for IP:', neighborIPOnly);
                 const neighborLatLng = neighborMarker.getLatLng();
                 this.log('Neighbor position:', neighborLatLng);
-                
+
                 this.log('Creating line between:', droneLatLng, 'and', neighborLatLng);
-                
+
                 try {
                     // Create the line with explicit coordinates
                     const line = L.polyline(
@@ -1207,7 +1207,7 @@ class Monitor {
                             [droneLatLng.lat, droneLatLng.lng],
                             [neighborLatLng.lat, neighborLatLng.lng]
                         ],
-                        { 
+                        {
                             color: '#4CAF50',
                             weight: 3,
                             opacity: 1.0,
@@ -1217,12 +1217,12 @@ class Monitor {
 
                     // Add popup with distance information
                     try {
-                        const distance = condition 
-                            ? (this.droneMarkers[droneId].neighbors_distance && 
+                        const distance = condition
+                            ? (this.droneMarkers[droneId].neighbors_distance &&
                                this.droneMarkers[droneId].neighbors_distance[neighborIP])
-                            : (neighborMarker.neighbors_distance && 
+                            : (neighborMarker.neighbors_distance &&
                                neighborMarker.neighbors_distance[this.droneMarkers[droneId].ip]);
-                        
+
                         line.bindPopup(`
                             <div class="line-popup">
                                 <p><strong>Distance:</strong> ${distance ? distance + ' m' : 'Calculating...'}</p>
@@ -1288,16 +1288,16 @@ class Monitor {
         Object.entries(this.droneMarkers).forEach(([id, marker]) => {
             if (id !== droneId && marker.neighbors) {
                 this.log('Processing marker:', id, 'with neighbors:', marker.neighbors, 'type:', typeof marker.neighbors);
-                
+
                 // Handle both string and array formats for neighbors
-                const neighborIPs = Array.isArray(marker.neighbors) 
-                    ? marker.neighbors 
-                    : (typeof marker.neighbors === 'string' 
+                const neighborIPs = Array.isArray(marker.neighbors)
+                    ? marker.neighbors
+                    : (typeof marker.neighbors === 'string'
                         ? marker.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
                         : []);
-                
+
                 this.log('Processed neighbor IPs:', neighborIPs);
-                
+
                 if (neighborIPs.some(ip => ip.startsWith(currentDroneIP))) {
                     this.log('Found matching neighbor, updating lines');
                     this.updateNeighborLines(
@@ -1316,7 +1316,7 @@ class Monitor {
         const ipOnly = ip.split(':')[0];
         this.log('Looking for marker with IP:', ipOnly);
         this.log('Available markers:', Object.values(this.droneMarkers).map(m => m.ip));
-        
+
         const marker = Object.values(this.droneMarkers).find(marker => {
             const markerIP = marker.ip.split(':')[0];
             const matches = markerIP === ipOnly;
@@ -1325,7 +1325,7 @@ class Monitor {
             }
             return matches;
         });
-        
+
         if (!marker) {
             this.warn('No marker found for IP:', ipOnly);
         }
@@ -1337,7 +1337,7 @@ class Monitor {
         setInterval(() => {
             const currentTime = Date.now();
             const staleThreshold = 20000; // 20 seconds in milliseconds
-            
+
             // Check all nodes for staleness
             this.nodeTimestamps.forEach((timestamp, nodeId) => {
                 const timeSinceLastUpdate = currentTime - timestamp;
@@ -1358,10 +1358,10 @@ class Monitor {
         }
 
         this.log(`Marking node ${nodeId} as offline`);
-        
+
         // Add to offline nodes set
         this.offlineNodes.add(node.ip);
-        
+
         // Update node color in graph data
         const nodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
         if (nodeIndex !== -1) {
@@ -1380,7 +1380,7 @@ class Monitor {
         if (marker) {
             marker.setIcon(this.droneIconOffline);
             marker.getElement().classList.add('drone-offline');
-            
+
             // Remove all lines connected to this node
             if (this.droneLines[marker.uid]) {
                 this.cleanupDroneLines(marker.uid);
@@ -1395,7 +1395,7 @@ class Monitor {
         }
 
         const [uid, _] = nodeEntry;
-        
+
         // Update table status
         const nodeRow = document.querySelector(`#node-${uid}`);
         if (nodeRow) {
@@ -1404,10 +1404,10 @@ class Monitor {
                 statusCell.innerHTML = '<span class="badge bg-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
             }
         }
-        
+
         // Update graph visualization
         this.updateGraph();
-        
+
         // Update map visualization
         this.updateAllRelatedLines(uid);
     }
@@ -1426,7 +1426,7 @@ class Monitor {
                 this.error('Failed to fetch node status');
                 return;
             }
-            
+
             const data = await response.json();
             if (!data.nodes || data.nodes.length === 0) {
                 this.warn('No nodes in status check response');
@@ -1478,12 +1478,12 @@ class Monitor {
             });
 
             this.updateGraphDataFromStatus(data.nodes);
-            
+
             // Update all visualizations
             this.updateGraph();
             this.updateAllMarkers();
             this.updateAllRelatedLines();
-            
+
             // Check if all nodes are offline
             this.checkAllNodesOffline();
         } catch (error) {
@@ -1499,7 +1499,7 @@ class Monitor {
         }
 
         let nodeRow = document.querySelector(`#node-${data.uid}`);
-        
+
         // If row doesn't exist, create it
         if (!nodeRow) {
             this.log('Creating new row for node:', data.uid);
@@ -1512,7 +1512,7 @@ class Monitor {
             // Create new row
             nodeRow = document.createElement('tr');
             nodeRow.id = `node-${data.uid}`;
-            
+
             // Create cells with initial values
             const cells = [
                 { class: 'py-3', content: data.idx || '0' }, // IDX
@@ -1526,7 +1526,7 @@ class Monitor {
                 { class: 'py-3', content: data.malicious === "True" || data.malicious === "true"
                     ? '<span class="badge bg-dark"><i class="fa fa-skull me-1"></i>Malicious</span>'
                     : '<span class="badge bg-secondary"><i class="fa fa-shield-alt me-1"></i>Benign</span>' }, // Behaviour
-                { class: 'py-3', content: data.status 
+                { class: 'py-3', content: data.status
                     ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
                     : '<span class="badge bg-danger-subtle text-danger"><i class="fa fa-circle me-1"></i>Offline</span>' }, // Status
                 { class: 'py-3', content: `
@@ -1618,7 +1618,7 @@ class Monitor {
             // Update Status
             const statusCell = nodeRow.querySelector('td:nth-child(6)');
             if (statusCell) {
-                statusCell.innerHTML = data.status 
+                statusCell.innerHTML = data.status
                     ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
                     : '<span class="badge bg-danger-subtle text-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
             }
@@ -1633,7 +1633,7 @@ class Monitor {
                         </a>
                     </li>
                 ` : '';
-                
+
                 actionsCell.innerHTML = `
                     <div class="dropdown d-flex justify-content-center">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
@@ -1720,10 +1720,10 @@ class Monitor {
     checkAllNodesOffline() {
         // Get all unique node IPs from markers
         const allNodeIPs = new Set(Object.values(this.droneMarkers).map(marker => marker.ip));
-        
+
         // Check if all nodes are in the offlineNodes set
         const allOffline = allNodeIPs.size > 0 && Array.from(allNodeIPs).every(ip => this.offlineNodes.has(ip));
-        
+
         if (allOffline) {
             // Update scenario status badge to "Finished"
             const statusBadge = document.getElementById('scenario_status');
@@ -1747,4 +1747,4 @@ class Monitor {
 // Initialize monitor when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new Monitor();
-}); 
+});

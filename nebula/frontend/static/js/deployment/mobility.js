@@ -10,7 +10,7 @@ const MobilityManager = {
 
     setupLocationControls() {
         const customLocationDiv = document.getElementById("mobility-custom-location");
-        
+
         document.getElementById("random-geo-btn").addEventListener("click", () => {
             customLocationDiv.style.display = "none";
         });
@@ -42,7 +42,7 @@ const MobilityManager = {
 
     setupMobilityControls() {
         const mobilityOptionsDiv = document.getElementById("mobility-options");
-        
+
         document.getElementById("without-mobility-btn").addEventListener("click", () => {
             mobilityOptionsDiv.style.display = "none";
             if (this.map) {
@@ -67,7 +67,7 @@ const MobilityManager = {
     initializeMap() {
         if (!this.map) {
             this.map = L.map('map').setView([38.023522, -1.174389], 17);
-            
+
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                 attribution: '&copy; <a href="https://enriquetomasmb.com">enriquetomasmb.com</a>',
                 maxZoom: 15,
@@ -143,17 +143,17 @@ const MobilityManager = {
             }
         });
 
-        document.getElementById("connectionDelaySwitch").addEventListener("change", function() {          
+        document.getElementById("connectionDelaySwitch").addEventListener("change", function() {
             if(this.checked) {
                 document.getElementById("connectionDelay").style.display = "inline";
                 $(".additional-participant-item").remove();
             } else {
                 document.getElementById("connectionDelay").style.display = "none";
-                
+
                 //Generate additional participants
                 const container = document.getElementById("additional-participants-items");
                 container.innerHTML = "";
-                
+
                 let additionalParticipants = document.getElementById("additionalParticipants");
                 for (let i = 0; i < additionalParticipants.value; i++) {
                     const participantItem = MobilityManager.createParticipantItem(i);
@@ -171,7 +171,7 @@ const MobilityManager = {
         const heading = document.createElement("h5");
         heading.textContent = `Round of deployment (participant ${index + 1})`;
         heading.classList.add("step-title")
-        
+
         const input = document.createElement("input");
         input.type = "number";
         input.classList.add("form-control");
@@ -243,7 +243,7 @@ const MobilityManager = {
         document.getElementById("random-geo-btn").checked = config.randomGeo;
         document.getElementById("custom-location-btn").checked = !config.randomGeo;
         document.getElementById("mobility-custom-location").style.display = config.randomGeo ? "none" : "block";
-        
+
         if (config.location) {
             document.getElementById("latitude").value = config.location.latitude;
             document.getElementById("longitude").value = config.location.longitude;
@@ -307,4 +307,4 @@ const MobilityManager = {
     }
 };
 
-export default MobilityManager; 
+export default MobilityManager;

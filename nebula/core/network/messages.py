@@ -127,7 +127,7 @@ class MessagesManager:
                         await self.cm.handle_message(me)
             # Rest of messages
             else:
-                #if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                # if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
                 me = MessageEvent(
                     (msg_name, get_action_name_from_value(msg_name, message_data.action)), source, message_data
                 )

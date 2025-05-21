@@ -89,7 +89,7 @@ def euclidean_metric(
                     l2 = (l2 - l2.mean()) / std_l2
 
             distance = torch.norm(l1 - l2, p=2)
-            
+
             if similarity:
                 norm_sum = torch.norm(l1, p=2) + torch.norm(l2, p=2)
                 similarity_score = 1 - (distance / norm_sum if norm_sum != 0 else 0)
@@ -237,7 +237,9 @@ def jaccard_metric(
 
 
 def normalise_layers(untrusted_params, trusted_params):
-    trusted_norms = dict([k, torch.norm(trusted_params[k].data.to("cpu").view(-1).float())] for k in trusted_params.keys())
+    trusted_norms = dict(
+        [k, torch.norm(trusted_params[k].data.to("cpu").view(-1).float())] for k in trusted_params.keys()
+    )
 
     normalised_params = copy.deepcopy(untrusted_params)
 

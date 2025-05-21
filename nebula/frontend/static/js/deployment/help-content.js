@@ -175,4 +175,4 @@ const HelpContent = (function() {
     };
 })();
 
-export default HelpContent; 
+export default HelpContent;

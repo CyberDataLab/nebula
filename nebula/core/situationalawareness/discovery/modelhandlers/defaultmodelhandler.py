@@ -1,10 +1,9 @@
+from nebula.core.situationalawareness.discovery.federationconnector import FederationConnector
 from nebula.core.situationalawareness.discovery.modelhandlers.modelhandler import ModelHandler
 from nebula.core.utils.locker import Locker
-from nebula.core.situationalawareness.discovery.federationconnector import FederationConnector
-import logging
+
 
 class DefaultModelHandler(ModelHandler):
-    
     def __init__(self):
         self.model = None
         self.rounds = 0
@@ -12,8 +11,8 @@ class DefaultModelHandler(ModelHandler):
         self.epochs = 0
         self.model_lock = Locker(name="model_lock")
         self.params_lock = Locker(name="param_lock")
-        self._nm : FederationConnector = None
-        
+        self._nm: FederationConnector = None
+
     def set_config(self, config):
         """
         Args:
@@ -25,15 +24,15 @@ class DefaultModelHandler(ModelHandler):
         self.params_lock.acquire()
         self.rounds = config[0]
         if config[1] > self.round:
-            self.round = config[1] 
+            self.round = config[1]
         self.epochs = config[2]
         if not self._nm:
             self._nm = config[3]
         self.params_lock.release()
-    
+
     def accept_model(self, model):
         return True
-            
+
     async def get_model(self, model):
         """
         Returns:
@@ -44,6 +43,6 @@ class DefaultModelHandler(ModelHandler):
 
     def pre_process_model(self):
         """
-            no pre-processing defined
+        no pre-processing defined
         """
         pass

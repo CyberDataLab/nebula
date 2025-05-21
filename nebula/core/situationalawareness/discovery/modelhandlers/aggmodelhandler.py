@@ -1,8 +1,8 @@
 from nebula.core.situationalawareness.discovery.modelhandlers.modelhandler import ModelHandler
 from nebula.core.utils.locker import Locker
 
-class AGGModelHandler(ModelHandler):
 
+class AGGModelHandler(ModelHandler):
     def __init__(self):
         self.model = None
         self.rounds = 0
@@ -22,13 +22,13 @@ class AGGModelHandler(ModelHandler):
         self.params_lock.acquire()
         self.rounds = config[0]
         if config[1] > self.round:
-            self.round = config[0] 
+            self.round = config[0]
         self.epochs = config[2]
         self.params_lock.release()
-    
+
     def accept_model(self, model):
         """
-            Save first model receive and collect the rest for pre-processing
+        Save first model receive and collect the rest for pre-processing
         """
         self.models_lock.acquire()
         if self.model is None:
@@ -36,14 +36,14 @@ class AGGModelHandler(ModelHandler):
         else:
             self.model_list.append(model)
         self.models_lock.release()
-           
+
     def get_model(self, model):
         """
         Returns:
             neccesary data to create trainer after pre-processing
         """
         self.models_lock.acquire()
-        self.pre_process_model() 
+        self.pre_process_model()
         self.models_lock.release()
         return (self.model, self.rounds, self.round, self.epochs)
 

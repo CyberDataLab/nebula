@@ -1,8 +1,10 @@
 import asyncio
 import logging
 import time
+
 from nebula.addons.functions import print_msg_box
 from nebula.core.utils.locker import Locker
+
 
 class Forwarder:
     def __init__(self, config):
@@ -20,6 +22,7 @@ class Forwarder:
     def cm(self):
         if not self._cm:
             from nebula.core.network.communications import CommunicationsManager
+
             self._cm = CommunicationsManager.get_instance()
             return self._cm
         else:

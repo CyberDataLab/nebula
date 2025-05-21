@@ -12,7 +12,7 @@ const ScenarioActions = {
     handleRelaunch(event) {
         const scenarioName = $(event.currentTarget).data('scenario-name');
         const scenarioTitle = $(event.currentTarget).data('scenario-title');
-        
+
         $('#confirm-modal').modal('show');
         $('#confirm-modal .modal-title').text('Relaunch scenario');
         $('#confirm-modal #confirm-modal-body').html(`Are you sure you want to relaunch the scenario ${scenarioTitle}?`);
@@ -24,7 +24,7 @@ const ScenarioActions = {
 
     handleRemove(event) {
         const scenarioName = $(event.currentTarget).data('scenario-name');
-        
+
         $('#confirm-modal').modal('show');
         $('#confirm-modal .modal-title').text('Remove scenario');
         $('#confirm-modal #confirm-modal-body').html(
@@ -78,4 +78,4 @@ const ScenarioActions = {
     }
 };
 
-export default ScenarioActions; 
+export default ScenarioActions;

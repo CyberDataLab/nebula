@@ -36,4 +36,4 @@ const ConfigManager = {
     }
 };
 
-export default ConfigManager; 
+export default ConfigManager;
