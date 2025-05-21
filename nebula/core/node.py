@@ -12,7 +12,7 @@ from cryptography.utils import CryptographyDeprecationWarning
 
 warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import logging
 
 from nebula.config.config import Config

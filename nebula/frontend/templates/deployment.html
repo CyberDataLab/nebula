@@ -13,7 +13,8 @@
 </section>
 
 <!-- Modal participant -->
-<div class="modal fade" id="participant-modal" tabindex="-1" role="dialog" aria-labelledby="participant-modal-title" aria-hidden="true">
+<div class="modal fade" id="participant-modal" tabindex="-1" role="dialog" aria-labelledby="participant-modal-title"
+    aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -75,10 +76,12 @@
                     <h5>Advanced Deployment <i class="fa fa-cloud-upload"></i></h5>
                     <div style="display: inline-block;">
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="radio" id="mod-cpu" name="adv-deployment" value="cpu" style="margin-right: 10px;" checked>CPU
+                            <input type="radio" id="mod-cpu" name="adv-deployment" value="cpu"
+                                style="margin-right: 10px;" checked>CPU
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="radio" id="mod-gpu" name="adv-deployment" value="gpu" style="margin-right: 10px; margin-left: 10px;">GPU
+                            <input type="radio" id="mod-gpu" name="adv-deployment" value="gpu"
+                                style="margin-right: 10px; margin-left: 10px;">GPU
                         </label>
                     </div>
                     <hr>
@@ -87,16 +90,20 @@
                     </h5>
                     <div style="display: inline-block;">
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-fedavg" value="FedAvg" style="margin-right: 10px;" checked>FedAvg
+                            <input type="checkbox" id="mod-fedavg" value="FedAvg" style="margin-right: 10px;"
+                                checked>FedAvg
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-krum" value="Krum" style="margin-right: 10px; margin-left: 10px;">Krum
+                            <input type="checkbox" id="mod-krum" value="Krum"
+                                style="margin-right: 10px; margin-left: 10px;">Krum
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-trimmed" value="TrimmedMean" style="margin-right: 10px; margin-left: 10px;">TrimmedMean
+                            <input type="checkbox" id="mod-trimmed" value="TrimmedMean"
+                                style="margin-right: 10px; margin-left: 10px;">TrimmedMean
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-median" value="Median" style="margin-right: 10px; margin-left: 10px;">Median
+                            <input type="checkbox" id="mod-median" value="Median"
+                                style="margin-right: 10px; margin-left: 10px;">Median
                         </label>
                     </div>
                     <hr>
@@ -105,17 +112,23 @@
                     </h5>
                     <div style="display: inline-block; white-space: nowrap;">
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-fully" value='Fully' style="margin-right: 10px;" checked>Fully
+                            <input type="checkbox" id="mod-fully" value='Fully' style="margin-right: 10px;"
+                                checked>Fully
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-ring" value='Ring' style="margin-right: 10px; margin-left: 10px;">Ring
+                            <input type="checkbox" id="mod-ring" value='Ring'
+                                style="margin-right: 10px; margin-left: 10px;">Ring
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-star" value='Star' style="margin-right: 10px; margin-left: 10px;">Star
+                            <input type="checkbox" id="mod-star" value='Star'
+                                style="margin-right: 10px; margin-left: 10px;">Star
                         </label>
-                        <input type="number" id="mod-topology-nodes" placeholder="Nodes" oninput="greaterThan0(this)" style="display: inline; width: 15%; margin-left: 10px;">
-                        <input type="number" id="mod-topology-increment" placeholder="Increment" oninput="greaterThan0(this)" style="display: inline; width: 21%; margin-left: 0px;">
-                        <input type="number" id="mod-topology-iterations" placeholder="Iterations" oninput="greaterThan0(this)" style="display: inline; width: 20%; margin-left: 0px;">
+                        <input type="number" id="mod-topology-nodes" placeholder="Nodes" oninput="greaterThan0(this)"
+                            style="display: inline; width: 15%; margin-left: 10px;">
+                        <input type="number" id="mod-topology-increment" placeholder="Increment"
+                            oninput="greaterThan0(this)" style="display: inline; width: 21%; margin-left: 0px;">
+                        <input type="number" id="mod-topology-iterations" placeholder="Iterations"
+                            oninput="greaterThan0(this)" style="display: inline; width: 20%; margin-left: 0px;">
                     </div>
                     <hr>
                     <h5>Dataset <i class="fa fa-database"></i>
@@ -123,43 +136,54 @@
                     </h5>
                     <div style="display: inline-block;">
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-mnist" value='MNIST' style="margin-right: 10px;" checked>MNIST
+                            <input type="checkbox" id="mod-mnist" value='MNIST' style="margin-right: 10px;"
+                                checked>MNIST
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-fmnist" value='FashionMNIST' style="margin-right: 10px; margin-left: 10px;">FashionMNIST
+                            <input type="checkbox" id="mod-fmnist" value='FashionMNIST'
+                                style="margin-right: 10px; margin-left: 10px;">FashionMNIST
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
-                            <input type="checkbox" id="mod-cifar10" value='CIFAR10' style="margin-right: 10px; margin-left: 10px;">CIFAR10
+                            <input type="checkbox" id="mod-cifar10" value='CIFAR10'
+                                style="margin-right: 10px; margin-left: 10px;">CIFAR10
                         </label>
                     </div>
                     <hr>
                     <h5>Robustness <i class="fa fa-shield"></i>
                         <input type="checkbox" id="mod-robustness" style="margin-right: 10px; float: left;">
                     </h5>
-                    <div class="wrapper" style="text-align: center; display: flex; justify-content: left; align-items: left;">
+                    <div class="wrapper"
+                        style="text-align: center; display: flex; justify-content: left; align-items: left;">
                         <div class="col-md-5" style="display: inline-block;">
                             <label>
-                                <input type="checkbox" id="mod-noattack" value='No Attack' style="margin-right: 10px;" checked>No Attack
+                                <input type="checkbox" id="mod-noattack" value='No Attack' style="margin-right: 10px;"
+                                    checked>No Attack
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-labelflipping" value='Label Flipping' style="margin-right: 10px;">Label Flipping
+                                <input type="checkbox" id="mod-labelflipping" value='Label Flipping'
+                                    style="margin-right: 10px;">Label Flipping
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-samplepoisoning" value='Sample Poisoning' style="margin-right: 10px;">Sample Poisoning
+                                <input type="checkbox" id="mod-samplepoisoning" value='Sample Poisoning'
+                                    style="margin-right: 10px;">Sample Poisoning
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-modelpoisoning" value='Model Poisoning' style="margin-right: 10px;">Model Poisoning
+                                <input type="checkbox" id="mod-modelpoisoning" value='Model Poisoning'
+                                    style="margin-right: 10px;">Model Poisoning
                             </label>
                         </div>
                         <div class="col-md-7" style="right: inherit;">
                             <label>
-                                <input type="checkbox" id="mod-neuroninversion" value='GLLNeuronInversionAttack' style="margin-right: 10px;">GLL Neuron Inversion
+                                <input type="checkbox" id="mod-neuroninversion" value='GLLNeuronInversionAttack'
+                                    style="margin-right: 10px;">GLL Neuron Inversion
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-swappingweights" value='SwappingWeightsAttack' style="margin-right: 10px;">Swapping Weights
+                                <input type="checkbox" id="mod-swappingweights" value='SwappingWeightsAttack'
+                                    style="margin-right: 10px;">Swapping Weights
                             </label>
                             <label>
-                                <input type="checkbox" id="mod-delayer" value='DelayerAttack' style="margin-right: 10px;">Delayer
+                                <input type="checkbox" id="mod-delayer" value='DelayerAttack'
+                                    style="margin-right: 10px;">Delayer
                             </label>
                         </div>
                     </div>
@@ -197,10 +221,11 @@
                     <h5 class="step-number">Deployment <i class="fa fa-cloud-upload"></i></h5>
                     <h5 class="step-title">Deployment type</h5>
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="deploymentRadioOptions" id="process-radio" value="process">
+                        <input class="form-check-input" type="radio" name="deploymentRadioOptions" id="process-radio"
+                            value="process">
                         <label class="form-check-label" for="process-radio">Processes</label>
                         <small id="processHelp" class="form-text text-muted"></small>
-                            <i id="processHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                        <i id="processHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
                         </small>
                     </div>
                     <div class="form-check form-check-inline">
@@ -208,12 +233,12 @@
                             value="docker" checked>
                         <label class="form-check-label" for="docker-radio">Virtual devices</label>
                         <small id="dockerHelp" class="form-text text-muted"></small>
-                            <i id="dockerHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                        <i id="dockerHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
                         </small>
                     </div>
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="deploymentRadioOptions" id="physical-devices-radio"
-                            value="physical">
+                        <input class="form-check-input" type="radio" name="deploymentRadioOptions"
+                            id="physical-devices-radio" value="physical">
                         <label class="form-check-label" for="physical-devices-radio">Physical devices</label>
                         <small id="physicalDevicesHelp" class="form-text text-muted">
                             <i id="physicalDevicesHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
@@ -221,7 +246,8 @@
                     </div>
                 </div>
                 <div class="form-group row container-shadow tiny grey">
-                    <h5 class="step-number" >Federation Architecture <i class="fa fa-puzzle-piece" aria-hidden="true"></i>
+                    <h5 class="step-number">Federation Architecture <i class="fa fa-puzzle-piece"
+                            aria-hidden="true"></i>
                     </h5>
                     <h5 class="step-title">Federation approach</h5>
                     <div class="form-check form-check-inline">
@@ -266,7 +292,8 @@
                             style="display: inline; width: 40%">
                         </select>
                         <input type="number" class="form-control" id="predefined-topology-nodes"
-                            placeholder="Number of nodes" min="1" value="3" oninput="greaterThan0(this)" style="display: inline; width: 40%">
+                            placeholder="Number of nodes" min="1" value="3" oninput="greaterThan0(this)"
+                            style="display: inline; width: 40%">
                         <div id="random-topology-options" style="display: none; margin-top: 10px;">
                             <label for="random-probability">Edge Probability:</label>
                             <select class="form-control" id="random-probability" style="display: inline; width: 40%">
@@ -325,7 +352,8 @@
                         <button id="add-btn" title="New Scenario" type="button" class="btn btn-dark">
                             <i class="fa fa-plus" aria-hidden="true"></i>
                         </button>
-                        <button id="del-btn" type="button" class="btn btn-dark" style="background-color: red; border-color: red; display: none;">
+                        <button id="del-btn" type="button" class="btn btn-dark"
+                            style="background-color: red; border-color: red; display: none;">
                             <i class="fa fa-trash" aria-hidden="true"></i>
                         </button>
                     </div>
@@ -380,8 +408,8 @@
                     </div>
                     <h5 class="step-title">Parameter setting</h5>
                     <div id="partitionBlock" class="form-check form-check-inline">
-                        <input type="number" step="0.1" class="form-control" id="partitionParameter" style="display: inline; width: 50%"
-                            value="0.5">
+                        <input type="number" step="0.1" class="form-control" id="partitionParameter"
+                            style="display: inline; width: 50%" value="0.5">
                         <small id="parameterSettingHelp" class="form-text text-muted">
                             <i id="parameterSettingHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
                         </small>
@@ -429,7 +457,8 @@
                     </div>
                     <h5 class="step-title">Reporting</h5>
                     <div class="form-check form-switch" style="margin-left: 23px;">
-                        <input class="form-check-input" type="checkbox" id="reportingSwitch" checked="true" style="display: inline; width: 80px; height: 30px;">
+                        <input class="form-check-input" type="checkbox" id="reportingSwitch" checked="true"
+                            style="display: inline; width: 80px; height: 30px;">
                     </div>
                     <h5 class="step-title">Individual participants</h5>
                     <div id="participant-items" class="row"></div>
@@ -473,11 +502,13 @@
                             <option>Delayer</option>
                             <option>Flooding</option>
                         </select>
-                        <h5 id="poisoned-node-title" class="step-title" style="margin-left: 11px; display: none;">% Malicious nodes</h5>
-                        <div class="form-check form-check-inline" style="display: none;" id="poisoned-node-percent-container">
+                        <h5 id="poisoned-node-title" class="step-title" style="margin-left: 11px; display: none;">%
+                            Malicious nodes</h5>
+                        <div class="form-check form-check-inline" style="display: none;"
+                            id="poisoned-node-percent-container">
                             <input type="number" class="form-control" id="poisoned-node-percent"
                                 placeholder="% malicious nodes" min="0" value="0" style="display: inline; width: 20%">
-                                <select class="form-control" id="malicious-nodes-select" name="malicious-nodes-select"
+                            <select class="form-control" id="malicious-nodes-select" name="malicious-nodes-select"
                                 style="display: inline; width: 10%">
                                 <option selected>Percentage</option>
                                 <option>Manual</option>
@@ -486,15 +517,17 @@
                                 <i id="maliciousHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
                             </small>
                         </div>
-                        <h5 class="step-title" id="poisoned-sample-title" style="display: none;">% Samples poisoned by each malicious node</h5>
-                        <div class="form-check form-check-inline" id="poisoned-sample-percent-container" style="display: none;">
+                        <h5 class="step-title" id="poisoned-sample-title" style="display: none;">% Samples poisoned by
+                            each malicious node</h5>
+                        <div class="form-check form-check-inline" id="poisoned-sample-percent-container"
+                            style="display: none;">
                             <input type="number" class="form-control" id="poisoned-sample-percent"
                                 placeholder="% samples poisoned in each malicious node" min="0" value="0" max="100"
-                                oninput="isInRange(this, 0, 100)"
-                                style="display: inline; width: 20%">
+                                oninput="isInRange(this, 0, 100)" style="display: inline; width: 20%">
                         </div>
                         <h5 id="poisoned-noise-title" class="step-title" style="display: none;">% Poisoned noise</h5>
-                        <div class="form-check form-check-inline" id="poisoned-noise-percent-container" style="display: none;">
+                        <div class="form-check form-check-inline" id="poisoned-noise-percent-container"
+                            style="display: none;">
                             <input type="number" class="form-control" id="poisoned-noise-percent"
                                 placeholder="% noise in each poisoned sample" min="0" value="0"
                                 style="display: inline; width: 20%">
@@ -502,7 +535,7 @@
                         <h5 id="noise-type-title" class="step-title" style="display: none;">Noise type</h5>
                         <div class="form-check form-check-inline" id="noise-type-container" style="display: none;">
                             <select class="form-control" id="noise_type" name="noise-type"
-                            style="display: inline; width: 20%">
+                                style="display: inline; width: 20%">
                                 <option selected>Salt</option>
                                 <option>Gaussian</option>
                                 <option>S&P</option>
@@ -511,68 +544,66 @@
                         <h5 id="targeted-title" class="step-title" style="display: none;">Targeted</h5>
                         <div class="form-check form-check-inline" id="targeted-container" style="display: none;">
                             <div class="form-check form-switch" style="margin-bottom: 20px;">
-                                <input class="form-check-input" type="checkbox" id="targeted" checked="false" style="display: inline; width: 80px; height: 30px;">
+                                <input class="form-check-input" type="checkbox" id="targeted" checked="false"
+                                    style="display: inline; width: 80px; height: 30px;">
                             </div>
                         </div>
                         <h5 id="target_label-title" class="step-title" style="display: none;">Target label</h5>
                         <div class="form-check form-check-inline" id="target_label-container" style="display: none;">
-                            <input type="number" class="form-control" id="target_label"
-                                placeholder="target label" min="0" value="4"
-                                style="display: inline; width: 20%">
+                            <input type="number" class="form-control" id="target_label" placeholder="target label"
+                                min="0" value="4" style="display: inline; width: 20%">
                         </div>
-                        <h5 id="target_changed_label-title" class="step-title" style="display: none;">Target changed label</h5>
-                        <div class="form-check form-check-inline" id="target_changed_label-container" style="display: none;">
+                        <h5 id="target_changed_label-title" class="step-title" style="display: none;">Target changed
+                            label</h5>
+                        <div class="form-check form-check-inline" id="target_changed_label-container"
+                            style="display: none;">
                             <input type="number" class="form-control" id="target_changed_label"
                                 placeholder="target changed label" min="0" value="7"
                                 style="display: inline; width: 20%">
                         </div>
                         <h5 id="layer_idx-title" class="step-title" style="display: none;">Layer</h5>
                         <div class="form-check form-check-inline" id="layer_idx-container" style="display: none;">
-                            <input type="number" class="form-control" id="layer_idx"
-                                placeholder="Layer" value="0"
+                            <input type="number" class="form-control" id="layer_idx" placeholder="Layer" value="0"
                                 style="display: inline; width: 80%">
                         </div>
                         <h5 id="delay-title" class="step-title" style="display: none;">Delay</h5>
                         <div class="form-check form-check-inline" id="delay-container" style="display: none;">
-                            <input type="number" class="form-control" id="delay"
-                                placeholder="Delay" min="0" value="10"
+                            <input type="number" class="form-control" id="delay" placeholder="Delay" min="0" value="10"
                                 style="display: inline; width: 80%">
                         </div>
                         <h5 id="flooding-factor-title" class="step-title" style="display: none;">Flooding Factor</h5>
                         <div class="form-check form-check-inline" id="flooding-factor-container" style="display: none;">
-                            <input type="number" class="form-control" id="flooding-factor"
-                                placeholder="Flooding Factor" min="1" value="100"
-                                style="display: inline; width: 80%">
+                            <input type="number" class="form-control" id="flooding-factor" placeholder="Flooding Factor"
+                                min="1" value="100" style="display: inline; width: 80%">
                         </div>
-                        <h5 id="target-percentage-title" class="step-title" style="display: none;">Target Percentage</h5>
-                        <div class="form-check form-check-inline" id="target-percentage-container" style="display: none;">
+                        <h5 id="target-percentage-title" class="step-title" style="display: none;">Target Percentage
+                        </h5>
+                        <div class="form-check form-check-inline" id="target-percentage-container"
+                            style="display: none;">
                             <input type="number" class="form-control" id="target-percentage"
-                                placeholder="Target Percentage" min="1" value="100"
-                                style="display: inline; width: 80%">
+                                placeholder="Target Percentage" min="1" value="100" style="display: inline; width: 80%">
                         </div>
-                        <h5 id="selection-interval-title" class="step-title" style="display: none;">Target Selection Interval</h5>
-                        <div class="form-check form-check-inline" id="selection-interval-container" style="display: none;">
+                        <h5 id="selection-interval-title" class="step-title" style="display: none;">Target Selection
+                            Interval</h5>
+                        <div class="form-check form-check-inline" id="selection-interval-container"
+                            style="display: none;">
                             <input type="number" class="form-control" id="selection-interval"
-                                placeholder="Selection Interval" min="1" value="1"
-                                style="display: inline; width: 80%">
+                                placeholder="Selection Interval" min="1" value="1" style="display: inline; width: 80%">
                         </div>
                         <h5 id="start-attack-title" class="step-title" style="display: none;">Starting round</h5>
                         <div class="form-check form-check-inline" id="start-attack-container" style="display: none;">
-                            <input type="number" class="form-control" id="start-attack"
-                                placeholder="Starting round" min="0" value="1"
-                                style="display: inline; width: 80%">
+                            <input type="number" class="form-control" id="start-attack" placeholder="Starting round"
+                                min="0" value="1" style="display: inline; width: 80%">
                         </div>
                         <h5 id="stop-attack-title" class="step-title" style="display: none;">Stopping round</h5>
                         <div class="form-check form-check-inline" id="stop-attack-container" style="display: none;">
-                            <input type="number" class="form-control" id="stop-attack"
-                                placeholder="Stopping round" min="0" value="10"
-                                style="display: inline; width: 80%">
+                            <input type="number" class="form-control" id="stop-attack" placeholder="Stopping round"
+                                min="0" value="10" style="display: inline; width: 80%">
                         </div>
                         <h5 id="attack-interval-title" class="step-title" style="display: none;">Attack interval</h5>
                         <div class="form-check form-check-inline" id="attack-interval-container" style="display: none;">
-                            <input type="number" class="form-control" id="attack-interval"
-                                placeholder="Repetitions" min="1" value="1"
-                                style="display: inline; width: 80%">
+                            <input type="number" class="form-control" id="attack-interval" placeholder="Repetitions"
+                                min="1" value="1" style="display: inline; width: 80%">
                         </div>
                     </div>
                 </div>
@@ -582,18 +613,22 @@
                     </h5>
                     <h5 class="step-title">Enable/Disable Reputation</h5>
                     <div class="form-check form-switch" style="margin-left: 23px;">
-                        <input class="form-check-input" type="checkbox" id="reputationSwitch" style="display: inline; width: 80px; height: 30px;">
+                        <input class="form-check-input" type="checkbox" id="reputationSwitch"
+                            style="display: inline; width: 80px; height: 30px;">
                     </div>
                     <div id="reputation-settings" style="margin-top: 10px; display:none;">
                         <h5 class="step-title">Reputation Initialization</h5>
-                        <input class="form-control" type="number" id="initial-reputation" name="initialReputation" step="0.01" style="display: inline; width: 80%" value="0.6" min="0.1" max="1">
+                        <input class="form-control" type="number" id="initial-reputation" name="initialReputation"
+                            step="0.01" style="display: inline; width: 80%" value="0.6" min="0.1" max="1">
                         <small id="reputationInitializationHelp" class="form-text text-muted">
-                            <i id="reputationInitializationHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                            <i id="reputationInitializationHelpIcon" class="fa fa-info-circle"
+                                style="cursor: pointer;"></i>
                         </small>
                     </div>
                     <div id="weighting-settings" style="margin-top: 10px; display:none;">
                         <h5 class="step-title">Weighting Factor</h5>
-                        <select class="form-control" id="weighting-factor" name="weightingFactor" style="display: inline; width: 80%">
+                        <select class="form-control" id="weighting-factor" name="weightingFactor"
+                            style="display: inline; width: 80%">
                             <option value="dynamic" selected>Dynamic</option>
                             <option value="static">Static</option>
                         </select>
@@ -605,25 +640,41 @@
                         <h5 class="step-title">Reputation Metrics</h5>
                         <p>Model-based metrics</p>
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="model-similarity" name="modelSimilarity">
+                            <input class="form-check-input" type="checkbox" id="model-similarity"
+                                name="modelSimilarity">
                             <label class="form-check-label" for="model-similarity">Model Similarity</label>
-                            <input class="form-control weight-input" type="number" id="weight-model-similarity" name="weightModelSimilarity" step="0.01" value="0" placeholder="Weight to model similarity" style="display: none; width: 30%; margin-top:2px;">
+                            <input class="form-control weight-input" type="number" id="weight-model-similarity"
+                                name="weightModelSimilarity" step="0.01" value="0"
+                                placeholder="Weight to model similarity"
+                                style="display: none; width: 30%; margin-top:2px;">
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="fraction-parameters-changed" name="fractionParametersChanged" >
-                            <label class="form-check-label" for="fraction-parameters-changed">Fraction Parameters Changed</label>
-                            <input class="form-control weight-input" type="number" id="weight-fraction-parameters-changed" name="weightFractionParametersChanged" step="0.01" value="0" placeholder="Weight to fraction paremeters changed" style="display: none; width: 30%; margin-top:2px;">
+                            <input class="form-check-input" type="checkbox" id="fraction-parameters-changed"
+                                name="fractionParametersChanged">
+                            <label class="form-check-label" for="fraction-parameters-changed">Fraction Parameters
+                                Changed</label>
+                            <input class="form-control weight-input" type="number"
+                                id="weight-fraction-parameters-changed" name="weightFractionParametersChanged"
+                                step="0.01" value="0" placeholder="Weight to fraction paremeters changed"
+                                style="display: none; width: 30%; margin-top:2px;">
                         </div>
                         <p>Communication-based metrics</p>
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="num-messages" name="numMessages">
                             <label class="form-check-label" for="num-messages">Number of Messages</label>
-                            <input class="form-control weight-input" type="number" id="weight-num-messages" name="weightNumMessages" step="0.01" value="0" placeholder="Weight to number of messages" style="display: none; width: 30%; margin-top:2px;">
+                            <input class="form-control weight-input" type="number" id="weight-num-messages"
+                                name="weightNumMessages" step="0.01" value="0"
+                                placeholder="Weight to number of messages"
+                                style="display: none; width: 30%; margin-top:2px;">
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="model-arrival-latency" name="modelArrivalLatency">
+                            <input class="form-check-input" type="checkbox" id="model-arrival-latency"
+                                name="modelArrivalLatency">
                             <label class="form-check-label" for="model-arrival-latency">Model Arrival Latency</label>
-                            <input class="form-control weight-input" type="number" id="weight-model-arrival-latency" name="weightModelArrivalLatency" step="0.01" value="0" placeholder="Weight to model arrival latency" style="display: none; width: 30%; margin-top:2px;">
+                            <input class="form-control weight-input" type="number" id="weight-model-arrival-latency"
+                                name="weightModelArrivalLatency" step="0.01" value="0"
+                                placeholder="Weight to model arrival latency"
+                                style="display: none; width: 30%; margin-top:2px;">
                         </div>
                         <p id="weight-warning" style="color: red; display: none;">Total weight must not exceed 1.</p>
                     </div>
@@ -705,7 +756,8 @@
                         </div>
                         <h5 class="step-title">Mobility adaptation</h5>
                         <div class="form-check form-check-inline">
-                            <select class="form-control" id="mobilityAdaptationSelect" name="mobilityAdaptation" style="display: inline">
+                            <select class="form-control" id="mobilityAdaptationSelect" name="mobilityAdaptation"
+                                style="display: inline">
                                 <option value="sa" selected>Situational Awareness</option>
                                 <option value="static">Static</option>
                             </select>
@@ -851,4 +903,4 @@
         });
     </script>
 
-{% endblock %}
+    {% endblock %}

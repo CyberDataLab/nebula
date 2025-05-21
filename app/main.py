@@ -4,8 +4,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))  # Parent directory where is the NEBULA module
 import nebula
-from nebula.controller import Controller
-from nebula.scenarios import ScenarioManagement
+from nebula.controller.controller import Controller
+from nebula.controller.scenarios import ScenarioManagement
 
 argparser = argparse.ArgumentParser(description="Controller of NEBULA platform", add_help=False)
 
@@ -53,8 +53,6 @@ argparser.add_argument(
     default=8080,
     help="Statistics port (default: 8080)",
 )
-
-argparser.add_argument("-t", "--test", dest="test", action="store_true", default=False, help="Run tests")
 
 argparser.add_argument(
     "-st",

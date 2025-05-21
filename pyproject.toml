@@ -63,6 +63,8 @@ docs = [
     "mkdocstrings[python]<1.0.0,>=0.26.2",
 ]
 controller = [
+    "aiosqlite==0.20.0",
+    "argon2-cffi==23.1.0",
     "ansi2html==1.9.2",
     "docker==7.1.0",
     "fastapi[all]==0.114.0",
@@ -123,9 +125,7 @@ core = [
     "h5py==3.13.0",
 ]
 frontend = [
-    "aiosqlite==0.20.0",
     "ansi2html==1.9.2",
-    "argon2-cffi==23.1.0",
     "cffi==1.17.1",
     "cryptography==43.0.1",
     "docker==7.1.0",

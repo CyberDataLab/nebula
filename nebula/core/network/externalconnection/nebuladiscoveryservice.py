@@ -56,7 +56,7 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
                 key, value = line.split(": ", 1)
                 beacon_data[key] = value
 
-        # Verificar que no sea el propio beacon
+        # Verify that it is not the beacon itself
         beacon_addr = beacon_data.get("LOCATION")
         if beacon_addr == self.addr:
             return
@@ -127,7 +127,7 @@ class NebulaBeacon:
     def __init__(self, nebula_service, addr, interval=20):
         self.nebula_service: NebulaConnectionService = nebula_service
         self.addr = addr
-        self.interval = interval  # Intervalo de envío en segundos
+        self.interval = interval  # Send interval in seconds
         self.running = False
         self._latitude = None
         self._longitude = None
