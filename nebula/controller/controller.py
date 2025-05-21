@@ -24,8 +24,9 @@ from watchdog.observers import Observer
 from nebula.addons.env import check_environment
 from nebula.config.config import Config
 from nebula.config.mender import Mender
+from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
 from nebula.controller.scenarios import Scenario, ScenarioManagement
-from nebula.utils import DockerUtils, SocketUtils
+from nebula.utils import DockerUtils, FileUtils, SocketUtils
 
 
 # Setup controller logger
@@ -271,9 +272,36 @@ async def run_scenario(
     return scenarioManagement.scenario_name
 
 
+@app.post("/scenarios/stop")
+async def stop_scenario(
+    scenario_name: str = Body(..., embed=True),
+    username: str = Body(..., embed=True),
+    all: bool = Body(False, embed=True)
+):
+    from nebula.controller.scenarios import ScenarioManagement
+
+    ScenarioManagement.stop_participants(scenario_name)
+    DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{username}-participant")
+    DockerUtils.remove_docker_network(
+        f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(username).lower()}-nebula-net-scenario"
+    )
+    ScenarioManagement.stop_blockchain()
+    try:
+        if all:
+            scenario_set_all_status_to_finished()
+        else:
+            scenario_set_status_to_finished(scenario_name)
+    except Exception as e:
+        logging.error(f"Error setting scenario {scenario_name} to finished: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    # Generate statistics for the scenario
+    path = FileUtils.check_path(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
+    ScenarioManagement.generate_statistics(path)
+
 @app.post("/scenarios/remove")
 async def remove_scenario(
-    scenario_name: str = Body(..., embed=True)
+    scenario_name: str = Body(..., embed=True),
 ):
     """
     Removes a scenario from the database by its name.
@@ -288,6 +316,7 @@ async def remove_scenario(
 
     try:
         remove_scenario_by_name(scenario_name)
+        ScenarioManagement.remove_files_by_scenario(scenario_name)
     except Exception as e:
         logging.error(f"Error removing scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

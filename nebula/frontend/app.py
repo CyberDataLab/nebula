@@ -477,6 +477,31 @@ async def deploy_scenario(scenario_data, role, user):
     return await controller_post(url, data)
 
 
+async def stop_scenario_by_name(scenario_name, username, all=False):
+    """
+    Stops a running scenario via the NEBULA controller.
+
+    This function sends an HTTP POST request to the controller to stop a specific scenario.
+    It can stop only the nodes associated with a particular user, or all nodes in the scenario
+    if specified.
+
+    Args:
+        scenario_name (str): The name of the scenario to be stopped.
+        username (str): The username requesting the scenario to be stopped.
+        all (bool, optional): If True, stops all nodes in the scenario regardless of the user.
+            Defaults to False.
+
+    Returns:
+        dict: Response from the controller indicating the result of the operation.
+
+    Raises:
+        HTTPException: If the request to the controller fails or returns an error.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/stop"
+    data = {"scenario_name": scenario_name, "username": username, "all": all}
+    return await controller_post(url, data)
+
+
 async def get_scenarios(user, role):
     """
     Retrieve all scenarios available for a specific user and role.
@@ -1238,7 +1263,7 @@ async def monitor_resources():
                     await manager.broadcast(json.dumps(scenario_exceed_resources))
                 except Exception:
                     pass
-                stop_scenario(scenario_name, user)
+                await stop_scenario_by_name(scenario_name, user)
                 user_data = user_data_store[user]
                 user_data.scenarios_list_length -= 1
                 await wait_for_enough_ram()
@@ -1514,7 +1539,7 @@ async def node_stopped(scenario_name: str, request: Request):
                 finished = False
 
         if finished:
-            await stop_scenario(scenario_name, user)
+            await stop_scenario_by_name(scenario_name, user)
             user_data.nodes_finished.clear()
             user_data.finish_scenario_event.set()
             return JSONResponse(
@@ -1551,32 +1576,6 @@ async def nebula_monitor_image(scenario_name: str):
         raise HTTPException(status_code=404, detail="Topology image not found")
 
 
-async def stop_scenario(scenario_name, user):
-    """
-    Stop a running scenario by terminating participants, cleaning up Docker resources,
-    updating scenario status, and generating scenario statistics.
-
-    Parameters:
-        scenario_name (str): Name of the scenario to stop.
-        user (str): Username associated with the scenario.
-
-    Returns:
-        None
-    """
-    from nebula.controller.scenarios import ScenarioManagement
-
-    ScenarioManagement.stop_participants(scenario_name)
-    DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{user}-participant")
-    DockerUtils.remove_docker_network(
-        f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(user).lower()}-nebula-net-scenario"
-    )
-    ScenarioManagement.stop_blockchain()
-    await scenario_set_status_to_finished(scenario_name)
-    # Generate statistics for the scenario
-    path = FileUtils.check_path(settings.log_dir, scenario_name)
-    ScenarioManagement.generate_statistics(path)
-
-
 @app.get("/platform/dashboard/{scenario_name}/stop/{stop_all}")
 async def nebula_stop_scenario(
     scenario_name: str,
@@ -1609,11 +1608,11 @@ async def nebula_stop_scenario(
             user_data.stop_all_scenarios_event.set()
             user_data.scenarios_list_length = 0
             user_data.scenarios_finished = 0
-            await stop_scenario(scenario_name, user)
+            await stop_scenario_by_name(scenario_name, user)
         else:
             user_data.finish_scenario_event.set()
             user_data.scenarios_list_length -= 1
-            await stop_scenario(scenario_name, user)
+            await stop_scenario_by_name(scenario_name, user)
         return RedirectResponse(url="/platform/dashboard")
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -1641,7 +1640,6 @@ async def remove_scenario(scenario_name=None, user=None):
     await remove_nodes_by_scenario_name(scenario_name)
     await remove_scenario_by_name(scenario_name)
     await remove_note(scenario_name)
-    ScenarioManagement.remove_files_by_scenario(scenario_name)
 
 
 @app.get("/platform/dashboard/{scenario_name}/relaunch")
