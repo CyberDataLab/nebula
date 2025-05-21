@@ -146,25 +146,6 @@
     "propagation_early_stop": 3,
     "history_size": 20
   },
-  "situational_awareness": {
-    "strict_topology" : true,
-    "sa_discovery" : {
-      "candidate_selector": "random",
-      "model_handler": "std",
-      "verbose" : true
-    },
-    "sa_reasoner" : {
-      "arbitatrion_policy": "sap",
-      "verbose" : true,
-      "sar_components": {
-        "sa_network" : true
-      },
-      "sa_network" : {
-        "neighbor_policy": "random",
-        "verbose" : true
-      }
-    }
-  },
   "misc_args": {
     "grace_time_connection": 10,
     "grace_time_start_federation": 10
