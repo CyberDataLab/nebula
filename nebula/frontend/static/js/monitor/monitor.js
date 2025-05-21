@@ -307,19 +307,19 @@ class Monitor {
             try {
                 this.log('Processing node:', node);
                 const nodeData = {
-                    uid: node[0],
-                    idx: node[1],
-                    ip: node[2],
-                    port: node[3],
-                    role: node[4],
-                    neighbors: node[5] || "",
-                    latitude: parseFloat(node[6]) || 0,
-                    longitude: parseFloat(node[7]) || 0,
-                    timestamp: node[8],
-                    federation: node[9],
-                    round: node[10],
-                    malicious: node[13],
-                    status: node[14]
+                    uid: node.uid,
+                    idx: node.idx,
+                    ip: node.ip,
+                    port: node.port,
+                    role: node.role,
+                    neighbors: node.neighbors || "",
+                    latitude: parseFloat(node.latitude) || 0,
+                    longitude: parseFloat(node.longitude) || 0,
+                    timestamp: node.timestamp,
+                    federation: node.federation,
+                    round: node.round,
+                    malicious: node.malicious,
+                    status: node.status
                 };
 
                 this.log('Processed node data:', nodeData);
@@ -1740,12 +1740,19 @@ class Monitor {
         // Check if all nodes are in the offlineNodes set
         const allOffline = allNodeIPs.size > 0 && Array.from(allNodeIPs).every(ip => this.offlineNodes.has(ip));
 
-        if (allOffline) {
-            // Update scenario status badge to "Finished"
-            const statusBadge = document.getElementById('scenario_status');
-            if (statusBadge) {
+        // Update scenario status badge
+        const statusBadge = document.getElementById('scenario_status');
+        if (statusBadge) {
+            if (allNodeIPs.size === 0) {
+                // Show Running status when there are no nodes
+                statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
+            } else if (allOffline) {
                 statusBadge.className = 'badge bg-danger-subtle text-danger px-3 py-2 ms-3';
                 statusBadge.innerHTML = '<i class="fa fa-times-circle me-2"></i>Finished';
+            } else {
+                statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
             }
         }
     }

@@ -547,9 +547,9 @@ async def remove_scenario_by_name(scenario_name):
     await controller_post(url, data)
 
 
-async def check_scenario_with_role(session, scenario_name):
+async def check_scenario_with_role(role, scenario_name):
     """
-    Check if a specific scenario is allowed for the session’s role.
+    Check if a specific scenario is allowed for the session's role.
 
     Parameters:
         session (dict): Session data containing at least a 'role' key.
@@ -562,8 +562,7 @@ async def check_scenario_with_role(session, scenario_name):
         HTTPException: If the underlying HTTP GET request fails.
     """
     url = (
-                f"http://{settings.controller_host}:{settings.controller_port}"
-                f"/scenarios/check?role={session['role']}&scenario_name={scenario_name}"
+                f"http://{settings.controller_host}:{settings.controller_port}/scenarios/check/{role}/{scenario_name}"
             )
     check_data = await controller_get(url)
     return check_data.get("allowed", False)
@@ -1348,24 +1347,24 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
             formatted_nodes = []
             for node in nodes_list:
                 # Calculate initial status based on timestamp
-                timestamp = datetime.datetime.strptime(node[8], "%Y-%m-%d %H:%M:%S.%f")
+                timestamp = datetime.datetime.strptime(node["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
                 is_online = (datetime.datetime.now() - timestamp) <= datetime.timedelta(seconds=25)
 
                 formatted_nodes.append({
-                    "uid": node[0],
-                    "idx": node[1],
-                    "ip": node[2],
-                    "port": node[3],
-                    "role": node[4],
-                    "neighbors": node[5],
-                    "latitude": node[6],
-                    "longitude": node[7],
-                    "timestamp": node[8],
-                    "federation": node[9],
-                    "round": str(node[10]),
-                    "scenario_name": node[11],
-                    "hash": node[12],
-                    "malicious": node[13],
+                    "uid": node["uid"],
+                    "idx": node["idx"],
+                    "ip": node["ip"],
+                    "port": node["port"],
+                    "role": node["role"],
+                    "neighbors": node["neighbors"],
+                    "latitude": node["latitude"],
+                    "longitude": node["longitude"],
+                    "timestamp": node["timestamp"],
+                    "federation": node["federation"],
+                    "round": str(node["round"]),
+                    "scenario_name": node["scenario"],
+                    "hash": node["hash"],
+                    "malicious": node["malicious"],
                     "status": is_online,
                 })
 
@@ -1384,11 +1383,11 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
             # For API response, return the formatted node data
             elif request.url.path == f"/platform/api/dashboard/{scenario_name}/monitor":
                 return JSONResponse({
-                    "scenario_status": scenario[5],
+                    "scenario_status": scenario["status"],
                     "nodes": formatted_nodes,
-                    "scenario_name": scenario[0],
-                    "title": scenario[3],
-                    "description": scenario[4],
+                    "scenario_name": scenario["name"],
+                    "title": scenario["title"],
+                    "description": scenario["description"],
                 })
             else:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -1407,11 +1406,11 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                 )
             elif request.url.path == f"/platform/api/dashboard/{scenario_name}/monitor":
                 return JSONResponse({
-                    "scenario_status": scenario[5],
+                    "scenario_status": scenario["status"],
                     "nodes": [],
-                    "scenario_name": scenario[0],
-                    "title": scenario[3],
-                    "description": scenario[4],
+                    "scenario_name": scenario["name"],
+                    "title": scenario["title"],
+                    "description": scenario["description"],
                 })
             else:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -1432,42 +1431,6 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
             return JSONResponse({"scenario_status": "not exists"})
         else:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-
-
-def update_topology(scenario_name, nodes_list, nodes_config):
-    """
-    Update the network topology for a given scenario by constructing an adjacency matrix,
-    applying node configurations, and generating a topology image.
-
-    Parameters:
-        scenario_name (str): Name of the scenario.
-        nodes_list (list): List of node tuples containing network and node attributes.
-        nodes_config (dict): Configuration settings for each node.
-
-    Returns:
-        None
-    """
-    import numpy as np
-
-    nodes = []
-    for node in nodes_list:
-        nodes.append(node[2] + ":" + str(node[3]))
-    matrix = np.zeros((len(nodes), len(nodes)))
-    for node in nodes_list:
-        for neighbour in node[5].split(" "):
-            if neighbour != "" and neighbour in nodes:
-                matrix[
-                    nodes.index(node[2] + ":" + str(node[3])),
-                    nodes.index(neighbour),
-                ] = 1
-    from nebula.addons.topologymanager import TopologyManager
-
-    tm = TopologyManager(n_nodes=len(nodes_list), topology=matrix, scenario_name=scenario_name)
-    tm.update_nodes(nodes_config)
-    try:
-        tm.draw_graph(path=os.path.join(settings.config_dir, scenario_name, "topology.png"))
-    except FileNotFoundError:
-        logging.exception("Topology.png not found in config dir")
 
 
 @app.post("/platform/dashboard/{scenario_name}/node/update")
@@ -1547,7 +1510,7 @@ async def node_stopped(scenario_name: str, request: Request):
         finished = True
         # Check if all the nodes of the scenario have finished the experiment
         for node in nodes_list:
-            if str(node[1]) not in map(str, user_data.nodes_finished):
+            if str(node["idx"]) not in map(str, user_data.nodes_finished):
                 finished = False
 
         if finished:
@@ -1976,7 +1939,7 @@ async def assign_available_gpu(scenario_data, role):
     available_system_gpus = response.get("available_gpus", None) if response is not None else None
 
     if available_system_gpus:
-        running_scenarios = get_running_scenarios(get_all=True)
+        running_scenarios = await get_running_scenarios(get_all=True)
         # Obtain currently used gpus
         if running_scenarios:
             running_gpus = []

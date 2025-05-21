@@ -427,8 +427,27 @@ async def get_running_scenario(get_all: bool = False):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/scenarios/check")
-async def check_scenario(role: str, scenario_name: str):
+@app.get("/scenarios/check/{role}/{scenario_name}")
+async def check_scenario(
+    role: Annotated[
+        str, 
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid role"
+        )
+    ],
+    scenario_name: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=50,
+            description="Valid scenario name"
+        )
+    ]
+    ):
     """
     Checks if a scenario is allowed for a specific role.
     

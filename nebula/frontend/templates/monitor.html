@@ -23,23 +23,23 @@
                                 <h5 class="text-muted mb-2">
                                     <i class="fa fa-heading me-2"></i>Title
                                 </h5>
-                                <p class="lead ms-3" id="scenario_title">{{ scenario[3] }}</p>
+                                <p class="lead ms-3" id="scenario_title">{{ scenario.title }}</p>
                             </div>
                             <div class="mb-3">
                                 <h5 class="text-muted mb-2">
                                     <i class="fa fa-align-left me-2"></i>Description
                                 </h5>
-                                <p class="lead ms-3" id="scenario_description">{{ scenario[4] }}</p>
+                                <p class="lead ms-3" id="scenario_description">{{ scenario.description }}</p>
                             </div>
                             <div class="mb-4">
                                 <h5 class="text-muted mb-2">
                                     <i class="fa fa-signal me-2"></i>Status
                                 </h5>
-                                {% if scenario[43] == "running" %}
+                                {% if scenario.status == "running" %}
                                 <span id="scenario_status" class="badge bg-warning-subtle text-warning px-3 py-2 ms-3">
                                     <i class="fa fa-spinner fa-spin me-2"></i>Running
                                 </span>
-                                {% elif scenario[43] == "completed" %}
+                                {% elif scenario.status == "completed" %}
                                 <span id="scenario_status" class="badge bg-success-subtle text-success px-3 py-2 ms-3">
                                     <i class="fa fa-check-circle me-2"></i>Completed
                                 </span>
@@ -52,25 +52,25 @@
                         </div>
 
                         <div class="scenario-actions">
-                            {% if scenario[43] == "running" or scenario[43] == "completed" %}
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario[0], stop_all = False) }}"
+                            {% if scenario.status == "running" or scenario.status == "completed" %}
+                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all = False) }}"
                                 class="btn btn-danger bg-danger-subtle text-danger w-100 mb-2">
                                 <i class="fa fa-stop-circle me-2"></i>Stop scenario
                             </a>
                             {% endif %}
-                            <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=scenario[0]) }}"
+                            <a href="{{ url_for('nebula_dashboard_statistics', scenario_name=scenario.name) }}"
                                 class="btn btn-dark w-100 mb-2">
                                 <i class="fa fa-bar-chart me-2"></i>Real-time metrics
                             </a>
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
+                                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario.name) }}"
                                         class="btn btn-outline-dark w-100">
                                         <i class="fa fa-file-alt me-2"></i>Logs
                                     </a>
                                 </div>
                                 <div class="col-6">
-                                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario[0]) }}"
+                                    <a href="{{ url_for('nebula_dashboard_download_logs_metrics', scenario_name=scenario.name) }}"
                                         class="btn btn-outline-dark w-100">
                                         <i class="fa fa-chart-bar me-2"></i>Metrics
                                     </a>
@@ -206,7 +206,7 @@
                         <p class="text-muted mb-3">
                             <i class="fa fa-info-circle me-2"></i>
                             Visualize the scenario topology.
-                            <a href="{{ url_for('nebula_monitor_image', scenario_name=scenario[0]) }}">
+                            <a href="{{ url_for('nebula_monitor_image', scenario_name=scenario.name) }}">
                                 <i class="fa fa-download me-1"></i>Download topology
                             </a>
                         </p>
