@@ -34,7 +34,7 @@ class DelayerAttack(CommunicationAttack):
         super().__init__(
             engine,
             CommunicationsManager.get_instance(),
-            "send_model",
+            "send_message",
             round_start,
             round_stop,
             attack_interval,
