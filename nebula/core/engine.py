@@ -20,6 +20,7 @@ from nebula.core.nebulaevents import (
 )
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
+from nebula.addons.reputation.reputation import Reputation
 from nebula.core.utils.locker import Locker
 
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -147,6 +148,9 @@ class Engine:
         # Additional Components
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
+            
+        if self.config.participant["defense_args"]["with_reputation"]:
+            self._reputation = Reputation(engine=self, config=self.config)
 
     @property
     def cm(self):
@@ -451,6 +455,8 @@ class Engine:
         await self.aggregator.init()
         if "situational_awareness" in self.config.participant:
             await self.sa.init()
+        if self.config.participant["defense_args"]["with_reputation"]:
+            await self._reputation.setup()
         await self._reporter.start()
         await self._addon_manager.deploy_additional_services()
 
