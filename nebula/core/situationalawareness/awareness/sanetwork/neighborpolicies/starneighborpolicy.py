@@ -11,6 +11,7 @@ class STARNeighborPolicy(NeighborPolicy):
         self.neighbors_lock = Locker(name="neighbors_lock")
         self.nodes_known_lock = Locker(name="nodes_known_lock")
         self.addr = ""
+        self._verbose = False
         
     async def need_more_neighbors(self):
         self.neighbors_lock.acquire()

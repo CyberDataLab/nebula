@@ -6,13 +6,13 @@ import logging
 
 class DistanceCandidateSelector(CandidateSelector):
     MAX_DISTANCE_THRESHOLD = 200
-    MIN_DISTANCE_THRESHOLD = 100
 
     def __init__(self):
         self.candidates = []
         self.candidates_lock = Locker(name="candidates_lock", async_lock=True)
         self.nodes_distances: dict[str, tuple[float, tuple[float, float]]] = None
         self.nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
+        self._verbose = False
         
     async def set_config(self, config):
         await EventManager.get_instance().subscribe_addonevent(GPSEvent, self._udpate_distances)
@@ -29,13 +29,12 @@ class DistanceCandidateSelector(CandidateSelector):
     async def select_candidates(self):
         async with self.candidates_lock:
             async with self.nodes_distances_lock:
-                # Filtrar candidatos cuya ID está en nodes_distances y su distancia < MAX_DISTANCE_THRESHOLD
                 nodes_available = [
                     candidate for candidate in self.candidates
                     if candidate[0] in self.nodes_distances and
                     self.nodes_distances[candidate[0]][0] < self.MAX_DISTANCE_THRESHOLD
                 ]
-                logging.info(f"Nodes availables: {nodes_available}")
+                if self._verbose: logging.info(f"Nodes availables: {nodes_available}")
         return (nodes_available, [])
     
     async def remove_candidates(self):

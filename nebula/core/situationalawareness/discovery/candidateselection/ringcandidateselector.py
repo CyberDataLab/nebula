@@ -17,10 +17,7 @@ class RINGCandidateSelector(CandidateSelector):
             To avoid topology problems select 1st candidate found
         """
         self.candidates_lock.acquire()
-        # if len(self._candidates) == 0:
         self._candidates.append(candidate)
-        # else:
-        #     self._rejected_candidates.append(candidate)
         self.candidates_lock.release()
       
     async def select_candidates(self):

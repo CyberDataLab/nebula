@@ -356,8 +356,6 @@ class FederationConnector(ISADiscovery):
                 logging.info(f"{df_actions}")
                 for addr in df_actions.split():
                     await self.cm.disconnect(addr, mutual_disconnection=True)
-                # df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
-                # await self.cm.send_message(source, df_msg)
 
             await self._register_late_neighbor(source, joinning_federation=True)
 
@@ -435,7 +433,7 @@ class FederationConnector(ISADiscovery):
                     "offer",
                     "offer_metric",
                     n_neighbors=len(await self.engine.get_federation_nodes()),
-                    loss=0 #self.engine.trainer.get_current_loss(),
+                    loss=0 #self.engine.trainer.get_current_loss()
                 )
                 logging.info(f"Sending offer metric to {source}")
                 await self.cm.send_message(source, msg)

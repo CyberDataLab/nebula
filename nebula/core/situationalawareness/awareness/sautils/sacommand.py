@@ -9,7 +9,7 @@ class SACommandType(Enum):
     CONNECTIVITY = "Connectivity"
     AGGREGATION = "Aggregation"
 
-#TODO separar por tipos de commands
+#TODO make differents parts
 class SACommandAction(Enum):
     IDLE = "idle"
     DISCONNECT = "disconnect"

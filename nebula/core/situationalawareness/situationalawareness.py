@@ -79,7 +79,7 @@ class SituationalAwareness():
     
     @property
     def sad(self):
-        """Federation Connector"""
+        """SA Discovery"""
         return self._sad
     
     @property

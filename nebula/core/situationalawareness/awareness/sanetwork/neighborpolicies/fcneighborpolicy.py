@@ -11,6 +11,7 @@ class FCNeighborPolicy(NeighborPolicy):
         self.addr = None
         self.neighbors_lock = Locker(name="neighbors_lock")
         self.nodes_known_lock = Locker(name="nodes_known_lock")
+        self._verbose = False
         
     async def need_more_neighbors(self):
         """
@@ -108,12 +109,12 @@ class FCNeighborPolicy(NeighborPolicy):
         if remove:
             try:
                 self.neighbors.remove(node)
-                logging.info(f"Remove neighbor | addr: {node}")
+                if self._verbose: logging.info(f"Remove neighbor | addr: {node}")
             except KeyError:
                 pass    
         else:
             self.neighbors.add(node)
-            logging.info(f"Add neighbor | addr: {node}")
+            if self._verbose: logging.info(f"Add neighbor | addr: {node}")
         self.neighbors_lock.release()
 
     async def any_leftovers_neighbors(self):

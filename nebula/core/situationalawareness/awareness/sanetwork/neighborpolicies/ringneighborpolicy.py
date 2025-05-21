@@ -16,6 +16,7 @@ class RINGNeighborPolicy(NeighborPolicy):
         self.addr = ""
         self._excess_neighbors_removed = set()
         self._excess_neighbors_removed_lock = Locker("excess_neighbors_removed_lock", async_lock=True)
+        self._verbose = False
         
     async def need_more_neighbors(self):
         self.neighbors_lock.acquire()
@@ -33,7 +34,7 @@ class RINGNeighborPolicy(NeighborPolicy):
         """
         logging.info("Initializing Ring Topology Neighbor Policy")
         self.neighbors_lock.acquire()
-        logging.info(f"neighbors: {config[0]}")
+        if self._verbose: logging.info(f"neighbors: {config[0]}")
         self.neighbors = config[0]
         self.neighbors_lock.release()
         for addr in config[1]:

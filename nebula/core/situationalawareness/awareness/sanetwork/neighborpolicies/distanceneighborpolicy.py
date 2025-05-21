@@ -16,6 +16,7 @@ class DistanceNeighborPolicy(NeighborPolicy):
         self.nodes_known_lock = Locker(name="nodes_known_lock", async_lock=True)
         self.nodes_distances: dict[str, tuple[float, tuple[float, float]]] = None
         self.nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
+        self._verbose = False
 
     async def set_config(self, config):
         """
@@ -25,7 +26,7 @@ class DistanceNeighborPolicy(NeighborPolicy):
             config[2] -> self addr
             config[3] -> stricted_topology
         """
-        logging.info("Initializing Random Topology Neighbor Policy")
+        logging.info("Initializing Distance Topology Neighbor Policy")
         async with self.neighbors_lock:
             self.neighbors = config[0] 
         for addr in config[1]:
@@ -51,7 +52,7 @@ class DistanceNeighborPolicy(NeighborPolicy):
                     if distancia < self.MAX_DISTANCE_THRESHOLD
                 }
                 available_nodes = closest_nodes.difference(self.neighbors)
-                logging.info(f"Available neighbors based on distance: {available_nodes}")
+                if self._verbose: logging.info(f"Available neighbors based on distance: {available_nodes}")
                 return len(available_nodes) > 0
           
     async def accept_connection(self, source, joining=False):
@@ -116,12 +117,12 @@ class DistanceNeighborPolicy(NeighborPolicy):
             if remove:
                 try:
                     self.neighbors.remove(node)
-                    logging.info(f"Remove neighbor | addr: {node}")
+                    if self._verbose: logging.info(f"Remove neighbor | addr: {node}")
                 except KeyError:
                     pass    
             else:
                 self.neighbors.add(node)
-                logging.info(f"Add neighbor | addr: {node}")
+                if self._verbose: logging.info(f"Add neighbor | addr: {node}")
 
     async def get_posible_neighbors(self):
         """Return set of posible neighbors to connect to."""
@@ -132,9 +133,9 @@ class DistanceNeighborPolicy(NeighborPolicy):
                     for nodo_id, (distancia, _) in self.nodes_distances.items()
                     if distancia < self.MAX_DISTANCE_THRESHOLD-20
                 }
-                logging.info(f"Closest nodes: {closest_nodes}, neighbors: {self.neighbors}")
+                if self._verbose: logging.info(f"Closest nodes: {closest_nodes}, neighbors: {self.neighbors}")
                 available_nodes = closest_nodes.difference(self.neighbors)
-                logging.info(f"Available neighbors based on distance: {available_nodes}")
+                if self._verbose: logging.info(f"Available neighbors based on distance: {available_nodes}")
                 return available_nodes
 
     async def any_leftovers_neighbors(self):
@@ -150,7 +151,7 @@ class DistanceNeighborPolicy(NeighborPolicy):
                     if distancia > self.MAX_DISTANCE_THRESHOLD
                 }
                 distant_nodes = self.neighbors.intersection(distant_nodes)
-                logging.info(f"Distant neighbors based on distance: {distant_nodes}")
+                if self._verbose: logging.info(f"Distant neighbors based on distance: {distant_nodes}")
         return len(distant_nodes) > 0
 
     async def get_neighbors_to_remove(self):
@@ -163,7 +164,7 @@ class DistanceNeighborPolicy(NeighborPolicy):
                     if distancia > self.MAX_DISTANCE_THRESHOLD
                 }
                 distant_nodes = self.neighbors.intersection(distant_nodes)
-                logging.info(f"Remove neighbors based on distance: {distant_nodes}")
+                if self._verbose: logging.info(f"Remove neighbors based on distance: {distant_nodes}")
         return distant_nodes
 
     def stricted_topology_status(stricted_topology: bool):

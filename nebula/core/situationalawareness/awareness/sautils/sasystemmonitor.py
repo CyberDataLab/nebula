@@ -27,7 +27,7 @@ class SystemMonitor:
             # Try to initialize NVIDIA library if available
             try:
                 nvmlInit()
-                self.gpu_available = True  # Flag to check if GPU is available
+                self.gpu_available = True   # Flag to check if GPU is available
             except Exception:
                 self.gpu_available = False  # If not, set GPU availability to False
             self._initialized = True
