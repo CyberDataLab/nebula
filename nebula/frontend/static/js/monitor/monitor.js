@@ -2,11 +2,37 @@
 class Monitor {
     constructor() {
         // Debug flag to control logging
-        this.debug = false;
+        this.debug = true;
 
         // Get scenario name from URL path
         const pathParts = window.location.pathname.split('/');
         this.scenarioName = pathParts[pathParts.indexOf('dashboard') + 1];
+        
+        this.clearAllData();
+        
+        this.isLoadingInitialData = false;
+        this.initialDataPromise = null;
+        
+        this.initializeMap();
+        this.initializeGraph();
+        this.initializeWebSocket();
+        this.initializeEventListeners();
+        this.initializeDownloadHandlers();
+        
+        this.startStaleNodeCheck();
+        
+        // Load initial data and then start periodic status check
+        this.loadInitialData().then(() => {
+            this.startPeriodicStatusCheck();
+        }).catch(error => {
+            this.error('Error during initialization:', error);
+            showAlert('danger', 'Error initializing monitor. Please refresh the page.');
+        });
+    }
+
+    // Helper method to clear all data structures
+    clearAllData() {
+        this.log('Clearing all data structures');
         this.offlineNodes = new Set();
         this.droneMarkers = {};
         this.droneLines = {};
@@ -15,22 +41,27 @@ class Monitor {
             nodes: [],
             links: []
         };
-        this.nodeTimestamps = new Map(); // Track last update time for each node
-        this.nodePositions = new Map(); // Track node positions
-        this.isInitialDataLoaded = false; // Flag to track initial data loading
-        this.processingUpdates = false; // Flag to prevent concurrent updates
-        this.pendingGraphUpdate = false; // Flag to track pending graph updates
-        this.updateTimeout = null; // Timeout for debounced graph updates
-
-        this.initializeMap();
-        this.initializeGraph();
-        this.initializeWebSocket();
-        this.initializeEventListeners();
-        this.initializeDownloadHandlers();
-        this.loadInitialData();
-
-        this.startStaleNodeCheck();
-        this.startPeriodicStatusCheck();
+        this.nodeTimestamps = new Map();
+        this.nodePositions = new Map();
+        this.isInitialDataLoaded = false;
+        this.processingUpdates = false;
+        this.pendingGraphUpdate = false;
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+        
+        // Clear the table body
+        const tableBody = document.querySelector('#table-nodes tbody');
+        if (tableBody) {
+            tableBody.innerHTML = '';
+        }
+        
+        // Clear the map markers and lines
+        if (this.lineLayer) {
+            this.lineLayer.clearLayers();
+        }
+        
+        this.log('All data structures cleared');
     }
 
     // Helper method for logging
@@ -188,100 +219,99 @@ class Monitor {
     loadInitialData() {
         if (!this.scenarioName) {
             this.error('No scenario name found in URL');
-            return;
+            return Promise.reject(new Error('No scenario name found'));
         }
+
+        this.isLoadingInitialData = true;
+        this.log('Starting initial data load');
 
         // Clear existing data
-        this.gData.nodes = [];
-        this.gData.links = [];
-        this.droneMarkers = {};
-        this.droneLines = {};
-        this.offlineNodes.clear();
-        this.nodeTimestamps.clear();
-        this.isInitialDataLoaded = false;
-        this.pendingGraphUpdate = false;
-        if (this.updateTimeout) {
-            clearTimeout(this.updateTimeout);
-        }
+        this.clearAllData();
 
-        this.log('Loading initial data for scenario:', this.scenarioName);
-        fetch(`/platform/api/dashboard/${this.scenarioName}/monitor`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                this.log('Received initial data:', data);
-                if (data.nodes && data.nodes.length > 0) {
-                    // Create a Set to track unique nodes
-                    const uniqueNodes = new Set();
+        // Create and store the promise
+        this.initialDataPromise = new Promise((resolve, reject) => {
+            this.log('Loading initial data for scenario:', this.scenarioName);
+            fetch(`/platform/api/dashboard/${this.scenarioName}/monitor`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    this.log('Received initial data:', data);
+                    if (data.nodes && data.nodes.length > 0) {
+                        // Create a Set to track unique nodes
+                        const uniqueNodes = new Set();
+                        const processedNodes = new Set();
 
-                    data.nodes.forEach(node => {
-                        const nodeId = `${node.ip}:${node.port}`;
+                        data.nodes.forEach(node => {
+                            const nodeId = `${node.ip}:${node.port}`;
 
-                        // Skip if we've already processed this node
-                        if (uniqueNodes.has(nodeId)) {
-                            this.log('Skipping duplicate node:', nodeId);
-                            return;
-                        }
-                        uniqueNodes.add(nodeId);
+                            // Skip if we've already processed this node
+                            if (processedNodes.has(nodeId)) {
+                                this.log('Skipping duplicate node in initial data:', nodeId);
+                                return;
+                            }
+                            processedNodes.add(nodeId);
 
-                        const nodeData = {
-                            uid: node.uid,
-                            idx: node.idx,
-                            ip: node.ip,
-                            port: node.port,
-                            role: node.role,
-                            neighbors: node.neighbors,
-                            latitude: node.latitude,
-                            longitude: node.longitude,
-                            timestamp: node.timestamp,
-                            federation: node.federation,
-                            round: node.round,
-                            scenario_name: node.scenario_name,
-                            hash: node.hash,
-                            malicious: node.malicious,
-                            status: node.status
-                        };
+                            const nodeData = {
+                                uid: node.uid,
+                                idx: node.idx,
+                                ip: node.ip,
+                                port: node.port,
+                                role: node.role,
+                                neighbors: node.neighbors,
+                                latitude: node.latitude,
+                                longitude: node.longitude,
+                                timestamp: node.timestamp,
+                                federation: node.federation,
+                                round: node.round,
+                                scenario_name: node.scenario_name,
+                                hash: node.hash,
+                                malicious: node.malicious,
+                                status: node.status
+                            };
 
-                        // Update offline nodes set
-                        if (!nodeData.status) {
-                            this.offlineNodes.add(nodeData.ip);
-                            this.log(`Node ${nodeData.ip}:${nodeData.port} marked as offline from initial data`);
-                        }
+                            if (!nodeData.status) {
+                                this.offlineNodes.add(nodeData.ip);
+                                this.log(`Node ${nodeData.ip}:${nodeData.port} marked as offline from initial data`);
+                            }
 
-                        // Update table
-                        this.updateTableRow(nodeData);
+                            this.updateTableRow(nodeData);
 
-                        // Update map
-                        this.updateQueue.push(nodeData);
+                            this.updateQueue.push(nodeData);
 
-                        // Add to graph data
-                        this.gData.nodes.push({
-                            id: nodeData.idx,
-                            ip: nodeData.ip,
-                            port: nodeData.port,
-                            ipport: nodeId,
-                            role: nodeData.role,
-                            malicious: nodeData.malicious,
-                            color: !nodeData.status ? '#ff0000' : this.getNodeColor({ ipport: nodeId, role: nodeData.role, malicious: nodeData.malicious })
+                            this.gData.nodes.push({
+                                id: nodeData.idx,
+                                ip: nodeData.ip,
+                                port: nodeData.port,
+                                ipport: nodeId,
+                                role: nodeData.role,
+                                malicious: nodeData.malicious,
+                                color: !nodeData.status ? '#ff0000' : this.getNodeColor({ ipport: nodeId, role: nodeData.role, malicious: nodeData.malicious })
+                            });
                         });
-                    });
 
-                    // Process queue and update visualizations
-                    this.processQueue();
-                    this.updateGraph();
-                } else {
-                    this.log('No nodes in initial data');
-                }
-                this.isInitialDataLoaded = true;
-            })
-            .catch(error => {
-                this.error('Error loading initial data:', error);
-                showAlert('danger', 'Error loading initial data. Please refresh the page.');
-            });
+                        // Process queue and update visualizations
+                        this.processQueue();
+                        this.updateGraph();
+                    } else {
+                        this.log('No nodes in initial data');
+                    }
+                    this.isInitialDataLoaded = true;
+                    this.isLoadingInitialData = false;
+                    this.log('Initial data load completed');
+                    resolve();
+                })
+                .catch(error => {
+                    this.error('Error loading initial data:', error);
+                    this.isLoadingInitialData = false;
+                    reject(error);
+                });
+        });
+
+        return this.initialDataPromise;
     }
 
     processInitialData(data) {
@@ -630,9 +660,9 @@ class Monitor {
 
     handleNodeUpdate(data) {
         try {
-            // Skip updates if initial data is not loaded yet
-            if (!this.isInitialDataLoaded) {
-                this.log('Skipping node update - initial data not loaded yet');
+            // Skip updates if initial data is not loaded yet or if we're still loading initial data
+            if (!this.isInitialDataLoaded || this.isLoadingInitialData) {
+                this.log('Skipping node update - initial data not loaded yet or still loading');
                 return;
             }
 
@@ -642,10 +672,19 @@ class Monitor {
                 return;
             }
 
+            const nodeId = `${data.ip}:${data.port}`;
+            
+            // Check if this node already exists
+            const existingNode = this.gData.nodes.find(n => n.ipport === nodeId);
+            if (existingNode) {
+                this.log('Updating existing node:', nodeId);
+            } else {
+                this.log('Adding new node:', nodeId);
+            }
+
             this.log('Handling node update:', data);
 
             // Update timestamp for this node
-            const nodeId = `${data.ip}:${data.port}`;
             this.nodeTimestamps.set(nodeId, Date.now());
 
             // First update the table to show changes immediately
@@ -1433,6 +1472,18 @@ class Monitor {
 
     async checkNodeStatus() {
         try {
+            // Skip status check if we're still loading initial data
+            if (this.isLoadingInitialData) {
+                this.log('Skipping status check - initial data still loading');
+                return;
+            }
+
+            // Wait for initial data to be loaded if it hasn't completed yet
+            if (this.initialDataPromise && !this.isInitialDataLoaded) {
+                this.log('Waiting for initial data to complete before status check');
+                await this.initialDataPromise;
+            }
+
             const response = await fetch(`/platform/api/dashboard/${this.scenarioName}/monitor`);
             if (!response.ok) {
                 this.error('Failed to fetch node status');
@@ -1447,8 +1498,19 @@ class Monitor {
 
             this.log('Received status check data:', data);
 
-            this.offlineNodes.clear();
+            // Create a Set to track processed nodes in this status check
+            const processedNodes = new Set();
+
             data.nodes.forEach(node => {
+                const nodeId = `${node.ip}:${node.port}`;
+                
+                // Skip if we've already processed this node in this status check
+                if (processedNodes.has(nodeId)) {
+                    this.log('Skipping duplicate node in status check:', nodeId);
+                    return;
+                }
+                processedNodes.add(nodeId);
+
                 const nodeData = {
                     uid: node.uid,
                     idx: node.idx,

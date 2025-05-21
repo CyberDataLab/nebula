@@ -296,8 +296,8 @@ async def stop_scenario(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     # Generate statistics for the scenario
-    path = FileUtils.check_path(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
-    ScenarioManagement.generate_statistics(path)
+    # path = FileUtils.check_path(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
+    # ScenarioManagement.generate_statistics(path)
 
 @app.post("/scenarios/remove")
 async def remove_scenario(
