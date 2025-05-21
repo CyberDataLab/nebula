@@ -115,15 +115,13 @@ message LinkMessage {
 }
 
 message ReputationMessage {
-    enum Action {
-      SHARE_REPUTATION = 0;     // Message to tell reputation state to a node
-      START_TRIAL = 1;          // Message to start a trial
-      SUBMIT_VERDICT = 2;       // Message to send back the verdict for a trial
-    }
-    Action action = 1;
-    string reputation = 2;
-    string defendant = 3;
-    string verdict = 4;
+  enum Action {
+    SHARE = 0;
+  }
+  string node_id = 1; //Id of the node to which the reputation is sent
+  float score = 2; //Score reputation
+  int32 round = 3; //Round to send the reputation
+  Action action = 4; // Action type (default: SHARE)
 }
 
 // Response transmits the outcome of a requested operation, including any errors.
