@@ -120,7 +120,7 @@ const ScenarioManager = (function() {
             longitude: window.MobilityManager.getMobilityConfig().location.longitude || 0,
             //with_sa : window.SaManager.getSaConfig().with_sa || false,
             with_sa: window.MobilityManager.getMobilityConfig().enabled || false,
-            //strict_topology: window.SaManager.getSaConfig().strict_topology.checked,
+            //strict_topology: window.SaManager.getSaConfig().strict_topology || false,
             strict_topology: false,
             //sad_candidate_selector: window.SaManager.getSaConfig().sad_candidate_selector.value || "Distance",
             sad_candidate_selector: "Distance",
