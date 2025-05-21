@@ -53,7 +53,6 @@ class CandidateSelector(ABC):
 def factory_CandidateSelector(selector) -> CandidateSelector:
     from nebula.core.situationalawareness.discovery.candidateselection.stdcandidateselector import STDandidateSelector
     from nebula.core.situationalawareness.discovery.candidateselection.fccandidateselector import FCCandidateSelector
-    from nebula.core.situationalawareness.discovery.candidateselection.hetcandidateselector import HETCandidateSelector
     from nebula.core.situationalawareness.discovery.candidateselection.ringcandidateselector import RINGCandidateSelector
     from nebula.core.situationalawareness.discovery.candidateselection.distcandidateselector import DistanceCandidateSelector
     
@@ -61,7 +60,6 @@ def factory_CandidateSelector(selector) -> CandidateSelector:
         "ring": RINGCandidateSelector,
         "fully": FCCandidateSelector,
         "random": STDandidateSelector,
-        "het": HETCandidateSelector,
         "distance": DistanceCandidateSelector,   
     } 
     
