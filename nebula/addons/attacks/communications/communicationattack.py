@@ -21,18 +21,6 @@ class CommunicationAttack(Attack):
         selectivity_percentage: int = 100,
         selection_interval: int = None,
     ):
-    def __init__(
-        self,
-        engine,
-        target_class,
-        target_method,
-        round_start_attack,
-        round_stop_attack,
-        attack_interval,
-        decorator_args=None,
-        selectivity_percentage: int = 100,
-        selection_interval: int = None,
-    ):
         super().__init__()
         self.engine = engine
         self.target_class = target_class
@@ -70,7 +58,7 @@ class CommunicationAttack(Attack):
                 self.targets = set(random.sample(list(all_nodes), num_targets))
         else:
             logging.info("All neighbors selected as targets")
-            self.targets = CommunicationsManager.get_instance().get_addrs_current_connections(only_direct=True)
+            self.targets = await CommunicationsManager.get_instance().get_addrs_current_connections(only_direct=True)
 
         logging.info(f"Selected {self.selectivity_percentage}% targets from neighbors: {self.targets}")
         self.last_selection_round += 1

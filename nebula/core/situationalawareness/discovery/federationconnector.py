@@ -421,7 +421,7 @@ class FederationConnector(ISADiscovery):
                     epochs=epochs,
                 )
                 logging.info(f"Sending offer model to {source}")
-                await self.cm.send_message(source, msg, is_compressed=True)
+                await self.cm.send_message(source, msg, message_type="offer_model")
             else:
                 logging.info("Discover join received before federation is running..")
                 # starter node is going to send info to the new node

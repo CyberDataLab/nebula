@@ -175,7 +175,7 @@ class Propagator:
             logging.info(
                 f"Sending model to {neighbor_addr} with round {self.get_round()}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
             )
-            asyncio.create_task(self.cm.send_message(neighbor_addr, message, is_compressed=True))
+            asyncio.create_task(self.cm.send_message(neighbor_addr, message, "model"))
             # asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
 
         await asyncio.sleep(self.interval)

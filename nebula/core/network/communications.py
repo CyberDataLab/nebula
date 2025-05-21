@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 
 BLACKLIST_EXPIRATION_TIME = 60
 
+_COMPRESSED_MESSAGES = [
+    "model",
+    "offer_model"
+]
 
 class CommunicationsManager:
     _instance = None
@@ -517,7 +521,8 @@ class CommunicationsManager:
             if interval > 0:
                 await asyncio.sleep(interval)
 
-    async def send_message(self, dest_addr, message, is_compressed=False):
+    async def send_message(self, dest_addr, message, message_type=""):
+        is_compressed = message_type in _COMPRESSED_MESSAGES
         if not is_compressed:
             try:
                 if dest_addr in self.connections:
