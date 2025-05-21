@@ -20,10 +20,10 @@ const ScenarioManager = (function() {
     }
 
     function collectScenarioData() {
+        window.TopologyManager.updateGraph();
         const topologyData = window.TopologyManager.getData();
         const nodes = {};
         const nodes_graph = {};
-
         // Convert nodes array to objects with string IDs
         topologyData.nodes.forEach(node => {
             const nodeId = node.id.toString();
