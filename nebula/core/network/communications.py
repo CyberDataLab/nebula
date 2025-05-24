@@ -25,6 +25,8 @@ _COMPRESSED_MESSAGES = [
     "model",
     "offer_model"
 ]
+    
+
 
 class CommunicationsManager:
     _instance = None
@@ -139,8 +141,9 @@ class CommunicationsManager:
         logging.info(
             f"🔗  check_federation_ready | Ready connections: {self.ready_connections} | Connections: {self.connections.keys()}"
         )
-        if set(self.connections.keys()) == self.ready_connections:
-            return True
+        async with self.connections_lock:
+            if set(self.connections.keys()) == self.ready_connections:
+                return True
 
     async def add_ready_connection(self, addr):
         self.ready_connections.add(addr)
@@ -156,7 +159,7 @@ class CommunicationsManager:
             addr = f"{i.split(':')[0]}:{i.split(':')[1]}"
             await self.connect(addr, direct=True)
             await asyncio.sleep(1)
-        while not self.verify_connections(initial_neighbors):
+        while not await self.verify_connections(initial_neighbors):
             await asyncio.sleep(1)
         current_connections = await self.get_addrs_current_connections()
         logging.info(f"Connections verified: {current_connections}")
@@ -264,7 +267,6 @@ class CommunicationsManager:
         if neighbors:
             addrs.difference_update(neighbors)
 
-        # logging.info(f"neighbors: {neighbors} | addr filtered: {addrs}")
         discovers_sent = 0
         connections_made = set()
         if addrs:
@@ -275,7 +277,7 @@ class CommunicationsManager:
                 connections_made.add(addr)
                 await asyncio.sleep(1)
             for i in range(0, max_tries):
-                if self.verify_any_connections(addrs):
+                if await self.verify_any_connections(addrs):
                     break
                 await asyncio.sleep(1)
             current_connections = await self.get_addrs_current_connections(only_undirected=True)
@@ -357,24 +359,25 @@ class CommunicationsManager:
                     return
 
                 async with self.connections_manager_lock:
-                    if len(self.connections) >= self.max_connections:
-                        logging.info("🔗  [incoming] Maximum number of connections reached")
-                        logging.info(f"🔗  [incoming] Sending CONNECTION//CLOSE to {addr}")
-                        writer.write(b"CONNECTION//CLOSE\n")
-                        await writer.drain()
-                        writer.close()
-                        await writer.wait_closed()
-                        return
+                    async with self.connections_lock:
+                        if len(self.connections) >= self.max_connections:
+                            logging.info("🔗  [incoming] Maximum number of connections reached")
+                            logging.info(f"🔗  [incoming] Sending CONNECTION//CLOSE to {addr}")
+                            writer.write(b"CONNECTION//CLOSE\n")
+                            await writer.drain()
+                            writer.close()
+                            await writer.wait_closed()
+                            return
 
-                    logging.info(f"🔗  [incoming] Connections: {self.connections}")
-                    if connection_addr in self.connections:
-                        logging.info(f"🔗  [incoming] Already connected with {self.connections[connection_addr]}")
-                        logging.info(f"🔗  [incoming] Sending CONNECTION//EXISTS to {addr}")
-                        writer.write(b"CONNECTION//EXISTS\n")
-                        await writer.drain()
-                        writer.close()
-                        await writer.wait_closed()
-                        return
+                        logging.info(f"🔗  [incoming] Connections: {self.connections}")
+                        if connection_addr in self.connections:
+                            logging.info(f"🔗  [incoming] Already connected with {self.connections[connection_addr]}")
+                            logging.info(f"🔗  [incoming] Sending CONNECTION//EXISTS to {addr}")
+                            writer.write(b"CONNECTION//EXISTS\n")
+                            await writer.drain()
+                            writer.close()
+                            await writer.wait_closed()
+                            return
 
                     if connection_addr in self.pending_connections:
                         logging.info(f"🔗  [incoming] Connection with {connection_addr} is already pending")
@@ -415,14 +418,15 @@ class CommunicationsManager:
                     prio=priority,
                 )
                 async with self.connections_manager_lock:
-                    logging.info(f"🔗  [incoming] Including {connection_addr} in connections")
-                    self.connections[connection_addr] = connection
-                    logging.info(f"🔗  [incoming] Sending CONNECTION//NEW to {addr}")
-                    writer.write(b"CONNECTION//NEW\n")
-                    await writer.drain()
-                    writer.write(f"{self.id}\n".encode())
-                    await writer.drain()
-                    await connection.start()
+                    async with self.connections_lock:
+                        logging.info(f"🔗  [incoming] Including {connection_addr} in connections")
+                        self.connections[connection_addr] = connection
+                        logging.info(f"🔗  [incoming] Sending CONNECTION//NEW to {addr}")
+                        writer.write(b"CONNECTION//NEW\n")
+                        await writer.drain()
+                        writer.write(f"{self.id}\n".encode())
+                        await writer.drain()
+                        await connection.start()
 
             except Exception as e:
                 logging.exception(f"❗️  [incoming] Error while handling connection with {addr}: {e}")
@@ -447,13 +451,14 @@ class CommunicationsManager:
 
     async def stop(self):
         logging.info("🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")
-        connections = list(self.connections.values())
-        for node in connections:
-            await node.stop()
-        if hasattr(self, "server"):
-            self.network_engine.close()
-            await self.network_engine.wait_closed()
-            self.network_task.cancel()
+        async with self.connections_lock:
+            connections = list(self.connections.values())
+            for node in connections:
+                await node.stop()
+            if hasattr(self, "server"):
+                self.network_engine.close()
+                await self.network_engine.wait_closed()
+                self.network_task.cancel()
 
     async def run_reconnections(self):
         for connection in self.connections_reconnect:
@@ -466,20 +471,22 @@ class CommunicationsManager:
 
     async def clear_unused_undirect_connections(self):
         async with self.connections_lock:
-            for conn in self.connections.values():
-                if not conn.direct and await conn.is_inactive():
-                    logging.info(f"Cleaning unused connection: {conn.addr}")
-                    asyncio.create_task(self.disconnect(conn.addr, mutual_disconnection=False))
+            inactive_connections = [conn for conn in self.connections.values() if await conn.is_inactive()]
+        for conn in inactive_connections:
+            logging.info(f"Cleaning unused connection: {conn.addr}")
+            asyncio.create_task(self.disconnect(conn.addr, mutual_disconnection=False))
 
-    def verify_any_connections(self, neighbors):
+    async def verify_any_connections(self, neighbors):
         # Return True if any neighbors are connected
-        if any(neighbor in self.connections for neighbor in neighbors):
-            return True
-        return False
+        async with self.connections_lock:
+            if any(neighbor in self.connections for neighbor in neighbors):
+                return True
+            return False
 
-    def verify_connections(self, neighbors):
+    async def verify_connections(self, neighbors):
         # Return True if all neighbors are connected
-        return bool(all(neighbor in self.connections for neighbor in neighbors))
+        async with self.connections_lock:
+            return bool(all(neighbor in self.connections for neighbor in neighbors))
 
     async def network_wait(self):
         await self.stop_network_engine.wait()
@@ -487,9 +494,6 @@ class CommunicationsManager:
     async def deploy_additional_services(self):
         logging.info("🌐  Deploying additional services...")
         await self._forwarder.start()
-
-        # await self._discoverer.start()
-        # await self._health.start()
         self._propagator.start()
 
     async def include_received_message_hash(self, hash_message):
@@ -553,7 +557,7 @@ class CommunicationsManager:
                 if host == self.host and port == self.port:
                     logging.info("🔗  [outgoing] Connection with yourself is not allowed")
                     return False
-
+                
                 blacklist = await self.bl.get_blacklist()
                 if blacklist:
                     logging.info(f"blacklist: {blacklist}, source trying to connect: {addr}")
@@ -562,13 +566,14 @@ class CommunicationsManager:
                         return
 
                 async with self.connections_manager_lock:
-                    if addr in self.connections:
-                        logging.info(f"🔗  [outgoing] Already connected with {self.connections[addr]}")
-                        if not self.connections[addr].get_direct() and (direct == True):
-                            self.connections[addr].set_direct(direct)
-                            return True
-                        else:
-                            return False
+                    async with self.connections_lock:
+                        if addr in self.connections:
+                            logging.info(f"🔗  [outgoing] Already connected with {self.connections[addr]}")
+                            if not self.connections[addr].get_direct() and (direct == True):
+                                self.connections[addr].set_direct(direct)
+                                return True
+                            else:
+                                return False
                     if addr in self.pending_connections:
                         logging.info(f"🔗  [outgoing] Connection with {addr} is already pending")
                         if int(self.host.split(".")[3]) >= int(host.split(".")[3]):
@@ -606,7 +611,8 @@ class CommunicationsManager:
                 connection_status = connection_status.decode("utf-8").strip()
 
                 logging.info(f"🔗  [outgoing] Received connection status {connection_status} (from {addr})")
-                logging.info(f"🔗  [outgoing] Connections: {self.connections}")
+                async with self.connections_lock:
+                    logging.info(f"🔗  [outgoing] Connections: {self.connections}")
 
                 if connection_status == "CONNECTION//CLOSE":
                     logging.info(f"🔗  [outgoing] Connection with {addr} closed")
@@ -634,7 +640,8 @@ class CommunicationsManager:
                     await writer.wait_closed()
                     return False
                 elif connection_status == "CONNECTION//EXISTS":
-                    logging.info(f"🔗  [outgoing] Already connected {self.connections[addr]}")
+                    async with self.connections_lock:
+                        logging.info(f"🔗  [outgoing] Already connected {self.connections[addr]}")
                     writer.close()
                     await writer.wait_closed()
                     return True
@@ -656,7 +663,8 @@ class CommunicationsManager:
                             config=self.config,
                             prio=priority,
                         )
-                        self.connections[addr] = connection
+                        async with self.connections_lock:
+                            self.connections[addr] = connection
                         await connection.start()
                 else:
                     logging.info(f"🔗  [outgoing] Unknown connection status {connection_status}")
@@ -692,9 +700,8 @@ class CommunicationsManager:
         asyncio.create_task(process_establish_connection(addr, direct, reconnect, priority))
 
     async def connect(self, addr, direct=True, priority="medium"):
-        await self.get_connections_lock().acquire_async()
-        duplicated = addr in self.connections
-        await self.get_connections_lock().release_async()
+        async with self.connections_lock:
+            duplicated = addr in self.connections
         if duplicated:
             if direct:  # Upcoming direct connection
                 if not self.connections[addr].get_direct():
@@ -739,14 +746,18 @@ class CommunicationsManager:
             await self.add_to_blacklist(dest_addr)
 
         logging.info(f"Trying to disconnect {dest_addr}")
-        if dest_addr not in self.connections:
-            logging.info(f"Connection {dest_addr} not found")
-            return
+        async with self.connections_lock:
+            if dest_addr not in self.connections:
+                logging.info(f"Connection {dest_addr} not found")
+                return
         try:
             if mutual_disconnection:
                 await self.connections[dest_addr].send(data=self.create_message("connection", "disconnect"))
                 await asyncio.sleep(1)
-                await self.connections[dest_addr].stop()
+                async with self.connections_lock:
+                    conn = self.connections.pop(dest_addr)
+                await conn.stop()
+                #await self.connections[dest_addr].stop()
         except Exception as e:
             logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
         if dest_addr in self.connections:
@@ -754,8 +765,11 @@ class CommunicationsManager:
             # del self.connections[dest_addr]
             try:
                 removed = True
-                await self.connections[dest_addr].stop()
-                del self.connections[dest_addr]
+                async with self.connections_lock:
+                    conn = self.connections.pop(dest_addr)
+                await conn.stop()
+                # await self.connections[dest_addr].stop()
+                # del self.connections[dest_addr]
             except Exception as e:
                 logging.exception(f"❗️  Error while removing connection {dest_addr}: {e!s}")
         current_connections = await self.get_all_addrs_current_connections(only_direct=True)
@@ -767,14 +781,6 @@ class CommunicationsManager:
             current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
             if is_neighbor:
                 await self.engine.update_neighbors(dest_addr, current_connections, remove=removed)
-
-    async def remove_temporary_connection(self, temp_addr):
-        logging.info(f"Removing temporary conneciton:{temp_addr}..")
-        try:
-            await self.get_connections_lock().acquire_async()
-            self.connections.pop(temp_addr, None)
-        finally:
-            await self.get_connections_lock().release_async()
 
     async def get_all_addrs_current_connections(self, only_direct=False, only_undirected=False):
         try:
@@ -797,63 +803,11 @@ class CommunicationsManager:
             current_connections.add(self.addr)
         return current_connections
 
-    async def get_connection_by_addr(self, addr):
-        try:
-            await self.get_connections_lock().acquire_async()
-            for key, conn in self.connections.items():
-                if addr in key:
-                    return conn
-            return None
-        except Exception as e:
-            logging.exception(f"Error getting connection by address: {e}")
-            return None
-        finally:
-            await self.get_connections_lock().release_async()
-
-    async def get_direct_connections(self):
-        try:
-            await self.get_connections_lock().acquire_async()
-            return {conn for _, conn in self.connections.items() if conn.get_direct()}
-        finally:
-            await self.get_connections_lock().release_async()
-
-    async def get_undirect_connections(self):
-        try:
-            await self.get_connections_lock().acquire_async()
-            return {conn for _, conn in self.connections.items() if not conn.get_direct()}
-        finally:
-            await self.get_connections_lock().release_async()
-
-    async def get_nearest_connections(self, top: int = 1):
-        try:
-            await self.get_connections_lock().acquire_async()
-            sorted_connections = sorted(
-                self.connections.values(),
-                key=lambda conn: (
-                    conn.get_neighbor_distance() if conn.get_neighbor_distance() is not None else float("inf")
-                ),
-            )
-            if sorted_connections:
-                if top == 1:
-                    return sorted_connections[0]
-                else:
-                    return sorted_connections[:top]
-            else:
-                return None
-        finally:
-            await self.get_connections_lock().release_async()
-
     def get_ready_connections(self):
         return {addr for addr, conn in self.connections.items() if conn.get_ready()}
 
     def learning_finished(self):
         return self.engine.learning_cycle_finished()
-
-    def check_finished_experiment(self):
-        return all(
-            conn.get_federated_round() == self.config.participant["scenario_args"]["rounds"] - 1
-            for conn in self.connections.values()
-        )
 
     def __str__(self):
         return f"Connections: {[str(conn) for conn in self.connections.values()]}"
