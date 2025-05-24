@@ -605,10 +605,6 @@ class Engine:
             else:
                 logging.error("Error reporting scenario finished")
 
-        logging.info("Checking if all my connections reached the total rounds...")
-        while not self.cm.check_finished_experiment():
-            await asyncio.sleep(1)
-
         await asyncio.sleep(5)
 
         # Kill itself
