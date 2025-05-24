@@ -47,51 +47,66 @@ class SwappingWeightsAttack(ModelAttack):
 
     def model_attack(self, received_weights):
         """
-        Performs the swapping weights attack by computing a similarity matrix and
-        swapping the weights of a specified layer based on their similarity.
+        Performs a similarity-based weight swapping attack to subtly sabotage a federated model.
 
-        This method applies a greedy algorithm to swap weights in the selected layer
-        in a way that could potentially disrupt the training process. The attack also
-        ensures that some rows are fully permuted, and others are swapped based on
-        similarity.
+        This attack targets a specific layer of the neural network (typically a fully connected layer)
+        and permutes its neurons (rows in the weight matrix) in a way that alters the model's behavior
+        without changing its structure or dimensions.
+
+        Steps:
+        1. Computes a pairwise cosine similarity matrix between the rows (neurons) of the selected layer.
+        2. Finds neuron pairs that are mutually dissimilar (i.e., each is the most dissimilar to the other).
+        These pairs are good candidates for swapping as the operation is more disruptive.
+        3. For the remaining neurons (not in such pairs), applies a random permutation ensuring no neuron
+        stays in its original position.
+        4. Applies the final permutation to:
+        - The target layer (permutes rows).
+        - The next layer (permutes corresponding rows).
+        - The following layer (if any), where the permutation is applied to columns (to preserve consistency).
+
+        This subtle attack degrades model performance while preserving architectural validity and
+        avoiding obvious signs of tampering.
 
         Args:
-            received_weights (dict): The aggregated model weights to be modified.
+            received_weights (dict): Dictionary of aggregated model weights with parameter names as keys.
 
         Returns:
-            dict: The modified model weights after performing the swapping attack.
+            dict: Modified model weights with rows of selected layers permuted.
         """
         logging.info("[SwappingWeightsAttack] Performing swapping weights attack")
-        lkeys = list(received_weights.keys())
-        wm = received_weights[lkeys[self.layer_idx]]
+        # Extract weight matrix for the target layer
+        layer_keys = list(received_weights.keys())
+        w = received_weights[layer_keys[self.layer_idx]]
 
-        # Compute similarity matrix
-        sm = torch.zeros((wm.shape[0], wm.shape[0]))
-        for j in range(wm.shape[0]):
-            sm[j] = pairwise_cosine_similarity(wm[j].reshape(1, -1), wm.reshape(wm.shape[0], -1))
+        # Compute cosine similarity matrix
+        sim_matrix = torch.nn.functional.cosine_similarity(
+            w.unsqueeze(1), w.unsqueeze(0), dim=2
+        )
 
-        # Check rows/cols where greedy approach is optimal
-        nsort = np.full(sm.shape[0], -1)
-        rows = []
-        for j in range(sm.shape[0]):
-            k = torch.argmin(sm[j])
-            if torch.argmin(sm[:, k]) == j:
-                nsort[j] = k
-                rows.append(j)
-        not_rows = np.array([i for i in range(sm.shape[0]) if i not in rows])
+        # Greedy mutual minimum pairing
+        perm = -torch.ones(sim_matrix.shape[0], dtype=torch.long)
+        mutual_rows = []
 
-        # Ensure the rest of the rows are fully permuted (not optimal, but good enough)
-        nrs = copy.deepcopy(not_rows)
-        nrs = np.random.permutation(nrs)
-        while np.any(nrs == not_rows):
-            nrs = np.random.permutation(nrs)
-        nsort[not_rows] = nrs
-        nsort = torch.tensor(nsort)
+        for i in range(sim_matrix.shape[0]):
+            j = torch.argmin(sim_matrix[i])
+            if torch.argmin(sim_matrix[j]) == i:
+                perm[i] = j
+                mutual_rows.append(i)
 
-        # Apply permutation to weights
-        received_weights[lkeys[self.layer_idx]] = received_weights[lkeys[self.layer_idx]][nsort]
-        received_weights[lkeys[self.layer_idx + 1]] = received_weights[lkeys[self.layer_idx + 1]][nsort]
-        if self.layer_idx + 2 < len(lkeys):
-            received_weights[lkeys[self.layer_idx + 2]] = received_weights[lkeys[self.layer_idx + 2]][:, nsort]
+        # Fully permute the remaining rows
+        remaining_rows = torch.tensor([i for i in range(sim_matrix.shape[0]) if i not in mutual_rows])
+        shuffled = remaining_rows[torch.randperm(len(remaining_rows))]
+        while torch.any(remaining_rows == shuffled):
+            shuffled = remaining_rows[torch.randperm(len(remaining_rows))]
+
+        perm[remaining_rows] = shuffled
+
+        # Apply permutation to current and next layers
+        received_weights[layer_keys[self.layer_idx]] = w[perm]
+        received_weights[layer_keys[self.layer_idx + 1]] = received_weights[layer_keys[self.layer_idx + 1]][perm]
+
+        # If there's a third layer and it matches output shape, permute columns accordingly
+        if self.layer_idx + 2 < len(layer_keys):
+            received_weights[layer_keys[self.layer_idx + 2]] = received_weights[layer_keys[self.layer_idx + 2]][:, perm]
 
         return received_weights
