@@ -53,7 +53,7 @@
 
                         <div class="scenario-actions">
                             {% if scenario.status == "running" or scenario.status == "completed" %}
-                            <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all = False) }}"
+                            <a id="stop_button" href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all = False) }}"
                                 class="btn btn-danger bg-danger-subtle text-danger w-100 mb-2">
                                 <i class="fa fa-stop-circle me-2"></i>Stop scenario
                             </a>

@@ -1812,6 +1812,10 @@ class Monitor {
             } else if (allOffline) {
                 statusBadge.className = 'badge bg-danger-subtle text-danger px-3 py-2 ms-3';
                 statusBadge.innerHTML = '<i class="fa fa-times-circle me-2"></i>Finished';
+                const stopButton = document.getElementById('stop_button');
+                if (stopButton) {
+                    stopButton.style.display = 'none';
+                }
             } else {
                 statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
                 statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
