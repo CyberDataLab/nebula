@@ -21,11 +21,7 @@ if TYPE_CHECKING:
 
 BLACKLIST_EXPIRATION_TIME = 60
 
-_COMPRESSED_MESSAGES = [
-    "model",
-    "offer_model"
-]
-    
+_COMPRESSED_MESSAGES = ["model", "offer_model"]
 
 
 class CommunicationsManager:
@@ -557,7 +553,7 @@ class CommunicationsManager:
                 if host == self.host and port == self.port:
                     logging.info("🔗  [outgoing] Connection with yourself is not allowed")
                     return False
-                
+
                 blacklist = await self.bl.get_blacklist()
                 if blacklist:
                     logging.info(f"blacklist: {blacklist}, source trying to connect: {addr}")
@@ -757,19 +753,15 @@ class CommunicationsManager:
                 async with self.connections_lock:
                     conn = self.connections.pop(dest_addr)
                 await conn.stop()
-                #await self.connections[dest_addr].stop()
         except Exception as e:
             logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
         if dest_addr in self.connections:
             logging.info(f"Removing {dest_addr} from connections")
-            # del self.connections[dest_addr]
             try:
                 removed = True
                 async with self.connections_lock:
                     conn = self.connections.pop(dest_addr)
                 await conn.stop()
-                # await self.connections[dest_addr].stop()
-                # del self.connections[dest_addr]
             except Exception as e:
                 logging.exception(f"❗️  Error while removing connection {dest_addr}: {e!s}")
         current_connections = await self.get_all_addrs_current_connections(only_direct=True)

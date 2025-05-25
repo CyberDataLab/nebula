@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import os
-import time
 import socket
+import time
+
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
@@ -86,7 +87,6 @@ class Engine:
         self.addr = config.participant["network_args"]["addr"]
         self.role = config.participant["device_args"]["role"]
         self.name = config.participant["device_args"]["name"]
-        self.docker_id = config.participant["device_args"]["docker_id"]
         self.client = docker.from_env()
 
         print_banner()
@@ -601,20 +601,20 @@ class Engine:
         if self.config.participant["scenario_args"]["controller"] != "nebula-test":
             result = await self.reporter.report_scenario_finished()
             if result:
-                logging.info("Scenario finished reported succesfully")
+                logging.info("📝  Scenario finished reported succesfully")
             else:
-                logging.error("Error reporting scenario finished")
+                logging.error("📝  Error reporting scenario finished")
 
         await asyncio.sleep(5)
 
         # Kill itself
         if self.config.participant["scenario_args"]["deployment"] == "docker":
             try:
-                self.docker_id = socket.gethostname()
-                logging.info(f"docker id: {self.docker_id} killing docker")
-                self.client.containers.get(self.docker_id).kill()
+                docker_id = socket.gethostname()
+                logging.info(f"📦  Killing docker container with ID {docker_id}")
+                self.client.containers.get(docker_id).kill()
             except Exception as e:
-                print(f"Error stopping Docker container with ID {self.docker_id}: {e}")
+                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
 
     async def _extended_learning_cycle(self):
         """

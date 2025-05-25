@@ -13,7 +13,6 @@
   "device_args": {
     "uid": "",
     "idx": "",
-    "docker_id": "",
     "name": "",
     "username": "pi",
     "password": "pi",
