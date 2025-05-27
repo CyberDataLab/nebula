@@ -143,7 +143,7 @@ class EventManager:
             logging.info(f"Publishing NodeEvent: {nodeevent}")
         async with self._node_events_lock:
             event_type = type(nodeevent)
-            callbacks = self._node_events_subs.get(event_type, [])  # Extraer la lista de callbacks
+            callbacks = self._node_events_subs.get(event_type, [])
 
         if not callbacks:
             if self._verbose:

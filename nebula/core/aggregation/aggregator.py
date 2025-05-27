@@ -59,6 +59,7 @@ class Aggregator(ABC):
 
     @property
     def us(self):
+        """Federation type UpdateHandler (e.g. DFL-UpdateHandler, CFL-UpdateHandler...)"""
         return self._update_storage
 
     @abstractmethod
@@ -71,6 +72,20 @@ class Aggregator(ABC):
         await self.us.init(self.config)
 
     async def update_federation_nodes(self, federation_nodes: set):
+        """
+        Updates the current set of nodes expected to participate in the upcoming aggregation round.
+
+        This method informs the update handler (`us`) about the new set of federation nodes, 
+        clears any pending models, and attempts to acquire the aggregation lock to prepare 
+        for model aggregation. If the aggregation process is already running, it raises an exception.
+
+        Args:
+            federation_nodes (set): A set of addresses representing the nodes expected to contribute 
+                                    updates for the next aggregation round.
+
+        Raises:
+            Exception: If the aggregation process is already running and the lock is currently held.
+        """
         await self.us.round_expected_updates(federation_nodes=federation_nodes)
 
         if not self._aggregation_done_lock.locked():
@@ -86,6 +101,23 @@ class Aggregator(ABC):
         return self._federation_nodes
 
     async def get_aggregation(self):
+        """
+        Handles the aggregation process for a training round.
+
+        This method waits for all expected model updates from federation nodes or until a timeout occurs.
+        It uses an asynchronous lock to coordinate access and includes an early exit mechanism if all
+        updates are received before the timeout. Once the condition is satisfied, it releases the lock,
+        collects the updates, identifies any missing nodes, and publishes an `AggregationEvent`.
+        Finally, it runs the aggregation algorithm and returns the result.
+
+        Returns:
+            Any: The result of the aggregation process, as returned by `run_aggregation`.
+
+        Raises:
+            TimeoutError: If the aggregation lock is not acquired within the defined timeout.
+            asyncio.CancelledError: If the aggregation lock acquisition is cancelled.
+            Exception: For any other unexpected errors during the aggregation process.
+        """
         try:
             timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
             logging.info(f"Aggregation timeout: {timeout} starts...")
