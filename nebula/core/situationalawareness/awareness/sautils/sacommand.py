@@ -110,29 +110,77 @@ class SACommand:
         raise NotImplementedError
 
     async def discard_command(self):
+        """
+        Mark this command as discarded, updating its internal state accordingly.
+        """
         await self._update_command_state(SACommandState.DISCARDED)
 
     def got_higher_priority_than(self, other_prio: SACommandPRIO):
+        """
+        Compare this command's priority against another.
+
+        Args:
+            other_prio (SACommandPRIO): The priority of the other command.
+
+        Returns:
+            bool: True if this command has higher priority, False otherwise.
+        """
         return self._priority.value > other_prio.value
 
     def get_prio(self):
+        """
+        Retrieve the priority level of this command.
+
+        Returns:
+            SACommandPRIO: The command's priority enum.
+        """
         return self._priority
 
     async def get_owner(self):
+        """
+        Asynchronously obtain the owner agent of this command.
+
+        Returns:
+            Agent: The agent instance that owns this command.
+        """
         return await self._owner.get_agent()
 
     def get_action(self) -> SACommandAction:
+        """
+        Get the action associated with this command.
+
+        Returns:
+            SACommandAction: The command's action enum.
+        """
         return self._action
 
     async def _update_command_state(self, sacs: SACommandState):
+        """
+        Update the command's state and resolve its completion future if pending.
+
+        Args:
+            sacs (SACommandState): The new state to assign to the command.
+        """
         self._state = sacs
         if not self._state_future.done():
             self._state_future.set_result(sacs)
 
     def get_state_future(self) -> asyncio.Future:
+        """
+        Get the Future that will be completed when the command's state changes.
+
+        Returns:
+            asyncio.Future: Future that resolves to the command's final state.
+        """
         return self._state_future
 
     def is_parallelizable(self):
+        """
+        Indicates whether this command can be executed in parallel with others.
+
+        Returns:
+            bool: True if parallel execution is allowed, False otherwise.
+        """
         return self._parallelizable
 
     def __repr__(self):
@@ -232,6 +280,19 @@ class AggregationCommand(SACommand):
 
 
 def factory_sa_command(sacommand_type, *config) -> SACommand:
+    """
+    Factory function to create situational awareness command instances.
+
+    Args:
+        sacommand_type (str): Identifier of the command type (e.g., "connectivity", "aggregation").
+        *config: Positional arguments to initialize the specific command class.
+
+    Returns:
+        SACommand: An instance of the requested situational awareness command.
+
+    Raises:
+        ValueError: If the provided command type is not recognized.
+    """
     options = {
         "connectivity": ConnectivityCommand,
         "aggregation": AggregationCommand,

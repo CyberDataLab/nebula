@@ -62,18 +62,22 @@ class FederationConnector(ISADiscovery):
 
     @property
     def engine(self):
+        """Engine"""
         return self._engine
 
     @cached_property
     def cm(self):
+        """Communication Manager"""
         return CommunicationsManager.get_instance()
 
     @property
     def candidate_selector(self):
+        """Candidate selector strategy"""
         return self._candidate_selector
 
     @property
     def model_handler(self):
+        """Model handler strategy"""
         return self._model_handler
 
     @property
@@ -83,15 +87,24 @@ class FederationConnector(ISADiscovery):
 
     async def init(self, sa_reasoner):
         """
-        model_handler config:
-            - self total rounds
-            - self current round
-            - self epochs
+        Initializes the main components of the federation connector, including the situational awareness reasoner
+        and the necessary configuration for neighbor handling and candidate selection.
 
-        candidate_selector config:
-            - self model loss
-            - self weight distance
-            - self weight hetereogeneity
+        This method performs the following tasks:
+        - Stores the reference to the situational awareness reasoner (`SAReasoner`).
+        - Registers message event callbacks.
+        - Subscribes to relevant events such as neighbor updates and model updates.
+        - Configures the `CandidateSelector` with initial weights for:
+            * Model loss
+            * Weight distance
+            * Data heterogeneity
+        - Configures the `ModelHandler`:
+            * total rounds
+            * current round
+            * epochs
+
+        Args:
+            sa_reasoner (ISAReasoner): An instance of the situational awareness reasoner used for decision-making.
         """
         logging.info("Building Federation Connector configurations...")
         self._sa_reasoner: ISAReasoner = sa_reasoner
@@ -110,12 +123,34 @@ class FederationConnector(ISADiscovery):
     """
 
     async def _accept_connection(self, source, joining=False):
+        """
+        Handles the acceptance of a connection request delegating on reasoner.
+
+        Args:
+            source (str): Address of the source node requesting the connection.
+            joining (bool): Indicates whether the source node is joining the federation.
+
+        Returns:
+            Any: The result of the underlying connection acceptance process.
+        """
         return await self.sar.accept_connection(source, joining)
 
     def _still_waiting_for_candidates(self):
+        """
+        Checks whether the system is still waiting for candidate neighbors to complete the late connection process.
+
+        Returns:
+            bool: True if still waiting for candidates, False otherwise.
+        """
         return not self.accept_candidates_lock.locked() and self.late_connection_process_lock.locked()
 
     async def _add_pending_connection_confirmation(self, addr):
+        """
+        Adds a node to the set of pending connection confirmations if it's not already known or pending.
+
+        Args:
+            addr (str): The address of the node to track for pending confirmation.
+        """
         added = False
         async with self._update_neighbors_lock:
             async with self.pending_confirmation_from_nodes_lock:
@@ -128,21 +163,53 @@ class FederationConnector(ISADiscovery):
             await self._clear_pending_confirmations(node=addr)
 
     async def _remove_pending_confirmation_from(self, addr):
+        """
+        Removes a node from the pending confirmation set.
+
+        Args:
+            addr (str): Address of the node to remove.
+        """
         async with self.pending_confirmation_from_nodes_lock:
             self.pending_confirmation_from_nodes.discard(addr)
 
     async def _clear_pending_confirmations(self, node):
+        """
+        Clears the pending confirmation for a given node after a expired timeout.
+
+        Args:
+            node (str): The node address to clear from the pending set.
+        """
         await asyncio.sleep(PENDING_CONFIRMATION_TTL)
         async with self.pending_confirmation_from_nodes_lock:
             if node in self.pending_confirmation_from_nodes:
                 self.pending_confirmation_from_nodes.discard(node)
 
     async def _waiting_confirmation_from(self, addr):
+        """
+        Checks whether a node is still pending confirmation.
+
+        Args:
+            addr (str): Address of the node to check.
+
+        Returns:
+            bool: True if the node is still pending confirmation, False otherwise.
+        """
         async with self.pending_confirmation_from_nodes_lock:
             found = addr in self.pending_confirmation_from_nodes
         return found
 
     async def _confirmation_received(self, addr, confirmation=True, joining=False):
+        """
+        Handles when a confirmation is received from a node.
+
+        If the confirmation is positive, the node is added to the connected list and the appropriate
+        event is published.
+
+        Args:
+            addr (str): Address of the confirming node.
+            confirmation (bool): Whether the confirmation is positive.
+            joining (bool): Whether the node is joining the federation.
+        """
         logging.info(f" Update | connection confirmation received from: {addr} | joining federation: {joining}")
         await self._remove_pending_confirmation_from(addr)
         if confirmation:
@@ -151,19 +218,44 @@ class FederationConnector(ISADiscovery):
             await EventManager.get_instance().publish_node_event(une)
 
     async def _add_to_discarded_offers(self, addr_discarded):
+        """
+        Adds a given address to the list of discarded offers.
+
+        Args:
+            addr_discarded (str): Address of the node whose offer was discarded.
+        """
         async with self.discarded_offers_addr_lock:
             self.discarded_offers_addr.append(addr_discarded)
 
     async def _get_actions(self):
+        """
+        Retrieves the list of current SA actions.
+
+        Returns:
+            list: A list of SA actions from the situational awareness reasoner.
+        """
         return await self.sar.get_actions()
 
     async def _register_late_neighbor(self, addr, joinning_federation=False):
+        """
+        Registers a node that joined the federation later than expected.
+
+        Args:
+            addr (str): Address of the late neighbor.
+            joinning_federation (bool): Whether the node is joining the federation.
+        """
         if self._verbose:
             logging.info(f"Registering | late neighbor: {addr}, joining: {joinning_federation}")
         une = UpdateNeighborEvent(addr, joining=joinning_federation)
         await EventManager.get_instance().publish_node_event(une)
 
     async def _update_neighbors(self, une: UpdateNeighborEvent):
+        """
+        Handles an update to the neighbor list based on an UpdateNeighborEvent.
+
+        Args:
+            une (UpdateNeighborEvent): The event carrying the node to add or remove.
+        """
         node, remove = await une.get_event_data()
         await self._update_neighbors_lock.acquire_async()
         if not remove:
@@ -172,6 +264,12 @@ class FederationConnector(ISADiscovery):
         await self._update_neighbors_lock.release_async()
 
     async def _meet_node(self, node):
+        """
+        Publishes a NodeFoundEvent for a newly discovered or confirmed neighbor.
+
+        Args:
+            node (str): Address of the node that has been met.
+        """
         nfe = NodeFoundEvent(node)
         await EventManager.get_instance().publish_node_event(nfe)
 
@@ -203,9 +301,23 @@ class FederationConnector(ISADiscovery):
             return False
 
     async def get_trainning_info(self):
+        """
+        Retrieves the current training model information from the model handler.
+
+        Returns:
+            Any: The current model or training-related information.
+        """
         return await self.model_handler.get_model(None)
 
     async def _add_candidate(self, source, n_neighbors, loss):
+        """
+        Adds a candidate node to the candidate selector if candidates are currently being accepted.
+
+        Args:
+            source (str): Address of the candidate node.
+            n_neighbors (int): Number of neighbors the candidate currently has.
+            loss (float): Reported model loss from the candidate.
+        """
         if not self.accept_candidates_lock.locked():
             await self.candidate_selector.add_candidate((source, n_neighbors, loss))
 
@@ -241,12 +353,24 @@ class FederationConnector(ISADiscovery):
 
     async def start_late_connection_process(self, connected=False, msg_type="discover_join", addrs_known=None):
         """
-        This function represents the process of discovering the federation and stablish the first
-        connections with it. The first step is to send the DISCOVER_JOIN/NODES message to look for nodes,
-        the ones that receive that message will send back a OFFER_MODEL/METRIC message. It contains info to do
-        a selection process among candidates to later on connect to the best ones.
-        The process will repeat until at least one candidate is found and the process will be locked
-        to avoid concurrency.
+        Starts the late connection process to discover and join an existing federation.
+
+        This method initiates the discovery phase by broadcasting a `DISCOVER_JOIN` or `DISCOVER_NODES` message
+        to nearby nodes. Nodes that receive this message respond with an `OFFER_MODEL` or `OFFER_METRIC` message,
+        which contains the necessary information to evaluate and select the most suitable candidates.
+
+        The process is protected by locks to avoid race conditions, and it continues iteratively until at least 
+        one valid candidate is found. Once candidates are selected, a connection message is sent to the best nodes.
+
+        Args:
+            connected (bool): Whether the node is already connected to some federation (used to differentiate restructuring).
+            msg_type (str): Type of discovery message to send ("discover_join" or "discover_nodes").
+            addrs_known (Optional[Iterable[str]]): Optional list of known node addresses to use for discovery.
+
+        Notes:
+            - Uses `late_connection_process_lock` to avoid concurrent executions of the discovery process.
+            - Uses `accept_candidates_lock` to prevent late candidate acceptance after selection.
+            - Logs progress and state transitions for monitoring purposes.
         """
         logging.info("🌐  Initializing late connection process..")
 
@@ -308,6 +432,7 @@ class FederationConnector(ISADiscovery):
     """
 
     async def _register_message_events_callbacks(self):
+        """Dinamyc message callback registration"""
         me_dict = self.cm.get_messages_events()
         message_events = [
             (message_name, message_action)
@@ -322,10 +447,12 @@ class FederationConnector(ISADiscovery):
                 await EventManager.get_instance().subscribe((event_type, action), method)
 
     async def _connection_disconnect_callback(self, source, message):
+        """Remove if there is any pending confirmation from the disconnected node"""
         if await self._waiting_confirmation_from(source):
             await self._confirmation_received(source, confirmation=False)
 
     async def _model_update_callback(self, source, message):
+        """Update confirmation if a model update is received while there is a pending confirmation"""
         if await self._waiting_confirmation_from(source):
             await self._confirmation_received(source)
 
