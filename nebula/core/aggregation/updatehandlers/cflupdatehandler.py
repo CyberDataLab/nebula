@@ -13,6 +13,16 @@ if TYPE_CHECKING:
 
 
 class Update:
+    """
+    Represents a model update received from a node in a specific training round.
+    
+    Attributes:
+        model (object): The model object or weights received.
+        weight (float): The weight or importance of the update.
+        source (str): Identifier of the node that sent the update.
+        round (int): Training round this update belongs to.
+        time_received (float): Timestamp when the update was received.
+    """
     def __init__(self, model, weight, source, round, time_received):
         self.model = model
         self.weight = weight
@@ -21,6 +31,9 @@ class Update:
         self.time_received = time_received
 
     def __eq__(self, other):
+        """
+        Checks if two updates belong to the same round.
+        """
         return self.round == other.round
 
 
@@ -28,6 +41,21 @@ MAX_UPDATE_BUFFER_SIZE = 1
 
 
 class CFLUpdateHandler(UpdateHandler):
+    """
+    Handles updates received in a cross-silo/federated learning setup,
+    managing synchronization and aggregation across distributed nodes.
+
+    Attributes:
+        _aggregator (Aggregator): Reference to the aggregator managing the global model.
+        _addr (str): Local address of the node.
+        _buffersize (int): Max number of updates to store per node.
+        _updates_storage (dict): Stores received updates per source node.
+        _sources_expected (set): Set of nodes expected to send updates this round.
+        _sources_received (set): Set of nodes that have sent updates this round.
+        _missing_ones (set): Tracks nodes whose updates are missing.
+        _role (str): Role of this node (e.g., trainer or server).
+    """
+    
     def __init__(self, aggregator, addr, buffersize=MAX_UPDATE_BUFFER_SIZE):
         self._addr = addr
         self._aggregator: Aggregator = aggregator
@@ -47,18 +75,30 @@ class CFLUpdateHandler(UpdateHandler):
 
     @property
     def us(self):
+        """Returns the internal updates storage dictionary."""
         return self._updates_storage
 
     @property
     def agg(self):
+        """Returns the aggregator instance."""
         return self._aggregator
 
     async def init(self, config):
+        """
+        Initializes the handler with the participant configuration,
+        and subscribes to relevant node events.
+        """
         self._role = config.participant["device_args"]["role"]
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.notify_federation_update)
         await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.storage_update)
 
     async def round_expected_updates(self, federation_nodes: set):
+        """
+        Sets the expected nodes for the current training round and updates storage.
+
+        Args:
+            federation_nodes (set): Nodes expected to send updates this round.
+        """
         await self._update_federation_lock.acquire_async()
         await self._updates_storage_lock.acquire_async()
         self._sources_expected = federation_nodes.copy()
@@ -84,6 +124,12 @@ class CFLUpdateHandler(UpdateHandler):
         self._notification = False
 
     async def storage_update(self, updt_received_event: UpdateReceivedEvent):
+        """
+        Stores a received update if it comes from an expected source.
+
+        Args:
+            updt_received_event (UpdateReceivedEvent): The event containing the update.
+        """
         time_received = time.time()
         (model, weight, source, round, _) = await updt_received_event.get_event_data()
 
@@ -113,6 +159,12 @@ class CFLUpdateHandler(UpdateHandler):
                 logging.info(f"Discard update | source: {source} not in expected updates for this Round")
 
     async def get_round_updates(self) -> dict[str, tuple[object, float]]:
+        """
+        Retrieves the latest updates received this round.
+
+        Returns:
+            dict: Mapping of source to (model, weight) tuples.
+        """
         await self._updates_storage_lock.acquire_async()
         updates_missing = self._sources_expected.difference(self._sources_received)
         if updates_missing:
@@ -133,6 +185,12 @@ class CFLUpdateHandler(UpdateHandler):
         return updates
 
     async def notify_federation_update(self, updt_nei_event: UpdateNeighborEvent):
+        """
+        Reacts to neighbor updates (e.g., join or leave).
+
+        Args:
+            updt_nei_event (UpdateNeighborEvent): The neighbor update event.
+        """
         source, remove = await updt_nei_event.get_event_data()
         if not remove:
             if self._round_updates_lock.locked():
@@ -147,6 +205,13 @@ class CFLUpdateHandler(UpdateHandler):
                 logging.info(f"Already received update from: {source}, it will be discarded next round")
 
     async def _update_source(self, source, remove=False):
+        """
+        Updates internal tracking for a specific source node.
+
+        Args:
+            source (str): Source node ID.
+            remove (bool): Whether the source should be removed.
+        """
         logging.info(f"🔄 Update | remove: {remove} | source: {source}")
         await self._updates_storage_lock.acquire_async()
         if remove:
@@ -158,9 +223,15 @@ class CFLUpdateHandler(UpdateHandler):
         await self._updates_storage_lock.release_async()
 
     async def get_round_missing_nodes(self):
+        """
+        Returns nodes whose updates were expected but not received.
+        """
         return self._missing_ones
 
     async def notify_if_all_updates_received(self):
+        """
+        Acquires a lock to notify the aggregator if all updates have been received.
+        """
         logging.info("Set notification when all expected updates received")
         await self._round_updates_lock.acquire_async()
         await self._updates_storage_lock.acquire_async()
@@ -170,11 +241,17 @@ class CFLUpdateHandler(UpdateHandler):
             await self._notify()
 
     async def stop_notifying_updates(self):
+        """
+        Stops waiting for updates and releases the notification lock if held.
+        """
         if self._round_updates_lock.locked():
             logging.info("Stop notification updates")
             await self._round_updates_lock.release_async()
 
     async def _notify(self):
+        """
+        Notifies the aggregator that all updates have been received.
+        """
         await self._notification_sent_lock.acquire_async()
         if self._notification:
             await self._notification_sent_lock.release_async()
@@ -186,6 +263,12 @@ class CFLUpdateHandler(UpdateHandler):
         await self.agg.notify_all_updates_received()
 
     async def _all_updates_received(self):
+        """
+        Checks if updates from all expected nodes have been received.
+
+        Returns:
+            bool: True if all updates are received, False otherwise.
+        """
         updates_left = self._sources_expected.difference(self._sources_received)
         all_received = False
         if len(updates_left) == 0:
