@@ -203,17 +203,17 @@ class Mobility:
         if self._verbose:
             logging.info("📍  Changing geo location towards the nearest neighbor")
         scale_factor = min(1, self.max_movement_nearest_strategy / distance)
-        # Calcular el ángulo hacia el vecino
+        # Calculating angle to the neighbor
         angle = math.atan2(neighbor_longitude - longitude, neighbor_latitude - latitude)
-        # Conversión de movimiento máximo a grados
-        max_lat_change = self.max_movement_nearest_strategy / 111000  # Cambio en grados para latitud
+        # Convert maximum movement to angle
+        max_lat_change = self.max_movement_nearest_strategy / 111000  # Change degree to latitude
         max_lon_change = self.max_movement_nearest_strategy / (
             111000 * math.cos(math.radians(latitude))
-        )  # Cambio en grados para longitud
-        # Aplicar escala y dirección
+        )  # Change dregree for longitude
+        # Scale and direction
         delta_lat = max_lat_change * math.cos(angle) * scale_factor
         delta_lon = max_lon_change * math.sin(angle) * scale_factor
-        # Actualizar latitud y longitud
+        # Update values
         new_latitude = latitude + delta_lat
         new_longitude = longitude + delta_lon
         await self.set_geo_location(new_latitude, new_longitude)
