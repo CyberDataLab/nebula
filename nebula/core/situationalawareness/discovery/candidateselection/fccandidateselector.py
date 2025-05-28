@@ -3,6 +3,28 @@ from nebula.core.utils.locker import Locker
 
 
 class FCCandidateSelector(CandidateSelector):
+    """
+    Candidate selector for fully-connected (FC) topologies.
+
+    In a fully-connected network, all available candidates are accepted
+    without applying any filtering criteria. This selector simply returns
+    all collected candidates.
+
+    Attributes:
+        candidates (list): List of all discovered candidate nodes.
+        candidates_lock (Locker): Lock to ensure thread-safe access to the candidate list.
+
+    Methods:
+        set_config(config): No-op for fully-connected mode.
+        add_candidate(candidate): Adds a new candidate to the list.
+        select_candidates(): Returns all currently stored candidates.
+        remove_candidates(): Clears the candidate list.
+        any_candidate(): Returns True if there is at least one candidate.
+
+    Inherits from:
+        CandidateSelector: Base class interface for candidate selection logic.
+    """
+    
     def __init__(self):
         self.candidates = []
         self.candidates_lock = Locker(name="candidates_lock")

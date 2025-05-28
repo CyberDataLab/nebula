@@ -15,27 +15,6 @@ if TYPE_CHECKING:
 class AggregatorException(Exception):
     pass
 
-
-def create_target_aggregator(config, engine):
-    from nebula.core.aggregation.fedavg import FedAvg
-    from nebula.core.aggregation.krum import Krum
-    from nebula.core.aggregation.median import Median
-    from nebula.core.aggregation.trimmedmean import TrimmedMean
-
-    ALGORITHM_MAP = {
-        "FedAvg": FedAvg,
-        "Krum": Krum,
-        "Median": Median,
-        "TrimmedMean": TrimmedMean,
-    }
-    algorithm = config.participant["defense_args"]["target_aggregation"]
-    aggregator = ALGORITHM_MAP.get(algorithm)
-    if aggregator:
-        return aggregator(config=config, engine=engine)
-    else:
-        raise AggregatorException(f"Aggregation algorithm {algorithm} not found.")
-
-
 class Aggregator(ABC):
     def __init__(self, config=None, engine=None):
         self.config = config
