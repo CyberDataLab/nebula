@@ -5,6 +5,26 @@ from nebula.core.utils.locker import Locker
 
 
 class IDLENeighborPolicy(NeighborPolicy):
+    """
+    Neighbor policy for minimal connectivity scenarios.
+
+    This policy only attempts to discover or establish new neighbor connections 
+    if the node is currently isolated (i.e., has no neighbors). All incoming 
+    connection requests are accepted regardless of the current neighbor state.
+
+    This policy is suitable for scenarios where minimal intervention is preferred, 
+    and connections are formed opportunistically rather than proactively.
+
+    Attributes:
+        max_neighbors (int | None): Unused in this policy but maintained for compatibility.
+        nodes_known (set[str]): Set of known node IDs discovered during federation.
+        neighbors (set[str]): Set of currently connected neighbor node IDs.
+        addr (str | None): This node's own address.
+        neighbors_lock (Locker): Async lock for thread-safe access to `neighbors`.
+        nodes_known_lock (Locker): Async lock for thread-safe access to `nodes_known`.
+        _verbose (bool): Enables verbose logging for debugging and traceability.
+    """
+    
     def __init__(self):
         self.max_neighbors = None
         self.nodes_known = set()
