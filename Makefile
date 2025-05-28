@@ -26,8 +26,8 @@ install-python: check-uv	## Install Python with uv
 
 .PHONY: install
 install: install-python		## Install core dependencies
-	@echo "📦 Installing core dependencies with uv"
-	@$(UV) sync --group controller --group core
+	# @echo "📦 Installing core dependencies with uv"
+	# @$(UV) sync --group controller --group core
 	@echo "🔧 Installing pre-commit hooks"
 	@$(UV) run pre-commit install
 	@echo ""
@@ -81,6 +81,14 @@ update-dockers:				## Update docker images
 		docker build -t nebula-core .; \
 	else \
 		echo "Skipping nebula-core docker build."; \
+	fi
+	echo "🐳 Docker images updated."
+	@echo ""
+	@echo "🐳 Building nebula-controller docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-controller -f nebula/controller/Dockerfile .; \
+	else \
+		echo "Skipping nebula-controller docker build."; \
 	fi
 	echo "🐳 Docker images updated."
 

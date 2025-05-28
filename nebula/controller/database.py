@@ -8,10 +8,10 @@ import sqlite3
 import aiosqlite
 from argon2 import PasswordHasher
 
-user_db_file_location = "users.db"
-node_db_file_location = "nodes.db"
-scenario_db_file_location = "scenarios.db"
-notes_db_file_location = "notes.db"
+user_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "users.db")
+node_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "nodes.db")
+scenario_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "scenarios.db")
+notes_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "notes.db")
 
 _node_lock = asyncio.Lock()
 
@@ -48,7 +48,7 @@ async def ensure_columns(conn, table_name, desired_columns):
 
 async def initialize_databases(databases_dir):
     global user_db_file_location, node_db_file_location, scenario_db_file_location, notes_db_file_location
-    
+
     user_db_file_location = os.path.join(databases_dir, user_db_file_location)
     node_db_file_location = os.path.join(databases_dir, node_db_file_location)
     scenario_db_file_location = os.path.join(databases_dir, scenario_db_file_location)
@@ -212,7 +212,7 @@ async def initialize_databases(databases_dir):
             "schema_additional_participants": "TEXT",
             "status": "TEXT",
             "role": "TEXT",
-            "username": "TEXT"
+            "username": "TEXT",
         }
         await ensure_columns(conn, "scenarios", desired_columns)
 
@@ -228,7 +228,6 @@ async def initialize_databases(databases_dir):
         desired_columns = {"scenario": "TEXT PRIMARY KEY", "scenario_notes": "TEXT"}
         await ensure_columns(conn, "notes", desired_columns)
 
-    
     username = os.environ.get("NEBULA_DEFAULT_USER", "admin")
     password = os.environ.get("NEBULA_DEFAULT_PASSWORD", "admin")
     if not list_users():
@@ -494,13 +493,13 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
             if sort_by == "start_time":
                 command = """
                 SELECT name, username, title, start_time, model, dataset, rounds, status FROM scenarios
-                ORDER BY 
-                    CASE 
-                        WHEN start_time IS NULL OR start_time = '' THEN 1 
-                        ELSE 0 
+                ORDER BY
+                    CASE
+                        WHEN start_time IS NULL OR start_time = '' THEN 1
+                        ELSE 0
                     END,
                     strftime(
-                        '%Y-%m-%d %H:%M:%S', 
+                        '%Y-%m-%d %H:%M:%S',
                         substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8)
                     );
                 """
@@ -514,13 +513,13 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
                 command = """
                 SELECT name, username, title, start_time, model, dataset, rounds, status FROM scenarios
                 WHERE username = ?
-                ORDER BY 
-                    CASE 
-                        WHEN start_time IS NULL OR start_time = '' THEN 1 
-                        ELSE 0 
+                ORDER BY
+                    CASE
+                        WHEN start_time IS NULL OR start_time = '' THEN 1
+                        ELSE 0
                     END,
                     strftime(
-                        '%Y-%m-%d %H:%M:%S', 
+                        '%Y-%m-%d %H:%M:%S',
                         substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8)
                     );
                 """
@@ -545,15 +544,7 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
     return result
 
 
-def scenario_update_record(
-    name,
-    start_time,
-    end_time,
-    scenario,
-    status,
-    role,
-    username
-):
+def scenario_update_record(name, start_time, end_time, scenario, status, role, username):
     with sqlite3.connect(scenario_db_file_location) as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -616,58 +607,61 @@ def scenario_update_record(
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 );
             """
-            c.execute(insert_command, (
-                name,
-                start_time,
-                end_time,
-                scenario.scenario_title,
-                scenario.scenario_description,
-                scenario.deployment,
-                scenario.federation,
-                scenario.topology,
-                json.dumps(scenario.nodes),
-                json.dumps(scenario.nodes_graph),
-                scenario.n_nodes,
-                json.dumps(scenario.matrix),
-                scenario.random_topology_probability,
-                scenario.dataset,
-                scenario.iid,
-                scenario.partition_selection,
-                scenario.partition_parameter,
-                scenario.model,
-                scenario.agg_algorithm,
-                scenario.rounds,
-                scenario.logginglevel,
-                scenario.report_status_data_queue,
-                scenario.accelerator,
-                json.dumps(scenario.gpu_id),
-                scenario.network_subnet,
-                scenario.network_gateway,
-                scenario.epochs,
-                json.dumps(scenario.attacks),
-                scenario.poisoned_node_percent,
-                scenario.poisoned_sample_percent,
-                scenario.poisoned_noise_percent,
-                json.dumps(scenario.attack_params),
-                scenario.with_reputation,
-                scenario.random_geo,
-                scenario.latitude,
-                scenario.longitude,
-                scenario.mobility,
-                scenario.mobility_type,
-                scenario.radius_federation,
-                scenario.scheme_mobility,
-                scenario.round_frequency,
-                scenario.mobile_participants_percent,
-                json.dumps(scenario.additional_participants),
-                scenario.schema_additional_participants,
-                status,
-                role,
-                username
-            ))
+            c.execute(
+                insert_command,
+                (
+                    name,
+                    start_time,
+                    end_time,
+                    scenario.scenario_title,
+                    scenario.scenario_description,
+                    scenario.deployment,
+                    scenario.federation,
+                    scenario.topology,
+                    json.dumps(scenario.nodes),
+                    json.dumps(scenario.nodes_graph),
+                    scenario.n_nodes,
+                    json.dumps(scenario.matrix),
+                    scenario.random_topology_probability,
+                    scenario.dataset,
+                    scenario.iid,
+                    scenario.partition_selection,
+                    scenario.partition_parameter,
+                    scenario.model,
+                    scenario.agg_algorithm,
+                    scenario.rounds,
+                    scenario.logginglevel,
+                    scenario.report_status_data_queue,
+                    scenario.accelerator,
+                    json.dumps(scenario.gpu_id),
+                    scenario.network_subnet,
+                    scenario.network_gateway,
+                    scenario.epochs,
+                    json.dumps(scenario.attacks),
+                    scenario.poisoned_node_percent,
+                    scenario.poisoned_sample_percent,
+                    scenario.poisoned_noise_percent,
+                    json.dumps(scenario.attack_params),
+                    scenario.with_reputation,
+                    scenario.random_geo,
+                    scenario.latitude,
+                    scenario.longitude,
+                    scenario.mobility,
+                    scenario.mobility_type,
+                    scenario.radius_federation,
+                    scenario.scheme_mobility,
+                    scenario.round_frequency,
+                    scenario.mobile_participants_percent,
+                    json.dumps(scenario.additional_participants),
+                    scenario.schema_additional_participants,
+                    status,
+                    role,
+                    username,
+                ),
+            )
         else:
             update_command = """
-                UPDATE scenarios SET 
+                UPDATE scenarios SET
                     start_time = ?,
                     end_time = ?,
                     title = ?,
@@ -716,55 +710,58 @@ def scenario_update_record(
                     username = ?
                 WHERE name = ?;
             """
-            c.execute(update_command, (
-                start_time,
-                end_time,
-                scenario.scenario_title,
-                scenario.scenario_description,
-                scenario.deployment,
-                scenario.federation,
-                scenario.topology,
-                json.dumps(scenario.nodes),
-                json.dumps(scenario.nodes_graph),
-                scenario.n_nodes,
-                json.dumps(scenario.matrix),
-                scenario.random_topology_probability,
-                scenario.dataset,
-                scenario.iid,
-                scenario.partition_selection,
-                scenario.partition_parameter,
-                scenario.model,
-                scenario.agg_algorithm,
-                scenario.rounds,
-                scenario.logginglevel,
-                scenario.report_status_data_queue,
-                scenario.accelerator,
-                json.dumps(scenario.gpu_id),
-                scenario.network_subnet,
-                scenario.network_gateway,
-                scenario.epochs,
-                json.dumps(scenario.attacks),
-                scenario.poisoned_node_percent,
-                scenario.poisoned_sample_percent,
-                scenario.poisoned_noise_percent,
-                json.dumps(scenario.attack_params),
-                scenario.with_reputation,
-                scenario.random_geo,
-                scenario.latitude,
-                scenario.longitude,
-                scenario.mobility,
-                scenario.mobility_type,
-                scenario.radius_federation,
-                scenario.scheme_mobility,
-                scenario.round_frequency,
-                scenario.mobile_participants_percent,
-                json.dumps(scenario.additional_participants),
-                scenario.schema_additional_participants,
-                status,
-                role,
-                username,
-                name
-            ))
+            c.execute(
+                update_command,
+                (
+                    start_time,
+                    end_time,
+                    scenario.scenario_title,
+                    scenario.scenario_description,
+                    scenario.deployment,
+                    scenario.federation,
+                    scenario.topology,
+                    json.dumps(scenario.nodes),
+                    json.dumps(scenario.nodes_graph),
+                    scenario.n_nodes,
+                    json.dumps(scenario.matrix),
+                    scenario.random_topology_probability,
+                    scenario.dataset,
+                    scenario.iid,
+                    scenario.partition_selection,
+                    scenario.partition_parameter,
+                    scenario.model,
+                    scenario.agg_algorithm,
+                    scenario.rounds,
+                    scenario.logginglevel,
+                    scenario.report_status_data_queue,
+                    scenario.accelerator,
+                    json.dumps(scenario.gpu_id),
+                    scenario.network_subnet,
+                    scenario.network_gateway,
+                    scenario.epochs,
+                    json.dumps(scenario.attacks),
+                    scenario.poisoned_node_percent,
+                    scenario.poisoned_sample_percent,
+                    scenario.poisoned_noise_percent,
+                    json.dumps(scenario.attack_params),
+                    scenario.with_reputation,
+                    scenario.random_geo,
+                    scenario.latitude,
+                    scenario.longitude,
+                    scenario.mobility,
+                    scenario.mobility_type,
+                    scenario.radius_federation,
+                    scenario.scheme_mobility,
+                    scenario.round_frequency,
+                    scenario.mobile_participants_percent,
+                    json.dumps(scenario.additional_participants),
+                    scenario.schema_additional_participants,
+                    status,
+                    role,
+                    username,
+                    name,
+                ),
+            )
 
         conn.commit()
 
@@ -783,8 +780,11 @@ def scenario_set_status_to_finished(scenario_name):
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         current_time = str(datetime.datetime.now())
-        c.execute("UPDATE scenarios SET status = 'finished', end_time = ? WHERE name = ?;", (current_time, scenario_name))
+        c.execute(
+            "UPDATE scenarios SET status = 'finished', end_time = ? WHERE name = ?;", (current_time, scenario_name)
+        )
         conn.commit()
+
 
 def scenario_set_status_to_completed(scenario_name):
     with sqlite3.connect(scenario_db_file_location) as conn:
@@ -792,6 +792,7 @@ def scenario_set_status_to_completed(scenario_name):
         c = conn.cursor()
         c.execute("UPDATE scenarios SET status = 'completed' WHERE name = ?;", (scenario_name,))
         conn.commit()
+
 
 def get_running_scenario(username=None, get_all=False):
     with sqlite3.connect(scenario_db_file_location) as conn:
@@ -827,13 +828,14 @@ def get_completed_scenario():
 
     return result
 
-def get_scenario_by_name(scenario_name):  
+
+def get_scenario_by_name(scenario_name):
     with sqlite3.connect(scenario_db_file_location) as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         c.execute("SELECT * FROM scenarios WHERE name = ?;", (scenario_name,))
         result = c.fetchone()
-        
+
     return result
 
 
@@ -843,7 +845,7 @@ def get_user_by_scenario_name(scenario_name):
         c = conn.cursor()
         c.execute("SELECT username FROM scenarios WHERE name = ?;", (scenario_name,))
         result = c.fetchone()
-        
+
     return result["username"]
 
 
@@ -894,10 +896,17 @@ def check_scenario_with_role(role, scenario_name):
     with sqlite3.connect(scenario_db_file_location) as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        c.execute("SELECT * FROM scenarios WHERE role = ? AND name = ?;", (role, scenario_name,))
+        c.execute(
+            "SELECT * FROM scenarios WHERE role = ? AND name = ?;",
+            (
+                role,
+                scenario_name,
+            ),
+        )
         result = c.fetchone()
-        
+
     return result is not None
+
 
 def save_notes(scenario, notes):
     try:

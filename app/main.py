@@ -4,7 +4,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))  # Parent directory where is the NEBULA module
 import nebula
-from nebula.controller.controller import Controller
+from app.deployer import Deployer
 from nebula.controller.scenarios import ScenarioManagement
 
 argparser = argparse.ArgumentParser(description="Controller of NEBULA platform", add_help=False)
@@ -106,6 +106,8 @@ argparser.add_argument(
     help=".env file path",
 )
 
+argparser.add_argument("-dev", "--developement", dest="developement", default=True, help="Nebula for devs")
+
 argparser.add_argument(
     "-p",
     "--production",
@@ -149,8 +151,8 @@ Code for deploying the controller
 """
 if __name__ == "__main__":
     if args.stop == "all":
-        Controller.stop()
+        Deployer.stop_all()
     elif args.stop == "nodes":
         ScenarioManagement.stop_nodes()
 
-    Controller(args).start()
+    Deployer(args).start()
