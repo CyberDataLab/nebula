@@ -88,15 +88,16 @@ class RoundEndEvent(NodeEvent):
 
 
 class ExperimentFinishEvent(NodeEvent):
-    def __init__(self):
+    def __init__(self, last_loss, last_accuracy):
         """Event triggered when experiment is going to finish."""
-        pass
+        self._loss = last_loss
+        self._accuracy = last_accuracy
 
     def __str__(self):
         return "Experiment finished"
 
     async def get_event_data(self):
-        pass
+        return (self._loss, self._accuracy)
 
     async def is_concurrent(self):
         return False
