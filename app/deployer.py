@@ -473,7 +473,6 @@ class Deployer:
             "NEBULA_PRODUCTION": self.production,
             "NEBULA_ROOT_HOST": self.root_path,
             "NEBULA_ADVANCED_ANALYTICS": self.advanced_analytics,
-            "NEBULA_CONTROLLER_PORT": self.controller_port,
             "NEBULA_DATABASES_DIR": self.databases_dir,
             "NEBULA_CONTROLLER_LOG": "/nebula/app/logs/controller.log",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
