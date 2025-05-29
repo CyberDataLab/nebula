@@ -4,6 +4,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.addons.gps.gpsmodule import factory_gpsmodule
 from nebula.addons.mobility import Mobility
 from nebula.addons.networksimulation.networksimulator import factory_network_simulator
+from nebula.addons.trustworthiness.trustworthiness import Trustworthiness
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
@@ -17,6 +18,10 @@ class AddondManager:
 
     async def deploy_additional_services(self):
         print_msg_box(msg="Deploying Additional Services", indent=2, title="Addons Manager")
+        if self.config.participant["trust_args"]["with_trustworthiness"]:
+            trustworthiness = Trustworthiness(self._engine, self._config)
+            self._addons.append(trustworthiness)
+            
         if self._config.participant["mobility_args"]["mobility"]:
             mobility = Mobility(self._config, verbose=False)
             self._addons.append(mobility)

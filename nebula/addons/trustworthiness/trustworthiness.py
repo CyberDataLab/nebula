@@ -1,6 +1,6 @@
 from nebula.core.nebulaevents import ExperimentFinishEvent
 from nebula.core.eventmanager import EventManager
-from nebula.core.role import Role #TODO cambiar en engine para q trabaje con Role de role.py
+from nebula.core.role import Role
 from abc import ABC, abstractmethod
 from nebula.config.config import Config
 from nebula.core.engine import Engine
@@ -67,6 +67,8 @@ class TrustWorkloadAggregator(TrustWorkload):
                                                         #       TRUSTWORTHINESS      #
                                                         ##############################
 """
+#TODO need trainer.test() to return loss,accuracy
+#TODO cambiar en engine para q trabaje con Role de role.py
 
 class Trustworthiness():
     def _init_(self, engine: Engine, config: Config):
