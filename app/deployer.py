@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 import docker
 import psutil
@@ -268,6 +269,40 @@ class Deployer:
             logger.handlers = []  # Remove existing handlers
             logger.propagate = False  # Prevent duplicate logs
 
+    def ensure_directory_access(self, directory_path: str) -> str:
+        """
+        Ensure the specified directory exists and is writable.
+
+        Args:
+            directory_path: Path to the directory to check/create
+
+        Returns:
+            str: Absolute path to the directory if successful
+
+        Raises:
+            SystemExit: If directory cannot be created or accessed
+        """
+        try:
+            path = Path(os.path.expanduser(directory_path))
+            path.mkdir(parents=True, exist_ok=True)
+
+            # Write metadata file to check if directory is writable
+            test_file = path / ".metadata"
+            try:
+                test_file.write_text("nebula")
+                test_file.unlink()
+            except OSError as e:
+                logging.exception(f"Write permission test failed: {str(e)}")
+                raise SystemExit(1) from e
+
+            logging.info(f"Successfully verified access to directory: {path}")
+            return str(path.absolute())
+
+        except Exception as e:
+            logging.exception(f"Failed to create/access directory {directory_path}: {str(e)}")
+            logging.exception("Please check directory permissions or choose a different location using --database option")
+            raise SystemExit(1) from e
+
     def start(self):
         banner = """
                     ███╗   ██╗███████╗██████╗ ██╗   ██╗██╗      █████╗
@@ -277,10 +312,14 @@ class Deployer:
                     ██║ ╚████║███████╗██████╔╝╚██████╔╝███████╗██║  ██║
                     ╚═╝  ╚═══╝╚══════╝╚═════╝  ╚═════╝ ╚══════╝╚═╝  ╚═╝
                       A Platform for Decentralized Federated Learning
-                        Created by Enrique Tomás Martínez Beltrán
-                          Featured by Alejandro Avilés Serrano
-                            Featured by Fernando Torres Vega
-                          https://github.com/CyberDataLab/nebula
+
+                      Developed by:
+                       • Enrique Tomás Martínez Beltrán
+                       • Alberto Huertas Celdrán
+                       • Alejandro Avilés Serrano
+                       • Fernando Torres Vega
+
+                      https://nebula-dfl.com / https://nebula-dfl.eu
                 """
         print("\x1b[0;36m" + banner + "\x1b[0m")
 
@@ -289,6 +328,9 @@ class Deployer:
 
         # Check information about the environment
         check_environment()
+
+        # Ensure database directory is accessible
+        self.databases_dir = self.ensure_directory_access(self.databases_dir)
 
         # Save controller pid
         with open(os.path.join(os.path.dirname(__file__), "deployer.pid"), "w") as f:

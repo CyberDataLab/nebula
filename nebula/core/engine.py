@@ -62,11 +62,15 @@ def print_banner():
                     ██║ ╚████║███████╗██████╔╝╚██████╔╝███████╗██║  ██║
                     ╚═╝  ╚═══╝╚══════╝╚═════╝  ╚═════╝ ╚══════╝╚═╝  ╚═╝
                       A Platform for Decentralized Federated Learning
-                        Created by Enrique Tomás Martínez Beltrán
-                          Featured by Alejandro Avilés Serrano
-                            Featured by Fernando Torres Vega
-                          https://github.com/CyberDataLab/nebula
-                """
+
+                      Developed by:
+                       • Enrique Tomás Martínez Beltrán
+                       • Alberto Huertas Celdrán
+                       • Alejandro Avilés Serrano
+                       • Fernando Torres Vega
+
+                      https://nebula-dfl.com / https://nebula-dfl.eu
+            """
     logging.info(f"\n{banner}\n")
 
 
