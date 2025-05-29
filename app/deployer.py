@@ -398,7 +398,7 @@ class Deployer:
             "NEBULA_HOST_PLATFORM": self.host_platform,
             "NEBULA_DEFAULT_USER": "admin",
             "NEBULA_DEFAULT_PASSWORD": "admin",
-            "NEBULA_CONTROLLER_PORT": self.controller_port,
+            "NEBULA_CONTROLLER_PORT": 5000,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
         }
 
