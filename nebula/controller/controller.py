@@ -278,8 +278,6 @@ async def run_scenario(
 
     import subprocess
 
-    from nebula.controller.scenarios import ScenarioManagement
-
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario_data, user)
 
@@ -316,8 +314,6 @@ async def stop_scenario(
     username: str = Body(..., embed=True),
     all: bool = Body(False, embed=True),
 ):
-    from nebula.controller.scenarios import ScenarioManagement
-
     ScenarioManagement.stop_participants(scenario_name)
     DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{username}-participant")
     DockerUtils.remove_docker_network(

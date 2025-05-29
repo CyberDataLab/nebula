@@ -32,11 +32,11 @@ class SamplePoisoningAttack(DatasetAttack):
         engine (object): The training engine object, including the associated
                          datamodule.
         attack_params (dict): Attack parameters including:
-            - poisoned_percent (float): The percentage of data points to be poisoned.
-            - poisoned_ratio (float): The ratio of poisoned data relative to the total dataset.
+            - poisoned_sample_percent (float): The percentage of data points to be poisoned (0-100).
+            - poisoned_noise_percent (float): The percentage of noise to be added to poisoned data (0-100).
             - targeted (bool): Whether the attack is targeted at a specific label.
-            - target_label (int): The target label for the attack (used if targeted is True).
-            - noise_type (str): The type of noise to introduce during the attack.
+            - target_label/targetLabel (int): The target label for the attack (used if targeted is True).
+            - noise_type/noiseType (str): The type of noise to introduce during the attack.
     """
 
     def __init__(self, engine, attack_params):
@@ -58,15 +58,17 @@ class SamplePoisoningAttack(DatasetAttack):
 
         super().__init__(engine, round_start, round_stop, attack_interval)
         self.datamodule = engine._trainer.datamodule
-        self.poisoned_percent = float(attack_params["poisoned_percent"])
-        self.poisoned_ratio = float(attack_params["poisoned_ratio"])
+        self.poisoned_percent = float(attack_params["poisoned_sample_percent"])
+        self.poisoned_noise_percent = float(attack_params["poisoned_noise_percent"])
         self.targeted = attack_params["targeted"]
-        self.target_label = int(attack_params["target_label"])
-        self.noise_type = attack_params["noise_type"].lower()
+        
+        # Handle both camelCase and snake_case parameter names
+        self.target_label = int(attack_params.get("target_label") or attack_params.get("targetLabel", 4))
+        self.noise_type = (attack_params.get("noise_type") or attack_params.get("noiseType", "Gaussian")).lower()
 
-    def apply_noise(self, t, noise_type, poisoned_ratio):
+    def apply_noise(self, t, noise_type, poisoned_noise_percent):
         """
-        Applies noise to a tensor based on the specified noise type and poisoning ratio.
+        Applies noise to a tensor based on the specified noise type and poisoning percentage.
 
         Args:
             t (torch.Tensor): The input tensor to which noise will be applied.
@@ -75,7 +77,7 @@ class SamplePoisoningAttack(DatasetAttack):
                 - "gaussian": Gaussian noise with mean 0 and specified variance.
                 - "s&p": Salt-and-pepper noise.
                 - "nlp_rawdata": Applies a custom NLP raw data poisoning function.
-            poisoned_ratio (float): The ratio or variance of noise to be applied, depending on the noise type.
+            poisoned_noise_percent (float): The percentage of noise to be applied (0-100).
 
         Returns:
             torch.Tensor: The tensor with noise applied. If the noise type is not supported,
@@ -90,6 +92,9 @@ class SamplePoisoningAttack(DatasetAttack):
              the `skimage.util` package, and returned as a `torch.Tensor`.
         """
         arr = t.detach().cpu().numpy() if isinstance(t, torch.Tensor) else np.array(t)
+        
+        # Convert percentage to ratio for noise application
+        poisoned_ratio = poisoned_noise_percent / 100.0
 
         if noise_type == "salt":
             return torch.tensor(random_noise(arr, mode=noise_type, amount=poisoned_ratio))
@@ -108,7 +113,7 @@ class SamplePoisoningAttack(DatasetAttack):
         dataset,
         indices,
         poisoned_percent,
-        poisoned_ratio,
+        poisoned_noise_percent,
         targeted=False,
         target_label=3,
         noise_type="salt",
@@ -118,14 +123,14 @@ class SamplePoisoningAttack(DatasetAttack):
 
         This function applies noise to randomly selected samples within a dataset.
         Noise can be targeted or non-targeted. In non-targeted poisoning, random samples
-        are chosen and altered using the specified noise type and ratio. In targeted poisoning,
+        are chosen and altered using the specified noise type and percentage. In targeted poisoning,
         only samples with a specified label are altered by adding an 'X' pattern.
 
         Args:
             dataset (Dataset): The dataset to poison, expected to have `.data` and `.targets` attributes.
             indices (list of int): The list of indices in the dataset to consider for poisoning.
-            poisoned_percent (float): The percentage of `indices` to poison, as a fraction (0 <= poisoned_percent <= 1).
-            poisoned_ratio (float): The intensity or probability parameter for the noise, depending on the noise type.
+            poisoned_percent (float): The percentage of `indices` to poison (0-100).
+            poisoned_noise_percent (float): The percentage of noise to apply to poisoned samples (0-100).
             targeted (bool, optional): If True, applies targeted poisoning by adding an 'X' only to samples with `target_label`.
                                        Default is False.
             target_label (int, optional): The label to target when `targeted` is True. Default is 3.
@@ -139,11 +144,11 @@ class SamplePoisoningAttack(DatasetAttack):
             Dataset: A deep copy of the original dataset with poisoned data in `.data`.
 
         Raises:
-            ValueError: If `poisoned_percent` is not between 0 and 1, or if `noise_type` is unsupported.
+            ValueError: If `poisoned_percent` or `poisoned_noise_percent` is not between 0 and 100, or if `noise_type` is unsupported.
 
         Notes:
             - Non-targeted poisoning randomly selects samples from `indices` based on `poisoned_percent`.
-            - Targeted poisoning modifies only samples with `target_label` by adding an 'X' pattern, regardless of `poisoned_ratio`.
+            - Targeted poisoning modifies only samples with `target_label` by adding an 'X' pattern, regardless of `poisoned_noise_percent`.
         """
         new_dataset = copy.deepcopy(dataset)
         if not isinstance(new_dataset.targets, np.ndarray):
@@ -156,7 +161,7 @@ class SamplePoisoningAttack(DatasetAttack):
             noise_type = noise_type[0]
 
         if not targeted:
-            num_poisoned = int(poisoned_percent * num_indices)
+            num_poisoned = int(poisoned_percent * num_indices / 100.0)  # Convert percentage to count
             if num_indices == 0:
                 return new_dataset
             if num_poisoned > num_indices:
@@ -168,7 +173,7 @@ class SamplePoisoningAttack(DatasetAttack):
                 t = new_dataset.data[i]
                 if isinstance(t, tuple):
                     t = t[0]
-                poisoned = self.apply_noise(t, noise_type, poisoned_ratio)
+                poisoned = self.apply_noise(t, noise_type, poisoned_noise_percent)
                 if isinstance(t, tuple):
                     poisoned = (poisoned, t[1])
                 if isinstance(poisoned, torch.Tensor):
@@ -267,7 +272,7 @@ class SamplePoisoningAttack(DatasetAttack):
             self.datamodule.train_set,
             self.datamodule.train_set_indices,
             self.poisoned_percent,
-            self.poisoned_ratio,
+            self.poisoned_noise_percent,
             self.targeted,
             self.target_label,
             self.noise_type,

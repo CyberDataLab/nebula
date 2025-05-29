@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import socket
 import time
 
 import docker
@@ -86,7 +87,6 @@ class Engine:
         self.addr = config.participant["network_args"]["addr"]
         self.role = config.participant["device_args"]["role"]
         self.name = config.participant["device_args"]["name"]
-        self.docker_id = config.participant["device_args"]["docker_id"]
         self.client = docker.from_env()
 
         print_banner()
@@ -112,7 +112,7 @@ class Engine:
         self._aggregator = create_aggregator(config=self.config, engine=self)
 
         self._secure_neighbors = []
-        self._is_malicious = self.config.participant["adversarial_args"]["attacks"] != "No Attack"
+        self._is_malicious = self.config.participant["adversarial_args"]["attack_params"]["attacks"] != "No Attack"
 
         msg = f"Trainer: {self._trainer.__class__.__name__}"
         msg += f"\nDataset: {self.config.participant['data_args']['dataset']}"
@@ -601,22 +601,20 @@ class Engine:
         if self.config.participant["scenario_args"]["controller"] != "nebula-test":
             result = await self.reporter.report_scenario_finished()
             if result:
-                pass
+                logging.info("📝  Scenario finished reported succesfully")
             else:
-                logging.error("Error reporting scenario finished")
-
-        logging.info("Checking if all my connections reached the total rounds...")
-        while not self.cm.check_finished_experiment():
-            await asyncio.sleep(1)
+                logging.error("📝  Error reporting scenario finished")
 
         await asyncio.sleep(5)
 
         # Kill itself
         if self.config.participant["scenario_args"]["deployment"] == "docker":
             try:
-                self.client.containers.get(self.docker_id).stop()
+                docker_id = socket.gethostname()
+                logging.info(f"📦  Killing docker container with ID {docker_id}")
+                self.client.containers.get(docker_id).kill()
             except Exception as e:
-                print(f"Error stopping Docker container with ID {self.docker_id}: {e}")
+                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
 
     async def _extended_learning_cycle(self):
         """
@@ -649,7 +647,7 @@ class MaliciousNode(Engine):
         try:
             await self.attack.attack()
         except Exception:
-            attack_name = self.config.participant["adversarial_args"]["attacks"]
+            attack_name = self.config.participant["adversarial_args"]["attack_params"]["attacks"]
             logging.exception(f"Attack {attack_name} failed")
 
         if self.role == "aggregator":

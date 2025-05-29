@@ -29,7 +29,7 @@ class ModelPoisonAttack(ModelAttack):
     Args:
         engine (object): The training engine object that manages the aggregator.
         attack_params (dict): Parameters for the attack, including:
-            - poisoned_ratio (float): The ratio of model weights to be poisoned.
+            - poisoned_noise_percent (float): The percentage of noise to be added to model weights (0-100).
             - noise_type (str): The type of noise to introduce during the attack.
     """
 
@@ -52,21 +52,21 @@ class ModelPoisonAttack(ModelAttack):
 
         super().__init__(engine, round_start, round_stop, attack_interval)
 
-        self.poisoned_ratio = float(attack_params["poisoned_ratio"])
+        self.poisoned_noise_percent = float(attack_params["poisoned_noise_percent"])
         self.noise_type = attack_params["noise_type"].lower()
 
-    def modelPoison(self, model: OrderedDict, poisoned_ratio, noise_type="gaussian"):
+    def modelPoison(self, model: OrderedDict, poisoned_noise_percent, noise_type="gaussian"):
         """
         Adds random noise to the parameters of a model for the purpose of data poisoning.
 
         This function modifies the model's parameters by injecting noise according to the specified
-        noise type and ratio. Various types of noise can be applied, including salt noise, Gaussian
+        noise type and percentage. Various types of noise can be applied, including salt noise, Gaussian
         noise, and salt-and-pepper noise.
 
         Args:
             model (OrderedDict): The model's parameters organized as an `OrderedDict`. Each key corresponds
                                  to a layer, and each value is a tensor representing the parameters of that layer.
-            poisoned_ratio (float): The proportion of noise to apply, expressed as a fraction (0 <= poisoned_ratio <= 1).
+            poisoned_noise_percent (float): The percentage of noise to apply (0-100).
             noise_type (str, optional): The type of noise to apply to the model parameters. Supported types are:
                                         - "salt": Applies salt noise, replacing random elements with 1.
                                         - "gaussian": Applies Gaussian-distributed additive noise.
@@ -77,7 +77,7 @@ class ModelPoisonAttack(ModelAttack):
             OrderedDict: A new `OrderedDict` containing the model parameters with noise added.
 
         Raises:
-            ValueError: If `poisoned_ratio` is not between 0 and 1, or if `noise_type` is unsupported.
+            ValueError: If `poisoned_noise_percent` is not between 0 and 100, or if `noise_type` is unsupported.
 
         Notes:
             - If a layer's tensor is a single point (0-dimensional), it will be reshaped for processing.
@@ -85,7 +85,11 @@ class ModelPoisonAttack(ModelAttack):
         """
         poisoned_model = OrderedDict()
         if not isinstance(noise_type, str):
+            logging.info(f"Noise type is not a string, converting to string: {noise_type}")
             noise_type = noise_type[0]
+
+        # Convert percentage to ratio for noise application
+        poisoned_ratio = poisoned_noise_percent / 100.0
 
         for layer in model:
             bt = model[layer]
@@ -94,14 +98,18 @@ class ModelPoisonAttack(ModelAttack):
             if len(t.shape) == 0:
                 t = t.view(-1)
                 single_point = True
+                logging.info(f"Layer {layer} is a single point, reshaping to {t.shape}")
 
             if noise_type == "salt":
+                logging.info(f"Applying salt noise to layer {layer}")
                 # Replaces random pixels with 1.
                 poisoned = torch.tensor(random_noise(t, mode=noise_type, amount=poisoned_ratio))
             elif noise_type == "gaussian":
+                logging.info(f"Applying gaussian noise to layer {layer}")
                 # Gaussian-distributed additive noise.
                 poisoned = torch.tensor(random_noise(t, mode=noise_type, mean=0, var=poisoned_ratio, clip=True))
             elif noise_type == "s&p":
+                logging.info(f"Applying salt-and-pepper noise to layer {layer}")
                 # Replaces random pixels with either 1 or low_val, where low_val is 0 for unsigned images or -1 for signed images.
                 poisoned = torch.tensor(random_noise(t, mode=noise_type, amount=poisoned_ratio))
             else:
@@ -109,6 +117,7 @@ class ModelPoisonAttack(ModelAttack):
                 poisoned = t
             if single_point:
                 poisoned = poisoned[0]
+                logging.info(f"Layer {layer} is a single point, reshaping to {poisoned.shape}")
             poisoned_model[layer] = poisoned
 
         return poisoned_model
@@ -123,6 +132,6 @@ class ModelPoisonAttack(ModelAttack):
         Returns:
             any: The modified model weights after applying the poisoning attack.
         """
-        logging.info("[ModelPoisonAttack] Performing model poison attack")
-        received_weights = self.modelPoison(received_weights, self.poisoned_ratio, self.noise_type)
+        logging.info(f"[ModelPoisonAttack] Performing model poison attack with poisoned_noise_percent={self.poisoned_noise_percent} and noise_type={self.noise_type}")
+        received_weights = self.modelPoison(received_weights, self.poisoned_noise_percent, self.noise_type)
         return received_weights

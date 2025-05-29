@@ -281,6 +281,25 @@ const UIControls = (function() {
             return;
         }
 
+        // If no scenarios exist, save the current one first
+        if (window.ScenarioManager.getScenariosList().length < 1) {
+            window.ScenarioManager.saveScenario();
+        } else {
+            window.ScenarioManager.replaceScenario();
+        }
+
+        // Ensure all scenarios have a title
+        window.ScenarioManager.getScenariosList().forEach((scenario, index) => {
+            if (!scenario.scenario_title) {
+                scenario.scenario_title = "empty";
+            }
+            if (!scenario.scenario_description) {
+                scenario.scenario_description = "empty";
+            }
+        });
+
+        console.log(window.ScenarioManager.getScenariosList());
+
         const confirmModal = document.getElementById('confirm-modal');
         const confirmModalBody = document.getElementById('confirm-modal-body');
         const yesButton = document.getElementById("yes-button");
@@ -308,23 +327,6 @@ const UIControls = (function() {
         modal.show();
 
         yesButton.onclick = async () => {
-            // If no scenarios exist, save the current one first
-            if (window.ScenarioManager.getScenariosList().length < 1) {
-                window.ScenarioManager.saveScenario();
-            } else {
-                window.ScenarioManager.replaceScenario();
-            }
-
-            // Ensure all scenarios have a title
-            window.ScenarioManager.getScenariosList().forEach((scenario, index) => {
-                if (!scenario.scenario_title) {
-                    scenario.scenario_title = "empty";
-                }
-                if (!scenario.scenario_description) {
-                    scenario.scenario_description = "empty";
-                }
-            });
-
             modal.hide();
             document.querySelector(".overlay").style.display = "block";
             document.getElementById("spinner").style.display = "block";

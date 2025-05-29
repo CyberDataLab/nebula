@@ -149,7 +149,7 @@ class SANetwork(SAMComponent):
             await EventManager.get_instance().subscribe_node_event(BeaconRecievedEvent, self.beacon_received)
             await self.cm.start_beacon()
 
-    async def experiment_finish(self):
+    async def experiment_finish(self, efe: ExperimentFinishEvent):
         await self.cm.stop_external_connection_service()
 
     async def beacon_received(self, beacon_recieved_event: BeaconRecievedEvent):

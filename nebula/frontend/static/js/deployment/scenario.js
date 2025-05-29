@@ -37,10 +37,6 @@ const ScenarioManager = (function() {
                 start: node.start,
                 neighbors: node.neighbors.map(n => n.toString()),
                 links: node.links,
-                attacks: [],
-                attack_params: {},
-                with_reputation: false,
-                mobility: false
             };
             nodes_graph[nodeId] = {
                 id: nodeId,
@@ -56,24 +52,6 @@ const ScenarioManager = (function() {
 
         // Get attack configuration
         const attackConfig = window.AttackManager.getAttackConfig();
-
-        // Map frontend parameter names to backend expected names
-        const attackParams = {
-            round_start_attack: attackConfig.round_start_attack || 1,
-            round_stop_attack: attackConfig.round_stop_attack || 10,
-            attack_interval: attackConfig.attack_interval || 1,
-            poisoned_percent: attackConfig.poisonedSamplePercent || 0,
-            poisoned_ratio: attackConfig.poisonedNoisePercent || 0,
-            noise_type: attackConfig.noiseType || "Salt",
-            targeted: attackConfig.targeted || false,
-            target_label: attackConfig.targetLabel || 4,
-            target_changed_label: attackConfig.targetChangedLabel || 7,
-            layer_idx: attackConfig.layerIdx || 0,
-            delay: attackConfig.delay || 10,
-            target_percentage: attackConfig.targetPercentage || 100,
-            selection_interval: attackConfig.selectionInterval || 1,
-            flooding_factor: attackConfig.floodingFactor || 100
-        };
 
         return {
             scenario_title: document.getElementById("scenario-title").value,
@@ -95,11 +73,7 @@ const ScenarioManager = (function() {
             logginglevel: document.getElementById("loggingLevel").value === "true",
             report_status_data_queue: document.getElementById("reportingSwitch").checked,
             epochs: parseInt(document.getElementById("epochs").value),
-            attacks: [attackConfig.type],
-            poisoned_node_percent: attackConfig.poisonedNodePercent || 0,
-            poisoned_sample_percent: attackConfig.poisonedSamplePercent || 0,
-            poisoned_noise_percent: attackConfig.poisonedNoisePercent || 0,
-            attack_params: attackParams,
+            attack_params: attackConfig,
             with_reputation: window.ReputationManager.getReputationConfig().with_reputation || false,
             reputation_metrics: window.ReputationManager.getReputationConfig().reputation_metrics || [],
             initial_reputation: window.ReputationManager.getReputationConfig().initial_reputation || 1.0,

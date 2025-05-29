@@ -47,7 +47,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/CyberDataLab/nebula"
-Documentation = "https://nebula.enriquetomasmb.com/"
+Documentation = "https://docs.nebula-dfl.com/"
 Repository = "https://github.com/CyberDataLab/nebula"
 
 [dependency-groups]

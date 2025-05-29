@@ -129,8 +129,10 @@ def create_attack(engine) -> Attack:
     }
 
     # Get attack name and parameters from the engine configuration
-    attack_name = engine.config.participant["adversarial_args"]["attacks"]
-    attack_params = engine.config.participant["adversarial_args"].get("attack_params", {}).items()
+    attack_params = engine.config.participant["adversarial_args"].get("attack_params", {})
+    attack_name = attack_params.get("attacks", None)
+    if attack_name is None:
+        raise AttackException("No attack specified")
 
     # Look up the attack class based on the attack name
     attack = ATTACK_MAP.get(attack_name)

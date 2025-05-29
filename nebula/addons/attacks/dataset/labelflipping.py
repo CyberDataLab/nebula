@@ -22,6 +22,14 @@ class LabelFlippingAttack(DatasetAttack):
 
     This attack alters the labels of certain data points in the training set to
     mislead the training process.
+
+    Args:
+        engine (object): The training engine object.
+        attack_params (dict): Parameters for the attack, including:
+            - poisoned_sample_percent (float): The percentage of data points to be poisoned (0-100).
+            - targeted (bool): Whether the attack is targeted at a specific label.
+            - target_label/targetLabel (int): The target label for the attack (used if targeted is True).
+            - target_changed_label/targetChangedLabel (int): The label to change to when targeted is True.
     """
 
     def __init__(self, engine, attack_params):
@@ -44,10 +52,12 @@ class LabelFlippingAttack(DatasetAttack):
 
         super().__init__(engine, round_start, round_stop, attack_interval)
         self.datamodule = engine._trainer.datamodule
-        self.poisoned_percent = float(attack_params["poisoned_percent"])
+        self.poisoned_percent = float(attack_params["poisoned_sample_percent"])
         self.targeted = attack_params["targeted"]
-        self.target_label = int(attack_params["target_label"])
-        self.target_changed_label = int(attack_params["target_changed_label"])
+        
+        # Handle both camelCase and snake_case parameter names
+        self.target_label = int(attack_params.get("target_label") or attack_params.get("targetLabel", 4))
+        self.target_changed_label = int(attack_params.get("target_changed_label") or attack_params.get("targetChangedLabel", 7))
 
     def labelFlipping(
         self,
@@ -69,8 +79,7 @@ class LabelFlippingAttack(DatasetAttack):
             dataset (Dataset): The dataset containing training data, expected to be a PyTorch dataset
                                with a `.targets` attribute.
             indices (list of int): The list of indices in the dataset to consider for label flipping.
-            poisoned_percent (float, optional): The ratio of labels to change, expressed as a fraction
-                                                (0 <= poisoned_percent <= 1). Default is 0.
+            poisoned_percent (float, optional): The percentage of labels to change (0-100). Default is 0.
             targeted (bool, optional): If True, flips only labels matching `target_label` to `target_changed_label`.
                                        Default is False.
             target_label (int, optional): The label to change when `targeted` is True. Default is 4.
@@ -80,7 +89,7 @@ class LabelFlippingAttack(DatasetAttack):
             Dataset: A deep copy of the original dataset with modified labels in `.targets`.
 
         Raises:
-            ValueError: If `poisoned_percent` is not between 0 and 1, or if `flipping_percent` is invalid.
+            ValueError: If `poisoned_percent` is not between 0 and 100.
 
         Notes:
             - When not in targeted mode, labels are flipped for a random selection of indices based on the specified
@@ -98,7 +107,7 @@ class LabelFlippingAttack(DatasetAttack):
 
         if not targeted:
             num_indices = len(indices)
-            num_flipped = int(poisoned_percent * num_indices)
+            num_flipped = int(poisoned_percent * num_indices / 100.0)  # Convert percentage to count
             if num_indices == 0 or num_flipped > num_indices:
                 return
             flipped_indices = random.sample(indices, num_flipped)

@@ -14,7 +14,7 @@
 
 ## 🌌 About NEBULA
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://nebula.enriquetomasmb.com)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://docs.nebula-dfl.com)
 ![Github Last Commit](https://img.shields.io/github/last-commit/CyberDataLab/nebula)
 [![GitHub issues](https://img.shields.io/github/issues/CyberDataLab/nebula)](https://github.com/CyberDataLab/nebula/issues)
 
@@ -70,7 +70,7 @@ NEBULA boasts a **modular architecture** that consists of three core elements:
 
 ## 🎯 Get Started
 
-To start using NEBULA, follow our detailed [Installation Guide](https://nebula.enriquetomasmb.com/installation/) and [User Manual](https://nebula.enriquetomasmb.com/usage/). For any queries or contributions, check out our [Contribution Guide](https://nebula.enriquetomasmb.com/contributing/).
+To start using NEBULA, follow our detailed [Installation Guide](https://docs.nebula-dfl.com/installation/) and [User Manual](https://docs.nebula-dfl.com/usage/). For any queries or contributions, check out our [Contribution Guide](https://docs.nebula-dfl.com/contributing/).
 
 ## 🤝 Contributing
 
