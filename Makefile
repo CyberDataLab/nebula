@@ -27,7 +27,7 @@ install-python: check-uv	## Install Python with uv
 .PHONY: install
 install: install-python		## Install core dependencies
 	# @echo "📦 Installing core dependencies with uv"
-	# @$(UV) sync --group controller --group core
+	@$(UV) sync --group controller --group core
 	@echo "🔧 Installing pre-commit hooks"
 	@$(UV) run pre-commit install
 	@echo ""
