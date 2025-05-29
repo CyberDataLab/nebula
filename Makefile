@@ -69,6 +69,13 @@ shell:				## Start a shell in the uv environment
 .PHONY: update-dockers
 update-dockers:				## Update docker images
 	@echo "🐳 Updating docker images..."
+	@echo "🐳 Building nebula-controller docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-controller -f nebula/controller/Dockerfile .; \
+	else \
+		echo "Skipping nebula-controller docker build."; \
+	fi
+	@echo ""
 	@echo "🐳 Building nebula-frontend docker image. Do you want to continue (overrides existing image)? (y/n)"
 	@read ans; if [ "$${ans:-N}" = y ]; then \
 		docker build -t nebula-frontend -f nebula/frontend/Dockerfile .; \
@@ -81,14 +88,6 @@ update-dockers:				## Update docker images
 		docker build -t nebula-core .; \
 	else \
 		echo "Skipping nebula-core docker build."; \
-	fi
-	echo "🐳 Docker images updated."
-	@echo ""
-	@echo "🐳 Building nebula-controller docker image. Do you want to continue (overrides existing image)? (y/n)"
-	@read ans; if [ "$${ans:-N}" = y ]; then \
-		docker build -t nebula-controller -f nebula/controller/Dockerfile .; \
-	else \
-		echo "Skipping nebula-controller docker build."; \
 	fi
 	echo "🐳 Docker images updated."
 
