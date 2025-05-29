@@ -30,7 +30,7 @@ class NebulaEventHandler(PatternMatchingEventHandler):
     patterns = ["*.sh", "*.ps1"]
 
     def __init__(self):
-        super(NebulaEventHandler, self).__init__()
+        super().__init__()
         self.last_processed = {}
         self.timeout_ns = 5 * 1e9
         self.processing_files = set()
@@ -433,7 +433,8 @@ class Deployer:
 
         client.api.start(container_id)
 
-    def stop_frontend(self):
+    @staticmethod
+    def stop_frontend():
         """
         Stops all running Docker containers whose names start with
         the pattern '<user>_nebula-frontend'.
@@ -515,7 +516,8 @@ class Deployer:
 
         client.api.start(container_id)
 
-    def stop_controller(self):
+    @staticmethod
+    def stop_controller():
         """
         Stops all running Docker containers whose names start with
         the pattern '<user>_nebula-controller'.
@@ -651,7 +653,8 @@ class Deployer:
 
         client.api.start(container_id_promtail)
 
-    def stop_waf(self):
+    @staticmethod
+    def stop_waf():
         """
         Stops all running Docker containers whose names start with
         the pattern '<user>_nebula-waf'.
@@ -660,12 +663,13 @@ class Deployer:
         """
         DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-waf")
 
-    def stop_all(self):
+    @staticmethod
+    def stop_all():
         logging.info("Closing NEBULA (exiting from components)... Please wait")
         try:
-            self.stop_frontend()
-            self.stop_controller()
-            self.stop_waf()
+            Deployer.stop_frontend()
+            Deployer.stop_controller()
+            Deployer.stop_waf()
             DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_")
             DockerUtils.remove_docker_networks_by_prefix(f"{os.environ['USER']}_")
             deployer_pid_file = os.path.join(os.path.dirname(__file__), "deployer.pid")

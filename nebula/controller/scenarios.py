@@ -1203,13 +1203,9 @@ class ScenarioManagement:
             nebula_reputation = os.path.join(
                 os.environ["NEBULA_LOGS_DIR"], "..", "..", "nebula", "core", "reputation", scenario_name
             )
-            logging.info(f"Removing reputation folder {nebula_reputation}")
-            logging.info(f"nebula_reputation: {nebula_reputation}")
             if os.path.exists(nebula_reputation):
                 shutil.rmtree(nebula_reputation)
-                # logging.info(f"Reputation folder {nebula_reputation} removed successfully")
-            else:
-                logging.info(f"Reputation folder {nebula_reputation} not found")
+                logging.info(f"Reputation folder {nebula_reputation} removed successfully")
         except FileNotFoundError:
             logging.warning("Files not found in reputation folder, nothing to remove")
         except Exception:
