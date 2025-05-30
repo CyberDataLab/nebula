@@ -19,6 +19,8 @@ from torch.nn import functional as F
 from nebula.config.config import TRAINING_LOGGER
 from nebula.core.utils.deterministic import enable_deterministic
 from nebula.core.utils.nebulalogger_tensorboard import NebulaTensorBoardLogger
+from nebula.core.nebulaevents import TestMetricsEvent
+from nebula.core.eventmanager import EventManager
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
 
@@ -312,8 +314,10 @@ class Lightning:
         try:
             self.create_trainer()
             logging.info(f"{'=' * 10} [Testing] Started (check training logs for progress) {'=' * 10}")
-            await asyncio.to_thread(self._test_sync)
+            loss, accuracy = await asyncio.to_thread(self._test_sync)
             logging.info(f"{'=' * 10} [Testing] Finished (check training logs for progress) {'=' * 10}")
+            tme = TestMetricsEvent(loss, accuracy)
+            await EventManager.get_instance().publish_addonevent(tme)
         except Exception as e:
             logging_training.error(f"Error testing model: {e}")
             logging_training.error(traceback.format_exc())
@@ -321,11 +325,16 @@ class Lightning:
     def _test_sync(self):
         try:
             self._trainer.test(self.model, self.datamodule, verbose=True)
+            metrics = self._trainer.callback_metrics
+            loss = metrics.get('val_loss/dataloader_idx_0', None).item()
+            accuracy = metrics.get('val_accuracy/dataloader_idx_0', None).item()
+            return loss, accuracy
         except Exception as e:
             logging_training.error(f"Error in _test_sync: {e}")
             tb = traceback.format_exc()
             logging_training.error(f"Traceback: {tb}")
             # If "raise", the exception will be managed by the main thread
+            return None, None
 
     def cleanup(self):
         if self._trainer is not None:

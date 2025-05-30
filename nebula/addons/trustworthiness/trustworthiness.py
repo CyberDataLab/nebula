@@ -76,7 +76,9 @@ class TrustWorkloadTrainer(TrustWorkload):
         pass
     
     async def _process_test_metrics_event(self, tme: TestMetricsEvent):
-        self._current_loss, self._current_accuracy = await tme.get_event_data()
+        cur_loss, cur_acc = await tme.get_event_data()
+        if cur_loss and cur_acc:
+            self._current_loss, self._current_accuracy = cur_loss, cur_acc
     
 class TrustWorkloadServer(TrustWorkload):
     def __init__(self,  engine, idx, trust_files_route):
@@ -101,7 +103,9 @@ class TrustWorkloadServer(TrustWorkload):
         pass
     
     async def _process_test_metrics_event(self, tme: TestMetricsEvent):
-        self._current_loss, self._current_accuracy = await tme.get_event_data()
+        cur_loss, cur_acc = await tme.get_event_data()
+        if cur_loss and cur_acc:
+            self._current_loss, self._current_accuracy = cur_loss, cur_acc
 
 """                                                     ##############################
                                                         #       TRUSTWORTHINESS      #
