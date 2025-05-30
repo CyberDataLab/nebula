@@ -97,35 +97,38 @@ class Reputation:
         self._addr = engine.addr
         self._log_dir = engine.log_dir
         self._idx = engine.idx
-        self.connection_metrics = []
+        self.connection_metrics = {}
 
         neighbors: str = self._config.participant["network_args"]["neighbors"]
-        self.connection_metrics = {}
         for nei in neighbors.split():
             self.connection_metrics[f"{nei}"] = Metrics()
 
-        self._with_reputation = self._config.participant["defense_args"]["with_reputation"]
-        self._reputation_metrics = self._config.participant["defense_args"]["reputation_metrics"]
-        self._initial_reputation = float(self._config.participant["defense_args"]["initial_reputation"])
-        self._weighting_factor = self._config.participant["defense_args"]["weighting_factor"]
-        self._weight_model_arrival_latency = float(
-            self._config.participant["defense_args"]["weight_model_arrival_latency"]
-        )
-        self._weight_model_similarity = float(self._config.participant["defense_args"]["weight_model_similarity"])
-        self._weight_num_messages = float(self._config.participant["defense_args"]["weight_num_messages"])
-        self._weight_fraction_params_changed = float(
-            self._config.participant["defense_args"]["weight_fraction_params_changed"]
-        )
+        reputation_config = self._config.participant["defense_args"]["reputation"]
+        self._enabled = reputation_config["enabled"]
+        self._metrics = reputation_config["metrics"]
+        self._initial_reputation = float(reputation_config["initial_reputation"])
+        self._weighting_factor = reputation_config["weighting_factor"]
 
-        msg = f"Reputation system: {self._with_reputation}"
-        msg += f"\nReputation metrics: {self._reputation_metrics}"
+        # Extract weights from metrics if using static weighting
+        if self._weighting_factor == "static":
+            self._weight_model_arrival_latency = float(self._metrics.get("modelArrivalLatency", {}).get("weight", 0.25))
+            self._weight_model_similarity = float(self._metrics.get("modelSimilarity", {}).get("weight", 0.25))
+            self._weight_num_messages = float(self._metrics.get("numMessages", {}).get("weight", 0.25))
+            self._weight_fraction_params_changed = float(self._metrics.get("fractionParametersChanged", {}).get("weight", 0.25))
+        else:
+            self._weight_model_arrival_latency = 0.25
+            self._weight_model_similarity = 0.25
+            self._weight_num_messages = 0.25
+            self._weight_fraction_params_changed = 0.25
+
+        msg = f"Reputation system: {self._enabled}"
+        msg += f"\nReputation metrics: {self._metrics}"
         msg += f"\nInitial reputation: {self._initial_reputation}"
         msg += f"\nWeighting factor: {self._weighting_factor}"
-        if self._weighting_factor == "static":
-            msg += f"\nWeight model arrival latency: {self._weight_model_arrival_latency}"
-            msg += f"\nWeight model similarity: {self._weight_model_similarity}"
-            msg += f"\nWeight number of messages: {self._weight_num_messages}"
-            msg += f"\nWeight fraction of parameters changed: {self._weight_fraction_params_changed}"
+        msg += f"\nWeight model arrival latency: {self._weight_model_arrival_latency}"
+        msg += f"\nWeight model similarity: {self._weight_model_similarity}"
+        msg += f"\nWeight number of messages: {self._weight_num_messages}"
+        msg += f"\nWeight fraction of parameters changed: {self._weight_fraction_params_changed}"
         print_msg_box(msg=msg, indent=2, title="Defense information")
 
     @property
@@ -205,30 +208,22 @@ class Reputation:
             logging.exception("Error saving data")
 
     async def setup(self):
-        """
-        Setup the reputation system by subscribing to various events.
-
-        This function enables the reputation system and subscribes to events based on active metrics.
-        """
-        if self._with_reputation:
-            logging.info("Reputation system enabled")
+        """Set up the reputation system by subscribing to relevant events."""
+        if self._enabled:
             await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self.on_round_start)
             await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.calculate_reputation)
-            if self._reputation_metrics.get("model_similarity", False):
+            if self._metrics.get("modelSimilarity", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_similarity)
-            if self._reputation_metrics.get("fraction_parameters_changed", False):
+            if self._metrics.get("fractionParametersChanged", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe_node_event(
                     UpdateReceivedEvent, self.recollect_fraction_of_parameters_changed
                 )
-            if self._reputation_metrics.get("num_messages", False):
+            if self._metrics.get("numMessages", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe(("model", "update"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("model", "initialization"), self.recollect_number_message)
-                await EventManager.get_instance().subscribe(("control", "alive"), self.recollect_number_message)
-                await EventManager.get_instance().subscribe(
-                    ("federation", "federation_models_included"), self.recollect_number_message
-                )
+                await EventManager.get_instance().subscribe(("model", "aggregation"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("reputation", "share"), self.recollect_number_message)
-            if self._reputation_metrics.get("model_arrival_latency", False):
+            if self._metrics.get("modelArrivalLatency", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe_node_event(
                     UpdateReceivedEvent, self.recollect_model_arrival_latency
                 )
@@ -250,7 +245,7 @@ class Reputation:
             logging.error("init_reputation | No federation nodes provided")
             return
 
-        if self._with_reputation:
+        if self._enabled:
             neighbors = self.is_valid_ip(federation_nodes)
 
             if not neighbors:
@@ -362,7 +357,7 @@ class Reputation:
         average_weights = {}
 
         for metric_name in self.history_data.keys():
-            if self._reputation_metrics.get(metric_name, False):
+            if self._metrics.get(metric_name, False):
                 valid_entries = [
                     entry
                     for entry in self.history_data[metric_name]
@@ -378,7 +373,7 @@ class Reputation:
         for nei in neighbors:
             metric_values = {}
             for metric_name in self.history_data.keys():
-                if self._reputation_metrics.get(metric_name, False):
+                if self._metrics.get(metric_name, False):
                     for entry in self.history_data.get(metric_name, []):
                         if (
                             entry["round"] == self._engine.get_round()
@@ -1316,9 +1311,9 @@ class Reputation:
             ae (AggregationEvent): The event containing aggregated updates.
         """
         (updates, _, _) = await ae.get_event_data()
-        if self._with_reputation:
+        if self._enabled:
             logging.info(f"Calculating reputation at round {self._engine.get_round()}")
-            logging.info(f"Active metrics: {self._reputation_metrics}")
+            logging.info(f"Active metrics: {self._metrics}")
             logging.info(f"rejected nodes at round {self._engine.get_round()}: {self.rejected_nodes}")
 
             neighbors = set(await self._engine._cm.get_addrs_current_connections(only_direct=True))
@@ -1335,7 +1330,7 @@ class Reputation:
                     self._idx,
                     self._addr,
                     nei,
-                    metrics_active=self._reputation_metrics,
+                    metrics_active=self._metrics,
                 )
 
                 if self._weighting_factor == "dynamic":
@@ -1348,7 +1343,7 @@ class Reputation:
                         self._engine.get_round(),
                         self._addr,
                         nei,
-                        self._reputation_metrics,
+                        self._metrics,
                     )
 
                 if self._weighting_factor == "static" and self._engine.get_round() >= 5:
@@ -1368,7 +1363,7 @@ class Reputation:
             if self._weighting_factor == "dynamic" and self._engine.get_round() >= 5:
                 await self._calculate_dynamic_reputation(self._addr, neighbors)
 
-            if self._engine.get_round() < 5 and self._with_reputation:
+            if self._engine.get_round() < 5 and self._enabled:
                 federation = self._engine.config.participant["network_args"]["neighbors"].split()
                 self.init_reputation(
                     self._addr,
@@ -1571,7 +1566,7 @@ class Reputation:
             ure (UpdateReceivedEvent): The event data containing model update information.
         """
         (decoded_model, weight, nei, round_num, local) = await ure.get_event_data()
-        if self._with_reputation and self._reputation_metrics.get("model_similarity"):
+        if self._enabled and self._metrics.get("model_similarity"):
             if self._engine.config.participant["adaptive_args"]["model_similarity"]:
                 if nei != self._addr:
                     logging.info("🤖  handle_model_message | Checking model similarity")

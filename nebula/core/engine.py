@@ -153,7 +153,7 @@ class Engine:
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
 
-        if self.config.participant["defense_args"]["with_reputation"]:
+        if self.config.participant["defense_args"]["reputation"]["enabled"]:
             self._reputation = Reputation(engine=self, config=self.config)
 
     @property
@@ -459,7 +459,7 @@ class Engine:
         await self.aggregator.init()
         if "situational_awareness" in self.config.participant:
             await self.sa.init()
-        if self.config.participant["defense_args"]["with_reputation"]:
+        if self.config.participant["defense_args"]["reputation"]["enabled"]:
             await self._reputation.setup()
         await self._reporter.start()
         await self._addon_manager.deploy_additional_services()

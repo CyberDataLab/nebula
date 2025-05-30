@@ -58,14 +58,7 @@ class Scenario:
         network_gateway,
         epochs,
         attack_params,
-        with_reputation,
-        reputation_metrics,
-        initial_reputation,
-        weighting_factor,
-        weight_model_arrival_latency,
-        weight_model_similarity,
-        weight_num_messages,
-        weight_fraction_params_changed,
+        reputation,
         random_geo,
         latitude,
         longitude,
@@ -87,45 +80,39 @@ class Scenario:
         sar_neighbor_policy,
     ):
         """
-        Initialize the scenario.
+        Initialize a Scenario instance.
 
         Args:
-            title (str): Title of the scenario.
-            description (str): Description of the scenario.
-            deployment (str): Type of deployment (e.g., 'docker', 'process').
+            scenario_title (str): Title of the scenario.
+            scenario_description (str): Description of the scenario.
+            deployment (str): Type of deployment.
             federation (str): Type of federation.
-            topology (str): Network topology.
+            topology (str): Type of topology.
             nodes (dict): Dictionary of nodes.
-            nodes_graph (dict): Graph of nodes.
+            nodes_graph (dict): Dictionary of nodes for graph representation.
             n_nodes (int): Number of nodes.
-            matrix (list): Matrix of connections.
-            dataset (str): Dataset used.
-            iid (bool): Indicator if data is independent and identically distributed.
-            partition_selection (str): Method of partition selection.
+            matrix (list): Adjacency matrix.
+            dataset (str): Name of the dataset.
+            iid (bool): Whether the data is IID.
+            partition_selection (str): Type of partition selection.
             partition_parameter (float): Parameter for partition selection.
-            model (str): Model used.
+            model (str): Name of the model.
             agg_algorithm (str): Aggregation algorithm.
             rounds (int): Number of rounds.
-            logginglevel (str): Logging level.
-            report_status_data_queue (bool): Indicator to report information about the nodes of the scenario
-            accelerator (str): Accelerator used.
-            gpu_id (list) : Id list of the used gpu
+            logginglevel (bool): Whether to log.
+            report_status_data_queue (bool): Whether to report status data.
+            accelerator (str): Type of accelerator.
+            gpu_id (str): ID of the GPU.
             network_subnet (str): Network subnet.
             network_gateway (str): Network gateway.
             epochs (int): Number of epochs.
             attack_params (dict): Dictionary containing attack parameters.
-            with_reputation (bool): Indicator if reputation is used.
-            reputation_metrics (list): List of reputation metrics.
-            initial_reputation (float): Initial reputation.
-            weighting_factor (str): dymanic or static weighting factor.
-            weight_model_arrival_latency (float): Weight of model arrival latency.
-            weight_model_similarity (float): Weight of model similarity.
-            weight_num_messages (float): Weight of number of messages.
-            weight_fraction_params_changed (float): Weight of fraction of parameters changed.
+            reputation (dict): Dictionary containing reputation configuration.
             random_geo (bool): Indicator if random geo is used.
             latitude (float): Latitude for mobility.
             longitude (float): Longitude for mobility.
-            mobility (bool): Indicator if mobility is used.
+            mobility (bool): Whether mobility is enabled.
+            network_simulation (bool): Whether network simulation is enabled.
             mobility_type (str): Type of mobility.
             radius_federation (float): Radius of federation.
             scheme_mobility (str): Scheme of mobility.
@@ -134,12 +121,12 @@ class Scenario:
             additional_participants (list): List of additional participants.
             schema_additional_participants (str): Schema for additional participants.
             random_topology_probability (float): Probability for random topology.
-            with_sa (bool) : Indicator if Situational Awareness is used.
-            strict_topology (bool) :
-            sad_candidate_selector (str) :
-            sad_model_handler (str) :
-            sar_arbitration_policy (str) :
-            sar_neighbor_policy (str) :
+            with_sa (bool): Whether situational awareness is enabled.
+            strict_topology (bool): Whether strict topology is enabled.
+            sad_candidate_selector (str): Candidate selector for SAD.
+            sad_model_handler (str): Model handler for SAD.
+            sar_arbitration_policy (str): Arbitration policy for SAR.
+            sar_neighbor_policy (str): Neighbor policy for SAR.
         """
         self.scenario_title = scenario_title
         self.scenario_description = scenario_description
@@ -165,14 +152,7 @@ class Scenario:
         self.network_gateway = network_gateway
         self.epochs = epochs
         self.attack_params = attack_params
-        self.with_reputation = with_reputation
-        self.reputation_metrics = reputation_metrics
-        self.initial_reputation = initial_reputation
-        self.weighting_factor = weighting_factor
-        self.weight_model_arrival_latency = weight_model_arrival_latency
-        self.weight_model_similarity = weight_model_similarity
-        self.weight_num_messages = weight_num_messages
-        self.weight_fraction_params_changed = weight_fraction_params_changed
+        self.reputation = reputation
         self.random_geo = random_geo
         self.latitude = latitude
         self.longitude = longitude
@@ -295,11 +275,11 @@ class Scenario:
         for node in nodes:
             node_att = "No Attack"
             malicious = False
-            with_reputation = self.with_reputation
+            node_reputation = self.reputation.copy() if self.reputation else None
 
             if node in attacked_nodes or nodes[node]["malicious"]:
                 malicious = True
-                with_reputation = False
+                node_reputation = None
                 node_att = attack
                 logging.info(f"Node {node} marked as malicious with attack {attack}")
 
@@ -387,7 +367,7 @@ class Scenario:
                 nodes[node]["attack_params"] = {"attacks": "No Attack"}
 
             nodes[node]["malicious"] = malicious
-            nodes[node]["with_reputation"] = with_reputation
+            nodes[node]["reputation"] = node_reputation
 
             logging.info(
                 f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attack_params']['attacks']}"
@@ -548,18 +528,8 @@ class ScenarioManagement:
                 participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
             else:
                 participant_config["adversarial_args"]["attack_params"] = {"attacks": "No Attack"}
-            participant_config["defense_args"]["with_reputation"] = node_config["with_reputation"]
-            participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
-            participant_config["defense_args"]["initial_reputation"] = self.scenario.initial_reputation
-            participant_config["defense_args"]["weighting_factor"] = self.scenario.weighting_factor
-            participant_config["defense_args"]["weight_model_arrival_latency"] = (
-                self.scenario.weight_model_arrival_latency
-            )
-            participant_config["defense_args"]["weight_model_similarity"] = self.scenario.weight_model_similarity
-            participant_config["defense_args"]["weight_num_messages"] = self.scenario.weight_num_messages
-            participant_config["defense_args"]["weight_fraction_params_changed"] = (
-                self.scenario.weight_fraction_params_changed
-            )
+            participant_config["defense_args"]["reputation"] = self.scenario.reputation
+
             participant_config["mobility_args"]["random_geo"] = self.scenario.random_geo
             participant_config["mobility_args"]["latitude"] = self.scenario.latitude
             participant_config["mobility_args"]["longitude"] = self.scenario.longitude

@@ -74,14 +74,12 @@ const ScenarioManager = (function() {
             report_status_data_queue: document.getElementById("reportingSwitch").checked,
             epochs: parseInt(document.getElementById("epochs").value),
             attack_params: attackConfig,
-            with_reputation: window.ReputationManager.getReputationConfig().with_reputation || false,
-            reputation_metrics: window.ReputationManager.getReputationConfig().reputation_metrics || [],
-            initial_reputation: window.ReputationManager.getReputationConfig().initial_reputation || 1.0,
-            weighting_factor: window.ReputationManager.getReputationConfig().weighting_factor || "static",
-            weight_model_arrival_latency: window.ReputationManager.getReputationConfig().weight_model_arrival_latency || 0.25,
-            weight_model_similarity: window.ReputationManager.getReputationConfig().weight_model_similarity || 0.25,
-            weight_num_messages: window.ReputationManager.getReputationConfig().weight_num_messages || 0.25,
-            weight_fraction_params_changed: window.ReputationManager.getReputationConfig().weight_fraction_params_changed || 0.25,
+            reputation: {
+                enabled: window.ReputationManager.getReputationConfig().enabled || false,
+                metrics: window.ReputationManager.getReputationConfig().metrics || {},
+                initial_reputation: window.ReputationManager.getReputationConfig().initialReputation || 0.6,
+                weighting_factor: window.ReputationManager.getReputationConfig().weightingFactor || "dynamic"
+            },
             mobility: window.MobilityManager.getMobilityConfig().enabled || false,
             network_simulation: window.MobilityManager.getMobilityConfig().network_simulation || false,
             mobility_type: window.MobilityManager.getMobilityConfig().mobilityType || "random",
@@ -195,16 +193,12 @@ const ScenarioManager = (function() {
                 additionalParticipants: scenario.additional_participants
             });
         }
-        if (scenario.with_reputation) {
+        if (scenario.reputation.enabled) {
             window.ReputationManager.setReputationConfig({
-                with_reputation: scenario.with_reputation,
-                reputation_metrics: scenario.reputation_metrics,
-                initial_reputation: scenario.initial_reputation,
-                weighting_factor: scenario.weighting_factor,
-                weight_model_arrival_latency: scenario.weight_model_arrival_latency,
-                weight_model_similarity: scenario.weight_model_similarity,
-                weight_num_messages: scenario.weight_num_messages,
-                weight_fraction_params_changed: scenario.weight_fraction_params_changed
+                enabled: scenario.reputation.enabled,
+                metrics: scenario.reputation.metrics,
+                initialReputation: scenario.reputation.initialReputation,
+                weightingFactor: scenario.reputation.weighting_factor,
             });
         }
         if (scenario.with_sa) {

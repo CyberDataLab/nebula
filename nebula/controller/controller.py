@@ -14,7 +14,6 @@ from fastapi import Body, FastAPI, HTTPException, Path, Request, status
 from fastapi.concurrency import asynccontextmanager
 
 from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
-from nebula.controller.scenarios import Scenario, ScenarioManagement
 from nebula.utils import DockerUtils
 
 
@@ -278,6 +277,8 @@ async def run_scenario(
 
     import subprocess
 
+    from nebula.controller.scenarios import ScenarioManagement
+
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario_data, user)
 
@@ -314,6 +315,8 @@ async def stop_scenario(
     username: str = Body(..., embed=True),
     all: bool = Body(False, embed=True),
 ):
+    from nebula.controller.scenarios import ScenarioManagement
+
     ScenarioManagement.stop_participants(scenario_name)
     DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{username}-participant")
     DockerUtils.remove_docker_network(
@@ -348,6 +351,7 @@ async def remove_scenario(
         dict: A message indicating successful removal.
     """
     from nebula.controller.database import remove_scenario_by_name
+    from nebula.controller.scenarios import ScenarioManagement
 
     try:
         remove_scenario_by_name(scenario_name)
@@ -415,6 +419,7 @@ async def update_scenario(
         dict: A message confirming the update.
     """
     from nebula.controller.database import scenario_update_record
+    from nebula.controller.scenarios import Scenario
 
     try:
         scenario = Scenario.from_dict(scenario)
