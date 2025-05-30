@@ -218,13 +218,15 @@ class Factsheet:
                     lightning_model = pickle.load(file)
 
                 if dataset == "MNIST" and model == "MLP":
-                    pytorch_model = MNISTTorchModelMLP()
+                    model = MNISTModelMLP()
                 elif dataset == "MNIST" and model == "CNN":
-                    pytorch_model = MNISTTorchModelCNN()
-                else:
-                    pytorch_model = CIFAR10TorchModelCNN()
+                    model = MNISTModelCNN()
+                # elif dataset == "Syscall" and model == "MLP":
+                #     model = SyscallModelMLP()
+                # else:
+                #     model = CIFAR10ModelCNN()
 
-                pytorch_model.load_state_dict(lightning_model.state_dict())
+                model.load_state_dict(lightning_model.state_dict())
 
                 with open(test_dataloader_file, "rb") as file:
                     test_dataloader = pickle.load(file)
@@ -232,11 +234,11 @@ class Factsheet:
                 test_sample = next(iter(test_dataloader))
 
                 lr = factsheet["configuration"]["learning_rate"]
-                value_clever = get_clever_score(pytorch_model, test_sample, 10, lr)
+                value_clever = get_clever_score(model, test_sample, 10, lr)
 
                 factsheet["performance"]["test_clever"] = 1 if value_clever > 1 else value_clever
 
-                feature_importance = get_feature_importance_cv(pytorch_model, test_sample)
+                feature_importance = get_feature_importance_cv(model, test_sample)
 
                 factsheet["performance"]["test_feature_importance_cv"] = (
                     1 if feature_importance > 1 else feature_importance
