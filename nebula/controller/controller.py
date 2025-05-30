@@ -826,7 +826,7 @@ async def remove_user_controller(user: str = Body(..., embed=True)):
 
 
 @app.post("/user/update")
-async def add_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
+async def update_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
     """
     Controller endpoint that modifies a user of the database.
 
@@ -848,7 +848,7 @@ async def add_user_controller(user: str = Body(...), password: str = Body(...), 
 
 
 @app.post("/user/verify")
-async def add_user_controller(user: str = Body(...), password: str = Body(...)):
+async def verify_user_controller(user: str = Body(...), password: str = Body(...)):
     """
     Endpoint to verify user credentials.
 

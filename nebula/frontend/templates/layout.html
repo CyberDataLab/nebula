@@ -272,29 +272,44 @@
     <script>
         const loginForm = document.getElementById("login-form");
         if (loginForm) {
-
             loginForm.addEventListener("submit", (event) => {
                 event.preventDefault();
 
                 const formData = new FormData(loginForm);
+                const data = {
+                    user: formData.get('user'),
+                    password: formData.get('password')
+                };
 
                 fetch("/platform/login", {
                     method: "POST",
-                    body: formData,
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: new URLSearchParams(data),
+                    credentials: 'include'
                 })
-                    .then((response) => {
-                        if (!response.ok) {
-                            showAlert('danger', 'Invalid credentials');
-                        } else {
-                            window.location.replace("/platform");
-                        }
-                    })
-                    .catch((error) => {
-                        console.error(error);
-                    });
+                .then(async (response) => {
+                    const responseData = await response.json();
+                    if (!response.ok) {
+                        throw new Error(responseData.error || responseData.message || 'Login failed');
+                    }
+                    return responseData;
+                })
+                .then((data) => {
+                    if (data.message === "Login successful") {
+                        window.location.replace("/platform");
+                    } else {
+                        showAlert('danger', data.error || 'Invalid credentials');
+                    }
+                })
+                .catch((error) => {
+                    console.error('Login error:', error);
+                    showAlert('danger', error.message || 'Login failed. Please try again.');
+                });
             });
         }
-
     </script>
 
     <script>

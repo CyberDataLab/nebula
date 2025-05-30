@@ -8,10 +8,10 @@ import sqlite3
 import aiosqlite
 from argon2 import PasswordHasher
 
-user_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "users.db")
-node_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "nodes.db")
-scenario_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "scenarios.db")
-notes_db_file_location = os.path.join(os.path.dirname(__file__), "databases", "notes.db")
+user_db_file_location = None
+node_db_file_location = None
+scenario_db_file_location = None
+notes_db_file_location = None
 
 _node_lock = asyncio.Lock()
 
@@ -49,10 +49,10 @@ async def ensure_columns(conn, table_name, desired_columns):
 async def initialize_databases(databases_dir):
     global user_db_file_location, node_db_file_location, scenario_db_file_location, notes_db_file_location
 
-    user_db_file_location = os.path.join(databases_dir, user_db_file_location)
-    node_db_file_location = os.path.join(databases_dir, node_db_file_location)
-    scenario_db_file_location = os.path.join(databases_dir, scenario_db_file_location)
-    notes_db_file_location = os.path.join(databases_dir, notes_db_file_location)
+    user_db_file_location = os.path.join(databases_dir, "users.db")
+    node_db_file_location = os.path.join(databases_dir, "nodes.db")
+    scenario_db_file_location = os.path.join(databases_dir, "scenarios.db")
+    notes_db_file_location = os.path.join(databases_dir, "notes.db")
 
     await setup_database(user_db_file_location)
     await setup_database(node_db_file_location)

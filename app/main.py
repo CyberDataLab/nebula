@@ -78,7 +78,7 @@ argparser.add_argument(
     "-d",
     "--database",
     dest="databases",
-    default=os.path.expanduser("~/.nebula"),
+    default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "databases"),
     help="Nebula databases path",
 )
 

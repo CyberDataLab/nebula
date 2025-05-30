@@ -14,6 +14,8 @@ from urllib.parse import urlencode
 import aiohttp
 import requests
 from dotenv import load_dotenv
+from aiohttp import ClientConnectorError
+from aiohttp.client_exceptions import ClientError
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -229,13 +231,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
     WebSocket endpoint for real-time chat at /platform/ws/{client_id}.
 
     Parameters:
-        websocket (WebSocket): The client’s WebSocket connection instance.
+        websocket (WebSocket): The client's WebSocket connection instance.
         client_id (int): Unique identifier for the connecting client.
 
     Functionality:
         - On connection: registers the client via manager.connect(websocket).
         - Message loop: awaits incoming text frames, wraps each in a control message including the client_id, and broadcasts to all active clients using manager.broadcast().
-        - On WebSocketDisconnect: deregisters the client via manager.disconnect(websocket) and broadcasts a “client left” control message.
+        - On WebSocketDisconnect: deregisters the client via manager.disconnect(websocket) and broadcasts a "client left" control message.
         - Error handling: logs exceptions during broadcast or any unexpected WebSocket errors, ensuring the connection is cleaned up on failure.
     """
     await manager.connect(websocket)
@@ -370,10 +372,10 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     Functionality:
         - Builds a context dict with the request and its session.
         - For specific HTTP status codes (401, 403, 404, 405, 413), returns a TemplateResponse rendering the corresponding error page and status.
-        - For all other status codes, delegates to the application's default exception handler.
+        - For all other status codes, returns a JSON response with the error details.
 
     Returns:
-        Response: Either a TemplateResponse for the matched error code or the default exception handler’s response.
+        Response: Either a TemplateResponse for the matched error code or a JSON response with error details.
     """
     context = {"request": request, "session": request.session}
     if exc.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -389,6 +391,39 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     return await request.app.default_exception_handler(request, exc)
 
 
+async def retry_with_backoff(func, *args, max_retries=5, initial_delay=1):
+    """
+    Retry a function with exponential backoff.
+
+    Args:
+        func: The async function to retry
+        *args: Arguments to pass to the function
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay between retries in seconds
+
+    Returns:
+        The result of the function if successful
+
+    Raises:
+        The last exception if all retries fail
+    """
+    delay = initial_delay
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            return await func(*args)
+        except (ClientConnectorError, ClientError) as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                logging.warning(f"Connection attempt {attempt + 1} failed: {str(e)}. Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+                delay *= 2  # Exponential backoff
+            else:
+                logging.error(f"All {max_retries} connection attempts failed")
+                raise last_exception
+
+
 async def controller_get(url):
     """
     Fetch JSON data from a remote controller endpoint via asynchronous HTTP GET.
@@ -402,12 +437,16 @@ async def controller_get(url):
     Raises:
         HTTPException: If the response status is not 200, raises with the response status code and an error detail.
     """
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                raise HTTPException(status_code=response.status, detail="Error fetching data")
+
+    async def _get():
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(status_code=response.status, detail="Error fetching data")
+
+    return await retry_with_backoff(_get)
 
 
 async def controller_post(url, data=None):
@@ -424,12 +463,16 @@ async def controller_post(url, data=None):
     Raises:
         HTTPException: If the response status is not 200, with the status code and an error detail.
     """
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=data) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                raise HTTPException(status_code=response.status, detail="Error posting data")
+
+    async def _post():
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(status_code=response.status, detail="Error posting data")
+
+    return await retry_with_backoff(_post)
 
 
 async def get_available_gpus():
@@ -525,7 +568,7 @@ async def get_scenarios(user, role):
 
 async def scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username):
     """
-    Update the record of a scenario’s execution status on the controller.
+    Update the record of a scenario's execution status on the controller.
 
     Parameters:
         scenario_name (str): Unique name of the scenario.
@@ -570,7 +613,7 @@ async def scenario_set_status_to_finished(scenario_name, all=False):
 
 async def remove_scenario_by_name(scenario_name):
     """
-    Remove a scenario by name from the controller’s records.
+    Remove a scenario by name from the controller's records.
 
     Parameters:
         scenario_name (str): Name of the scenario to remove.
@@ -670,7 +713,7 @@ async def update_node_record(
     malicious,
 ):
     """
-    Update the record of a node’s state on the controller.
+    Update the record of a node's state on the controller.
 
     Parameters:
         uid (str): Unique node identifier.
@@ -679,8 +722,8 @@ async def update_node_record(
         port (int): Node port number.
         role (str): Node role in the scenario.
         neighbors (Any): Neighboring node references.
-        latitude (float): Node’s latitude coordinate.
-        longitude (float): Node’s longitude coordinate.
+        latitude (float): Node's latitude coordinate.
+        longitude (float): Node's longitude coordinate.
         timestamp (str): ISO-formatted timestamp of the update.
         federation (str): Federation identifier.
         round_number (int): Current round number in the scenario.
@@ -854,20 +897,42 @@ async def delete_user(user):
     await controller_post(url, data)
 
 
-async def verify_user(user, password):
+async def verify_user(username: str, password: str) -> bool:
     """
-    Verify a user's credentials against the controller.
+    Verify user credentials with the controller.
 
-    Parameters:
-    - user (str): The username to verify.
-    - password (str): The password to verify for the user.
+    Args:
+        username (str): The username to verify
+        password (str): The password to verify
 
     Returns:
-    - dict: The verification result from the controller, typically including authentication status.
+        dict: User data if credentials are valid, False otherwise
+
+    Raises:
+        HTTPException: If there's an error communicating with the controller
     """
-    url = f"http://{settings.controller_host}:{settings.controller_port}/user/verify"
-    data = {"user": user, "password": password}
-    return await controller_post(url, data)
+    try:
+        url = f"http://{settings.controller_host}:{settings.controller_port}/user/verify"
+        logging.info(f"Verifying user {username} with controller at {url}")
+
+        response = await controller_post(url, {"user": username, "password": password})
+        logging.info(f"Controller response for user {username}: {response}")
+
+        if not isinstance(response, dict):
+            logging.error(f"Invalid response format from controller: {response}")
+            return False
+
+        # Return the user data if verification was successful
+        if response.get("user") and response.get("role"):
+            return response
+        return False
+
+    except HTTPException as e:
+        logging.error(f"HTTP error verifying user {username}: {str(e)}")
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error verifying user {username}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error verifying credentials: {str(e)}")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1063,10 +1128,20 @@ async def nebula_login(
     Returns:
         JSONResponse: {"message": "Login successful"} with HTTP 200 status on success.
     """
-    data = await verify_user(user, password)
-    session["user"] = data.get("user")
-    session["role"] = data.get("role")
-    return JSONResponse({"message": "Login successful"}, status_code=200)
+    logging.info(f"Login attempt for user: {user}")
+    try:
+        user_data = await verify_user(user, password)
+        if not user_data:
+            logging.error(f"Login failed: Invalid credentials for user {user}")
+            return JSONResponse({"message": "Invalid credentials"}, status_code=401)
+
+        session["user"] = user_data.get("user")
+        session["role"] = user_data.get("role")
+        logging.info(f"Login successful for user: {user} with role: {user_data.get('role')}")
+        return JSONResponse({"message": "Login successful"}, status_code=200)
+    except Exception as e:
+        logging.exception(f"Login error for user {user}: {str(e)}")
+        return JSONResponse({"message": "Login failed", "error": str(e)}, status_code=401)
 
 
 @app.get("/platform/logout")
@@ -1210,14 +1285,19 @@ async def get_host_resources():
         None: If the HTTP response status is not 200.
     """
     url = f"http://{settings.controller_host}:{settings.controller_port}/resources"
-    async with aiohttp.ClientSession() as session, session.get(url) as response:
-        if response.status == 200:
-            try:
-                return await response.json()
-            except Exception as e:
-                return {"error": f"Failed to parse JSON: {e}"}
-        else:
-            return None
+
+    async def _get_resources():
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    try:
+                        return await response.json()
+                    except Exception as e:
+                        return {"error": f"Failed to parse JSON: {e}"}
+                else:
+                    return None
+
+    return await retry_with_backoff(_get_resources)
 
 
 async def check_enough_resources():
@@ -1900,7 +1980,7 @@ async def nebula_dashboard_download_logs_metrics(
         session (dict): Session data extracted via dependency.
 
     Returns:
-        StreamingResponse: A zip file containing the scenario’s logs and configuration.
+        StreamingResponse: A zip file containing the scenario's logs and configuration.
 
     Raises:
         HTTPException: 401 Unauthorized if the user is not logged in.

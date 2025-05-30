@@ -228,7 +228,7 @@ class Deployer:
         self.production = args.production if hasattr(args, "production") else False
         self.dev = args.developement if hasattr(args, "developement") else False
         self.advanced_analytics = args.advanced_analytics if hasattr(args, "advanced_analytics") else False
-        self.databases_dir = args.databases if hasattr(args, "databases") else "/opt/nebula"
+        self.databases_dir = args.databases if hasattr(args, "databases") else "/nebula/app/databases"
         self.simulation = args.simulation
         self.config_dir = args.config
         self.log_dir = args.logs
@@ -454,7 +454,6 @@ class Deployer:
                 "/var/run/docker.sock:/var/run/docker.sock",
                 f"{self.root_path}/nebula/frontend/config/nebula:/etc/nginx/sites-available/default",
             ],
-            extra_hosts={self.controller_host: "host-gateway"},
             port_bindings={80: self.frontend_port, 8080: self.statistics_port},
         )
 
@@ -515,13 +514,13 @@ class Deployer:
             "NEBULA_PRODUCTION": self.production,
             "NEBULA_ROOT_HOST": self.root_path,
             "NEBULA_ADVANCED_ANALYTICS": self.advanced_analytics,
-            "NEBULA_DATABASES_DIR": self.databases_dir,
+            "NEBULA_DATABASES_DIR": "/nebula/app/databases",
             "NEBULA_CONTROLLER_LOG": "/nebula/app/logs/controller.log",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
             "NEBULA_CERTS_DIR": "/nebula/app/certs/",
             "NEBULA_HOST_PLATFORM": self.host_platform,
-            "NEBULA_CONTROLLER_PORT": self.controller_port,
+            "NEBULA_CONTROLLER_PORT": 5000,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
         }
@@ -534,7 +533,7 @@ class Deployer:
             binds=[
                 f"{self.root_path}:/nebula",
                 "/var/run/docker.sock:/var/run/docker.sock",
-                f"{self.databases_dir}:/nebula/nebula/controller/databases",
+                f"{self.databases_dir}:/nebula/app/databases"
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={5000: self.controller_port},

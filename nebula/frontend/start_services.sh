@@ -11,7 +11,6 @@ nginx &
 
 # Change directory to where app.py is located
 NEBULA_FRONTEND_DIR=/nebula/nebula/frontend
-#NEBULA_DATABASES_DIR=/nebula/nebula/frontend/databases
 cd $NEBULA_FRONTEND_DIR
 
 # Start Gunicorn
