@@ -27,7 +27,7 @@ class Settings:
 
     Attributes:
         controller_host (str): Hostname or IP address of the Nebula controller service.
-        controller_port (int): Port on which the Nebula controller listens (default: 5000).
+        controller_port (int): Port on which the Nebula controller listens (default: 5050).
         resources_threshold (float): Threshold for resource usage alerts (default: 0.0).
         port (int): Port for the Nebula frontend service (default: 6060).
         production (bool): Whether the application is running in production mode.
@@ -47,7 +47,7 @@ class Settings:
     """
 
     controller_host: str = os.environ.get("NEBULA_CONTROLLER_HOST")
-    controller_port: int = os.environ.get("NEBULA_CONTROLLER_PORT", 5000)
+    controller_port: int = os.environ.get("NEBULA_CONTROLLER_PORT", 5050)
     resources_threshold: float = 0.0
     port: int = os.environ.get("NEBULA_FRONTEND_PORT", 6060)
     production: bool = os.environ.get("NEBULA_PRODUCTION", "False") == "True"
@@ -2206,7 +2206,7 @@ async def nebula_dashboard_deployment_run(
 if __name__ == "__main__":
     # Parse args from command line
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=5000, help="Port to run the frontend on.")
+    parser.add_argument("--port", type=int, default=6060, help="Port to run the frontend on.")
     args = parser.parse_args()
     logging.info(f"Starting frontend on port {args.port}")
     import uvicorn

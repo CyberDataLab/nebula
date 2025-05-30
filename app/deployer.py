@@ -219,7 +219,7 @@ def run_observer():
 
 class Deployer:
     def __init__(self, args):
-        self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5000
+        self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
@@ -338,13 +338,13 @@ class Deployer:
 
         # Check ports available
         if not SocketUtils.is_port_open(self.controller_port):
-            self.controller_port = SocketUtils.find_free_port()
+            self.controller_port = SocketUtils.find_free_port(start_port=self.controller_port)
 
         if not SocketUtils.is_port_open(self.frontend_port):
-            self.frontend_port = SocketUtils.find_free_port(self.controller_port + 1)
+            self.frontend_port = SocketUtils.find_free_port(start_port=self.frontend_port)
 
         if not SocketUtils.is_port_open(self.statistics_port):
-            self.statistics_port = SocketUtils.find_free_port(self.frontend_port + 1)
+            self.statistics_port = SocketUtils.find_free_port(start_port=self.statistics_port)
 
         self.run_controller()
         logging.info("NEBULA Controller is running")
@@ -440,7 +440,7 @@ class Deployer:
             "NEBULA_HOST_PLATFORM": self.host_platform,
             "NEBULA_DEFAULT_USER": "admin",
             "NEBULA_DEFAULT_PASSWORD": "admin",
-            "NEBULA_CONTROLLER_PORT": 5000,
+            "NEBULA_CONTROLLER_PORT": self.controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
         }
 
@@ -520,14 +520,14 @@ class Deployer:
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
             "NEBULA_CERTS_DIR": "/nebula/app/certs/",
             "NEBULA_HOST_PLATFORM": self.host_platform,
-            "NEBULA_CONTROLLER_PORT": 5000,
+            "NEBULA_CONTROLLER_PORT": self.controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]
 
-        ports = [5000]
+        ports = [self.controller_port]
 
         host_config = client.api.create_host_config(
             binds=[
@@ -536,7 +536,7 @@ class Deployer:
                 f"{self.databases_dir}:/nebula/app/databases"
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
-            port_bindings={5000: self.controller_port},
+            port_bindings={self.controller_port: self.controller_port},
         )
 
         networking_config = client.api.create_networking_config({

@@ -13,8 +13,8 @@ argparser.add_argument(
     "-cp",
     "--controllerport",
     dest="controllerport",
-    default=5000,
-    help="Controller port (default: 5000)",
+    default=5050,
+    help="Controller port (default: 5050)",
 )
 
 argparser.add_argument(

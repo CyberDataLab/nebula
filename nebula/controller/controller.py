@@ -875,7 +875,7 @@ async def verify_user_controller(user: str = Body(...), password: str = Body(...
 if __name__ == "__main__":
     # Parse args from command line
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=5000, help="Port to run the controller on.")
+    parser.add_argument("--port", type=int, default=5050, help="Port to run the controller on.")
     args = parser.parse_args()
     logging.info(f"Starting frontend on port {args.port}")
     import uvicorn
