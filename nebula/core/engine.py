@@ -3,9 +3,9 @@ import logging
 import os
 import socket
 import time
-
 import docker
 
+from nebula.core.role import Role, factory_node_role
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
@@ -19,6 +19,7 @@ from nebula.core.nebulaevents import (
     RoundStartEvent,
     UpdateNeighborEvent,
     UpdateReceivedEvent,
+    ExperimentFinishEvent,
 )
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
@@ -86,13 +87,14 @@ class Engine:
         self.port = config.participant["network_args"]["port"]
         self.addr = config.participant["network_args"]["addr"]
         self.role = config.participant["device_args"]["role"]
+        self.role: Role = factory_node_role(self.role)
         self.name = config.participant["device_args"]["name"]
         self.client = docker.from_env()
 
         print_banner()
 
         print_msg_box(
-            msg=f"Name {self.name}\nRole: {self.role}",
+            msg=f"Name {self.name}\nRole: {self.role.value}",
             indent=2,
             title="Node information",
         )
@@ -566,7 +568,7 @@ class Engine:
             direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
             undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
             logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
-            logging.info(f"[Role {self.role}] Starting learning cycle...")
+            logging.info(f"[Role {self.role.value}] Starting learning cycle...")
             await self.aggregator.update_federation_nodes(expected_nodes)
             await self._extended_learning_cycle()
 
@@ -591,7 +593,12 @@ class Engine:
 
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
+        
         await self.trainer.test()
+        
+        efe = ExperimentFinishEvent()
+        await EventManager.get_instance().publish_node_event(efe)
+        
         print_msg_box(
             msg=f"FL process has been completed successfully (max. {self.total_rounds} rounds reached)",
             indent=2,
@@ -650,11 +657,11 @@ class MaliciousNode(Engine):
             attack_name = self.config.participant["adversarial_args"]["attack_params"]["attacks"]
             logging.exception(f"Attack {attack_name} failed")
 
-        if self.role == "aggregator":
+        if self.role.value == "aggregator":
             await AggregatorNode._extended_learning_cycle(self)
-        if self.role == "trainer":
+        if self.role.value == "trainer":
             await TrainerNode._extended_learning_cycle(self)
-        if self.role == "server":
+        if self.role.value == "server":
             await ServerNode._extended_learning_cycle(self)
 
 

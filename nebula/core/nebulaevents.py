@@ -88,16 +88,14 @@ class RoundEndEvent(NodeEvent):
 
 
 class ExperimentFinishEvent(NodeEvent):
-    def __init__(self, last_loss, last_accuracy):
+    def __init__(self):
         """Event triggered when experiment is going to finish."""
-        self._loss = last_loss
-        self._accuracy = last_accuracy
 
     def __str__(self):
         return "Experiment finished"
 
     async def get_event_data(self):
-        return (self._loss, self._accuracy)
+        pass
 
     async def is_concurrent(self):
         return False
@@ -307,3 +305,14 @@ class ChangeLocationEvent(AddonEvent):
 
     async def get_event_data(self):
         return (self.latitude, self.longitude)
+    
+class TestMetricsEvent(AddonEvent):
+    def __init__(self, loss, accuracy):
+        self._loss = loss
+        self._accuracy = accuracy
+
+    def __str__(self):
+        return "TestMetricsEvent"
+
+    async def get_event_data(self):
+        return (self._loss, self._accuracy)
