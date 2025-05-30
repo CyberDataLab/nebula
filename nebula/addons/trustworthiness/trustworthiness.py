@@ -3,7 +3,7 @@ from nebula.core.eventmanager import EventManager
 from nebula.core.role import Role
 from abc import ABC, abstractmethod
 from nebula.config.config import Config
-from nebula.core.engine import Engine
+from nebula.core.engine import Engine, ServerNode
 import pickle
 from nebula.addons.trustworthiness.calculation import stop_emissions_tracking_and_save
 from nebula.addons.trustworthiness.utils import save_results_csv
@@ -35,7 +35,7 @@ class TrustWorkload(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    async def finish_experiment_role_actions(self):
+    async def finish_experiment_role_actions(self, trust_config, experiment_name):
         raise NotImplementedError
 
 class TrustWorkloadTrainer(TrustWorkload):
@@ -62,7 +62,7 @@ class TrustWorkloadTrainer(TrustWorkload):
     def get_metrics(self):
         return (self._current_loss, self._current_accuracy)
     
-    async def finish_experiment_role_actions(self):
+    async def finish_experiment_role_actions(self, trust_config, experiment_name):
         with open(self._train_loader_file, 'rb') as file:
             train_loader = pickle.load(file)
         self._sample_size = len(train_loader)
@@ -73,7 +73,6 @@ class TrustWorkloadTrainer(TrustWorkload):
         # Save the train model in trustworthy dir
         with open(train_model, 'wb') as f:
             pickle.dump(self._engine.trainer.model, f)
-        pass
     
     async def _process_test_metrics_event(self, tme: TestMetricsEvent):
         cur_loss, cur_acc = await tme.get_event_data()
@@ -81,11 +80,14 @@ class TrustWorkloadTrainer(TrustWorkload):
             self._current_loss, self._current_accuracy = cur_loss, cur_acc
     
 class TrustWorkloadServer(TrustWorkload):
-    def __init__(self,  engine, idx, trust_files_route):
+    
+    def __init__(self,  engine: ServerNode, idx, trust_files_route):
         self._workload = 'aggregation'
         self._sample_size = 0
         self._current_loss = None
         self._current_accuracy = None
+        self._start_time = engine._start_time
+        self._end_time = None
         
     async def init(self):
         await EventManager.get_instance().subscribe_addonevent(TestMetricsEvent, self._process_test_metrics_event)   
@@ -99,8 +101,53 @@ class TrustWorkloadServer(TrustWorkload):
     def get_metrics(self):
         return (self._current_loss, self._current_accuracy)
     
-    async def finish_experiment_role_actions(self):
-        pass
+    async def finish_experiment_role_actions(self, trust_config, experiment_name):
+        self._end_time = ServerNode.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        await self._generate_factsheet(trust_config, experiment_name)
+        
+    async def _generate_factsheet(self, trust_config, experiment_name):
+        from nebula.addons.trustworthiness.factsheet import Factsheet
+        from nebula.addons.trustworthiness.metric import TrustMetricManager
+        import json
+        import os
+        
+        factsheet = Factsheet()
+        factsheet.populate_factsheet_pre_train(trust_config, experiment_name)
+        factsheet.populate_factsheet_post_train(experiment_name, self._start_time, self._end_time)
+        
+        data_file_path = os.path.join(os.environ.get('NEBULA_CONFIG_DIR'), experiment_name, "scenario.json")
+        with open(data_file_path, 'r') as data_file:
+            data = json.load(data_file)
+
+            weights = {
+                "robustness": float(data["robustness_pillar"]),
+                "resilience_to_attacks": float(data["resilience_to_attacks"]),
+                "algorithm_robustness": float(data["algorithm_robustness"]),
+                "client_reliability": float(data["client_reliability"]),
+                "privacy": float(data["privacy_pillar"]),
+                "technique": float(data["technique"]),
+                "uncertainty": float(data["uncertainty"]),
+                "indistinguishability": float(data["indistinguishability"]),
+                "fairness": float(data["fairness_pillar"]),
+                "selection_fairness": float(data["selection_fairness"]),
+                "performance_fairness": float(data["performance_fairness"]),
+                "class_distribution": float(data["class_distribution"]),
+                "explainability": float(data["explainability_pillar"]),
+                "interpretability": float(data["interpretability"]),
+                "post_hoc_methods": float(data["post_hoc_methods"]),
+                "accountability": float(data["accountability_pillar"]),
+                "factsheet_completeness":  float(data["factsheet_completeness"]),
+                "architectural_soundness": float(data["architectural_soundness_pillar"]),
+                "client_management": float(data["client_management"]),
+                "optimization": float(data["optimization"]),
+                "sustainability": float(data["sustainability_pillar"]),
+                "energy_source": float(data["energy_source"]),
+                "hardware_efficiency": float(data["hardware_efficiency"]),
+                "federation_complexity": float(data["federation_complexity"])
+            }
+
+            trust_metric_manager = TrustMetricManager(self._start_time)
+            trust_metric_manager.evaluate(experiment_name, weights, use_weights=True)
     
     async def _process_test_metrics_event(self, tme: TestMetricsEvent):
         cur_loss, cur_acc = await tme.get_event_data()
@@ -111,13 +158,12 @@ class TrustWorkloadServer(TrustWorkload):
                                                         #       TRUSTWORTHINESS      #
                                                         ##############################
 """
-#TODO need trainer.test() to return loss,accuracy -> create TestMetricsEvent
-#TODO cambiar en engine para q trabaje con Role de role.py
 
 class Trustworthiness():
     def _init_(self, engine: Engine, config: Config):
         self._engine = engine
         self._config = config
+        self._trust_config = self._config.participant["trust_args"]["scenario"]
         self._trust_dir_files = f"/nebula/app/logs/{self._experiment_name}/trustworthiness"
         self._experiment_name = self._config.participant["scenario_args"]["name"]
         self._emissions_file = 'emissions.csv'
@@ -134,10 +180,20 @@ class Trustworthiness():
         return self._trust_workload
     
     async def start(self):
+        await self._create_trustworthiness_directory()
         await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._process_experiment_finish_event)
         self._tracker.start()
         
+    async def _create_trustworthiness_directory(self):
+        import os
+        trust_dir = os.path.join(os.environ.get("NEBULA_LOGS_DIR"), self._experiment_name, "trustworthiness")
+        # Create a directory to save files to calcutate trust
+        os.makedirs(trust_dir, exist_ok=True)
+        os.chmod(trust_dir, 0o777)
+        
     async def _process_experiment_finish_event(self, efe: ExperimentFinishEvent):
+        await self.tw.finish_experiment_role_actions(self._trust_config, self._experiment_name)
+        
         last_loss, last_accuracy = self.tw.get_metrics()
         
         # Save model -> neccesary here?
@@ -150,7 +206,6 @@ class Trustworthiness():
         bytes_recv = self._engine.reporter.acc_bytes_recv
         
         # Get TrustWorkload info
-        await self.tw.finish_experiment_role_actions()
         workload = self.tw.get_workload()
         sample_size = self.tw.get_sample_size()
         

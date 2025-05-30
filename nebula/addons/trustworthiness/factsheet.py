@@ -135,15 +135,13 @@ class Factsheet:
             json.dump(factsheet, f, indent=4)
             f.close()
 
-    def populate_factsheet_post_train(self, scenario):
+    def populate_factsheet_post_train(self, scenario_name, start_time, end_time):
         """
         Populates the factsheet with values after the training.
 
         Args:
             scenario (object): The scenario object.
         """
-        scenario_name = scenario[0]
-
         factsheet_file = os.path.join(dirname, f"files/{scenario_name}/{self.factsheet_file_nm}")
 
         logger.info("FactSheet: Populating factsheet with post training metrics")
@@ -196,7 +194,7 @@ class Factsheet:
                 test_acc_cv = get_cv(std=result_avg_loss_accuracy[2], mean=result_avg_loss_accuracy[1])
                 factsheet["fairness"]["test_acc_cv"] = 1 if test_acc_cv > 1 else test_acc_cv
 
-                factsheet["system"]["avg_time_minutes"] = get_elapsed_time(scenario)
+                factsheet["system"]["avg_time_minutes"] = get_elapsed_time(start_time, end_time)
                 factsheet["system"]["avg_model_size"] = get_bytes_models(models_files)
 
                 result_bytes_sent_recv = get_bytes_sent_recv(bytes_sent_files, bytes_recv_files)

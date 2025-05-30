@@ -243,19 +243,17 @@ def get_global_privacy_risk(dp, epsilon, n):
         return 1
 
 
-def get_elapsed_time(scenario):
+def get_elapsed_time(start_time, end_time):
     """
     Calculates the elapsed time during the execution of the scenario.
 
     Args:
-        scenario (object): Scenario required.
+        start_time (datetime): Start datetime.
+        end_time (datetime): End datetime.
 
     Returns:
         float: The elapsed time.
     """
-    start_time = scenario[1]
-    end_time = scenario[2]
-
     start_date = datetime.strptime(start_time, "%d/%m/%Y %H:%M:%S")
     end_date = datetime.strptime(end_time, "%d/%m/%Y %H:%M:%S")
 

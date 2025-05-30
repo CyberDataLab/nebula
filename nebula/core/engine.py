@@ -699,6 +699,8 @@ class AggregatorNode(Engine):
 
 
 class ServerNode(Engine):
+    from datetime import datetime
+    
     def __init__(
         self,
         model,
@@ -714,6 +716,7 @@ class ServerNode(Engine):
             trainer,
             security,
         )
+        self._start_time = ServerNode.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
     async def _extended_learning_cycle(self):
         # Define the functionality of the server node

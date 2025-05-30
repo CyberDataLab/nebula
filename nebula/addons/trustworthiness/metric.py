@@ -20,7 +20,7 @@ class TrustMetricManager:
         self.eval_metrics_file_nm = "eval_metrics.json"
         self.nebula_trust_results_nm = "nebula_trust_results.json"
 
-    def evaluate(self, scenario, weights, use_weights=False):
+    def evaluate(self, experiment_name, weights, use_weights=False):
         """
         Evaluates the trustworthiness score.
 
@@ -30,7 +30,7 @@ class TrustMetricManager:
             use_weights (bool): True to turn on the weights in the metric config file, default to False.
         """
         # Get scenario name
-        scenario_name = scenario[0]
+        scenario_name = experiment_name
         factsheet_file = os.path.join(dirname, f"files/{scenario_name}/{self.factsheet_file_nm}")
         metrics_cfg_file = os.path.join(dirname, f"configs/{self.eval_metrics_file_nm}")
         results_file = os.path.join(dirname, f"files/{scenario_name}/{self.nebula_trust_results_nm}")
