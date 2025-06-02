@@ -1536,6 +1536,11 @@ class Reputation:
             ure (UpdateReceivedEvent): The event data for a model update.
         """
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
+
+        # Exclude the node itself from the calculation
+        if source == self._addr:
+            return
+
         current_time = time.time()
         current_round = round_num
 
