@@ -1,7 +1,7 @@
 site_name: NEBULA
 docs_dir: '_prebuilt'
 repo_url: https://github.com/CyberDataLab/nebula
-site_url: https://nebula.enriquetomasmb.com
+site_url: https://docs.nebula-dfl.com
 site_description: "NEBULA: A Platform for Decentralized Federated Learning"
 site_author: Enrique Tomás Martínez Beltrán
 edit_uri: edit/main/docs/

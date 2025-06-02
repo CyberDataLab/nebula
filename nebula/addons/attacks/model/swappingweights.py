@@ -40,7 +40,7 @@ class SwappingWeightsAttack(ModelAttack):
             raise ValueError(f"Missing required attack parameter: {e}")
         except ValueError:
             raise ValueError("Invalid value in attack_params. Ensure all values are integers.")
-        
+
         super().__init__(engine, round_start, round_stop, attack_interval)
 
         self.layer_idx = int(attack_params["layer_idx"])

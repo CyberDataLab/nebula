@@ -1,24 +1,30 @@
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
 
 from nebula.addons.functions import print_msg_box
 
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
-
 
 class Health:
-    def __init__(self, addr, config, cm: "CommunicationsManager"):
+    def __init__(self, addr, config):
         print_msg_box(msg="Starting health module...", indent=2, title="Health module")
         self.addr = addr
         self.config = config
-        self.cm = cm
+        self._cm = None
         self.period = self.config.participant["health_args"]["health_interval"]
         self.alive_interval = self.config.participant["health_args"]["send_alive_interval"]
         self.check_alive_interval = self.config.participant["health_args"]["check_alive_interval"]
         self.timeout = self.config.participant["health_args"]["alive_timeout"]
+
+    @property
+    def cm(self):
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     async def start(self):
         asyncio.create_task(self.run_send_alive())

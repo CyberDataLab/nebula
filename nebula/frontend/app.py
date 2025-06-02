@@ -20,6 +20,29 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "
 
 
 class Settings:
+    """
+    Configuration settings for the Nebula application, loaded from environment variables with sensible defaults.
+    
+    Attributes:
+        controller_host (str): Hostname or IP address of the Nebula controller service.
+        controller_port (int): Port on which the Nebula controller listens (default: 5000).
+        resources_threshold (float): Threshold for resource usage alerts (default: 0.0).
+        port (int): Port for the Nebula frontend service (default: 6060).
+        production (bool): Whether the application is running in production mode.
+        gpu_available (bool): Whether GPU resources are available.
+        advanced_analytics (bool): Whether advanced analytics features are enabled.
+        host_platform (str): Underlying host operating platform (e.g., 'unix').
+        log_dir (str): Directory path where application logs are stored.
+        config_dir (str): Directory path for general configuration files.
+        cert_dir (str): Directory path for SSL/TLS certificates.
+        root_host_path (str): Root path on the host for volume mounting.
+        config_frontend_dir (str): Subdirectory for frontend-specific configuration (default: 'config').
+        env_file (str): Path to the environment file to load additional variables (default: '.env').
+        statistics_port (int): Port for the statistics/metrics endpoint (default: 8080).
+        PERMANENT_SESSION_LIFETIME (datetime.timedelta): Duration for session permanence (default: 60 minutes).
+        templates_dir (str): Directory name containing template files (default: 'templates').
+        frontend_log (str): File path for the frontend log output.
+    """
     controller_host: str = os.environ.get("NEBULA_CONTROLLER_HOST")
     controller_port: int = os.environ.get("NEBULA_CONTROLLER_PORT", 5000)
     resources_threshold: float = 0.0
@@ -63,7 +86,6 @@ if os.path.exists(settings.env_file):
     logging.info(f"Loading environment variables from {settings.env_file}")
     load_dotenv(settings.env_file, override=True)
 
-from ansi2html import Ansi2HTMLConverter
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -81,7 +103,6 @@ from fastapi.responses import (
     FileResponse,
     HTMLResponse,
     JSONResponse,
-    PlainTextResponse,
     RedirectResponse,
     StreamingResponse,
 )
@@ -90,31 +111,6 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from nebula.frontend.database import (
-    add_user,
-    check_scenario_with_role,
-    delete_user_from_db,
-    get_all_scenarios_and_check_completed,
-    get_notes,
-    get_running_scenario,
-    get_scenario_by_name,
-    get_user_by_scenario_name,
-    get_user_info,
-    initialize_databases,
-    list_nodes_by_scenario_name,
-    list_users,
-    remove_nodes_by_scenario_name,
-    remove_note,
-    remove_scenario_by_name,
-    save_notes,
-    scenario_set_all_status_to_finished,
-    scenario_set_status_to_finished,
-    scenario_update_record,
-    update_node_record,
-    update_user,
-    verify,
-    verify_hash_algorithm,
-)
 from nebula.utils import DockerUtils, FileUtils
 
 logging.info(f"🚀  Starting Nebula Frontend on port {settings.port}")
@@ -147,6 +143,28 @@ app.mount("/platform/static", StaticFiles(directory="static"), name="static")
 
 
 class ConnectionManager:
+    """
+    Manages WebSocket client connections, broadcasts messages to all connected clients, and retains a history of exchanged messages.
+
+    Attributes:
+        historic_messages (dict[str, dict]): Stores each received or broadcast message keyed by timestamp (formatted as "%Y-%m-%d %H:%M:%S").
+        active_connections (list[WebSocket]): List of currently open WebSocket connections.
+
+    Methods:
+        async connect(websocket: WebSocket):
+            Accepts a new WebSocket connection, registers it, and broadcasts a control message indicating the new client count.
+        disconnect(websocket: WebSocket):
+            Removes the specified WebSocket from the active connections list if present.
+        add_message(message: str):
+            Parses the incoming JSON-formatted message string, timestamps it, and adds it to historic_messages.
+        async send_personal_message(message: str, websocket: WebSocket):
+            Sends a text message to a single WebSocket; on connection closure, cleans up the connection.
+        async broadcast(message: str):
+            Logs the message via add_message, then iterates through active_connections to send the message to all clients;
+            collects and removes any connections that have been closed or error out, logging exceptions as needed.
+        get_historic() -> dict[str, dict]:
+            Returns the full history of timestamped messages.
+    """
     def __init__(self):
         self.historic_messages = {}
         self.active_connections: list[WebSocket] = []
@@ -181,7 +199,7 @@ class ConnectionManager:
     async def broadcast(self, message: str):
         self.add_message(message)
         disconnected_websockets = []
-        
+
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
@@ -189,9 +207,9 @@ class ConnectionManager:
                 # Mark connection for removal
                 disconnected_websockets.append(connection)
             except Exception as e:
-                logging.error(f"Error broadcasting message: {e}")
+                logging.exception(f"Error broadcasting message: {e}")
                 disconnected_websockets.append(connection)
-        
+
         # Remove disconnected websockets
         for websocket in disconnected_websockets:
             self.disconnect(websocket)
@@ -205,6 +223,19 @@ manager = ConnectionManager()
 
 @app.websocket("/platform/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: int):
+    """
+    WebSocket endpoint for real-time chat at /platform/ws/{client_id}.
+
+    Parameters:
+        websocket (WebSocket): The client’s WebSocket connection instance.
+        client_id (int): Unique identifier for the connecting client.
+
+    Functionality:
+        - On connection: registers the client via manager.connect(websocket).
+        - Message loop: awaits incoming text frames, wraps each in a control message including the client_id, and broadcasts to all active clients using manager.broadcast().
+        - On WebSocketDisconnect: deregisters the client via manager.disconnect(websocket) and broadcasts a “client left” control message.
+        - Error handling: logs exceptions during broadcast or any unexpected WebSocket errors, ensuring the connection is cleaned up on failure.
+    """
     await manager.connect(websocket)
     try:
         while True:
@@ -216,16 +247,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
             try:
                 await manager.broadcast(json.dumps(message))
             except Exception as e:
-                logging.error(f"Error broadcasting message: {e}")
+                logging.exception(f"Error broadcasting message: {e}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         try:
             message = {"type": "control", "message": f"Client #{client_id} left the chat"}
             await manager.broadcast(json.dumps(message))
         except Exception as e:
-            logging.error(f"Error broadcasting disconnect message: {e}")
+            logging.exception(f"Error broadcasting disconnect message: {e}")
     except Exception as e:
-        logging.error(f"WebSocket error: {e}")
+        logging.exception(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
 
@@ -233,10 +264,30 @@ templates = Jinja2Templates(directory=settings.templates_dir)
 
 
 def datetimeformat(value, format="%B %d, %Y %H:%M"):
+    """
+    Formats a datetime string into a specified output format.
+
+    Parameters:
+        value (str): Input datetime string in "%Y-%m-%d %H:%M:%S" format.
+        format (str): Desired output datetime format (default: "%B %d, %Y %H:%M").
+
+    Returns:
+        str: The datetime string formatted according to the provided format.
+    """
     return datetime.datetime.strptime(value, "%Y-%m-%d %H:%M:%S").strftime(format)
 
 
 def add_global_context(request: Request):
+    """
+    Add global context variables for template rendering.
+
+    Parameters:
+        request (Request): The incoming request object.
+
+    Returns:
+        dict[str, bool]: 
+            is_production: Flag indicating if the application is running in production mode.
+    """
     return {
         "is_production": settings.production,
     }
@@ -247,25 +298,31 @@ templates.env.globals.update(add_global_context=add_global_context)
 
 
 def get_session(request: Request) -> dict:
+    """
+    Retrieve the session data associated with the incoming request.
+
+    Parameters:
+        request (Request): The HTTP request object containing session information.
+
+    Returns:
+        dict: The session data dictionary stored in the request.
+    """
     return request.session
 
 
-def set_default_user():
-    username = os.environ.get("NEBULA_DEFAULT_USER", "admin")
-    password = os.environ.get("NEBULA_DEFAULT_PASSWORD", "admin")
-    if not list_users():
-        add_user(username, password, "admin")
-    if not verify_hash_algorithm(username):
-        update_user(username, password, "admin")
-
-
-@app.on_event("startup")
-async def startup_event():
-    await initialize_databases()
-    set_default_user()
-
-
 class UserData:
+    """
+    Holds runtime state and synchronization events for user-specific scenario execution.
+
+    Attributes:
+        nodes_registration (dict): Mapping of node identifiers to their registration data.
+        scenarios_list (list): Ordered list of scenario identifiers or objects to be executed.
+        scenarios_list_length (int): Total number of scenarios in scenarios_list.
+        scenarios_finished (int): Count of scenarios that have completed execution.
+        nodes_finished (list): List of node identifiers that have finished processing.
+        stop_all_scenarios_event (asyncio.Event): Event used to signal all scenarios should be halted.
+        finish_scenario_event (asyncio.Event): Event used to signal a single scenario has finished.
+    """
     def __init__(self):
         self.nodes_registration = {}
         self.scenarios_list = []
@@ -280,9 +337,18 @@ user_data_store = {}
 
 
 # Detect CTRL+C from parent process
-def signal_handler(signal, frame):
+async def signal_handler(signal, frame):
+    """
+    Asynchronous signal handler for Ctrl+C (SIGINT) in the frontend.
+
+    Logs the interrupt event, schedules all scenarios to be marked as finished by creating an asyncio task for `scenario_set_status_to_finished(all=True)`, and then exits the process.
+
+    Parameters:
+        signal (int): The signal number received (e.g., signal.SIGINT).
+        frame (types.FrameType): The current stack frame at the moment the signal was handled.
+    """
     logging.info("You pressed Ctrl+C [frontend]!")
-    scenario_set_all_status_to_finished()
+    asyncio.get_event_loop().create_task(scenario_set_status_to_finished(all=True))
     sys.exit(0)
 
 
@@ -291,6 +357,21 @@ signal.signal(signal.SIGINT, signal_handler)
 
 @app.exception_handler(StarletteHTTPException)
 async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """
+    Custom HTTP exception handler for Starlette applications.
+
+    Parameters:
+        request (Request): The incoming HTTP request object.
+        exc (StarletteHTTPException): The HTTP exception instance containing the status code to handle.
+
+    Functionality:
+        - Builds a context dict with the request and its session.
+        - For specific HTTP status codes (401, 403, 404, 405, 413), returns a TemplateResponse rendering the corresponding error page and status.
+        - For all other status codes, delegates to the application's default exception handler.
+
+    Returns:
+        Response: Either a TemplateResponse for the matched error code or the default exception handler’s response.
+    """
     context = {"request": request, "session": request.session}
     if exc.status_code == status.HTTP_401_UNAUTHORIZED:
         return templates.TemplateResponse("401.html", context, status_code=exc.status_code)
@@ -305,20 +386,504 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     return await request.app.default_exception_handler(request, exc)
 
 
+async def controller_get(url):
+    """
+    Fetch JSON data from a remote controller endpoint via asynchronous HTTP GET.
+
+    Parameters:
+        url (str): The full URL of the controller API endpoint.
+
+    Returns:
+        Any: Parsed JSON response when the HTTP status code is 200.
+
+    Raises:
+        HTTPException: If the response status is not 200, raises with the response status code and an error detail.
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                raise HTTPException(status_code=response.status, detail="Error fetching data")
+            
+
+async def controller_post(url, data=None):
+    """
+    Asynchronously send a JSON payload via HTTP POST to a controller endpoint and parse the response.
+
+    Parameters:
+        url (str): The full URL of the controller API endpoint.
+        data (Any, optional): JSON-serializable payload to include in the POST request (default: None).
+
+    Returns:
+        Any: Parsed JSON response when the HTTP status code is 200.
+
+    Raises:
+        HTTPException: If the response status is not 200, with the status code and an error detail.
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                raise HTTPException(status_code=response.status, detail="Error posting data")
+            
+
+async def get_available_gpus():
+    """
+    Fetch the list of available GPUs from the controller service.
+
+    Returns:
+        Any: Parsed JSON response containing available GPU information.
+
+    Raises:
+        HTTPException: If the underlying HTTP request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/available_gpus"
+    return await controller_get(url)
+
+
+async def get_least_memory_gpu():
+    """
+    Fetch the GPU with the least memory usage from the controller service.
+
+    Returns:
+        Any: Parsed JSON response with details of the GPU having the least memory usage.
+
+    Raises:
+        HTTPException: If the underlying HTTP request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/least_memory_gpu"
+    return await controller_get(url)
+
+
+async def deploy_scenario(scenario_data, role, user):
+    """
+    Deploy a new scenario on the controller with the given parameters.
+
+    Parameters:
+        scenario_data (Any): Data payload describing the scenario to run.
+        role (str): Role identifier for the scenario execution.
+        user (str): Username initiating the deployment.
+
+    Returns:
+        Any: Parsed JSON response confirming scenario deployment.
+
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/run"
+    data = {"scenario_data": scenario_data, "role": role, "user": user}
+    return await controller_post(url, data)
+
+
+async def stop_scenario_by_name(scenario_name, username, all=False):
+    """
+    Stops a running scenario via the NEBULA controller.
+
+    This function sends an HTTP POST request to the controller to stop a specific scenario.
+    It can stop only the nodes associated with a particular user, or all nodes in the scenario
+    if specified.
+
+    Args:
+        scenario_name (str): The name of the scenario to be stopped.
+        username (str): The username requesting the scenario to be stopped.
+        all (bool, optional): If True, stops all nodes in the scenario regardless of the user.
+            Defaults to False.
+
+    Returns:
+        dict: Response from the controller indicating the result of the operation.
+
+    Raises:
+        HTTPException: If the request to the controller fails or returns an error.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/stop"
+    data = {"scenario_name": scenario_name, "username": username, "all": all}
+    return await controller_post(url, data)
+
+
+async def get_scenarios(user, role):
+    """
+    Retrieve all scenarios available for a specific user and role.
+
+    Parameters:
+        user (str): Username to query scenarios for.
+        role (str): Role identifier to filter scenarios.
+
+    Returns:
+        Any: Parsed JSON response listing available scenarios.
+
+    Raises:
+        HTTPException: If the underlying HTTP GET request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/{user}/{role}"
+    return await controller_get(url)
+
+
+async def scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username):
+    """
+    Update the record of a scenario’s execution status on the controller.
+
+    Parameters:
+        scenario_name (str): Unique name of the scenario.
+        start_time (str): ISO-formatted start timestamp.
+        end_time (str): ISO-formatted end timestamp.
+        scenario (Any): Scenario payload or identifier.
+        status (str): New status value (e.g., 'running', 'finished').
+        role (str): Role associated with the scenario.
+        username (str): User who ran or updated the scenario.
+
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/update"
+    data = {"scenario_name": scenario_name, "start_time": start_time, "end_time": end_time, "scenario": scenario, "status": status, "role": role, "username": username}
+    await controller_post(url, data)
+
+
+async def scenario_set_status_to_finished(scenario_name, all=False):
+    """
+    Mark one or all scenarios as finished on the controller.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to update.
+        all (bool): If True, mark all scenarios as finished; otherwise only the named one.
+
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/set_status_to_finished"
+    data = {"scenario_name": scenario_name, "all": all}
+    await controller_post(url, data)
+
+
+async def remove_scenario_by_name(scenario_name):
+    """
+    Remove a scenario by name from the controller’s records.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to remove.
+
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/remove"
+    data = {"scenario_name": scenario_name}
+    await controller_post(url, data)
+
+
+async def check_scenario_with_role(role, scenario_name):
+    """
+    Check if a specific scenario is allowed for the session's role.
+
+    Parameters:
+        session (dict): Session data containing at least a 'role' key.
+        scenario_name (str): Name of the scenario to check.
+
+    Returns:
+        bool: True if the scenario is allowed for the role, False otherwise.
+
+    Raises:
+        HTTPException: If the underlying HTTP GET request fails.
+    """
+    url = (
+                f"http://{settings.controller_host}:{settings.controller_port}/scenarios/check/{role}/{scenario_name}"
+            )
+    check_data = await controller_get(url)
+    return check_data.get("allowed", False)
+            
+            
+async def get_scenario_by_name(scenario_name):
+    """
+    Fetch the details of a scenario by name from the controller.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to retrieve.
+
+    Returns:
+        Any: Parsed JSON response with scenario details.
+
+    Raises:
+        HTTPException: If the underlying HTTP GET request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/{scenario_name}"
+    return await controller_get(url)
+
+
+async def get_running_scenarios(get_all=False):
+    """
+    Retrieve a list of currently running scenarios.
+
+    Parameters:
+        get_all (bool): If True, include all running scenarios; if False, apply default filtering.
+
+    Returns:
+        Any: Parsed JSON response listing running scenarios.
+
+    Raises:
+        HTTPException: If the underlying HTTP GET request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/running?get_all={get_all}"
+    return await controller_get(url)
+
+
+async def list_nodes_by_scenario_name(scenario_name):
+    """
+    List all nodes associated with a given scenario.
+    
+    Parameters:
+        scenario_name (str): Name of the scenario to list nodes for.
+    
+    Returns:
+        Any: Parsed JSON response containing node details.
+    
+    Raises:
+        HTTPException: If the underlying HTTP GET request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/nodes/{scenario_name}"
+    return await controller_get(url)
+
+
+async def update_node_record(uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round_number, scenario_name, run_hash, malicious):
+    """
+    Update the record of a node’s state on the controller.
+
+    Parameters:
+        uid (str): Unique node identifier.
+        idx (int): Node index within the scenario.
+        ip (str): Node IP address.
+        port (int): Node port number.
+        role (str): Node role in the scenario.
+        neighbors (Any): Neighboring node references.
+        latitude (float): Node’s latitude coordinate.
+        longitude (float): Node’s longitude coordinate.
+        timestamp (str): ISO-formatted timestamp of the update.
+        federation (str): Federation identifier.
+        round_number (int): Current round number in the scenario.
+        scenario_name (str): Name of the scenario.
+        run_hash (str): Unique hash for this scenario run.
+        malicious (bool): Flag indicating if the node is malicious.
+
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/nodes/update"
+    data = {
+        "node_uid": uid,
+        "node_idx": idx,
+        "node_ip": ip,
+        "node_port": port,
+        "node_role": role,
+        "node_neighbors": neighbors,
+        "node_latitude": latitude,
+        "node_longitude": longitude,
+        "node_timestamp": timestamp,
+        "node_federation": federation,
+        "node_round": round_number,
+        "node_scenario_name": scenario_name,
+        "node_run_hash": run_hash,
+        "malicious": malicious,
+    }
+    await controller_post(url, data)
+
+
+async def remove_nodes_by_scenario_name(scenario_name):
+    """
+    Remove all nodes associated with a scenario from the controller records.
+
+    Parameters:
+        scenario_name (str): Name of the scenario whose nodes should be removed.
+
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/nodes/remove"
+    data = {"scenario_name": scenario_name}
+    await controller_post(url, data)
+
+
+async def get_notes(scenario_name):
+    """
+    Fetch saved notes for a specific scenario.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to retrieve notes for.
+
+    Returns:
+        Any: Parsed JSON response containing the notes.
+
+    Raises:
+        HTTPException: If the underlying HTTP GET request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/notes/{scenario_name}"
+    return await controller_get(url)
+
+
+async def save_notes(scenario_name, notes):
+    """
+    Save or update notes for a specific scenario on the controller.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to attach notes to.
+        notes (Any): Content of the notes to be saved.
+
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/notes/update"
+    data = {"scenario_name": scenario_name, "notes": notes}
+    await controller_post(url, data)
+
+
+async def remove_note(scenario_name):
+    """
+    Remove notes for a specific scenario from the controller.
+    
+    Parameters:
+        scenario_name (str): Name of the scenario whose notes should be removed.
+    
+    Raises:
+        HTTPException: If the underlying HTTP POST request fails.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/notes/remove"
+    data = {"scenario_name": scenario_name}
+    await controller_post(url, data)
+
+
+async def list_users(allinfo=True):
+    """
+    Retrieves the list of users by calling the controller endpoint.
+    
+    Parameters:
+    - all_info (bool): If True, retrieves detailed information for each user.
+    
+    Returns:
+    - A list of users, as provided by the controller.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/user/list?all_info={allinfo}"
+    data = await controller_get(url)
+    user_list = data["users"]
+
+    return user_list
+
+
+async def get_user_by_scenario_name(scenario_name):
+    """
+    Fetch user data for a given scenario from the controller.
+
+    Parameters:
+    - scenario_name (str): The name of the scenario whose user data to retrieve.
+
+    Returns:
+    - dict: The user data associated with the specified scenario.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/user/{scenario_name}"
+    return await controller_get(url)
+
+
+async def add_user(user, password, role):
+    """
+    Create a new user via the controller endpoint.
+
+    Parameters:
+    - user (str): The username for the new user.
+    - password (str): The password for the new user.
+    - role (str): The role assigned to the new user.
+
+    Returns:
+    - None
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/user/add"
+    data = {"user": user, "password": password, "role": role}
+    await controller_post(url, data)
+
+
+async def update_user(user, password, role):
+    """
+    Update an existing user's credentials and role via the controller endpoint.
+
+    Parameters:
+    - user (str): The username of the user to update.
+    - password (str): The new password for the user.
+    - role (str): The new role to assign to the user.
+
+    Returns:
+    - None
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/user/update"
+    data = {"user": user, "password": password, "role": role}
+    await controller_post(url, data)
+
+
+async def delete_user(user):
+    """
+    Delete an existing user via the controller endpoint.
+
+    Parameters:
+    - user (str): The username of the user to delete.
+
+    Returns:
+    - None
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/user/delete"
+    data = {"user": user}
+    await controller_post(url, data)
+
+
+async def verify_user(user, password):
+    """
+    Verify a user's credentials against the controller.
+
+    Parameters:
+    - user (str): The username to verify.
+    - password (str): The password to verify for the user.
+
+    Returns:
+    - dict: The verification result from the controller, typically including authentication status.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/user/verify"
+    data = {"user": user, "password": password}
+    return await controller_post(url, data)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
+    """
+    Handle root path by redirecting to the platform home page.
+
+    Returns:
+        RedirectResponse: Redirects client to the '/platform' endpoint.
+    """
     return RedirectResponse(url="/platform")
 
 
 @app.get("/platform", response_class=HTMLResponse)
 @app.get("/platform/", response_class=HTMLResponse)
 async def nebula_home(request: Request):
+    """
+    Render the Nebula platform home page.
+
+    Parameters:
+        request (Request): FastAPI request object.
+
+    Returns:
+        HTMLResponse: Rendered 'index.html' template with alerts context.
+    """
     alerts = []
     return templates.TemplateResponse("index.html", {"request": request, "alerts": alerts})
 
 
 @app.get("/platform/historic")
 async def nebula_ws_historic(session: dict = Depends(get_session)):
+    """
+    Retrieve historical data for admin users.
+
+    Parameters:
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        JSONResponse: Historical data if available, otherwise an error message.
+    """
     if session.get("role") == "admin":
         historic = manager.get_historic()
         if historic:
@@ -330,6 +895,20 @@ async def nebula_ws_historic(session: dict = Depends(get_session)):
 
 @app.get("/platform/dashboard/{scenario_name}/private", response_class=HTMLResponse)
 async def nebula_dashboard_private(request: Request, scenario_name: str, session: dict = Depends(get_session)):
+    """
+    Render the private scenario dashboard for authenticated users.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        scenario_name (str): Name of the scenario to display.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        HTMLResponse: Rendered 'private.html' template with scenario context.
+
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not authenticated.
+    """
     if "user" in session:
         return templates.TemplateResponse("private.html", {"request": request, "scenario_name": scenario_name})
     else:
@@ -338,12 +917,26 @@ async def nebula_dashboard_private(request: Request, scenario_name: str, session
 
 @app.get("/platform/admin", response_class=HTMLResponse)
 async def nebula_admin(request: Request, session: dict = Depends(get_session)):
+    """
+    Render the admin interface showing a list of users for admin role.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        HTMLResponse: Rendered 'admin.html' template with user table context.
+
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not an admin.
+    """
     if session.get("role") == "admin":
-        user_list = list_users(all_info=True)
+        user_list = await list_users()
+        
         user_table = zip(
             range(1, len(user_list) + 1),
-            [user[0] for user in user_list],
-            [user[2] for user in user_list],
+            [user["user"] for user in user_list],
+            [user["role"] for user in user_list],
             strict=False,
         )
         return templates.TemplateResponse("admin.html", {"request": request, "users": user_table})
@@ -353,11 +946,22 @@ async def nebula_admin(request: Request, session: dict = Depends(get_session)):
 
 @app.post("/platform/dashboard/{scenario_name}/save_note")
 async def save_note_for_scenario(scenario_name: str, request: Request, session: dict = Depends(get_session)):
+    """
+    Save notes for a specific scenario for authenticated users.
+
+    Parameters:
+        scenario_name (str): Name of the scenario.
+        request (Request): FastAPI request object containing JSON payload.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        JSONResponse: {"status": "success"} on success, or error message on failure.
+    """
     if "user" in session:
         data = await request.json()
         notes = data["notes"]
         try:
-            save_notes(scenario_name, notes)
+            await save_notes(scenario_name, notes)
             return JSONResponse({"status": "success"})
         except Exception as e:
             logging.exception(e)
@@ -371,9 +975,18 @@ async def save_note_for_scenario(scenario_name: str, request: Request, session: 
 
 @app.get("/platform/dashboard/{scenario_name}/notes")
 async def get_notes_for_scenario(scenario_name: str):
-    notes_record = get_notes(scenario_name)
+    """
+    Retrieve saved notes for a specific scenario.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to retrieve notes for.
+
+    Returns:
+        JSONResponse: {"status": "success", "notes": <notes>} if found, otherwise an error message.
+    """
+    notes_record = await get_notes(scenario_name)
     if notes_record:
-        notes_data = dict(zip(notes_record.keys(), notes_record, strict=False))
+        notes_data = dict(notes_record)
         return JSONResponse({"status": "success", "notes": notes_data["scenario_notes"]})
     else:
         return JSONResponse({"status": "error", "message": "Notes not found for the specified scenario"})
@@ -381,6 +994,15 @@ async def get_notes_for_scenario(scenario_name: str):
 
 @app.get("/platform/dashboard/{scenario_name}/config")
 async def get_config_for_scenario(scenario_name: str):
+    """
+    Load configuration for a specific scenario from the filesystem.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to load configuration for.
+
+    Returns:
+        JSONResponse: {"status": "success", "config": <data>} if successful, or error message if file not found or invalid JSON.
+    """
     json_path = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name, "scenario.json")
 
     try:
@@ -405,34 +1027,64 @@ async def nebula_login(
     user: str = Form(...),
     password: str = Form(...),
 ):
-    user_submitted = user.upper()
-    if (user_submitted in list_users()) and verify(user_submitted, password):
-        user_info = get_user_info(user_submitted)
-        session["user"] = user_submitted
-        session["role"] = user_info[2]
-        return JSONResponse({"message": "Login successful"}, status_code=200)
-    else:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    """
+    Authenticate a user and initialize session data.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+        user (str): Username provided in form data.
+        password (str): Password provided in form data.
+
+    Returns:
+        JSONResponse: {"message": "Login successful"} with HTTP 200 status on success.
+    """
+    data = await verify_user(user, password)
+    session["user"] = data.get("user")
+    session["role"] = data.get("role")
+    return JSONResponse({"message": "Login successful"}, status_code=200)
 
 
 @app.get("/platform/logout")
 async def nebula_logout(request: Request, session: dict = Depends(get_session)):
+    """
+    Log out the authenticated user and redirect to the platform home.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        RedirectResponse: Redirects client to the '/platform' endpoint.
+    """
     session.pop("user", None)
     return RedirectResponse(url="/platform")
 
 
 @app.get("/platform/user/delete/{user}/")
 async def nebula_delete_user(user: str, request: Request, session: dict = Depends(get_session)):
+    """
+    Delete a specified user account via admin privileges, preventing deletion of 'ADMIN' or self.
+
+    Parameters:
+        user (str): Username of the account to delete.
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        RedirectResponse: Redirects client to '/platform/admin' on success.
+
+    Raises:
+        HTTPException: 403 Forbidden if attempting to delete 'ADMIN' or the current user.
+    """
     if session.get("role") == "admin":
         if user == "ADMIN":  # ADMIN account can't be deleted.
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
         if user == session["user"]:  # Current user can't delete himself.
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
-        delete_user_from_db(user)
+        await delete_user(user)
         return RedirectResponse(url="/platform/admin")
-    else:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
 @app.post("/platform/user/add")
@@ -443,15 +1095,35 @@ async def nebula_add_user(
     password: str = Form(...),
     role: str = Form(...),
 ):
-    if session.get("role") == "admin":  # only Admin should be able to add user.
-        user_list = list_users(all_info=True)
-        if user.upper() in user_list or " " in user or "'" in user or '"' in user:
-            return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
-        else:
-            add_user(user, password, role)
-            return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
-    else:
+    """
+    Add a new user to the system via form submission, available only to admin users, with basic username validation.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+        user (str): Username provided in form data.
+        password (str): Password provided in form data.
+        role (str): Role provided in form data.
+
+    Returns:
+        RedirectResponse: Redirects client to '/platform/admin' with status 303 on success.
+
+    Raises:
+        HTTPException: 401 Unauthorized if the current user is not an admin.
+    """
+    # Only admin users can add new users.
+    if session.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    
+    # Basic validation on the user value before calling the controller.
+    user_list = await list_users()
+    
+    if user.upper() in user_list or " " in user or "'" in user or '"' in user:
+        return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
+    
+    # Call the controller's endpoint to add the user. 
+    await add_user(user, password, role)
+    return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @app.post("/platform/user/update")
@@ -462,18 +1134,41 @@ async def nebula_update_user(
     password: str = Form(...),
     role: str = Form(...),
 ):
+    """
+    Update an existing user's credentials and role via form submission, accessible only to admin users.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+        user (str): Username provided in form data.
+        password (str): New password provided in form data.
+        role (str): New role provided in form data.
+
+    Returns:
+        RedirectResponse: Redirects client to '/platform/admin' on success, or to '/platform' if unauthorized.
+    """
     if "user" not in session or session["role"] != "admin":
         return RedirectResponse(url="/platform", status_code=status.HTTP_302_FOUND)
-    update_user(user, password, role)
+      
+    await update_user(user, password, role)
     return RedirectResponse(url="/platform/admin", status_code=status.HTTP_302_FOUND)
 
 
 @app.get("/platform/api/dashboard/runningscenario", response_class=JSONResponse)
 async def nebula_dashboard_runningscenario(session: dict = Depends(get_session)):
+    """
+    Get information about currently running scenario(s) for the authenticated user or admin.
+
+    Parameters:
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        JSONResponse: JSON object containing running scenario details and status, or {"scenario_status": "not running"}.
+    """
     if session.get("role") == "admin":
-        scenario_running = get_running_scenario()
+        scenario_running = await get_running_scenarios()
     elif "user" in session:
-        scenario_running = get_running_scenario(session["user"])
+        scenario_running = await get_running_scenarios(session["user"])
     if scenario_running:
         scenario_running_as_dict = dict(scenario_running)
         scenario_running_as_dict["scenario_status"] = "running"
@@ -483,6 +1178,13 @@ async def nebula_dashboard_runningscenario(session: dict = Depends(get_session))
 
 
 async def get_host_resources():
+    """
+    Retrieve host resource usage data from the controller endpoint.
+
+    Returns:
+        dict: Parsed JSON resource metrics on success, or {'error': <message>} on parse failure.
+        None: If the HTTP response status is not 200.
+    """
     url = f"http://{settings.controller_host}:{settings.controller_port}/resources"
     async with aiohttp.ClientSession() as session, session.get(url) as response:
         if response.status == 200:
@@ -494,31 +1196,13 @@ async def get_host_resources():
             return None
 
 
-async def get_available_gpus():
-    url = f"http://{settings.controller_host}:{settings.controller_port}/available_gpus"
-    async with aiohttp.ClientSession() as session, session.get(url) as response:
-        if response.status == 200:
-            try:
-                return await response.json()
-            except Exception as e:
-                return {"error": f"Failed to parse JSON: {e}"}
-        else:
-            return None
-
-
-async def get_least_memory_gpu():
-    url = f"http://{settings.controller_host}:{settings.controller_port}/least_memory_gpu"
-    async with aiohttp.ClientSession() as session, session.get(url) as response:
-        if response.status == 200:
-            try:
-                return await response.json()
-            except Exception as e:
-                return {"error": f"Failed to parse JSON: {e}"}
-        else:
-            return None
-
-
 async def check_enough_resources():
+    """
+    Check if the host's memory usage is below the configured threshold.
+
+    Returns:
+        bool: True if sufficient resources are available (or threshold is 0.0), False otherwise.
+    """
     resources = await get_host_resources()
 
     mem_percent = resources.get("memory_percent")
@@ -533,6 +1217,12 @@ async def check_enough_resources():
 
 
 async def wait_for_enough_ram():
+    """
+    Asynchronously wait until the host's memory usage falls below 80% of its initial measurement.
+
+    Returns:
+        None
+    """
     resources = await get_host_resources()
     initial_ram = resources.get("memory_percent")
 
@@ -549,10 +1239,16 @@ async def wait_for_enough_ram():
 
 
 async def monitor_resources():
+    """
+    Continuously monitor host resources and, if usage exceeds the threshold, stop the last running scenario after broadcasting a message, then wait for resources to recover.
+
+    Returns:
+        None
+    """
     while True:
         enough_resources = await check_enough_resources()
         if not enough_resources:
-            running_scenarios = get_running_scenario(get_all=True)
+            running_scenarios = await get_running_scenarios(get_all=True)
             if running_scenarios:
                 last_running_scenario = running_scenarios.pop()
                 running_scenario_as_dict = dict(last_running_scenario)
@@ -567,7 +1263,7 @@ async def monitor_resources():
                     await manager.broadcast(json.dumps(scenario_exceed_resources))
                 except Exception:
                     pass
-                stop_scenario(scenario_name, user)
+                await stop_scenario_by_name(scenario_name, user)
                 user_data = user_data_store[user]
                 user_data.scenarios_list_length -= 1
                 await wait_for_enough_ram()
@@ -585,14 +1281,24 @@ except Exception as e:
 @app.get("/platform/api/dashboard", response_class=JSONResponse)
 @app.get("/platform/dashboard", response_class=HTMLResponse)
 async def nebula_dashboard(request: Request, session: dict = Depends(get_session)):
+    """
+    Render or return the dashboard view or API data for the current user.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        TemplateResponse: Rendered 'dashboard.html' for HTML endpoint.
+        JSONResponse: List of scenario dictionaries or status message for API endpoint.
+
+    Raises:
+        HTTPException: 401 Unauthorized for invalid path access.
+    """
     if "user" in session:
-        scenarios = get_all_scenarios_and_check_completed(
-            username=session["user"], role=session["role"]
-        )  # Get all scenarios after checking if they are completed
-        if session.get("role") == "admin":
-            scenario_running = get_running_scenario()
-        else:
-            scenario_running = get_running_scenario(username=session["user"])
+        response = await get_scenarios(session["user"], session["role"])
+        scenarios = response.get("scenarios")
+        scenario_running = response.get("scenario_running")
 
         if session["user"] not in user_data_store:
             user_data_store[session["user"]] = UserData()
@@ -604,7 +1310,7 @@ async def nebula_dashboard(request: Request, session: dict = Depends(get_session
 
     bool_completed = False
     if scenario_running:
-        bool_completed = scenario_running[6] == "completed"
+        bool_completed = scenario_running["status"] == "completed"
     if scenarios:
         if request.url.path == "/platform/dashboard":
             return templates.TemplateResponse(
@@ -644,32 +1350,47 @@ async def nebula_dashboard(request: Request, session: dict = Depends(get_session
 @app.get("/platform/api/dashboard/{scenario_name}/monitor", response_class=JSONResponse)
 @app.get("/platform/dashboard/{scenario_name}/monitor", response_class=HTMLResponse)
 async def nebula_dashboard_monitor(scenario_name: str, request: Request, session: dict = Depends(get_session)):
-    scenario = get_scenario_by_name(scenario_name)
+    """
+    Display or return monitoring information for a specific scenario, including node statuses.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to monitor.
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        TemplateResponse: Rendered 'monitor.html' for HTML endpoint.
+        JSONResponse: JSON object containing scenario status, node list, and scenario metadata.
+
+    Raises:
+        HTTPException: 401 Unauthorized for invalid path access.
+    """
+    scenario = await get_scenario_by_name(scenario_name)
     if scenario:
-        nodes_list = list_nodes_by_scenario_name(scenario_name)
+        nodes_list = await list_nodes_by_scenario_name(scenario_name)
         if nodes_list:
             formatted_nodes = []
             for node in nodes_list:
                 # Calculate initial status based on timestamp
-                timestamp = datetime.datetime.strptime(node[8], "%Y-%m-%d %H:%M:%S.%f")
+                timestamp = datetime.datetime.strptime(node["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
                 is_online = (datetime.datetime.now() - timestamp) <= datetime.timedelta(seconds=25)
-                
+
                 formatted_nodes.append({
-                    "uid": node[0],
-                    "idx": node[1],
-                    "ip": node[2],
-                    "port": node[3],
-                    "role": node[4],
-                    "neighbors": node[5],
-                    "latitude": node[6],
-                    "longitude": node[7],
-                    "timestamp": node[8],
-                    "federation": node[9],
-                    "round": str(node[10]),
-                    "scenario_name": node[11],
-                    "hash": node[12],
-                    "malicious": node[13],
-                    "status": is_online
+                    "uid": node["uid"],
+                    "idx": node["idx"],
+                    "ip": node["ip"],
+                    "port": node["port"],
+                    "role": node["role"],
+                    "neighbors": node["neighbors"],
+                    "latitude": node["latitude"],
+                    "longitude": node["longitude"],
+                    "timestamp": node["timestamp"],
+                    "federation": node["federation"],
+                    "round": str(node["round"]),
+                    "scenario_name": node["scenario"],
+                    "hash": node["hash"],
+                    "malicious": node["malicious"],
+                    "status": is_online,
                 })
 
             # For HTML response, return the template with basic data
@@ -687,11 +1408,11 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
             # For API response, return the formatted node data
             elif request.url.path == f"/platform/api/dashboard/{scenario_name}/monitor":
                 return JSONResponse({
-                    "scenario_status": scenario[5],
+                    "scenario_status": scenario["status"],
                     "nodes": formatted_nodes,
-                    "scenario_name": scenario[0],
-                    "scenario_title": scenario[3],
-                    "scenario_description": scenario[4],
+                    "scenario_name": scenario["name"],
+                    "title": scenario["title"],
+                    "description": scenario["description"],
                 })
             else:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -710,11 +1431,11 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                 )
             elif request.url.path == f"/platform/api/dashboard/{scenario_name}/monitor":
                 return JSONResponse({
-                    "scenario_status": scenario[5],
+                    "scenario_status": scenario["status"],
                     "nodes": [],
-                    "scenario_name": scenario[0],
-                    "scenario_title": scenario[3],
-                    "scenario_description": scenario[4],
+                    "scenario_name": scenario["name"],
+                    "title": scenario["title"],
+                    "description": scenario["description"],
                 })
             else:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -737,55 +1458,24 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
-def update_topology(scenario_name, nodes_list, nodes_config):
-    import numpy as np
-
-    nodes = []
-    for node in nodes_list:
-        nodes.append(node[2] + ":" + str(node[3]))
-    matrix = np.zeros((len(nodes), len(nodes)))
-    for node in nodes_list:
-        for neighbour in node[5].split(" "):
-            if neighbour != "" and neighbour in nodes:
-                matrix[
-                    nodes.index(node[2] + ":" + str(node[3])),
-                    nodes.index(neighbour),
-                ] = 1
-    from nebula.addons.topologymanager import TopologyManager
-
-    tm = TopologyManager(n_nodes=len(nodes_list), topology=matrix, scenario_name=scenario_name)
-    tm.update_nodes(nodes_config)
-    try:
-        tm.draw_graph(path=os.path.join(settings.config_dir, scenario_name, "topology.png"))
-    except FileNotFoundError:
-        logging.exception("Topology.png not found in config dir")
-
-
 @app.post("/platform/dashboard/{scenario_name}/node/update")
 async def nebula_update_node(scenario_name: str, request: Request):
+    """
+    Process a node update request for a scenario and broadcast the updated node information.
+
+    Parameters:
+        scenario_name (str): Name of the scenario.
+        request (Request): FastAPI request object containing a JSON payload with node update data.
+
+    Returns:
+        JSONResponse: {"message": "Node updated", "status": "success"} on success.
+
+    Raises:
+        HTTPException: 400 Bad Request if the content type is not application/json.
+    """
     if request.method == "POST":
         if request.headers.get("content-type") == "application/json":
             config = await request.json()
-            timestamp = datetime.datetime.now()
-            # Update the node in database
-            await update_node_record(
-                str(config["device_args"]["uid"]),
-                str(config["device_args"]["idx"]),
-                str(config["network_args"]["ip"]),
-                str(config["network_args"]["port"]),
-                str(config["device_args"]["role"]),
-                str(config["network_args"]["neighbors"]),
-                str(config["mobility_args"]["latitude"]),
-                str(config["mobility_args"]["longitude"]),
-                str(timestamp),
-                str(config["scenario_args"]["federation"]),
-                str(config["federation_args"]["round"]),
-                str(config["scenario_args"]["name"]),
-                str(config["tracking_args"]["run_hash"]),
-                str(config["device_args"]["malicious"]),
-            )
-
-            neighbors_distance = config["mobility_args"]["neighbors_distance"]
 
             node_update = {
                 "type": "node_update",
@@ -799,12 +1489,12 @@ async def nebula_update_node(scenario_name: str, request: Request):
                 "neighbors": config["network_args"]["neighbors"],
                 "latitude": config["mobility_args"]["latitude"],
                 "longitude": config["mobility_args"]["longitude"],
-                "timestamp": str(timestamp),
+                "timestamp": config["timestamp"],
                 "federation": config["scenario_args"]["federation"],
                 "round": config["federation_args"]["round"],
                 "name": config["scenario_args"]["name"],
                 "status": True,
-                "neighbors_distance": neighbors_distance,
+                "neighbors_distance": config["mobility_args"]["neighbors_distance"],
                 "malicious": str(config["device_args"]["malicious"])
             }
 
@@ -818,147 +1508,72 @@ async def nebula_update_node(scenario_name: str, request: Request):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
 
-@app.post("/platform/dashboard/{scenario_name}/node/register")
-async def nebula_register_node(scenario_name: str, request: Request, session: dict = Depends(get_session)):
-    user_data = user_data_store[session["user"]]
+# Recieve a stopped node
+@app.post("/platform/dashboard/{scenario_name}/node/done")
+async def node_stopped(scenario_name: str, request: Request):
+    """
+    Handle notification that a node has finished its task; mark the node as finished,
+    stop the scenario if all nodes are done, and signal scenario completion.
+
+    Parameters:
+        scenario_name (str): Name of the scenario.
+        request (Request): FastAPI request object containing a JSON payload with the finished node index.
+
+    Returns:
+        JSONResponse: Message indicating node completion status or scenario completion.
+
+    Raises:
+        HTTPException: 400 Bad Request if the content type is not application/json.
+    """
+    user = await get_user_by_scenario_name(scenario_name)
+    user_data = user_data_store[user]
 
     if request.headers.get("content-type") == "application/json":
         data = await request.json()
-        node = data["node"]
-        logging.info(f"Registering node {node} for scenario {scenario_name}")
-        async with user_data.nodes_registration[scenario_name]["condition"]:
-            user_data.nodes_registration[scenario_name]["nodes"].add(node)
-            logging.info(f"Node {node} registered")
-            if (
-                len(user_data.nodes_registration[scenario_name]["nodes"])
-                == user_data.nodes_registration[scenario_name]["n_nodes"]
-            ):
-                user_data.nodes_registration[scenario_name]["condition"].notify_all()
-                logging.info("All nodes registered")
+        user_data.nodes_finished.append(data["idx"])
+        nodes_list = await list_nodes_by_scenario_name(scenario_name)
+        finished = True
+        # Check if all the nodes of the scenario have finished the experiment
+        for node in nodes_list:
+            if str(node["idx"]) not in map(str, user_data.nodes_finished):
+                finished = False
 
-        return JSONResponse({"message": "Node registered", "status": "success"}, status_code=200)
+        if finished:
+            await stop_scenario_by_name(scenario_name, user)
+            user_data.nodes_finished.clear()
+            user_data.finish_scenario_event.set()
+            return JSONResponse(
+                status_code=200,
+                content={"message": "All nodes finished, scenario marked as completed."},
+            )
+        else:
+            return JSONResponse(
+                status_code=200,
+                content={"message": "Node marked as finished, waiting for other nodes."},
+            )
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
 
 
-@app.get("/platform/dashboard/scenarios/node/list")
-async def nebula_list_all_scenarios(session: dict = Depends(get_session)):
-    user_data = user_data_store[session["user"]]
-
-    if "user" not in session or session["role"] not in ["admin", "user"]:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-
-    scenarios = {}
-    for scenario_name, scenario_info in user_data.nodes_registration.items():
-        scenarios[scenario_name] = list(scenario_info["nodes"])
-
-    if not scenarios:
-        return JSONResponse({"message": "No scenarios found", "status": "error"}, status_code=404)
-
-    return JSONResponse({"scenarios": scenarios, "status": "success"}, status_code=200)
-
-
-@app.get("/platform/dashboard/scenarios/node/erase")
-async def nebula_erase_all_nodes(session: dict = Depends(get_session)):
-    user_data = user_data_store[session["user"]]
-
-    if "user" not in session or session["role"] not in ["admin", "user"]:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-
-    user_data.nodes_registration.clear()
-    return JSONResponse({"message": "All nodes erased", "status": "success"}, status_code=200)
-
-
-@app.get("/platform/dashboard/{scenario_name}/node/wait")
-async def nebula_wait_nodes(scenario_name: str, session: dict = Depends(get_session)):
-    user_data = user_data_store[session["user"]]
-
-    if scenario_name not in user_data.nodes_registration:
-        return JSONResponse({"message": "Scenario not found", "status": "error"}, status_code=404)
-
-    async with user_data.nodes_registration[scenario_name]["condition"]:
-        while (
-            len(user_data.nodes_registration[scenario_name]["nodes"])
-            < user_data.nodes_registration[scenario_name]["n_nodes"]
-        ):
-            await user_data.nodes_registration[scenario_name]["condition"].wait()
-        return JSONResponse({"message": "All nodes registered", "status": "success"}, status_code=200)
-
-
-@app.get("/platform/dashboard/{scenario_name}/node/{id}/infolog")
-async def nebula_monitor_log(scenario_name: str, id: str):
-    logs = FileUtils.check_path(settings.log_dir, os.path.join(scenario_name, f"participant_{id}.log"))
-    if os.path.exists(logs):
-        return FileResponse(logs, media_type="text/plain", filename=f"participant_{id}.log")
-    else:
-        raise HTTPException(status_code=404, detail="Log file not found")
-
-
-@app.get(
-    "/platform/dashboard/{scenario_name}/node/{id}/infolog/{number}",
-    response_class=PlainTextResponse,
-)
-async def nebula_monitor_log_x(scenario_name: str, id: str, number: int):
-    logs = FileUtils.check_path(settings.log_dir, os.path.join(scenario_name, f"participant_{id}.log"))
-    if os.path.exists(logs):
-        with open(logs) as f:
-            lines = f.readlines()[-number:]
-            lines = "".join(lines)
-            converter = Ansi2HTMLConverter()
-            html_text = converter.convert(lines, full=False)
-            return Response(content=html_text, media_type="text/plain")
-    else:
-        return Response(content="No logs available", media_type="text/plain")
-
-
-@app.get("/platform/dashboard/{scenario_name}/node/{id}/debuglog")
-async def nebula_monitor_log_debug(scenario_name: str, id: str):
-    logs = FileUtils.check_path(settings.log_dir, os.path.join(scenario_name, f"participant_{id}_debug.log"))
-    if os.path.exists(logs):
-        return FileResponse(logs, media_type="text/plain", filename=f"participant_{id}_debug.log")
-    else:
-        raise HTTPException(status_code=404, detail="Log file not found")
-
-
-@app.get("/platform/dashboard/{scenario_name}/node/{id}/errorlog")
-async def nebula_monitor_log_error(scenario_name: str, id: str):
-    logs = FileUtils.check_path(settings.log_dir, os.path.join(scenario_name, f"participant_{id}_error.log"))
-    if os.path.exists(logs):
-        return FileResponse(logs, media_type="text/plain", filename=f"participant_{id}_error.log")
-    else:
-        raise HTTPException(status_code=404, detail="Log file not found")
-
-
 @app.get("/platform/dashboard/{scenario_name}/topology/image/")
 async def nebula_monitor_image(scenario_name: str):
+    """
+    Serve the topology image for a given scenario if available.
+
+    Parameters:
+        scenario_name (str): Name of the scenario.
+
+    Returns:
+        FileResponse: The topology.png image for the scenario.
+
+    Raises:
+        HTTPException: 404 Not Found if the topology image does not exist.
+    """
     topology_image = FileUtils.check_path(settings.config_dir, os.path.join(scenario_name, "topology.png"))
     if os.path.exists(topology_image):
         return FileResponse(topology_image, media_type="image/png", filename=f"{scenario_name}_topology.png")
     else:
         raise HTTPException(status_code=404, detail="Topology image not found")
-
-
-def stop_scenario(scenario_name, user):
-    from nebula.scenarios import ScenarioManagement
-
-    ScenarioManagement.stop_participants(scenario_name)
-    DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{user}-participant")
-    DockerUtils.remove_docker_network(
-        f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(user).lower()}-nebula-net-scenario"
-    )
-    ScenarioManagement.stop_blockchain()
-    scenario_set_status_to_finished(scenario_name)
-    # Generate statistics for the scenario
-    path = FileUtils.check_path(settings.log_dir, scenario_name)
-    ScenarioManagement.generate_statistics(path)
-
-
-def stop_all_scenarios():
-    from nebula.scenarios import ScenarioManagement
-
-    ScenarioManagement.stop_participants()
-    ScenarioManagement.stop_blockchain()
-    scenario_set_all_status_to_finished()
 
 
 @app.get("/platform/dashboard/{scenario_name}/stop/{stop_all}")
@@ -968,31 +1583,53 @@ async def nebula_stop_scenario(
     request: Request,
     session: dict = Depends(get_session),
 ):
+    """
+    Stop one or all scenarios for the current user and redirect to the dashboard.
+    
+    Parameters:
+        scenario_name (str): Name of the scenario to stop.
+        stop_all (bool): If True, stop all scenarios; otherwise stop only the specified one.
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+    
+    Returns:
+        RedirectResponse: Redirects to the '/platform/dashboard' endpoint.
+    
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not authenticated or lacks permission.
+    """
     if "user" in session:
-        user = get_user_by_scenario_name(scenario_name)
+        user = await get_user_by_scenario_name(scenario_name)
         user_data = user_data_store[user]
 
         if session["role"] == "demo":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-        # elif session["role"] == "user":
-        #     if not check_scenario_with_role(session["role"], scenario_name):
-        #         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         if stop_all:
             user_data.stop_all_scenarios_event.set()
             user_data.scenarios_list_length = 0
             user_data.scenarios_finished = 0
-            stop_scenario(scenario_name, user)
+            await stop_scenario_by_name(scenario_name, user)
         else:
             user_data.finish_scenario_event.set()
             user_data.scenarios_list_length -= 1
-            stop_scenario(scenario_name, user)
+            await stop_scenario_by_name(scenario_name, user)
         return RedirectResponse(url="/platform/dashboard")
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
-def remove_scenario(scenario_name=None, user=None):
-    from nebula.scenarios import ScenarioManagement
+async def remove_scenario(scenario_name=None, user=None):
+    """
+    Remove all data and resources associated with a scenario, including nodes, notes, and files.
+
+    Parameters:
+        scenario_name (str, optional): Name of the scenario to remove.
+        user (str, optional): Username associated with the scenario.
+
+    Returns:
+        None
+    """
+    from nebula.controller.scenarios import ScenarioManagement
 
     user_data = user_data_store[user]
 
@@ -1000,23 +1637,37 @@ def remove_scenario(scenario_name=None, user=None):
         logging.info("Advanced analytics enabled")
     # Remove registered nodes and conditions
     user_data.nodes_registration.pop(scenario_name, None)
-    remove_nodes_by_scenario_name(scenario_name)
-    remove_scenario_by_name(scenario_name)
-    remove_note(scenario_name)
-    ScenarioManagement.remove_files_by_scenario(scenario_name)
+    await remove_nodes_by_scenario_name(scenario_name)
+    await remove_scenario_by_name(scenario_name)
+    await remove_note(scenario_name)
 
 
 @app.get("/platform/dashboard/{scenario_name}/relaunch")
 async def nebula_relaunch_scenario(
     scenario_name: str, background_tasks: BackgroundTasks, session: dict = Depends(get_session)
 ):
+    """
+    Relaunch a previously run scenario by loading its configuration, enqueuing it,
+    and starting execution in the background.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to relaunch.
+        background_tasks (BackgroundTasks): FastAPI BackgroundTasks instance for deferred execution.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        RedirectResponse: Redirects to the '/platform/dashboard' endpoint.
+
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not authenticated or lacks permission.
+    """
     user_data = user_data_store[session["user"]]
 
     if "user" in session:
         if session["role"] == "demo":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         elif session["role"] == "user":
-            if not check_scenario_with_role(session["role"], scenario_name):
+            if not await check_scenario_with_role(session["role"], scenario_name):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
         scenario_path = FileUtils.check_path(settings.config_dir, os.path.join(scenario_name, "scenario.json"))
@@ -1040,13 +1691,26 @@ async def nebula_relaunch_scenario(
 
 @app.get("/platform/dashboard/{scenario_name}/remove")
 async def nebula_remove_scenario(scenario_name: str, session: dict = Depends(get_session)):
+    """
+    Remove a scenario for the authenticated user and redirect back to the dashboard.
+
+    Parameters:
+        scenario_name (str): Name of the scenario to remove.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        RedirectResponse: Redirects to the '/platform/dashboard' endpoint.
+
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not authenticated or lacks permission.
+    """
     if "user" in session:
         if session["role"] == "demo":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         elif session["role"] == "user":
-            if not check_scenario_with_role(session["role"], scenario_name):
+            if not await check_scenario_with_role(session["role"], scenario_name):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-        remove_scenario(scenario_name, session["user"])
+        await remove_scenario(scenario_name, session["user"])
         return RedirectResponse(url="/platform/dashboard")
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -1059,82 +1723,127 @@ else:
 
     # TENSORBOARD START
 
-    @app.get("/platform/dashboard/statistics/", response_class=HTMLResponse)
-    @app.get("/platform/dashboard/{scenario_name}/statistics/", response_class=HTMLResponse)
-    async def nebula_dashboard_statistics(request: Request, scenario_name: str = None):
-        statistics_url = "/platform/statistics/"
-        if scenario_name is not None:
-            statistics_url += f"?smoothing=0&runFilter={scenario_name}"
+@app.get("/platform/dashboard/statistics/", response_class=HTMLResponse)
+@app.get("/platform/dashboard/{scenario_name}/statistics/", response_class=HTMLResponse)
+async def nebula_dashboard_statistics(request: Request, scenario_name: str = None):
+    """
+    Render the TensorBoard statistics page for all experiments or filter by scenario.
 
-        return templates.TemplateResponse("statistics.html", {"request": request, "statistics_url": statistics_url})
+    Parameters:
+        request (Request): FastAPI request object.
+        scenario_name (str, optional): Scenario name to filter statistics by; defaults to None.
 
-    @app.api_route("/platform/statistics/", methods=["GET", "POST"])
-    @app.api_route("/platform/statistics/{path:path}", methods=["GET", "POST"])
-    async def statistics_proxy(request: Request, path: str = None, session: dict = Depends(get_session)):
-        if "user" in session:
-            query_string = urlencode(request.query_params)
+    Returns:
+        TemplateResponse: Rendered 'statistics.html' with the appropriate URL parameter for TensorBoard.
+    """
+    statistics_url = "/platform/statistics/"
+    if scenario_name is not None:
+        statistics_url += f"?smoothing=0&runFilter={scenario_name}"
 
-            url = "http://localhost:8080"
-            tensorboard_url = f"{url}{('/' + path) if path else ''}" + ("?" + query_string if query_string else "")
+    return templates.TemplateResponse("statistics.html", {"request": request, "statistics_url": statistics_url})
 
-            headers = {key: value for key, value in request.headers.items() if key.lower() != "host"}
+@app.api_route("/platform/statistics/", methods=["GET", "POST"])
+@app.api_route("/platform/statistics/{path:path}", methods=["GET", "POST"])
+async def statistics_proxy(request: Request, path: str = None, session: dict = Depends(get_session)):
+    """
+    Proxy requests to the TensorBoard backend to fetch experiment statistics,
+    rewriting URLs and filtering headers as needed.
 
-            response = requests.request(
-                method=request.method,
-                url=tensorboard_url,
-                headers=headers,
-                data=await request.body(),
-                cookies=request.cookies,
-                allow_redirects=False,
+    Parameters:
+        request (Request): FastAPI request object with original headers, cookies, and body.
+        path (str, optional): Specific TensorBoard sub-path to proxy; defaults to None.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        Response: The proxied TensorBoard response with adjusted headers and content.
+
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not authenticated.
+    """
+    if "user" in session:
+        query_string = urlencode(request.query_params)
+
+        url = "http://localhost:8080"
+        tensorboard_url = f"{url}{('/' + path) if path else ''}" + ("?" + query_string if query_string else "")
+
+        headers = {key: value for key, value in request.headers.items() if key.lower() != "host"}
+
+        response = requests.request(
+            method=request.method,
+            url=tensorboard_url,
+            headers=headers,
+            data=await request.body(),
+            cookies=request.cookies,
+            allow_redirects=False,
+        )
+
+        excluded_headers = [
+            "content-encoding",
+            "content-length",
+            "transfer-encoding",
+            "connection",
+        ]
+
+        filtered_headers = [
+            (name, value) for name, value in response.raw.headers.items() if name.lower() not in excluded_headers
+        ]
+
+        if "text/html" in response.headers["Content-Type"]:
+            content = response.text
+            content = content.replace("url(/", "url(/platform/statistics/")
+            content = content.replace('src="/', 'src="/platform/statistics/')
+            content = content.replace('href="/', 'href="/platform/statistics/')
+            response = Response(content, response.status_code, dict(filtered_headers))
+            return response
+
+        if path and path.endswith(".js"):
+            content = response.text
+            content = content.replace(
+                "experiment/${s}/data/plugin",
+                "nebula/statistics/experiment/${s}/data/plugin",
             )
+            response = Response(content, response.status_code, dict(filtered_headers))
+            return response
 
-            excluded_headers = [
-                "content-encoding",
-                "content-length",
-                "transfer-encoding",
-                "connection",
-            ]
+        return Response(response.content, response.status_code, dict(filtered_headers))
 
-            filtered_headers = [
-                (name, value) for name, value in response.raw.headers.items() if name.lower() not in excluded_headers
-            ]
+    else:
+        raise HTTPException(status_code=401)
 
-            if "text/html" in response.headers["Content-Type"]:
-                content = response.text
-                content = content.replace("url(/", "url(/platform/statistics/")
-                content = content.replace('src="/', 'src="/platform/statistics/')
-                content = content.replace('href="/', 'href="/platform/statistics/')
-                response = Response(content, response.status_code, dict(filtered_headers))
-                return response
+@app.get("/experiment/{path:path}")
+@app.post("/experiment/{path:path}")
+async def metrics_proxy(path: str = None, request: Request = None):
+    """
+    Proxy experiment metric requests to the platform statistics endpoint.
 
-            if path and path.endswith(".js"):
-                content = response.text
-                content = content.replace(
-                    "experiment/${s}/data/plugin",
-                    "nebula/statistics/experiment/${s}/data/plugin",
-                )
-                response = Response(content, response.status_code, dict(filtered_headers))
-                return response
+    Parameters:
+        path (str): The dynamic path segment to append to the statistics URL.
+        request (Request): FastAPI request object containing query parameters.
 
-            return Response(response.content, response.status_code, dict(filtered_headers))
+    Returns:
+        RedirectResponse: Redirects the client to the corresponding platform statistics experiment URL.
+    """
+    query_params = request.query_params
+    new_url = "/platform/statistics/experiment/" + path
+    if query_params:
+        new_url += "?" + urlencode(query_params)
 
-        else:
-            raise HTTPException(status_code=401)
-
-    @app.get("/experiment/{path:path}")
-    @app.post("/experiment/{path:path}")
-    async def metrics_proxy(path: str = None, request: Request = None):
-        query_params = request.query_params
-        new_url = "/platform/statistics/experiment/" + path
-        if query_params:
-            new_url += "?" + urlencode(query_params)
-
-        return RedirectResponse(url=new_url)
+    return RedirectResponse(url=new_url)
 
     # TENSORBOARD END
 
 
 def zipdir(path, ziph):
+    """
+    Recursively add all files from a directory into a zip archive.
+
+    Parameters:
+        path (str): The root directory whose contents will be zipped.
+        ziph (zipfile.ZipFile): An open ZipFile handle to which files will be written.
+
+    Returns:
+        None
+    """
     # ziph is zipfile handle
     for root, _, files in os.walk(path):
         for file in files:
@@ -1148,6 +1857,21 @@ def zipdir(path, ziph):
 async def nebula_dashboard_download_logs_metrics(
     scenario_name: str, request: Request, session: dict = Depends(get_session)
 ):
+    """
+    Package scenario logs and configuration into a zip archive and stream it to the client.
+
+    Parameters:
+        scenario_name (str): Name of the scenario whose files are to be downloaded.
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        StreamingResponse: A zip file containing the scenario’s logs and configuration.
+
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not logged in.
+        HTTPException: 404 Not Found if the log or config folder does not exist.
+    """
     if "user" in session:
         log_folder = FileUtils.check_path(settings.log_dir, scenario_name)
         config_folder = FileUtils.check_path(settings.config_dir, scenario_name)
@@ -1173,7 +1897,17 @@ async def nebula_dashboard_download_logs_metrics(
 
 @app.get("/platform/dashboard/deployment/", response_class=HTMLResponse)
 async def nebula_dashboard_deployment(request: Request, session: dict = Depends(get_session)):
-    scenario_running = get_running_scenario()
+    """
+    Render the deployment dashboard with running scenarios and GPU availability.
+
+    Parameters:
+        request (Request): FastAPI request object.
+        session (dict): Session data extracted via dependency.
+
+    Returns:
+        HTMLResponse: Rendered 'deployment.html' template with scenario and GPU context.
+    """
+    scenario_running = await get_running_scenarios()
     return templates.TemplateResponse(
         "deployment.html",
         {
@@ -1185,115 +1919,17 @@ async def nebula_dashboard_deployment(request: Request, session: dict = Depends(
     )
 
 
-def attack_node_assign(
-    nodes,
-    federation,
-    attack,
-    poisoned_node_percent,
-    poisoned_sample_percent,
-    poisoned_noise_percent,
-):
-    """Identify which nodes will be attacked"""
-    import math
-    import random
-
-    attack_matrix = []
-    n_nodes = len(nodes)
-    if n_nodes == 0:
-        return attack_matrix
-
-    nodes_index = []
-    # Get the nodes index
-    if federation == "DFL":
-        nodes_index = list(nodes.keys())
-    else:
-        for node in nodes:
-            if nodes[node]["role"] != "server":
-                nodes_index.append(node)
-
-    n_nodes = len(nodes_index)
-    # Number of attacked nodes, round up
-    num_attacked = int(math.ceil(poisoned_node_percent / 100 * n_nodes))
-    if num_attacked > n_nodes:
-        num_attacked = n_nodes
-
-    # Get the index of attacked nodes
-    attacked_nodes = random.sample(nodes_index, num_attacked)
-
-    # Assign the role of each node
-    for node in nodes:
-        node_att = "No Attack"
-        attack_sample_persent = 0
-        poisoned_ratio = 0
-        if (node in attacked_nodes) or (nodes[node]["malicious"]):
-            node_att = attack
-            attack_sample_persent = poisoned_sample_percent / 100
-            poisoned_ratio = poisoned_noise_percent / 100
-        nodes[node]["attacks"] = node_att
-        nodes[node]["poisoned_sample_percent"] = attack_sample_persent
-        nodes[node]["poisoned_ratio"] = poisoned_ratio
-        attack_matrix.append([node, node_att, attack_sample_persent, poisoned_ratio])
-    return nodes, attack_matrix
-
-
-import math
-
-
-def mobility_assign(nodes, mobile_participants_percent):
-    """Assign mobility to nodes"""
-    import random
-
-    # Number of mobile nodes, round down
-    num_mobile = math.floor(mobile_participants_percent / 100 * len(nodes))
-    if num_mobile > len(nodes):
-        num_mobile = len(nodes)
-
-    # Get the index of mobile nodes
-    mobile_nodes = random.sample(list(nodes.keys()), num_mobile)
-
-    # Assign the role of each node
-    for node in nodes:
-        node_mob = False
-        if node in mobile_nodes:
-            node_mob = True
-        nodes[node]["mobility"] = node_mob
-    return nodes
-
-
-# Recieve a stopped node
-@app.post("/platform/dashboard/{scenario_name}/node/done")
-async def node_stopped(scenario_name: str, request: Request):
-    user = get_user_by_scenario_name(scenario_name)
-    user_data = user_data_store[user]
-
-    if request.headers.get("content-type") == "application/json":
-        data = await request.json()
-        user_data.nodes_finished.append(data["idx"])
-        nodes_list = list_nodes_by_scenario_name(scenario_name)
-        finished = True
-        # Check if all the nodes of the scenario have finished the experiment
-        for node in nodes_list:
-            if str(node[1]) not in map(str, user_data.nodes_finished):
-                finished = False
-
-        if finished:
-            stop_scenario(scenario_name, user)
-            user_data.nodes_finished.clear()
-            user_data.finish_scenario_event.set()
-            return JSONResponse(
-                status_code=200,
-                content={"message": "All nodes finished, scenario marked as completed."},
-            )
-        else:
-            return JSONResponse(
-                status_code=200,
-                content={"message": "Node marked as finished, waiting for other nodes."},
-            )
-    else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
-
-
 async def assign_available_gpu(scenario_data, role):
+    """
+    Assign available GPU(s) or default to CPU for a scenario based on system resources and user role.
+
+    Parameters:
+        scenario_data (dict): Scenario configuration dict to be updated with accelerator settings.
+        role (str): User role ('user', 'admin', or other).
+
+    Returns:
+        dict: Updated scenario_data including 'accelerator' and 'gpu_id' fields.
+    """
     available_gpus = []
 
     response = await get_available_gpus()
@@ -1301,7 +1937,7 @@ async def assign_available_gpu(scenario_data, role):
     available_system_gpus = response.get("available_gpus", None) if response is not None else None
 
     if available_system_gpus:
-        running_scenarios = get_running_scenario(get_all=True)
+        running_scenarios = await get_running_scenarios(get_all=True)
         # Obtain currently used gpus
         if running_scenarios:
             running_gpus = []
@@ -1339,56 +1975,44 @@ async def assign_available_gpu(scenario_data, role):
 
 
 async def run_scenario(scenario_data, role, user):
-    import subprocess
+    """
+    Deploy a single scenario: assign resources, register it, and start its participants.
 
-    from nebula.scenarios import ScenarioManagement
+    Parameters:
+        scenario_data (dict): The scenario configuration data.
+        role (str): The role of the user initiating the scenario.
+        user (str): Username associated with the scenario.
 
+    Returns:
+        None
+    """
     user_data = user_data_store[user]
 
     scenario_data = await assign_available_gpu(scenario_data, role)
-    # Manager for the actual scenario
-    scenarioManagement = ScenarioManagement(scenario_data, user)
+     
+    scenario_name = await deploy_scenario(scenario_data, role, user)
 
-    scenario_update_record(
-        scenario_name=scenarioManagement.scenario_name,
-        username=user,
-        start_time=scenarioManagement.start_date_scenario,
-        end_time="",
-        status="running",
-        title=scenario_data["scenario_title"],
-        description=scenario_data["scenario_description"],
-        network_subnet=scenario_data["network_subnet"],
-        model=scenario_data["model"],
-        dataset=scenario_data["dataset"],
-        rounds=scenario_data["rounds"],
-        role=role,
-        gpu_id=json.dumps(scenario_data["gpu_id"]),
-    )
-
-    # Run the actual scenario
-    try:
-        if scenarioManagement.scenario.mobility:
-            additional_participants = scenario_data["additional_participants"]
-            schema_additional_participants = scenario_data["schema_additional_participants"]
-            scenarioManagement.load_configurations_and_start_nodes(
-                additional_participants, schema_additional_participants
-            )
-        else:
-            scenarioManagement.load_configurations_and_start_nodes()
-    except subprocess.CalledProcessError as e:
-        logging.exception(f"Error docker-compose up: {e}")
-        return
-
-    user_data.nodes_registration[scenarioManagement.scenario_name] = {
+    user_data.nodes_registration[scenario_name] = {
         "n_nodes": scenario_data["n_nodes"],
         "nodes": set(),
     }
 
-    user_data.nodes_registration[scenarioManagement.scenario_name]["condition"] = asyncio.Condition()
+    user_data.nodes_registration[scenario_name]["condition"] = asyncio.Condition()
 
 
 # Deploy the list of scenarios
 async def run_scenarios(role, user):
+    """
+    Sequentially execute all enqueued scenarios for a user, waiting for each to complete
+    and for sufficient resources before starting the next.
+
+    Parameters:
+        role (str): The role of the user initiating the scenarios.
+        user (str): Username associated with the scenarios.
+
+    Returns:
+        None
+    """
     try:
         user_data = user_data_store[user]
 
@@ -1420,6 +2044,22 @@ async def nebula_dashboard_deployment_run(
     background_tasks: BackgroundTasks,
     session: dict = Depends(get_session),
 ):
+    """
+    Handle incoming deployment requests to run one or more scenarios, enqueue them,
+    and trigger background execution.
+    
+    Parameters:
+        request (Request): FastAPI request object containing a JSON list of scenarios to run.
+        background_tasks (BackgroundTasks): Instance for scheduling tasks.
+        session (dict): Session data extracted via dependency.
+    
+    Returns:
+        RedirectResponse: Redirects to '/platform/dashboard' on successful enqueue.
+    
+    Raises:
+        HTTPException: 401 Unauthorized if the user is not logged in or content type is invalid.
+        HTTPException: 503 Service Unavailable if resources are insufficient.
+    """
     enough_resources = await check_enough_resources()
 
     if "user" not in session:

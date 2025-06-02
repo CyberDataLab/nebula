@@ -153,4 +153,4 @@ const ReputationManager = (function() {
     };
 })();
 
-export default ReputationManager; 
+export default ReputationManager;

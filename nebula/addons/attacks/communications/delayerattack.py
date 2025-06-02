@@ -3,6 +3,7 @@ import logging
 from functools import wraps
 
 from nebula.addons.attacks.communications.communicationattack import CommunicationAttack
+from nebula.core.network.communications import CommunicationsManager
 
 
 class DelayerAttack(CommunicationAttack):
@@ -32,8 +33,8 @@ class DelayerAttack(CommunicationAttack):
 
         super().__init__(
             engine,
-            engine._cm,
-            "send_model",
+            CommunicationsManager.get_instance(),
+            "send_message",
             round_start,
             round_stop,
             attack_interval,
@@ -43,27 +44,27 @@ class DelayerAttack(CommunicationAttack):
         )
 
     def decorator(self, delay: int):
-        """
-        Decorator that adds a delay to the execution of the original method.
+            """
+            Decorator that adds a delay to the execution of the original method.
 
-        Args:
-            delay (int): The time in seconds to delay the method execution.
+            Args:
+                delay (int): The time in seconds to delay the method execution.
 
-        Returns:
-            function: A decorator function that wraps the target method with the delay logic.
-        """
+            Returns:
+                function: A decorator function that wraps the target method with the delay logic.
+            """
 
-        def decorator(func):
-            @wraps(func)
-            async def wrapper(*args, **kwargs):
-                if len(args) > 1:
-                    dest_addr = args[1]
-                    if dest_addr in self.targets:
-                        logging.info(f"[DelayerAttack] Delaying model propagation to {dest_addr} by {delay} seconds")
-                        await asyncio.sleep(delay)
-                _, *new_args = args  # Exclude self argument
-                return await func(*new_args)
+            def decorator(func):
+                @wraps(func)
+                async def wrapper(*args, **kwargs):
+                    if len(args) == 4 and args[3] == "model":
+                        dest_addr = args[1]
+                        if dest_addr in self.targets:
+                            logging.info(f"[DelayerAttack] Delaying model propagation to {dest_addr} by {delay} seconds")
+                            await asyncio.sleep(delay)
+                    _, *new_args = args  # Exclude self argument
+                    return await func(*new_args)
 
-            return wrapper
+                return wrapper
 
-        return decorator
+            return decorator

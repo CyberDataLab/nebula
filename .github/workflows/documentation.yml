@@ -36,7 +36,7 @@ jobs:
           uv run mkdocs build -f docs/mkdocs.yml -d _build
     - name: Add files
       run: |
-          echo "nebula.enriquetomasmb.com" > docs/_build/CNAME
+          echo "docs.nebula-dfl.com" > docs/_build/CNAME
     - name: List directories
       run: |
           ls -la docs/_build/

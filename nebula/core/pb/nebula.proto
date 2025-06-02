@@ -85,6 +85,8 @@ message DiscoverMessage {
   enum Action {
     DISCOVER_JOIN = 0;        // Message to discover nodes on federation when i'm new
     DISCOVER_NODES = 1;       // Message to discover nodes on federation when i'm already in
+    LATE_CONNECT = 2;         // Message send when late connection to federation
+    RESTRUCTURE = 3;          // Message to notify connection is because restructuration of topology
   }
   Action action = 1;
 }
@@ -112,11 +114,6 @@ message LinkMessage {
     string addrs = 2;
 }
 
-// Response transmits the outcome of a requested operation, including any errors.
-message ResponseMessage {
-  string response = 1;      // Outcome of the requested operation.
-}
-
 message ReputationMessage {
   enum Action {
     SHARE = 0;
@@ -125,4 +122,9 @@ message ReputationMessage {
   float score = 2; //Score reputation
   int32 round = 3; //Round to send the reputation
   Action action = 4; // Action type (default: SHARE)
+}
+
+// Response transmits the outcome of a requested operation, including any errors.
+message ResponseMessage {
+  string response = 1;      // Outcome of the requested operation.
 }

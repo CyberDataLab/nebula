@@ -7,23 +7,23 @@ const ScenarioManager = (function() {
     function initializeScenarios() {
         // Clear session storage
         sessionStorage.removeItem("ScenarioList");
-        
+
         // Reset the scenarios list
         scenariosList = [];
         actual_scenario = 0;
-        
+
         // Clear all fields and reset modules
         clearFields();
-        
+
         // Update UI
         updateScenariosPosition(true);
     }
 
     function collectScenarioData() {
+        window.TopologyManager.updateGraph();
         const topologyData = window.TopologyManager.getData();
         const nodes = {};
         const nodes_graph = {};
-        
         // Convert nodes array to objects with string IDs
         topologyData.nodes.forEach(node => {
             const nodeId = node.id.toString();
@@ -37,10 +37,6 @@ const ScenarioManager = (function() {
                 start: node.start,
                 neighbors: node.neighbors.map(n => n.toString()),
                 links: node.links,
-                attacks: [],
-                attack_params: {},
-                with_reputation: false,
-                mobility: false
             };
             nodes_graph[nodeId] = {
                 id: nodeId,
@@ -56,24 +52,6 @@ const ScenarioManager = (function() {
 
         // Get attack configuration
         const attackConfig = window.AttackManager.getAttackConfig();
-
-        // Map frontend parameter names to backend expected names
-        const attackParams = {
-            round_start_attack: attackConfig.round_start_attack || 1,
-            round_stop_attack: attackConfig.round_stop_attack || 10,
-            attack_interval: attackConfig.attack_interval || 1,
-            poisoned_percent: attackConfig.poisonedSamplePercent || 0,
-            poisoned_ratio: attackConfig.poisonedNoisePercent || 0,
-            noise_type: attackConfig.noiseType || "Salt",
-            targeted: attackConfig.targeted || false,
-            target_label: attackConfig.targetLabel || 4,
-            target_changed_label: attackConfig.targetChangedLabel || 7,
-            layer_idx: attackConfig.layerIdx || 0,
-            delay: attackConfig.delay || 10,
-            target_percentage: attackConfig.targetPercentage || 100,
-            selection_interval: attackConfig.selectionInterval || 1,
-            flooding_factor: attackConfig.floodingFactor || 100
-        };
 
         return {
             scenario_title: document.getElementById("scenario-title").value,
@@ -95,11 +73,7 @@ const ScenarioManager = (function() {
             logginglevel: document.getElementById("loggingLevel").value === "true",
             report_status_data_queue: document.getElementById("reportingSwitch").checked,
             epochs: parseInt(document.getElementById("epochs").value),
-            attacks: [attackConfig.type],
-            poisoned_node_percent: attackConfig.poisonedNodePercent || 0,
-            poisoned_sample_percent: attackConfig.poisonedSamplePercent || 0,
-            poisoned_noise_percent: attackConfig.poisonedNoisePercent || 0,
-            attack_params: attackParams,
+            attack_params: attackConfig,
             with_reputation: window.ReputationManager.getReputationConfig().with_reputation || false,
             reputation_metrics: window.ReputationManager.getReputationConfig().reputation_metrics || [],
             initial_reputation: window.ReputationManager.getReputationConfig().initial_reputation || 1.0,
@@ -109,6 +83,7 @@ const ScenarioManager = (function() {
             weight_num_messages: window.ReputationManager.getReputationConfig().weight_num_messages || 0.25,
             weight_fraction_params_changed: window.ReputationManager.getReputationConfig().weight_fraction_params_changed || 0.25,
             mobility: window.MobilityManager.getMobilityConfig().enabled || false,
+            network_simulation: window.MobilityManager.getMobilityConfig().network_simulation || false,
             mobility_type: window.MobilityManager.getMobilityConfig().mobilityType || "random",
             radius_federation: window.MobilityManager.getMobilityConfig().radiusFederation || 1000,
             scheme_mobility: window.MobilityManager.getMobilityConfig().schemeMobility || "random",
@@ -117,6 +92,18 @@ const ScenarioManager = (function() {
             random_geo: window.MobilityManager.getMobilityConfig().randomGeo || false,
             latitude: window.MobilityManager.getMobilityConfig().location.latitude || 0,
             longitude: window.MobilityManager.getMobilityConfig().location.longitude || 0,
+            //with_sa : window.SaManager.getSaConfig().with_sa || false,
+            with_sa: window.MobilityManager.getMobilityConfig().enabled || false,
+            //strict_topology: window.SaManager.getSaConfig().strict_topology || false,
+            strict_topology: false,
+            //sad_candidate_selector: window.SaManager.getSaConfig().sad_candidate_selector.value || "Distance",
+            sad_candidate_selector: "Distance",
+            //sad_model_handler:  window.SaManager.getSaConfig().sad_model_handler.value || "std",
+            sad_model_handler: "std",
+            // sar_arbitration_policy: window.SaManager.getSaConfig().sar_arbitration_policy.value || "sap",
+            sar_arbitration_policy: "sap",
+            //sar_neighbor_policy: window.SaManager.getSaConfig().sar_neighbor_policy.value || "Distance",
+            sar_neighbor_policy: "Distance",
             random_topology_probability: document.getElementById("random-probability").value || 0.5,
             network_subnet: "172.20.0.0/16",
             network_gateway: "172.20.0.1",
@@ -133,7 +120,7 @@ const ScenarioManager = (function() {
         // Load basic fields
         document.getElementById("scenario-title").value = scenario.scenario_title || "";
         document.getElementById("scenario-description").value = scenario.scenario_description || "";
-        
+
         // Load deployment
         const deploymentRadio = document.querySelector(`input[name="deploymentRadioOptions"][value="${scenario.deployment}"]`);
         if (deploymentRadio) deploymentRadio.checked = true;
@@ -148,7 +135,7 @@ const ScenarioManager = (function() {
                 nodes: Object.values(scenario.nodes),
                 links: []
             };
-            
+
             // Reconstruct links from the nodes' neighbors
             topologyData.nodes.forEach(node => {
                 if (node.neighbors) {
@@ -160,7 +147,7 @@ const ScenarioManager = (function() {
                     });
                 }
             });
-            
+
             window.TopologyManager.setData(topologyData);
         } else {
             window.TopologyManager.generatePredefinedTopology();
@@ -194,6 +181,7 @@ const ScenarioManager = (function() {
         if (scenario.mobility) {
             window.MobilityManager.setMobilityConfig({
                 enabled: scenario.mobility,
+                network_simulation: scenario.network_simulation,
                 mobilityType: scenario.mobility_type,
                 radiusFederation: scenario.radius_federation,
                 schemeMobility: scenario.scheme_mobility,
@@ -219,6 +207,16 @@ const ScenarioManager = (function() {
                 weight_fraction_params_changed: scenario.weight_fraction_params_changed
             });
         }
+        if (scenario.with_sa) {
+            window.SaManager.setSaConfig({
+                with_sa: scenario.with_sa,
+                strict_topology: scenario.strict_topology,
+                sad_candidate_selector: scenario.sad_candidate_selector,
+                sad_model_handler: scenario.sad_model_handler,
+                sar_arbitration_policy: scenario.sar_arbitration_policy,
+                sar_neighbor_policy: scenario.sar_neighbor_policy
+            });
+        }
 
         // Trigger necessary events
         document.getElementById("federationArchitecture").dispatchEvent(new Event('change'));
@@ -236,25 +234,25 @@ const ScenarioManager = (function() {
 
     function deleteScenario() {
         if (scenariosList.length === 0) return;
-        
+
         scenariosList.splice(actual_scenario, 1);
         if (actual_scenario >= scenariosList.length) {
             actual_scenario = Math.max(0, scenariosList.length - 1);
         }
-        
+
         if (scenariosList.length > 0) {
             loadScenarioData(scenariosList[actual_scenario]);
         } else {
             clearFields();
         }
-        
+
         sessionStorage.setItem("ScenarioList", JSON.stringify(scenariosList));
         updateScenariosPosition(scenariosList.length === 0);
     }
 
     function replaceScenario() {
         if (actual_scenario < 0 || actual_scenario >= scenariosList.length) return;
-        
+
         const scenarioData = collectScenarioData();
         scenariosList[actual_scenario] = scenarioData;
         sessionStorage.setItem("ScenarioList", JSON.stringify(scenariosList));
@@ -263,10 +261,10 @@ const ScenarioManager = (function() {
     function updateScenariosPosition(isEmptyScenario = false) {
         const container = document.getElementById("scenarios-position");
         if (!container) return;
-        
+
         // Clear existing content
         container.innerHTML = '';
-        
+
         if (isEmptyScenario) {
             container.innerHTML = '<span style="margin: 0 10px;">No scenarios</span>';
             return;
@@ -275,12 +273,12 @@ const ScenarioManager = (function() {
         // Create a single span for all scenarios
         const span = document.createElement("span");
         span.style.margin = "0 10px";
-        
+
         // Create the scenario indicators
-        const indicators = scenariosList.map((_, index) => 
+        const indicators = scenariosList.map((_, index) =>
             index === actual_scenario ? `●` : `○`
         ).join(' ');
-        
+
         span.textContent = indicators;
         container.appendChild(span);
     }
@@ -317,6 +315,9 @@ const ScenarioManager = (function() {
         if (window.ReputationManager) {
             window.ReputationManager.resetReputationConfig();
         }
+        if (window.SaManager) {
+            window.SaManager.resetSaConfig();
+        }
 
         // Trigger necessary events
         document.getElementById("federationArchitecture").dispatchEvent(new Event('change'));
@@ -334,7 +335,7 @@ const ScenarioManager = (function() {
         initializeScenarios,
         getScenariosList: () => scenariosList,
         getActualScenario: () => actual_scenario,
-        setActualScenario: (index) => { 
+        setActualScenario: (index) => {
             actual_scenario = index;
             if (scenariosList[index]) {
                 loadScenarioData(scenariosList[index]);
@@ -350,4 +351,4 @@ const ScenarioManager = (function() {
     };
 })();
 
-export default ScenarioManager; 
+export default ScenarioManager;

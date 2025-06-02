@@ -26,7 +26,7 @@ class NebulaGPS(GPSModule):
         self._verbose = verbose
 
     async def start(self):
-        """Inicia el servicio de GPS, enviando y recibiendo ubicaciones."""
+        """Starts the GPS service, sending and receiving locations."""
         logging.info("Starting NebulaGPS service...")
         self.running = True
 
@@ -73,7 +73,7 @@ class NebulaGPS(GPSModule):
             await asyncio.sleep(self.update_interval)
 
     async def _receive_location_loop(self):
-        """Escucha y almacena geolocalizaciones de otros nodos."""
+        """Listens to and stores geolocations from other nodes."""
         while self.running:
             try:
                 data, addr = await asyncio.get_running_loop().run_in_executor(
@@ -88,7 +88,7 @@ class NebulaGPS(GPSModule):
                     if self._verbose:
                         logging.info(f"Received GPS from {addr[0]}: {lat}, {lon}")
             except Exception as e:
-                logging.error(f"Error receiving GPS update: {e}")
+                logging.exception(f"Error receiving GPS update: {e}")
 
     async def _notify_geolocs(self):
         while True:
@@ -102,5 +102,7 @@ class NebulaGPS(GPSModule):
                 for addr, (lat, long) in geolocs.items():
                     dist = await self.calculate_distance(self_lat, self_long, lat, long)
                     distances[addr] = (dist, (lat, long))
+                
+                self._config.update_nodes_distance(distances)
                 gpsevent = GPSEvent(distances)
                 asyncio.create_task(EventManager.get_instance().publish_addonevent(gpsevent))

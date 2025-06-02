@@ -38,4 +38,4 @@ const GraphSettings = (function() {
     };
 })();
 
-export default GraphSettings; 
+export default GraphSettings;

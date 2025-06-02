@@ -1,27 +1,42 @@
 import hashlib
 import logging
 import traceback
-from typing import TYPE_CHECKING
 
 from nebula.core.nebulaevents import MessageEvent
 from nebula.core.network.actions import factory_message_action, get_action_name_from_value, get_actions_names
 from nebula.core.pb import nebula_pb2
 
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
-
 
 class MessagesManager:
-    def __init__(self, addr, config, cm: "CommunicationsManager"):
+    def __init__(self, addr, config):
         self.addr = addr
         self.config = config
-        self.cm = cm
+        self._cm = None
         self._message_templates = {}
         self._define_message_templates()
+
+    @property
+    def cm(self):
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
 
     def _define_message_templates(self):
         # Dictionary that maps message types to their required parameters and default values
         self._message_templates = {
+            "offer": {
+                "parameters": ["action", "n_neighbors", "loss", "parameters", "rounds", "round", "epochs"],
+                "defaults": {
+                    "parameters": None,
+                    "rounds": 1,
+                    "round": -1,
+                    "epochs": 1,
+                },
+            },
             "connection": {"parameters": ["action"], "defaults": {}},
             "discovery": {
                 "parameters": ["action", "latitude", "longitude"],
@@ -55,6 +70,8 @@ class MessagesManager:
                     "round": None,
                 },
             },
+            "discover": {"parameters": ["action"], "defaults": {}},
+            "link": {"parameters": ["action", "addrs"], "defaults": {}},
             # Add additional message types here
         }
 
@@ -110,11 +127,11 @@ class MessagesManager:
                         await self.cm.handle_message(me)
             # Rest of messages
             else:
-                if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
-                    me = MessageEvent(
-                        (msg_name, get_action_name_from_value(msg_name, message_data.action)), source, message_data
-                    )
-                    await self.cm.handle_message(me)
+                # if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                me = MessageEvent(
+                    (msg_name, get_action_name_from_value(msg_name, message_data.action)), source, message_data
+                )
+                await self.cm.handle_message(me)
         except Exception as e:
             logging.exception(f"📥  handle_incoming_message | Error while processing: {e}")
             logging.exception(traceback.format_exc())

@@ -184,6 +184,9 @@ class Config:
                     self.participant["network_args"]["neighbors"] += " " + addr
                     self.participant["mobility_args"]["neighbors_distance"][addr] = None
 
+    def update_nodes_distance(self, distances: dict):
+        self.participant["mobility_args"]["neighbors_distance"] = {node: dist for node, (dist, _) in distances.items()}
+
     def update_neighbors_from_config(self, current_connections, dest_addr):
         final_neighbors = []
         for n in current_connections:

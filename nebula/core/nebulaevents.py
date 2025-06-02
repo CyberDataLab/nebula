@@ -24,10 +24,9 @@ class MessageEvent:
         self.message = message
 
 
-"""
-##############################
-#         NODE EVENTS        #
-##############################
+"""                                                     ##############################
+                                                        #         NODE EVENTS        #
+                                                        ##############################
 """
 
 
@@ -38,7 +37,6 @@ class RoundStartEvent(NodeEvent):
         Args:
             round (int): Round number.
             start_time (time): Current time when round is going to start.
-            rejected_nodes (set): Set of nodes that were rejected in the previous round.
         """
         self._round_start_time = start_time
         self._round = round
@@ -48,7 +46,57 @@ class RoundStartEvent(NodeEvent):
         return "Round starting"
 
     async def get_event_data(self):
+        """Retrieves the round start event data.
+
+        Returns:
+            tuple[int, float]:
+                -round (int): Round number.
+                -start_time (time): Current time when round is going to start.
+        """
         return (self._round, self._round_start_time, self._expected_nodes)
+
+    async def is_concurrent(self):
+        return False
+
+
+class RoundEndEvent(NodeEvent):
+    def __init__(self, round, end_time):
+        """Event triggered when round is going to start.
+
+        Args:
+            round (int): Round number.
+            end_time (time): Current time when round has ended.
+        """
+        self._round_end_time = end_time
+        self._round = round
+
+    def __str__(self):
+        return "Round ending"
+
+    async def get_event_data(self):
+        """Retrieves the round start event data.
+
+        Returns:
+            tuple[int, float]:
+                -round (int): Round number.
+                -end_time (time): Current time when round has ended.
+        """
+        return (self._round, self._round_end_time)
+
+    async def is_concurrent(self):
+        return False
+
+
+class ExperimentFinishEvent(NodeEvent):
+    def __init__(self):
+        """Event triggered when experiment is going to finish."""
+        pass
+
+    def __str__(self):
+        return "Experiment finished"
+
+    async def get_event_data(self):
+        pass
 
     async def is_concurrent(self):
         return False
@@ -70,6 +118,10 @@ class AggregationEvent(NodeEvent):
     def __str__(self):
         return "Aggregation Ready"
 
+    def update_updates(self, new_updates: dict):
+        """Allows an external module to update the updates dictionary."""
+        self._updates = new_updates
+
     async def get_event_data(self) -> tuple[dict, set, set]:
         """Retrieves the aggregation event data.
 
@@ -86,7 +138,7 @@ class AggregationEvent(NodeEvent):
 
 
 class UpdateNeighborEvent(NodeEvent):
-    def __init__(self, node_addr, removed=False):
+    def __init__(self, node_addr, removed=False, joining=False):
         """Event triggered when a neighboring node is updated.
 
         Args:
@@ -96,6 +148,7 @@ class UpdateNeighborEvent(NodeEvent):
         """
         self._node_addr = node_addr
         self._removed = removed
+        self._joining_federation = joining
 
     def __str__(self):
         return f"Node addr: {self._node_addr}, removed: {self._removed}"
@@ -112,6 +165,49 @@ class UpdateNeighborEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return False
+
+    def is_joining_federation(self):
+        return self._joining_federation
+
+
+class NodeBlacklistedEvent(NodeEvent):
+    def __init__(self, node_addr, blacklisted: bool = False):
+        self._node_addr = node_addr
+        self._blacklisted = blacklisted
+
+    def __str__(self):
+        return f"Node addr: {self._node_addr} | Blacklisted: {self._blacklisted} | Recently disconnected: {not self._blacklisted}"
+
+    async def get_event_data(self) -> tuple[str, bool]:
+        return (self._node_addr, self._blacklisted)
+
+    async def is_concurrent(self):
+        return True
+
+
+class NodeFoundEvent(NodeEvent):
+    def __init__(self, node_addr):
+        """Event triggered when a new node is found.
+
+        Args:
+            node_addr (str): Address of the neighboring node.
+        """
+        self._node_addr = node_addr
+
+    def __str__(self):
+        return f"Node addr: {self._node_addr} found"
+
+    async def get_event_data(self) -> tuple[str, bool]:
+        """Retrieves the node found event data.
+
+        Returns:
+            tuple[str, bool]:
+                - node_addr (str): Address of the node found.
+        """
+        return self._node_addr
+
+    async def is_concurrent(self) -> bool:
+        return True
 
 
 class UpdateReceivedEvent(NodeEvent):
@@ -135,7 +231,7 @@ class UpdateReceivedEvent(NodeEvent):
     def __str__(self):
         return f"Update received from source: {self._source}, round: {self._round}"
 
-    async def get_event_data(self) -> tuple[str, bool]:
+    async def get_event_data(self) -> tuple[object, int, str, int, bool]:
         """
         Retrieves the event data.
 
@@ -153,10 +249,39 @@ class UpdateReceivedEvent(NodeEvent):
         return False
 
 
-"""
-##############################
-#         ADDON EVENTS       #
-##############################
+class BeaconRecievedEvent(NodeEvent):
+    def __init__(self, source, geoloc):
+        """
+        Initializes an BeaconRecievedEvent.
+
+        Args:
+            source (str): The received beacon source.
+            geoloc (tuple): The geolocalzition associated with the received beacon source.
+        """
+        self._source = source
+        self._geoloc = geoloc
+
+    def __str__(self):
+        return "Beacon recieved"
+
+    async def get_event_data(self) -> tuple[str, tuple[float, float]]:
+        """
+        Retrieves the event data.
+
+        Returns:
+            tuple[str, tuple[float, float]]: A tuple containing:
+                - The beacon's source.
+                - the device geolocalization (latitude, longitude).
+        """
+        return (self._source, self._geoloc)
+
+    async def is_concurrent(self) -> bool:
+        return True
+
+
+"""                                                     ##############################
+                                                        #         ADDON EVENTS       #
+                                                        ##############################
 """
 
 
@@ -169,3 +294,15 @@ class GPSEvent(AddonEvent):
 
     async def get_event_data(self) -> dict:
         return self.distances.copy()
+
+
+class ChangeLocationEvent(AddonEvent):
+    def __init__(self, latitude, longitude):
+        self.latitude = latitude
+        self.longitude = longitude
+
+    def __str__(self):
+        return "ChangeLocationEvent"
+
+    async def get_event_data(self):
+        return (self.latitude, self.longitude)

@@ -22,7 +22,7 @@ const UIControls = (function() {
         if (modeBtn) {
             modeBtn.addEventListener('click', function() {
                 const isAdvancedMode = modeBtn.innerHTML.trim() === "Advanced mode";
-                
+
                 if (isAdvancedMode) {
                     // Switch to advanced mode
                     modeBtn.innerHTML = "User mode";
@@ -281,6 +281,25 @@ const UIControls = (function() {
             return;
         }
 
+        // If no scenarios exist, save the current one first
+        if (window.ScenarioManager.getScenariosList().length < 1) {
+            window.ScenarioManager.saveScenario();
+        } else {
+            window.ScenarioManager.replaceScenario();
+        }
+
+        // Ensure all scenarios have a title
+        window.ScenarioManager.getScenariosList().forEach((scenario, index) => {
+            if (!scenario.scenario_title) {
+                scenario.scenario_title = "empty";
+            }
+            if (!scenario.scenario_description) {
+                scenario.scenario_description = "empty";
+            }
+        });
+
+        console.log(window.ScenarioManager.getScenariosList());
+
         const confirmModal = document.getElementById('confirm-modal');
         const confirmModalBody = document.getElementById('confirm-modal-body');
         const yesButton = document.getElementById("yes-button");
@@ -300,31 +319,14 @@ const UIControls = (function() {
         yesButton.disabled = false;
 
         const modal = new bootstrap.Modal(confirmModal);
-        
+
         confirmModal.addEventListener('hidden.bs.modal', function () {
             cleanupModal(confirmModal);
         });
-        
+
         modal.show();
 
         yesButton.onclick = async () => {
-            // If no scenarios exist, save the current one first
-            if (window.ScenarioManager.getScenariosList().length < 1) {
-                window.ScenarioManager.saveScenario();
-            } else {
-                window.ScenarioManager.replaceScenario();
-            }
-
-            // Ensure all scenarios have a title
-            window.ScenarioManager.getScenariosList().forEach((scenario, index) => {
-                if (!scenario.scenario_title) {
-                    scenario.scenario_title = "empty";
-                }
-                if (!scenario.scenario_description) {
-                    scenario.scenario_description = "empty";
-                }
-            });
-
             modal.hide();
             document.querySelector(".overlay").style.display = "block";
             document.getElementById("spinner").style.display = "block";
@@ -355,7 +357,7 @@ const UIControls = (function() {
     function handleDeploymentError(status, error = null) {
         hideLoadingIndicators();
         let errorMessage;
-        
+
         switch(status) {
             case 401:
                 errorMessage = "You are not authorized to run a scenario. Please log in.";
@@ -377,12 +379,12 @@ const UIControls = (function() {
         const infoModalBody = document.getElementById('info-modal-body');
         infoModalBody.innerHTML = message;
         const modal = new bootstrap.Modal(infoModal);
-        
+
         // Add event listener for when modal is hidden
         infoModal.addEventListener('hidden.bs.modal', function () {
             cleanupModal(infoModal);
         });
-        
+
         modal.show();
     }
 
@@ -423,7 +425,7 @@ const UIControls = (function() {
 
         const nodes = graph.graphData().nodes;
         const numberOfNodes = nodes.length;
-        
+
         // Update the info-participants number
         const infoParticipantsNumber = document.getElementById("info-participants-number");
         if (infoParticipantsNumber) {
@@ -532,7 +534,7 @@ const UIControls = (function() {
     function showParticipantDetails(node, index) {
         const modalTitle = document.getElementById("participant-modal-title");
         const modalContent = document.getElementById("participant-modal-content");
-        
+
         modalTitle.innerHTML = `Participant ${index}`;
         modalContent.innerHTML = "";
 
@@ -639,4 +641,4 @@ const UIControls = (function() {
     };
 })();
 
-export default UIControls; 
+export default UIControls;

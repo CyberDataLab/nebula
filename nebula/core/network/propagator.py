@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 from abc import ABC, abstractmethod
 from collections import deque
 from typing import TYPE_CHECKING, Any
@@ -10,7 +11,6 @@ if TYPE_CHECKING:
     from nebula.config.config import Config
     from nebula.core.aggregation.aggregator import Aggregator
     from nebula.core.engine import Engine
-    from nebula.core.network.communications import CommunicationsManager
     from nebula.core.training.lightning import Lightning
 
 
@@ -63,11 +63,23 @@ class StableModelPropagation(PropagationStrategy):
 
 
 class Propagator:
-    def __init__(self, cm: "CommunicationsManager"):
-        self.engine: Engine = cm.engine
-        self.config: Config = cm.get_config()
-        self.addr = cm.get_addr()
-        self.cm: CommunicationsManager = cm
+    def __init__(self):
+        self._cm = None
+
+    @property
+    def cm(self):
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
+
+    def start(self):
+        self.engine: Engine = self.cm.engine
+        self.config: Config = self.cm.get_config()
+        self.addr = self.cm.get_addr()
         self.aggregator: Aggregator = self.engine.aggregator
         self.trainer: Lightning = self.engine._trainer
 
@@ -83,8 +95,6 @@ class Propagator:
             "initialization": InitialModelPropagation(self.aggregator, self.trainer, self.engine),
             "stable": StableModelPropagation(self.aggregator, self.trainer, self.engine),
         }
-
-    def start(self):
         print_msg_box(
             msg="Starting propagator functionality...\nModel propagation through the network",
             indent=2,
@@ -159,12 +169,14 @@ class Propagator:
             serialized_model = None
 
         round_number = -1 if strategy_id == "initialization" else self.get_round()
-
+        parameters = serialized_model
+        message = self.cm.create_message("model", "", round_number, parameters, weight)
         for neighbor_addr in eligible_neighbors:
-            asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
-
-        # if len(self.aggregator.get_nodes_pending_models_to_aggregate()) >= len(self.aggregator._federation_nodes):
-        #     return False
+            logging.info(
+                f"Sending model to {neighbor_addr} with round {self.get_round()}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
+            )
+            asyncio.create_task(self.cm.send_message(neighbor_addr, message, "model"))
+            # asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
 
         await asyncio.sleep(self.interval)
         return True

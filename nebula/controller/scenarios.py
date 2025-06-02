@@ -15,7 +15,6 @@ import tensorboard_reducer as tbr
 
 from nebula.addons.blockchain.blockchain_deployer import BlockchainDeployer
 from nebula.addons.topologymanager import TopologyManager
-from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
 from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
 from nebula.core.datasets.emnist.emnist import EMNISTDataset
@@ -23,6 +22,7 @@ from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
 from nebula.core.datasets.mnist.mnist import MNISTDataset
 from nebula.core.utils.certificate import generate_ca_certificate, generate_certificate
 from nebula.utils import DockerUtils, FileUtils
+from nebula.config.config import Config
 
 
 # Definition of a scenario
@@ -57,10 +57,6 @@ class Scenario:
         network_subnet,
         network_gateway,
         epochs,
-        attacks,
-        poisoned_node_percent,
-        poisoned_sample_percent,
-        poisoned_noise_percent,
         attack_params,
         with_reputation,
         reputation_metrics,
@@ -70,13 +66,11 @@ class Scenario:
         weight_model_similarity,
         weight_num_messages,
         weight_fraction_params_changed,
-        # is_dynamic_topology,
-        # is_dynamic_aggregation,
-        # target_aggregation,
         random_geo,
         latitude,
         longitude,
         mobility,
+        network_simulation,
         mobility_type,
         radius_federation,
         scheme_mobility,
@@ -85,13 +79,19 @@ class Scenario:
         additional_participants,
         schema_additional_participants,
         random_topology_probability,
+        with_sa,
+        strict_topology,
+        sad_candidate_selector,
+        sad_model_handler,
+        sar_arbitration_policy,
+        sar_neighbor_policy,
     ):
         """
         Initialize the scenario.
 
         Args:
-            scenario_title (str): Title of the scenario.
-            scenario_description (str): Description of the scenario.
+            title (str): Title of the scenario.
+            description (str): Description of the scenario.
             deployment (str): Type of deployment (e.g., 'docker', 'process').
             federation (str): Type of federation.
             topology (str): Network topology.
@@ -113,14 +113,7 @@ class Scenario:
             network_subnet (str): Network subnet.
             network_gateway (str): Network gateway.
             epochs (int): Number of epochs.
-            attacks (list): List of attacks.
-            poisoned_node_percent (float): Percentage of poisoned nodes.
-            poisoned_sample_percent (float): Percentage of poisoned samples.
-            noise_type (str): The type of noise applied by the attack.
-            targeted (bool): Indicator if the attack is targeted.
-            target_label (int): The label to change when `targeted` is True.
-            target_changed_label (int): The label to which `target_label` will be changed .
-            attack_params (dict) : Attack parameters.
+            attack_params (dict): Dictionary containing attack parameters.
             with_reputation (bool): Indicator if reputation is used.
             reputation_metrics (list): List of reputation metrics.
             initial_reputation (float): Initial reputation.
@@ -129,9 +122,6 @@ class Scenario:
             weight_model_similarity (float): Weight of model similarity.
             weight_num_messages (float): Weight of number of messages.
             weight_fraction_params_changed (float): Weight of fraction of parameters changed.
-            # is_dynamic_topology (bool): Indicator if topology is dynamic.
-            # is_dynamic_aggregation (bool): Indicator if aggregation is dynamic.
-            # target_aggregation (str): Target aggregation method.
             random_geo (bool): Indicator if random geo is used.
             latitude (float): Latitude for mobility.
             longitude (float): Longitude for mobility.
@@ -144,6 +134,12 @@ class Scenario:
             additional_participants (list): List of additional participants.
             schema_additional_participants (str): Schema for additional participants.
             random_topology_probability (float): Probability for random topology.
+            with_sa (bool) : Indicator if Situational Awareness is used.
+            strict_topology (bool) :
+            sad_candidate_selector (str) :
+            sad_model_handler (str) :
+            sar_arbitration_policy (str) :
+            sar_neighbor_policy (str) :
         """
         self.scenario_title = scenario_title
         self.scenario_description = scenario_description
@@ -168,10 +164,6 @@ class Scenario:
         self.network_subnet = network_subnet
         self.network_gateway = network_gateway
         self.epochs = epochs
-        self.attacks = attacks
-        self.poisoned_node_percent = poisoned_node_percent
-        self.poisoned_sample_percent = poisoned_sample_percent
-        self.poisoned_noise_percent = poisoned_noise_percent
         self.attack_params = attack_params
         self.with_reputation = with_reputation
         self.reputation_metrics = reputation_metrics
@@ -181,13 +173,11 @@ class Scenario:
         self.weight_model_similarity = weight_model_similarity
         self.weight_num_messages = weight_num_messages
         self.weight_fraction_params_changed = weight_fraction_params_changed
-        # self.is_dynamic_topology = is_dynamic_topology
-        # self.is_dynamic_aggregation = is_dynamic_aggregation
-        # self.target_aggregation = target_aggregation
         self.random_geo = random_geo
         self.latitude = latitude
         self.longitude = longitude
         self.mobility = mobility
+        self.network_simulation = network_simulation
         self.mobility_type = mobility_type
         self.radius_federation = radius_federation
         self.scheme_mobility = scheme_mobility
@@ -196,12 +186,17 @@ class Scenario:
         self.additional_participants = additional_participants
         self.schema_additional_participants = schema_additional_participants
         self.random_topology_probability = random_topology_probability
+        self.with_sa = with_sa
+        self.strict_topology = strict_topology
+        self.sad_candidate_selector = sad_candidate_selector
+        self.sad_model_handler = sad_model_handler
+        self.sar_arbitration_policy = sar_arbitration_policy
+        self.sar_neighbor_policy = sar_neighbor_policy
 
     def attack_node_assign(
         self,
         nodes,
         federation,
-        attack,
         poisoned_node_percent,
         poisoned_sample_percent,
         poisoned_noise_percent,
@@ -236,18 +231,24 @@ class Scenario:
             "No Attack", "Label Flipping", "Sample Poisoning", "Model Poisoning",
             "GLL Neuron Inversion", "Swapping Weights", "Delayer", "Flooding"
         }
-        
-        # Handle attack parameter which can be either a string or a list
-        if isinstance(attack, list):
-            if not attack:  # Empty list
-                attack = "No Attack"
-            else:
-                attack = attack[0]  # Take the first attack if it's a list
+
+        # Get attack type from attack_params
+        if attack_params and "attacks" in attack_params:
+            attack = attack_params["attacks"]
+
+        # Handle attack parameter which can be either a string or None
+        if attack is None:
+            attack = "No Attack"
         elif not isinstance(attack, str):
-            raise ValueError(f"Invalid attack type: {attack}. Expected string or list.")
+            raise ValueError(f"Invalid attack type: {attack}. Expected string or None.")
 
         if attack not in valid_attacks:
-            raise ValueError(f"Invalid attack type: {attack}")
+            raise ValueError(f"Invalid attack type: {attack}. Must be one of {valid_attacks}")
+
+        # Get attack parameters from attack_params
+        poisoned_node_percent = attack_params.get("poisoned_node_percent", poisoned_node_percent)
+        poisoned_sample_percent = attack_params.get("poisoned_sample_percent", poisoned_sample_percent)
+        poisoned_noise_percent = attack_params.get("poisoned_noise_percent", poisoned_noise_percent)
 
         # Validate percentage parameters
         poisoned_node_percent = validate_percentage(poisoned_node_percent, "poisoned_node_percent")
@@ -289,107 +290,102 @@ class Scenario:
             node_att = "No Attack"
             malicious = False
             with_reputation = self.with_reputation
-            
+
             if node in attacked_nodes or nodes[node]["malicious"]:
                 malicious = True
                 with_reputation = False
                 node_att = attack
                 logging.info(f"Node {node} marked as malicious with attack {attack}")
-                
+
                 # Initialize attack parameters with defaults
-                attack_params = attack_params.copy() if attack_params else {}
-                
+                node_attack_params = attack_params.copy() if attack_params else {}
+
                 # Set attack-specific parameters
                 if attack == "Label Flipping":
-                    attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["poisonedSamplePercent"] = poisoned_sample_percent
-                    attack_params["targeted"] = attack_params.get("targeted", False)
-                    if attack_params["targeted"]:
-                        attack_params["targetLabel"] = validate_positive_int(
-                            attack_params.get("targetLabel", 4), "targetLabel"
+                    node_attack_params["poisoned_node_percent"] = poisoned_node_percent
+                    node_attack_params["poisoned_sample_percent"] = poisoned_sample_percent
+                    node_attack_params["targeted"] = attack_params.get("targeted", False)
+                    if node_attack_params["targeted"]:
+                        node_attack_params["target_label"] = validate_positive_int(
+                            attack_params.get("targetLabel", 4), "target_label"
                         )
-                        attack_params["targetChangedLabel"] = validate_positive_int(
-                            attack_params.get("targetChangedLabel", 7), "targetChangedLabel"
+                        node_attack_params["target_changed_label"] = validate_positive_int(
+                            attack_params.get("targetChangedLabel", 7), "target_changed_label"
                         )
-                
+
                 elif attack == "Sample Poisoning":
-                    attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["poisonedSamplePercent"] = poisoned_sample_percent
-                    attack_params["poisonedNoisePercent"] = poisoned_noise_percent
-                    attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
-                    attack_params["targeted"] = attack_params.get("targeted", False)
-                
+                    node_attack_params["poisoned_node_percent"] = poisoned_node_percent
+                    node_attack_params["poisoned_sample_percent"] = poisoned_sample_percent
+                    node_attack_params["poisoned_noise_percent"] = poisoned_noise_percent
+                    node_attack_params["noise_type"] = attack_params.get("noiseType", "Gaussian")
+                    node_attack_params["targeted"] = attack_params.get("targeted", False)
+                    if node_attack_params["targeted"]:
+                        node_attack_params["target_label"] = validate_positive_int(
+                            attack_params.get("targetLabel", 4), "target_label"
+                        )
+
                 elif attack == "Model Poisoning":
-                    attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["poisonedNoisePercent"] = poisoned_noise_percent
-                    attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
-                
+                    node_attack_params["poisoned_node_percent"] = poisoned_node_percent
+                    node_attack_params["poisoned_noise_percent"] = poisoned_noise_percent
+                    node_attack_params["noise_type"] = attack_params.get("noiseType", "Gaussian")
+
                 elif attack == "GLL Neuron Inversion":
-                    attack_params["poisonedNodePercent"] = poisoned_node_percent
-                
+                    node_attack_params["poisoned_node_percent"] = poisoned_node_percent
+
                 elif attack == "Swapping Weights":
-                    attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["layerIdx"] = validate_positive_int(
-                        attack_params.get("layerIdx", 0), "layerIdx"
+                    node_attack_params["poisoned_node_percent"] = poisoned_node_percent
+                    node_attack_params["layer_idx"] = validate_positive_int(
+                        attack_params.get("layerIdx", 0), "layer_idx"
                     )
-                
+
                 elif attack == "Delayer":
-                    attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["delay"] = validate_positive_int(
+                    node_attack_params["poisoned_node_percent"] = poisoned_node_percent
+                    node_attack_params["delay"] = validate_positive_int(
                         attack_params.get("delay", 10), "delay"
                     )
-                    attack_params["targetPercentage"] = validate_percentage(
-                        attack_params.get("targetPercentage", 100), "targetPercentage"
+                    node_attack_params["target_percentage"] = validate_percentage(
+                        attack_params.get("targetPercentage", 100), "target_percentage"
                     )
-                    attack_params["selectionInterval"] = validate_positive_int(
-                        attack_params.get("selectionInterval", 1), "selectionInterval"
+                    node_attack_params["selection_interval"] = validate_positive_int(
+                        attack_params.get("selectionInterval", 1), "selection_interval"
                     )
-                
+
                 elif attack == "Flooding":
-                    attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["floodingFactor"] = validate_positive_int(
-                        attack_params.get("floodingFactor", 100), "floodingFactor"
+                    node_attack_params["poisoned_node_percent"] = poisoned_node_percent
+                    node_attack_params["flooding_factor"] = validate_positive_int(
+                        attack_params.get("floodingFactor", 100), "flooding_factor"
                     )
-                    attack_params["targetPercentage"] = validate_percentage(
-                        attack_params.get("targetPercentage", 100), "targetPercentage"
+                    node_attack_params["target_percentage"] = validate_percentage(
+                        attack_params.get("targetPercentage", 100), "target_percentage"
                     )
-                    attack_params["selectionInterval"] = validate_positive_int(
-                        attack_params.get("selectionInterval", 1), "selectionInterval"
+                    node_attack_params["selection_interval"] = validate_positive_int(
+                        attack_params.get("selectionInterval", 1), "selection_interval"
                     )
-                
+
                 # Add common attack parameters
-                attack_params["startRound"] = validate_positive_int(
-                    attack_params.get("startRound", 1), "startRound"
+                node_attack_params["round_start_attack"] = validate_positive_int(
+                    attack_params.get("roundStartAttack", 1), "round_start_attack"
                 )
-                attack_params["stopRound"] = validate_positive_int(
-                    attack_params.get("stopRound", 10), "stopRound"
+                node_attack_params["round_stop_attack"] = validate_positive_int(
+                    attack_params.get("roundStopAttack", 10), "round_stop_attack"
                 )
-                attack_params["attackInterval"] = validate_positive_int(
-                    attack_params.get("attackInterval", 1), "attackInterval"
+                node_attack_params["attack_interval"] = validate_positive_int(
+                    attack_params.get("attackInterval", 1), "attack_interval"
                 )
 
                 # Validate round parameters
-                if attack_params["startRound"] >= attack_params["stopRound"]:
-                    raise ValueError("startRound must be less than stopRound")
+                if node_attack_params["round_start_attack"] >= node_attack_params["round_stop_attack"]:
+                    raise ValueError("round_start_attack must be less than round_stop_attack")
+
+                node_attack_params["attacks"] = node_att
+                nodes[node]["attack_params"] = node_attack_params
+            else:
+                nodes[node]["attack_params"] = {"attacks": "No Attack"}
 
             nodes[node]["malicious"] = malicious
             nodes[node]["with_reputation"] = with_reputation
-            nodes[node]["attacks"] = node_att
-            nodes[node]["attack_params"] = attack_params
 
-            # Ensure the attack type is properly set in the node configuration
-            if malicious and attack != "No Attack":
-                nodes[node]["adversarial_args"] = {
-                    "attacks": attack,
-                    "attack_params": attack_params
-                }
-            else:
-                nodes[node]["adversarial_args"] = {
-                    "attacks": "No Attack",
-                    "attack_params": {}
-                }
-
-            logging.info(f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attacks']}")
+            logging.info(f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attack_params']['attacks']}")
 
         return nodes
 
@@ -415,7 +411,13 @@ class Scenario:
 
     @classmethod
     def from_dict(cls, data):
-        return cls(**data)
+        # Create a copy of the data to avoid modifying the original
+        scenario_data = data.copy()
+
+        # Create the scenario object
+        scenario = cls(**scenario_data)
+
+        return scenario
 
 
 # Class to manage the current scenario
@@ -438,9 +440,9 @@ class ScenarioManagement:
 
         # Assign the controller endpoint
         if self.scenario.deployment == "docker":
-            self.controller = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-frontend"
+            self.controller = f"{os.environ.get('NEBULA_CONTROLLER_HOST')}:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
         else:
-            self.controller = f"127.0.0.1:{os.environ.get('NEBULA_FRONTEND_PORT')}"
+            self.controller = f"127.0.0.1:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
 
         self.topologymanager = None
         self.env_path = None
@@ -480,13 +482,17 @@ class ScenarioManagement:
 
         os.chmod(settings_file, 0o777)
 
+        # Get attack parameters from attack_params
+        poisoned_node_percent = self.scenario.attack_params.get("poisoned_node_percent", 0)
+        poisoned_sample_percent = self.scenario.attack_params.get("poisoned_sample_percent", 0)
+        poisoned_noise_percent = self.scenario.attack_params.get("poisoned_noise_percent", 0)
+
         self.scenario.nodes = self.scenario.attack_node_assign(
             self.scenario.nodes,
             self.scenario.federation,
-            self.scenario.attacks,
-            int(self.scenario.poisoned_node_percent),
-            int(self.scenario.poisoned_sample_percent),
-            int(self.scenario.poisoned_noise_percent),
+            int(poisoned_node_percent),
+            int(poisoned_sample_percent),
+            int(poisoned_noise_percent),
             self.scenario.attack_params,
         )
 
@@ -504,7 +510,7 @@ class ScenarioManagement:
             shutil.copy(
                 os.path.join(
                     os.path.dirname(__file__),
-                    "./frontend/config/participant.json.example",
+                    "../frontend/config/participant.json.example",
                 ),
                 participant_file,
             )
@@ -514,6 +520,7 @@ class ScenarioManagement:
 
             participant_config["network_args"]["ip"] = node_config["ip"]
             participant_config["network_args"]["port"] = int(node_config["port"])
+            participant_config["network_args"]["simulation"] = self.scenario.network_simulation
             participant_config["device_args"]["idx"] = node_config["id"]
             participant_config["device_args"]["start"] = node_config["start"]
             participant_config["device_args"]["role"] = node_config["role"]
@@ -530,9 +537,13 @@ class ScenarioManagement:
             participant_config["device_args"]["gpu_id"] = self.scenario.gpu_id
             participant_config["device_args"]["logging"] = self.scenario.logginglevel
             participant_config["aggregator_args"]["algorithm"] = self.scenario.agg_algorithm
-            participant_config["adversarial_args"]["attacks"] = node_config["attacks"]
-            participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
+            # To be sure that benign nodes have no attack parameters
+            if node_config["malicious"]:
+                participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
+            else:
+                participant_config["adversarial_args"]["attack_params"] = {"attacks": "No Attack"}
             participant_config["defense_args"]["with_reputation"] = node_config["with_reputation"]
+<<<<<<< HEAD:nebula/scenarios.py
             if isinstance(self.scenario.reputation_metrics, list):
                 metrics_list = self.scenario.reputation_metrics
                 metrics_dict = {
@@ -544,6 +555,9 @@ class ScenarioManagement:
                 participant_config["defense_args"]["reputation_metrics"] = metrics_dict
             else:
                 participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
+=======
+            participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
+>>>>>>> origin/main:nebula/controller/scenarios.py
             participant_config["defense_args"]["initial_reputation"] = self.scenario.initial_reputation
             participant_config["defense_args"]["weighting_factor"] = self.scenario.weighting_factor
             participant_config["defense_args"]["weight_model_arrival_latency"] = (
@@ -564,6 +578,21 @@ class ScenarioManagement:
             participant_config["mobility_args"]["round_frequency"] = self.scenario.round_frequency
             participant_config["reporter_args"]["report_status_data_queue"] = self.scenario.report_status_data_queue
             participant_config["mobility_args"]["topology_type"] = self.scenario.topology
+            if self.scenario.with_sa:
+                participant_config["situational_awareness"] = {
+                    "strict_topology": self.scenario.strict_topology,
+                    "sa_discovery": {
+                        "candidate_selector": self.scenario.sad_candidate_selector,
+                        "model_handler": self.scenario.sad_model_handler,
+                        "verbose": True,
+                    },
+                    "sa_reasoner": {
+                        "arbitration_policy": self.scenario.sar_arbitration_policy,
+                        "verbose": True,
+                        "sar_components": {"sa_network": True},
+                        "sa_network": {"neighbor_policy": self.scenario.sar_neighbor_policy, "verbose": True},
+                    },
+                }
 
             with open(participant_file, "w") as f:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
@@ -699,6 +728,7 @@ class ScenarioManagement:
                     is_start_node = True
                 else:
                     raise ValueError("Only one node can be start node")
+
             with open(f"{self.config_dir}/participant_" + str(i) + ".json", "w") as f:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
 
@@ -969,7 +999,7 @@ class ScenarioManagement:
             command = [
                 "/bin/bash",
                 "-c",
-                f"{start_command} && ifconfig && echo '{base}.1 host.docker.internal' >> /etc/hosts && python /nebula/nebula/node.py /nebula/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json",
+                f"{start_command} && ifconfig && echo '{base}.1 host.docker.internal' >> /etc/hosts && python /nebula/nebula/core/node.py /nebula/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json",
             ]
 
             if self.use_blockchain:
@@ -1023,28 +1053,29 @@ class ScenarioManagement:
             i += 1
 
     def start_nodes_process(self):
+        self.processes_root_path = os.path.join(os.path.dirname(__file__),"..", "..")
         logging.info("Starting nodes as processes...")
         logging.info(f"env path: {self.env_path}")
 
         # Include additional config to the participants
         for idx, node in enumerate(self.config.participants):
-            node["tracking_args"]["log_dir"] = os.path.join(self.root_path, "app", "logs")
-            node["tracking_args"]["config_dir"] = os.path.join(self.root_path, "app", "config", self.scenario_name)
+            node["tracking_args"]["log_dir"] = os.path.join(self.processes_root_path, "app", "logs")
+            node["tracking_args"]["config_dir"] = os.path.join(self.processes_root_path, "app", "config", self.scenario_name)
             node["scenario_args"]["controller"] = self.controller
             node["scenario_args"]["deployment"] = self.scenario.deployment
             node["security_args"]["certfile"] = os.path.join(
-                self.root_path,
+                self.processes_root_path,
                 "app",
                 "certs",
                 f"participant_{node['device_args']['idx']}_cert.pem",
             )
             node["security_args"]["keyfile"] = os.path.join(
-                self.root_path,
+                self.processes_root_path,
                 "app",
                 "certs",
                 f"participant_{node['device_args']['idx']}_key.pem",
             )
-            node["security_args"]["cafile"] = os.path.join(self.root_path, "app", "certs", "ca_cert.pem")
+            node["security_args"]["cafile"] = os.path.join(self.processes_root_path, "app", "certs", "ca_cert.pem")
 
             # Write the config file in config directory
             with open(f"{self.config_dir}/participant_{node['device_args']['idx']}.json", "w") as f:
@@ -1070,11 +1101,11 @@ class ScenarioManagement:
                         commands += "Start-Sleep -Seconds 2\n"
 
                     commands += f'Write-Host "Running node {node["device_args"]["idx"]}..."\n'
-                    commands += f'$OUT_FILE = "{self.root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.out"\n'
-                    commands += f'$ERROR_FILE = "{self.root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.err"\n'
+                    commands += f'$OUT_FILE = "{self.processes_root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.out"\n'
+                    commands += f'$ERROR_FILE = "{self.processes_root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.err"\n'
 
                     # Use Start-Process for executing Python in background and capture PID
-                    commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\node.py {self.root_path}\\app\\config\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
+                    commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.processes_root_path}\\nebula\\core\\node.py {self.processes_root_path}\\app\\config\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
                 Add-Content -Path $PID_FILE -Value $process.Id
                 """
 
@@ -1096,19 +1127,19 @@ class ScenarioManagement:
                     else:
                         commands += "sleep 2\n"
                     commands += f'echo "Running node {node["device_args"]["idx"]}..."\n'
-                    commands += f"OUT_FILE={self.root_path}/app/logs/{self.scenario_name}/participant_{node['device_args']['idx']}.out\n"
-                    commands += f"python {self.root_path}/nebula/node.py {self.root_path}/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json > $OUT_FILE 2>&1 &\n"
+                    commands += f"OUT_FILE={self.processes_root_path}/app/logs/{self.scenario_name}/participant_{node['device_args']['idx']}.out\n"
+                    commands += f"python {self.processes_root_path}/nebula/core/node.py {self.processes_root_path}/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json > $OUT_FILE 2>&1 &\n"
                     commands += "echo $! >> $PID_FILE\n\n"
 
                 commands += 'echo "All nodes started. PIDs stored in $PID_FILE"\n'
 
-                with open(f"/nebula/app/config/{self.scenario_name}/current_scenario_commands.sh", "w") as f:
+                with open(f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", "w") as f:
                     f.write(commands)
-                os.chmod(f"/nebula/app/config/{self.scenario_name}/current_scenario_commands.sh", 0o755)
+                os.chmod(f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", 0o755)
 
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
-        
+
     def start_nodes_physical(self):
         logging.info("Starting nodes as physical devices...")
         logging.info(f"env path: {self.env_path}")

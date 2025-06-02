@@ -13,7 +13,6 @@
   "device_args": {
     "uid": "",
     "idx": "",
-    "docker_id": "",
     "name": "",
     "username": "pi",
     "password": "pi",
@@ -63,7 +62,6 @@
     "mobility": false,
     "mobility_type": "topology",
     "topology_type": "",
-    "push_strategy": "slow",
     "radius_federation": 1000,
     "scheme_mobility": "random",
     "round_frequency": 1,
@@ -100,7 +98,6 @@
     "weighting_factor": "dynamic"
   },
   "adversarial_args": {
-    "attacks": "No Attack",
     "attack_params" : {}
   },
   "tracking_args": {

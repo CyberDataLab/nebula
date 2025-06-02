@@ -1,7 +1,8 @@
-import math
+import copy
 import os
-from abc import ABC, abstractmethod
 import pickle
+from abc import ABC, abstractmethod
+from types import SimpleNamespace
 from typing import Any
 
 import h5py
@@ -10,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from sklearn.manifold import TSNE
-import torch
+from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset
 
 matplotlib.use("Agg")
@@ -301,9 +302,13 @@ class NebulaDataset:
         partitions_number=1,
         batch_size=32,
         num_workers=4,
-        iid=True,
+        iid=False,
         partition="dirichlet",
         partition_parameter=0.5,
+        nsplits_percentages=[1.0],
+        nsplits_iid=["Non-IID"],
+        npartitions=["dirichlet"],
+        npartitions_parameter=[0.1],
         seed=42,
         config_dir=None,
     ):
@@ -316,6 +321,11 @@ class NebulaDataset:
         self.partition_parameter = partition_parameter
         self.seed = seed
         self.config_dir = config_dir
+        self._nsplits_percentages = nsplits_percentages
+        self._nsplits_iid = nsplits_iid
+        self._npartitions = npartitions
+        self._npartitions_parameter = npartitions_parameter
+        self._targets_reales = None
 
         logging.info(
             f"Dataset {self.__class__.__name__} initialized | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
@@ -361,11 +371,16 @@ class NebulaDataset:
             f"Partitioning data for {self.__class__.__name__} | Partitions: {self.partitions_number} | IID: {self.iid} | Partition: {self.partition} | Partition parameter: {self.partition_parameter}"
         )
 
-        self.train_indices_map = (
-            self.generate_iid_map(self.train_set)
-            if self.iid
-            else self.generate_non_iid_map(self.train_set, self.partition, self.partition_parameter)
-        )
+        logging.info(f"Scenario with data distribution IID: {self.iid}")
+        if self.iid:
+            self.train_indices_map = self.generate_iid_map(self.train_set)
+        else:
+            self.train_indices_map = self.generate_non_iid_map(
+                self.train_set, partition=self.partition, partition_parameter=self.partition_parameter
+            )
+        # else:
+        #     self.train_indices_map = self.generate_hybrid_map()
+
         self.test_indices_map = self.get_test_indices_map()
         self.local_test_indices_map = self.get_local_test_indices_map()
 
@@ -499,11 +514,133 @@ class NebulaDataset:
         pass
 
     @abstractmethod
-    def generate_iid_map(self, dataset, plot=False):
+    def generate_iid_map(self, dataset, plot=False, num_clients=None):
         """
         Create an iid map of the dataset.
         """
         pass
+
+    def generate_hybrid_map(self):
+        index = 0
+        data = []
+        targets = []
+        sample, target = self.train_set.__getitem__(index)
+        while sample != None and target != None:
+            data.append(sample)
+            targets.append(target)
+            index += 1
+            try:
+                sample, target = self.train_set.__getitem__(index)
+            except Exception:
+                break
+        data = np.array(data)
+        targets = np.array(targets)
+        self._targets_reales = targets.copy()  # TODO remove
+        logging.info(f"number of samples on dataset: {len(data)}, targets: {targets}")
+
+        remaining_size = 1.0
+        subsets = []
+        subset_to_split, targets_to_split = copy.deepcopy(data), copy.deepcopy(targets)
+
+        participants = [i for i in range(self.partitions_number)]
+        num_participants = len(participants)
+        grouped_participants = []
+        start_idx = 0
+
+        or_indices = np.arange(len(data))
+
+        # Inicializar las estructuras que se dividirán en cada iteración
+        subset_to_split, targets_to_split, indices_to_split = (
+            copy.deepcopy(data),
+            copy.deepcopy(targets),
+            copy.deepcopy(or_indices),
+        )
+
+        for i, size in enumerate(self._nsplits_percentages[:-1]):  # Last one doesn't require split
+            relative_size = size / remaining_size  # Tamaño relativo respecto al conjunto restante
+            logging.info(f"size: {size}, relative size: {relative_size}, remaining size: {remaining_size}")
+
+            # Dividir manteniendo referencias originales
+            x_s1, x_s2, y_s1, y_s2, idx_s1, idx_s2 = train_test_split(
+                subset_to_split,
+                targets_to_split,
+                indices_to_split,
+                test_size=(1 - relative_size),
+                stratify=targets_to_split,
+                random_state=42,
+            )
+
+            # Guardar los datos y etiquetas originales asociados a los índices seleccionados
+            original_X_s1, original_y_s1 = data[idx_s1], targets[idx_s1]
+
+            logging.info(f"Subset {i + 1}: {len(original_X_s1)} samples")
+
+            # Guardar subset con referencia a los datos originales
+            subsets.append((original_X_s1, original_y_s1, idx_s1))
+
+            num_in_group = round(size * num_participants)
+            grouped_participants.append(participants[start_idx : start_idx + num_in_group])
+
+            # Actualizar para la siguiente iteración
+            subset_to_split, targets_to_split, indices_to_split = data[idx_s2], targets[idx_s2], idx_s2
+            remaining_size -= size
+            start_idx += num_in_group
+
+        # Guardar el último subset con sus índices originales
+        original_X_s2, original_y_s2 = data[indices_to_split], targets[indices_to_split]
+        subsets.append((original_X_s2, original_y_s2, indices_to_split))
+        grouped_participants.append(participants[start_idx:])
+
+        for i, (_, ysubset, _) in enumerate(subsets):
+            logging.info(f"Subset {i + 1} - {np.bincount(ysubset)}")
+
+        general_map = {}
+        for i, subset in enumerate(subsets):
+            data_mapped = dict()
+            real_indexes = subset[2]
+            subset_real_data = data[real_indexes]
+            subset_real_targets = targets[real_indexes]
+
+            dataset_wrapped = SimpleNamespace(
+                data=subset_real_data, targets=subset_real_targets, real_indexes=real_indexes
+            )
+
+            if self._nsplits_iid[i] == "IID":
+                logging.info(
+                    f"Generating dataset subset IID for participants: {grouped_participants[i]}, num_clients: {len(grouped_participants[i])}"
+                )
+                subset_map = self.generate_iid_map(
+                    dataset_wrapped,
+                    self._npartitions[i],
+                    self._npartitions_parameter[i],
+                    num_clients=len(grouped_participants[i]),
+                )
+                for j, real_id in enumerate(
+                    grouped_participants[i]
+                ):  # Mapping subset map generated to real clients IDs
+                    data_mapped[real_id] = subset_map[j]
+
+            else:
+                logging.info(
+                    f"Generating dataset subset Non-IID for participants: {grouped_participants[i]}, num_clients: {len(grouped_participants[i])}"
+                )
+                subset_map = self.generate_non_iid_map(
+                    dataset_wrapped,
+                    self._npartitions[i],
+                    self._npartitions_parameter[i],
+                    num_clients=len(grouped_participants[i]),
+                )
+                for j, real_id in enumerate(
+                    grouped_participants[i]
+                ):  # Mapping subset map generated to real clients IDs
+                    data_mapped[real_id] = subset_map[j]
+
+            general_map.update(data_mapped)
+        for id, indexes in general_map.items():
+            logging.info(
+                f" Participant id: {id}, num samples: {len(indexes)}, targets: {np.bincount(targets[indexes])}"
+            )
+        return general_map
 
     def plot_data_distribution(self, phase, dataset, partitions_map):
         """
@@ -591,11 +728,12 @@ class NebulaDataset:
     def dirichlet_partition(
         self,
         dataset: Any,
-        alpha: float = 0.5,
+        alpha: float = 0.2,
+        n_clients=None,
         min_samples_size: int = 50,
         balanced: bool = False,
         max_iter: int = 100,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> dict[int, list[int]]:
         """
         Partition the dataset among clients using a Dirichlet distribution.
@@ -622,55 +760,84 @@ class NebulaDataset:
         partitions : dict[int, list[int]]
             Dictionary mapping each client index to a list of sample indices.
         """
+        num_clients = self.partitions_number if not n_clients else n_clients
+        logging.info(f"Generating Dirichlet Partitioning, alpha: {alpha}, num_clients: {num_clients}")
+
         # Extract targets and unique labels.
-        y_data = self._get_targets(dataset)
-        unique_labels = np.unique(y_data)
+        if not n_clients:
+            y_data = self._get_targets(dataset)
+            unique_labels = np.unique(y_data)
+        else:
+            if verbose:
+                logging.info("Extracting dataset partition targets...")
+            # For hybrid dataset scenarios
+            y_data = dataset.targets
+            unique_labels = np.unique(y_data)
+        if verbose:
+            logging.info(f"Unique labels in dataset: {unique_labels}")
 
         # For each class, get a shuffled list of indices.
         class_indices = {}
         base_rng = np.random.default_rng(self.seed)
         for label in unique_labels:
-            idx = np.where(y_data == label)[0]
+            if not n_clients:
+                idx = np.where(y_data == label)[0]
+            else:
+                ri = dataset.real_indexes
+                idx = np.where(self._targets_reales[ri] == label)[0]
+                idx = ri[idx]
+                # logging.info(f"attempting: {self._targets_reales[idx]}")
+
             base_rng.shuffle(idx)
             class_indices[label] = idx
 
         # Prepare container for client indices.
-        indices_per_partition = [[] for _ in range(self.partitions_number)]
+        indices_per_partition = [[] for _ in range(num_clients)]
 
-        def allocate_for_label(label_idx: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+        def allocate_for_label(label_idx: np.ndarray, rng: np.random.Generator, n_clients) -> np.ndarray:
             num_label_samples = len(label_idx)
+            if verbose:
+                logging.info(f"number of samples allocating {num_label_samples}")
             if balanced:
-                proportions = np.full(self.partitions_number, 1.0 / self.partitions_number)
+                proportions = np.full(n_clients, 1.0 / n_clients)
             else:
-                proportions = rng.dirichlet([alpha] * self.partitions_number)
+                proportions = rng.dirichlet([alpha] * n_clients)
             sample_counts = (proportions * num_label_samples).astype(int)
             remainder = num_label_samples - sample_counts.sum()
             if remainder > 0:
-                extra_indices = rng.choice(self.partitions_number, size=remainder, replace=False)
+                extra_indices = rng.choice(n_clients, size=remainder, replace=False)
                 for idx in extra_indices:
                     sample_counts[idx] += 1
+            if verbose:
+                logging.info(f"Samples allocated per client: {sample_counts}")
             return sample_counts
 
         for iteration in range(1, max_iter + 1):
             rng = np.random.default_rng(self.seed + iteration)
-            temp_indices_per_partition = [[] for _ in range(self.partitions_number)]
+            temp_indices_per_partition = [[] for _ in range(num_clients)]
             for label in unique_labels:
                 label_idx = class_indices[label]
-                counts = allocate_for_label(label_idx, rng)
+                if verbose:
+                    logging.info(f"Calculating samples distribution for label: {label}")
+                counts = allocate_for_label(label_idx, rng, num_clients)
                 start = 0
                 for client_idx, count in enumerate(counts):
                     end = start + count
                     temp_indices_per_partition[client_idx].extend(label_idx[start:end])
+                    if verbose:
+                        logging.info(
+                            f"Counting check: {np.bincount(self._targets_reales[temp_indices_per_partition[client_idx]])}"
+                        )
                     start = end
 
             client_sizes = [len(indices) for indices in temp_indices_per_partition]
             if min(client_sizes) >= min_samples_size:
                 indices_per_partition = temp_indices_per_partition
                 if verbose:
-                    print(f"Partition successful at iteration {iteration}. Client sizes: {client_sizes}")
+                    logging.info(f"Partition successful at iteration {iteration}. Client sizes: {client_sizes}")
                 break
             if verbose:
-                print(f"Iteration {iteration}: client sizes {client_sizes}")
+                logging.info(f"Iteration {iteration}: client sizes {client_sizes}")
 
         else:
             raise ValueError(
@@ -678,9 +845,7 @@ class NebulaDataset:
             )
 
         initial_partition = {i: indices for i, indices in enumerate(indices_per_partition)}
-
-        final_partition = self.postprocess_partition(initial_partition, y_data)
-
+        final_partition = initial_partition  # self.postprocess_partition(initial_partition, y_data)
         return final_partition
 
     @staticmethod
@@ -797,7 +962,7 @@ class NebulaDataset:
 
         return net_dataidx_map
 
-    def balanced_iid_partition(self, dataset):
+    def balanced_iid_partition(self, dataset, n_clients=None):
         """
         Partition the dataset into balanced and IID (Independent and Identically Distributed)
         subsets for each client.
@@ -823,7 +988,8 @@ class NebulaDataset:
             federated_data = balanced_iid_partition(my_dataset)
             # This creates federated data subsets with equal class distributions.
         """
-        num_clients = self.partitions_number
+        logging.info("Generating balanced IID partition")
+        num_clients = self.partitions_number if not n_clients else n_clients
         clients_data = {i: [] for i in range(num_clients)}
 
         # Get the labels from the dataset
@@ -839,8 +1005,13 @@ class NebulaDataset:
         min_count = label_counts[min_label]
 
         for label in range(self.num_classes):
-            # Get the indices of the same label samples
-            label_indices = np.where(labels == label)[0]
+            if not n_clients:
+                label_indices = np.where(labels == label)[0]
+            else:  # For hybrid dataset scenarios
+                ri = dataset.real_indexes
+                label_indices = np.where(self._targets_reales[ri] == label)[0]
+                label_indices = ri[label_indices]
+
             np.random.seed(self.seed)
             np.random.shuffle(label_indices)
 
@@ -854,7 +1025,7 @@ class NebulaDataset:
 
         return clients_data
 
-    def unbalanced_iid_partition(self, dataset, imbalance_factor=2):
+    def unbalanced_iid_partition(self, dataset, imbalance_factor=2, n_clients=None):
         """
         Partition the dataset into multiple IID (Independent and Identically Distributed)
         subsets with different size.
@@ -885,12 +1056,18 @@ class NebulaDataset:
             # This creates federated data subsets with varying number of samples based on
             # an imbalance factor of 2.
         """
-        num_clients = self.partitions_number
+        logging.info("Generating unbalanced IID partition")
+        num_clients = self.partitions_number if not n_clients else n_clients
         clients_data = {i: [] for i in range(num_clients)}
 
         # Get the labels from the dataset
-        labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        if not n_clients:
+            labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        else:
+            labels = np.array(self._targets_reales[dataset.real_indexes])
+
         label_counts = np.bincount(labels)
+        logging.info(f"label_counts: {label_counts}")
 
         min_label = label_counts.argmin()
         min_count = label_counts[min_label]
@@ -905,7 +1082,13 @@ class NebulaDataset:
 
         for label in range(self.num_classes):
             # Get the indices of the same label samples
-            label_indices = np.where(labels == label)[0]
+            if not n_clients:
+                label_indices = np.where(labels == label)[0]
+            else:  # For hybrid dataset scenarios
+                ri = dataset.real_indexes
+                label_indices = np.where(self._targets_reales[ri] == label)[0]
+                label_indices = ri[label_indices]
+
             np.random.seed(self.seed)
             np.random.shuffle(label_indices)
 
@@ -918,7 +1101,7 @@ class NebulaDataset:
 
         return clients_data
 
-    def percentage_partition(self, dataset, percentage=20):
+    def percentage_partition(self, dataset, percentage=20, n_clients=None):
         """
         Partition a dataset into multiple subsets with a specified level of non-IID-ness.
 
@@ -947,11 +1130,20 @@ class NebulaDataset:
             y_train = np.asarray(dataset.targets)
 
         num_classes = self.num_classes
-        num_subsets = self.partitions_number
-        class_indices = {i: np.where(y_train == i)[0] for i in range(num_classes)}
+        num_subsets = self.partitions_number if not n_clients else n_clients
+
+        if not n_clients:
+            class_indices = {i: np.where(y_train == i)[0] for i in range(num_classes)}
+        else:
+            # TODO adapt, bad right now
+            ri = dataset.real_indexes
+            class_indices = {i: "" for i in range(num_classes)}
 
         # Get the labels from the dataset
-        labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        if not n_clients:
+            labels = np.array([dataset.targets[idx] for idx in range(len(dataset))])
+        else:
+            labels = np.array(self._targets_reales[dataset.real_indexes])
         label_counts = np.bincount(labels)
 
         min_label = label_counts.argmin()
@@ -1084,3 +1276,24 @@ class NebulaDataset:
         path_to_save = f"{self.config_dir}/all_data_distribution_CIRCLES_{'iid' if self.iid else 'non_iid'}{'_' + self.partition if not self.iid else ''}_{phase}.pdf"
         plt.savefig(path_to_save, dpi=300, bbox_inches="tight")
         plt.close()
+
+
+def factory_nebuladataset(dataset, **config) -> NebulaDataset:
+    from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
+    from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
+    from nebula.core.datasets.emnist.emnist import EMNISTDataset
+    from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
+    from nebula.core.datasets.mnist.mnist import MNISTDataset
+
+    options = {
+        "MNIST": MNISTDataset,
+        "FashionMNIST": FashionMNISTDataset,
+        "EMNIST": EMNISTDataset,
+        "CIFAR10": CIFAR10Dataset,
+        "CIFAR100": CIFAR100Dataset,
+    }
+
+    cs = options.get(dataset)
+    if not cs:
+        raise ValueError(f"Dataset {dataset} not supported")
+    return cs(**config)

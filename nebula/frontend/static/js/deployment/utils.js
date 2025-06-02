@@ -24,7 +24,7 @@ const Utils = (function() {
             value = Math.min(Math.max(value, 0), 1);
         }
         input.value = value.toFixed(1);
-        
+
         // Trigger topology update if Random is selected
         const topologySelect = document.getElementById('predefined-topology-select');
         if (topologySelect && topologySelect.value === 'Random') {
@@ -55,4 +55,4 @@ const Utils = (function() {
     };
 })();
 
-export default Utils; 
+export default Utils;

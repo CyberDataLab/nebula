@@ -35,9 +35,11 @@ class DatasetAttack(Attack):
         """
         if self.engine.round not in range(self.round_start_attack, self.round_stop_attack + 1):
             pass
-        elif  self.engine.round == self.round_stop_attack:
+        elif self.engine.round == self.round_stop_attack:
             logging.info(f"[{self.__class__.__name__}] Stopping attack")
-        elif self.engine.round >= self.round_start_attack and ((self.engine.round - self.round_start_attack) % self.attack_interval == 0):
+        elif self.engine.round >= self.round_start_attack and (
+            (self.engine.round - self.round_start_attack) % self.attack_interval == 0
+        ):
             logging.info(f"[{self.__class__.__name__}] Performing attack")
             self.engine.trainer.datamodule.train_set = self.get_malicious_dataset()
 

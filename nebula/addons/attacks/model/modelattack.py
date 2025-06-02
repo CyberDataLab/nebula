@@ -110,7 +110,9 @@ class ModelAttack(Attack):
         elif self.engine.round == self.round_stop_attack:
             logging.info(f"[{self.__class__.__name__}] Stopping attack")
             await self._restore_original_behaviour()
-        elif (self.engine.round == self.round_start_attack) or ((self.engine.round - self.round_start_attack) % self.attack_interval == 0):
+        elif (self.engine.round == self.round_start_attack) or (
+            (self.engine.round - self.round_start_attack) % self.attack_interval == 0
+        ):
             logging.info(f"[{self.__class__.__name__}] Performing attack")
             await self._inject_malicious_behaviour()
         else:

@@ -28,4 +28,4 @@ document.addEventListener('DOMContentLoaded', () => {
     Dashboard.init();
 });
 
-export default Dashboard; 
+export default Dashboard;

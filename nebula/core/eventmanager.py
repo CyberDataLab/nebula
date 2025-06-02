@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import logging
+from collections.abc import Callable
 
 from nebula.core.nebulaevents import AddonEvent, NodeEvent
 from nebula.core.network.messages import MessageEvent
@@ -9,10 +10,10 @@ from nebula.core.utils.locker import Locker
 
 class EventManager:
     _instance = None
-    _lock = Locker("event_manager")  # To avoid race conditions in multithreaded environments
+    _lock = Locker("event_manager")
 
     def __new__(cls, *args, **kwargs):
-        """Implementation of the Singleton pattern."""
+        """Implementación del patrón Singleton."""
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
@@ -20,8 +21,8 @@ class EventManager:
         return cls._instance
 
     def _initialize(self, verbose=False):
-        """Initializes the single instance (runs only once)."""
-        if hasattr(self, "_initialized"):  # Prevents resetting
+        """Inicializa la instancia única (solo se ejecuta una vez)."""
+        if hasattr(self, "_initialized"):
             return
         self._subscribers: dict[tuple[str, str], list] = {}
         self._message_events_lock = Locker("message_events_lock", async_lock=True)
@@ -29,18 +30,26 @@ class EventManager:
         self._addons_event_lock = Locker("addons_event_lock", async_lock=True)
         self._node_events_subs: dict[type, list] = {}
         self._node_events_lock = Locker("node_events_lock", async_lock=True)
+        self._global_message_subscribers: list[Callable] = []
+        self._global_message_subscribers_lock = Locker("global_message_subscribers_lock", async_lock=True)
         self._verbose = verbose
-        self._initialized = True  # Mark already initialized
+        self._initialized = True
 
     @staticmethod
     def get_instance(verbose=False):
-        """Static method to get the unique instance."""
+        """Método estático para obtener la instancia única."""
         if EventManager._instance is None:
             EventManager(verbose=verbose)
         return EventManager._instance
 
-    async def subscribe(self, event_type: tuple[str, str], callback: callable):
-        """Register a callback for a specific event type."""
+    async def subscribe(self, event_type: tuple[str, str] | None, callback: Callable):
+        """Register a callback for a message event."""
+        if not event_type:
+            async with self._global_message_subscribers_lock:
+                self._global_message_subscribers.append(callback)
+                logging.info(f"EventManager | Subscribed callback for all message events: {event_type}")
+                return
+
         async with self._message_events_lock:
             if event_type not in self._subscribers:
                 self._subscribers[event_type] = []
@@ -71,7 +80,24 @@ class EventManager:
             except Exception as e:
                 logging.exception(f"EventManager | Error in callback for event {event_type}: {e}")
 
-    async def subscribe_addonevent(self, addonEventType: type[AddonEvent], callback: callable):
+        # Global callbacks (callbacks for all message events)
+        async with self._global_message_subscribers_lock:
+            global_callbacks = self._global_message_subscribers.copy()
+
+        for global_cb in global_callbacks:
+            try:
+                if self._verbose:
+                    logging.info(
+                        f"EventManager | Triggering callback for event: {event_type}, from source: {message_event.source}"
+                    )
+                if asyncio.iscoroutinefunction(callback) or inspect.iscoroutine(callback):
+                    await global_cb(message_event.source, message_event.message)
+                else:
+                    global_cb(message_event.source, message_event.message)
+            except Exception as e:
+                logging.exception(f"EventManager | Error in callback for event {event_type}: {e}")
+
+    async def subscribe_addonevent(self, addonEventType: type[AddonEvent], callback: Callable):
         """Register a callback for a specific type of AddonEvent."""
         async with self._addons_event_lock:
             if addonEventType not in self._addons_events_subs:
@@ -88,7 +114,8 @@ class EventManager:
             callbacks = self._addons_events_subs.get(event_type, [])
 
         if not callbacks:
-            logging.error(f"EventManager | No subscribers for AddonEvent type: {event_type.__name__}")
+            if self._verbose:
+                logging.error(f"EventManager | No subscribers for AddonEvent type: {event_type.__name__}")
             return
 
         for callback in self._addons_events_subs[event_type]:
@@ -102,7 +129,7 @@ class EventManager:
             except Exception as e:
                 logging.exception(f"EventManager | Error in callback for AddonEvent {event_type.__name__}: {e}")
 
-    async def subscribe_node_event(self, nodeEventType: type[NodeEvent], callback: callable):
+    async def subscribe_node_event(self, nodeEventType: type[NodeEvent], callback: Callable):
         """Register a callback for a specific type of AddonEvent."""
         async with self._node_events_lock:
             if nodeEventType not in self._node_events_subs:

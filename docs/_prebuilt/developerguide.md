@@ -829,8 +829,8 @@ To add a new message to the application, follow these steps:
         FEDERATION_READY = 3;
       }
       Action action = 1;
-      repeated string arguments = 2;  
-      int32 round = 3;                
+      repeated string arguments = 2;
+      int32 round = 3;
     }
     ```
 

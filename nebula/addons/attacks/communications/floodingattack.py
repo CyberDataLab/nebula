@@ -1,9 +1,8 @@
-import asyncio
 import logging
 from functools import wraps
-import time
 
 from nebula.addons.attacks.communications.communicationattack import CommunicationAttack
+from nebula.core.network.communications import CommunicationsManager
 
 
 class FloodingAttack(CommunicationAttack):
@@ -35,8 +34,8 @@ class FloodingAttack(CommunicationAttack):
 
         super().__init__(
             engine,
-            engine._cm,
-            "send_model",
+            CommunicationsManager.get_instance(),
+            "send_message",
             round_start,
             round_stop,
             attack_interval,
@@ -59,7 +58,7 @@ class FloodingAttack(CommunicationAttack):
         def decorator(func):
             @wraps(func)
             async def wrapper(*args, **kwargs):
-                if len(args) > 1:
+                if len(args) == 4 and args[3] == "model":
                     dest_addr = args[1]
                     if dest_addr in self.targets:
                         logging.info(f"[FloodingAttack] Flooding message to {dest_addr} by {flooding_factor} times")
@@ -68,13 +67,11 @@ class FloodingAttack(CommunicationAttack):
                                 logging.info(
                                     f"[FloodingAttack] Sending duplicate {i + 1}/{flooding_factor} to {dest_addr}"
                                 )
-                            _, dest_addr, _, serialized_model, weight = args  # Exclude self argument
-                            new_args = [dest_addr, i, serialized_model, weight]
+                            _, *new_args = args  # Exclude self argument
                             await func(*new_args, **kwargs)
-                _, dest_addr, _, serialized_model, weight = args  # Exclude self argument
-                new_args = [dest_addr, i, serialized_model, weight]
+                _, *new_args = args 
                 return await func(*new_args)
-
+            
             return wrapper
 
         return decorator

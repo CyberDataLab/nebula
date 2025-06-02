@@ -4,6 +4,7 @@ import TopologyManager from './topology.js';
 import AttackManager from './attack.js';
 import MobilityManager from './mobility.js';
 import ReputationManager from './reputation.js';
+import SaManager from './situational-awareness.js';
 import GraphSettings from './graph-settings.js';
 import Utils from './utils.js';
 
@@ -11,12 +12,12 @@ const DeploymentManager = (function() {
     function initialize() {
         // First initialize all modules
         initializeModules();
-        
+
         // Then initialize event listeners and UI controls
         initializeEventListeners();
         setupDeploymentButtons();
         initializeSelectElements();
-        
+
         // Finally initialize scenarios after all modules are ready
         ScenarioManager.initializeScenarios();
     }
@@ -27,14 +28,16 @@ const DeploymentManager = (function() {
         AttackManager.initializeEventListeners();
         MobilityManager.initializeMobility();
         ReputationManager.initializeReputationSystem();
+        SaManager.initializeSa();
         GraphSettings.initializeDistanceControls();
-        
+
         // Make modules globally available
         window.ScenarioManager = ScenarioManager;
         window.TopologyManager = TopologyManager;
         window.AttackManager = AttackManager;
         window.MobilityManager = MobilityManager;
         window.ReputationManager = ReputationManager;
+        window.SaManager = SaManager;
         window.GraphSettings = GraphSettings;
         window.DeploymentManager = DeploymentManager;
         window.Utils = Utils;
@@ -52,7 +55,7 @@ const DeploymentManager = (function() {
         window.addEventListener("resize", handleResize);
         window.addEventListener("click", handleOutsideClick);
         setupDatasetListeners();
-        setupInputValidation();
+        //setupInputValidation();
     }
 
     function handleResize() {
@@ -257,8 +260,8 @@ const DeploymentManager = (function() {
                 input.addEventListener('input', () => Utils.greaterThan0(input));
             }
             if(input.hasAttribute('min') && input.hasAttribute('max')) {
-                input.addEventListener('input', () => Utils.isInRange(input, 
-                    parseInt(input.getAttribute('min')), 
+                input.addEventListener('input', () => Utils.isInRange(input,
+                    parseInt(input.getAttribute('min')),
                     parseInt(input.getAttribute('max'))));
             }
         });
@@ -270,4 +273,4 @@ const DeploymentManager = (function() {
     };
 })();
 
-export default DeploymentManager; 
+export default DeploymentManager;

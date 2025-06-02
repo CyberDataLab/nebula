@@ -6,6 +6,8 @@ from nebula.core.pb import nebula_pb2
 class ConnectionAction(Enum):
     CONNECT = nebula_pb2.ConnectionMessage.Action.CONNECT
     DISCONNECT = nebula_pb2.ConnectionMessage.Action.DISCONNECT
+    LATE_CONNECT = nebula_pb2.ConnectionMessage.Action.LATE_CONNECT
+    RESTRUCTURE = nebula_pb2.ConnectionMessage.Action.RESTRUCTURE
 
 
 class FederationAction(Enum):
@@ -29,6 +31,21 @@ class ControlAction(Enum):
     WEAK_LINK = nebula_pb2.ControlMessage.Action.WEAK_LINK
 
 
+class DiscoverAction(Enum):
+    DISCOVER_JOIN = nebula_pb2.DiscoverMessage.Action.DISCOVER_JOIN
+    DISCOVER_NODES = nebula_pb2.DiscoverMessage.Action.DISCOVER_NODES
+
+
+class OfferAction(Enum):
+    OFFER_MODEL = nebula_pb2.OfferMessage.Action.OFFER_MODEL
+    OFFER_METRIC = nebula_pb2.OfferMessage.Action.OFFER_METRIC
+
+
+class LinkAction(Enum):
+    CONNECT_TO = nebula_pb2.LinkMessage.Action.CONNECT_TO
+    DISCONNECT_FROM = nebula_pb2.LinkMessage.Action.DISCONNECT_FROM
+
+
 class ReputationAction(Enum):
     SHARE = nebula_pb2.ReputationMessage.Action.SHARE
 
@@ -38,6 +55,9 @@ ACTION_CLASSES = {
     "federation": FederationAction,
     "discovery": DiscoveryAction,
     "control": ControlAction,
+    "discover": DiscoverAction,
+    "offer": OfferAction,
+    "link": LinkAction,
     "reputation": ReputationAction,
 }
 

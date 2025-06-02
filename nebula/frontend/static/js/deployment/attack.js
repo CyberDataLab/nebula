@@ -88,7 +88,19 @@ const AttackManager = (function() {
 
         document.getElementById("targeted").addEventListener("change", function() {
             const attackType = document.getElementById("poisoning-attack-select").value;
-            updateAttackUI(attackType);
+            const elements = {
+                targetLabel: {title: document.getElementById("target_label-title"), container: document.getElementById("target_label-container")},
+                targetChangedLabel: {title: document.getElementById("target_changed_label-title"), container: document.getElementById("target_changed_label-container")}
+            };
+            
+            if (this.checked && (attackType === ATTACK_TYPES.LABEL_FLIPPING || attackType === ATTACK_TYPES.SAMPLE_POISONING)) {
+                showElements(elements, ['targetLabel', 'targetChangedLabel']);
+            } else {
+                elements.targetLabel.title.style.display = "none";
+                elements.targetLabel.container.style.display = "none";
+                elements.targetChangedLabel.title.style.display = "none";
+                elements.targetChangedLabel.container.style.display = "none";
+            }
         });
 
         document.getElementById("malicious-nodes-select").addEventListener("change", function() {
@@ -104,53 +116,65 @@ const AttackManager = (function() {
 
     function getAttackConfig() {
         const attackType = document.getElementById("poisoning-attack-select").value;
+        
+        // Validate numeric inputs
+        function validateNumericInput(id, min = 0, max = 100) {
+            const value = parseFloat(document.getElementById(id).value);
+            if (isNaN(value) || value < min || value > max) {
+                throw new Error(`Invalid value for ${id}: must be between ${min} and ${max}`);
+            }
+            return value;
+        }
+
+        // Base config with common parameters
         const config = {
-            type: attackType,
-            poisonedNodePercent: parseFloat(document.getElementById("poisoned-node-percent").value),
-            round_start_attack: parseInt(document.getElementById("start-attack").value),
-            round_stop_attack: parseInt(document.getElementById("stop-attack").value),
-            attack_interval: parseInt(document.getElementById("attack-interval").value)
+            attacks: attackType, // Send as string instead of array
+            poisoned_node_percent: validateNumericInput("poisoned-node-percent"),
+            round_start_attack: validateNumericInput("start-attack", 0),
+            round_stop_attack: validateNumericInput("stop-attack", 0),
+            attack_interval: validateNumericInput("attack-interval", 1)
         };
 
+        // Add attack-specific parameters
         switch(attackType) {
             case ATTACK_TYPES.LABEL_FLIPPING:
-                config.poisoned_percent = parseFloat(document.getElementById("poisoned-sample-percent").value);
+                config.poisoned_sample_percent = validateNumericInput("poisoned-sample-percent");
                 config.targeted = document.getElementById("targeted").checked;
                 if(config.targeted) {
-                    config.target_label = parseInt(document.getElementById("target_label").value);
-                    config.target_changed_label = parseInt(document.getElementById("target_changed_label").value);
+                    config.target_label = validateNumericInput("target_label", 0);
+                    config.target_changed_label = validateNumericInput("target_changed_label", 0);
                 }
                 break;
 
             case ATTACK_TYPES.SAMPLE_POISONING:
-                config.poisoned_percent = parseFloat(document.getElementById("poisoned-sample-percent").value);
-                config.poisoned_ratio = parseFloat(document.getElementById("poisoned-noise-percent").value);
+                config.poisoned_sample_percent = validateNumericInput("poisoned-sample-percent");
+                config.poisoned_noise_percent = validateNumericInput("poisoned-noise-percent");
                 config.noise_type = document.getElementById("noise_type").value;
                 config.targeted = document.getElementById("targeted").checked;
                 if(config.targeted) {
-                    config.target_label = parseInt(document.getElementById("target_label").value);
+                    config.target_label = validateNumericInput("target_label", 0);
                 }
                 break;
 
             case ATTACK_TYPES.MODEL_POISONING:
-                config.poisoned_ratio = parseFloat(document.getElementById("poisoned-noise-percent").value);
+                config.poisoned_noise_percent = validateNumericInput("poisoned-noise-percent");
                 config.noise_type = document.getElementById("noise_type").value;
                 break;
 
             case ATTACK_TYPES.SWAPPING_WEIGHTS:
-                config.layer_idx = parseInt(document.getElementById("layer_idx").value);
+                config.layer_idx = validateNumericInput("layer_idx", 0);
                 break;
 
             case ATTACK_TYPES.DELAYER:
-                config.delay = parseInt(document.getElementById("delay").value);
-                config.target_percentage = parseInt(document.getElementById("target-percentage").value);
-                config.selection_interval = parseInt(document.getElementById("selection-interval").value);
+                config.delay = validateNumericInput("delay", 0);
+                config.target_percentage = validateNumericInput("target-percentage", 0, 100);
+                config.selection_interval = validateNumericInput("selection-interval", 1);
                 break;
 
             case ATTACK_TYPES.FLOODING:
-                config.flooding_factor = parseInt(document.getElementById("flooding-factor").value);
-                config.target_percentage = parseInt(document.getElementById("target-percentage").value);
-                config.selection_interval = parseInt(document.getElementById("selection-interval").value);
+                config.flooding_factor = validateNumericInput("flooding-factor", 1);
+                config.target_percentage = validateNumericInput("target-percentage", 0, 100);
+                config.selection_interval = validateNumericInput("selection-interval", 1);
                 break;
         }
 
@@ -165,7 +189,7 @@ const AttackManager = (function() {
         updateAttackUI(config.type);
 
         // Set common fields
-        document.getElementById("poisoned-node-percent").value = config.poisonedNodePercent || 0;
+        document.getElementById("poisoned-node-percent").value = config.poisoned_node_percent || 0;
         document.getElementById("start-attack").value = config.round_start_attack || 1;
         document.getElementById("stop-attack").value = config.round_stop_attack || 10;
         document.getElementById("attack-interval").value = config.attack_interval || 1;
@@ -173,7 +197,7 @@ const AttackManager = (function() {
         // Set attack-specific fields
         switch(config.type) {
             case ATTACK_TYPES.LABEL_FLIPPING:
-                document.getElementById("poisoned-sample-percent").value = config.poisoned_percent || 0;
+                document.getElementById("poisoned-sample-percent").value = config.poisoned_sample_percent || 0;
                 document.getElementById("targeted").checked = config.targeted || false;
                 if(config.targeted) {
                     document.getElementById("target_label").value = config.target_label || 4;
@@ -182,9 +206,9 @@ const AttackManager = (function() {
                 break;
 
             case ATTACK_TYPES.SAMPLE_POISONING:
-                document.getElementById("poisoned-sample-percent").value = config.poisoned_percent || 0;
-                document.getElementById("poisoned-noise-percent").value = config.poisoned_ratio || 0;
-                document.getElementById("noise_type").value = config.noise_type || "Salt";
+                document.getElementById("poisoned-sample-percent").value = config.poisoned_sample_percent || 0;
+                document.getElementById("poisoned-noise-percent").value = config.poisoned_noise_percent || 0;
+                document.getElementById("noise_type").value = config.noise_type || "Gaussian";
                 document.getElementById("targeted").checked = config.targeted || false;
                 if(config.targeted) {
                     document.getElementById("target_label").value = config.target_label || 4;
@@ -192,8 +216,8 @@ const AttackManager = (function() {
                 break;
 
             case ATTACK_TYPES.MODEL_POISONING:
-                document.getElementById("poisoned-noise-percent").value = config.poisoned_ratio || 0;
-                document.getElementById("noise_type").value = config.noise_type || "Salt";
+                document.getElementById("poisoned-noise-percent").value = config.poisoned_noise_percent || 0;
+                document.getElementById("noise_type").value = config.noise_type || "Gaussian";
                 break;
 
             case ATTACK_TYPES.SWAPPING_WEIGHTS:
@@ -229,4 +253,4 @@ const AttackManager = (function() {
     };
 })();
 
-export default AttackManager; 
+export default AttackManager;

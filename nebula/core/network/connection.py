@@ -6,12 +6,22 @@ import lzma
 import time
 import uuid
 import zlib
-import lz4.frame
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+import lz4.frame
+
+from nebula.core.utils.locker import Locker
+
 if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
+    pass
+
+
+class ConnectionPriority(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 @dataclass
@@ -27,10 +37,11 @@ MAX_INCOMPLETED_RECONNECTIONS = 3
 
 class Connection:
     DEFAULT_FEDERATED_ROUND = -1
+    INACTIVITY_TIMER = 30
+    INACTIVITY_DAEMON_SLEEP_TIME = 20
 
     def __init__(
         self,
-        cm: "CommunicationsManager",
         reader,
         writer,
         id,
@@ -40,9 +51,8 @@ class Connection:
         active=True,
         compression="zlib",
         config=None,
-        prio="MEDIUM",
+        prio="medium",
     ):
-        self.cm = cm
         self.reader = reader
         self.writer = writer
         self.id = str(id)
@@ -54,6 +64,7 @@ class Connection:
         self.last_active = time.time()
         self.compression = compression
         self.config = config
+        self._cm = None
 
         self.federated_round = Connection.DEFAULT_FEDERATED_ROUND
         self.loop = asyncio.get_event_loop()
@@ -61,7 +72,10 @@ class Connection:
         self.process_task = None
         self.pending_messages_queue = asyncio.Queue(maxsize=100)
         self.message_buffers: dict[bytes, dict[int, MessageChunk]] = {}
-        self._prio = prio
+        self._prio: ConnectionPriority = ConnectionPriority(prio)
+        self._inactivity = False
+        self._last_activity = time.time()
+        self._activity_lock = Locker(name="activity_lock", async_lock=True)
 
         self.EOT_CHAR = b"\x00\x00\x00\x04"
         self.COMPRESSION_CHAR = b"\x00\x00\x00\x01"
@@ -83,7 +97,7 @@ class Connection:
         )
 
     def __str__(self):
-        return f"Connection to {self.addr} (id: {self.id}) (active: {self.active}) (last active: {self.last_active}) (direct: {self.direct})"
+        return f"Connection to {self.addr} (id: {self.id}) (active: {self.active}) (last active: {self.last_active}) (direct: {self.direct}) (priority: {self._prio.value})"
 
     def __repr__(self):
         return self.__str__()
@@ -91,11 +105,45 @@ class Connection:
     async def __del__(self):
         await self.stop()
 
+    @property
+    def cm(self):
+        if not self._cm:
+            from nebula.core.network.communications import CommunicationsManager
+
+            self._cm = CommunicationsManager.get_instance()
+            return self._cm
+        else:
+            return self._cm
+
     def get_addr(self):
         return self.addr
 
     def get_prio(self):
         return self._prio
+
+    async def is_inactive(self):
+        async with self._activity_lock:
+            return self._inactivity
+
+    async def _update_activity(self):
+        async with self._activity_lock:
+            self._last_activity = time.time()
+            self._inactivity = False
+
+    async def _monitor_inactivity(self):
+        while True:
+            if self.direct:
+                break
+            await asyncio.sleep(self.INACTIVITY_DAEMON_SLEEP_TIME)
+            async with self._activity_lock:
+                time_since_last = time.time() - self._last_activity
+                if time_since_last > self.INACTIVITY_TIMER:
+                    if not self._inactivity:
+                        self._inactivity = True
+                        logging.warning(f"[{self}] Connection marked as inactive.")
+                else:
+                    if self._inactivity:
+                        self._inactivity = False
 
     def get_federated_round(self):
         return self.federated_round
@@ -134,6 +182,7 @@ class Connection:
     async def start(self):
         self.read_task = asyncio.create_task(self.handle_incoming_message(), name=f"Connection {self.addr} reader")
         self.process_task = asyncio.create_task(self.process_message_queue(), name=f"Connection {self.addr} processor")
+        asyncio.create_task(self._monitor_inactivity())
 
     async def stop(self):
         logging.info(f"❗️  Connection [stopped]: {self.addr} (id: {self.id})")
@@ -155,7 +204,7 @@ class Connection:
                 logging.exception(f"❗️  Error ocurred when closing pipe: {e}")
 
     async def reconnect(self, max_retries: int = 5, delay: int = 5) -> None:
-        if self.forced_disconnection:
+        if self.forced_disconnection or not self.direct:
             return
 
         self.incompleted_reconnections += 1
@@ -212,6 +261,7 @@ class Connection:
             else:
                 data_to_send = data_prefix + encoded_data
 
+            await self._update_activity()
             await self._send_chunks(message_id, data_to_send)
         except Exception as e:
             logging.exception(f"Error sending data: {e}")
@@ -276,6 +326,7 @@ class Connection:
                 message_id, chunk_index, is_last_chunk = self._parse_header(header)
 
                 chunk_data = await self._read_chunk(reusable_buffer)
+                await self._update_activity()
                 self._store_chunk(message_id, chunk_index, chunk_data, is_last_chunk)
                 # logging.debug(f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes")
                 # Active connection without fails
@@ -288,11 +339,10 @@ class Connection:
             logging.exception(f"Connection closed while reading: {e}")
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
-        except BrokenPipeError as e:
+        except BrokenPipeError:
             logging.exception(f"Error handling incoming message: {e}")
         finally:
-            if self.direct:
-                # TODO tal vez una task?
+            if self.direct or self._prio == ConnectionPriority.HIGH:
                 await self.reconnect()
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:

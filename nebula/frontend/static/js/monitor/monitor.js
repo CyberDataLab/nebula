@@ -1,9 +1,38 @@
 // Monitor page functionality
 class Monitor {
     constructor() {
+        // Debug flag to control logging
+        this.debug = true;
+
         // Get scenario name from URL path
         const pathParts = window.location.pathname.split('/');
         this.scenarioName = pathParts[pathParts.indexOf('dashboard') + 1];
+        
+        this.clearAllData();
+        
+        this.isLoadingInitialData = false;
+        this.initialDataPromise = null;
+        
+        this.initializeMap();
+        this.initializeGraph();
+        this.initializeWebSocket();
+        this.initializeEventListeners();
+        this.initializeDownloadHandlers();
+        
+        this.startStaleNodeCheck();
+        
+        // Load initial data and then start periodic status check
+        this.loadInitialData().then(() => {
+            this.startPeriodicStatusCheck();
+        }).catch(error => {
+            this.error('Error during initialization:', error);
+            showAlert('danger', 'Error initializing monitor. Please refresh the page.');
+        });
+    }
+
+    // Helper method to clear all data structures
+    clearAllData() {
+        this.log('Clearing all data structures');
         this.offlineNodes = new Set();
         this.droneMarkers = {};
         this.droneLines = {};
@@ -12,22 +41,58 @@ class Monitor {
             nodes: [],
             links: []
         };
-        this.nodeTimestamps = new Map(); // Track last update time for each node
-        this.nodePositions = new Map(); // Track node positions
+        this.nodeTimestamps = new Map();
+        this.nodePositions = new Map();
+        this.isInitialDataLoaded = false;
+        this.processingUpdates = false;
+        this.pendingGraphUpdate = false;
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
         
-        this.initializeMap();
-        this.initializeGraph();
-        this.initializeWebSocket();
-        this.initializeEventListeners();
-        this.initializeDownloadHandlers();
-        this.loadInitialData();
+        // Clear the table body
+        const tableBody = document.querySelector('#table-nodes tbody');
+        if (tableBody) {
+            tableBody.innerHTML = '';
+        }
         
-        this.startStaleNodeCheck();
-        this.startPeriodicStatusCheck();
+        // Clear the map markers and lines
+        if (this.lineLayer) {
+            this.lineLayer.clearLayers();
+        }
+        
+        this.log('All data structures cleared');
+    }
+
+    // Helper method for logging
+    log(...args) {
+        if (this.debug) {
+            console.log(...args);
+        }
+    }
+
+    // Helper method for warning logs
+    warn(...args) {
+        if (this.debug) {
+            console.warn(...args);
+        }
+    }
+
+    // Helper method for error logs
+    error(...args) {
+        // Always log errors regardless of debug flag
+        console.error(...args);
+    }
+
+    // Helper method for info logs
+    info(...args) {
+        if (this.debug) {
+            console.info(...args);
+        }
     }
 
     initializeMap() {
-        console.log('Initializing map...');
+        this.log('Initializing map...');
         this.map = L.map('map', {
             center: [38.023522, -1.174389],
             zoom: 17,
@@ -39,18 +104,18 @@ class Monitor {
             worldCopyJump: false,
         });
 
-        console.log('Adding tile layer...');
+        this.log('Adding tile layer...');
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: '&copy; <a href="https://enriquetomasmb.com">enriquetomasmb.com</a>'
         }).addTo(this.map);
 
         // Initialize line layer
-        console.log('Initializing line layer...');
+        this.log('Initializing line layer...');
         this.lineLayer = L.layerGroup().addTo(this.map);
-        console.log('Line layer added to map:', this.lineLayer);
-        
+        this.log('Line layer added to map:', this.lineLayer);
+
         // Initialize drone icons
-        console.log('Initializing drone icons...');
+        this.log('Initializing drone icons...');
         this.droneIcon = L.icon({
             iconUrl: '/platform/static/images/drone.svg',
             iconSize: [28, 28],
@@ -74,12 +139,13 @@ class Monitor {
         `;
         document.head.appendChild(style);
 
-        console.log('Map initialization complete');
+        this.log('Map initialization complete');
     }
 
     initializeGraph() {
         const width = document.getElementById('3d-graph').offsetWidth;
-        
+
+        // Initialize with basic configuration first
         this.Graph = ForceGraph3D()(document.getElementById('3d-graph'))
             .width(width)
             .height(600)
@@ -92,21 +158,21 @@ class Monitor {
             .linkColor(link => {
                 const sourceNode = this.gData.nodes.find(n => n.ipport === link.source);
                 const targetNode = this.gData.nodes.find(n => n.ipport === link.target);
-                return (sourceNode && this.offlineNodes.has(sourceNode.ipport)) || 
-                       (targetNode && this.offlineNodes.has(targetNode.ipport)) ? '#ff0000' : '#999';
+                return (sourceNode && this.offlineNodes.has(sourceNode.ip)) ||
+                       (targetNode && this.offlineNodes.has(targetNode.ip)) ? '#ff0000' : '#999';
             })
             .linkOpacity(0.6)
             .linkWidth(2)
             .linkDirectionalParticles(2)
             .linkDirectionalParticleSpeed(0.005)
-            .linkDirectionalParticleWidth(2)
-            .d3AlphaDecay(0)  // Disable automatic decay
-            .d3VelocityDecay(0)  // Disable velocity decay
-            .warmupTicks(0)  // Disable warmup
-            .cooldownTicks(0)  // Disable cooldown
-            .d3Force('center', null)  // Disable center force
-            .d3Force('charge', null)  // Disable charge force
-            .d3Force('link', d3.forceLink().id(d => d.ipport).distance(50).strength(1));  // Enable link force for visualization
+            .linkDirectionalParticleWidth(2);
+
+        // Configure forces after basic initialization
+        this.Graph
+            .d3AlphaDecay(0.02)
+            .d3VelocityDecay(0.1)
+            .warmupTicks(50)
+            .cooldownTicks(50);
 
         // Set initial camera position
         this.Graph.cameraPosition({ x: 0, y: 0, z: 300 }, { x: 0, y: 0, z: 0 }, 0);
@@ -126,132 +192,132 @@ class Monitor {
     layoutNodes(nodes) {
         const radius = 50;
         const center = { x: 0, y: 0, z: 0 };
-        
-        console.log('Layouting nodes:', nodes);
-        
-        nodes.forEach((node, i) => {
+
+        this.log('Layouting nodes:', nodes);
+
+        return nodes.map((node, i) => {
             // Calculate angle based on node index
             const angle = (2 * Math.PI * i) / nodes.length;
-            
-            // Position nodes in a circle on the x-y plane
-            node.x = center.x + radius * Math.cos(angle);
-            node.y = center.y + radius * Math.sin(angle);
-            node.z = center.z;  // Keep all nodes at the same z-level initially
 
-            // Store the fixed position
-            node.fx = node.x;
-            node.fy = node.y;
-            node.fz = node.z;
-            
-            console.log(`Node ${node.ipport} positioned at:`, { x: node.x, y: node.y, z: node.z });
+            // Position nodes in a circle on the x-y plane
+            const x = center.x + radius * Math.cos(angle);
+            const y = center.y + radius * Math.sin(angle);
+            const z = center.z;  // Keep all nodes at the same z-level initially
+
+            return {
+                ...node,
+                x,
+                y,
+                z,
+                fx: x,
+                fy: y,
+                fz: z
+            };
         });
-        
-        return nodes;
     }
 
     loadInitialData() {
         if (!this.scenarioName) {
-            console.error('No scenario name found in URL');
-            return;
+            this.error('No scenario name found in URL');
+            return Promise.reject(new Error('No scenario name found'));
         }
 
-        console.log('Loading initial data for scenario:', this.scenarioName);
-        fetch(`/platform/api/dashboard/${this.scenarioName}/monitor`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Received initial data:', data);
-                if (data.nodes && data.nodes.length > 0) {
-                    data.nodes.forEach(node => {
-                        const nodeData = {
-                            uid: node.uid,
-                            idx: node.idx,
-                            ip: node.ip,
-                            port: node.port,
-                            role: node.role,
-                            neighbors: node.neighbors,
-                            latitude: node.latitude,
-                            longitude: node.longitude,
-                            timestamp: node.timestamp,
-                            federation: node.federation,
-                            round: node.round,
-                            scenario_name: node.scenario_name,
-                            hash: node.hash,
-                            malicious: node.malicious,
-                            status: node.status
-                        };
+        this.isLoadingInitialData = true;
+        this.log('Starting initial data load');
 
-                        // Update offline nodes set
-                        if (!nodeData.status) {
-                            this.offlineNodes.add(nodeData.ip);
-                            console.log(`Node ${nodeData.ip}:${nodeData.port} marked as offline from initial data`);
-                        }
+        // Clear existing data
+        this.clearAllData();
 
-                        // Update table
-                        this.updateTableRow(nodeData);
+        // Create and store the promise
+        this.initialDataPromise = new Promise((resolve, reject) => {
+            this.log('Loading initial data for scenario:', this.scenarioName);
+            fetch(`/platform/api/dashboard/${this.scenarioName}/monitor`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    this.log('Received initial data:', data);
+                    if (data.nodes && data.nodes.length > 0) {
+                        // Create a Set to track unique nodes
+                        const uniqueNodes = new Set();
+                        const processedNodes = new Set();
 
-                        // Update map
-                        this.updateQueue.push(nodeData);
+                        data.nodes.forEach(node => {
+                            const nodeId = `${node.ip}:${node.port}`;
 
-                        // Add to graph data
-                        const nodeId = `${nodeData.ip}:${nodeData.port}`;
-                        this.gData.nodes.push({
-                            id: nodeData.idx,
-                            ip: nodeData.ip,
-                            port: nodeData.port,
-                            ipport: nodeId,
-                            role: nodeData.role,
-                            malicious: nodeData.malicious,
-                            color: !nodeData.status ? '#ff0000' : this.getNodeColor({ ipport: nodeId, role: nodeData.role, malicious: nodeData.malicious })
-                        });
-                    });
+                            // Skip if we've already processed this node
+                            if (processedNodes.has(nodeId)) {
+                                this.log('Skipping duplicate node in initial data:', nodeId);
+                                return;
+                            }
+                            processedNodes.add(nodeId);
 
-                    // Create links between online nodes
-                    data.nodes.forEach(sourceNode => {
-                        const sourceData = {
-                            ip: sourceNode.ip,
-                            port: sourceNode.port,
-                            status: sourceNode.status,
-                            neighbors: sourceNode.neighbors
-                        };
+                            const nodeData = {
+                                uid: node.uid,
+                                idx: node.idx,
+                                ip: node.ip,
+                                port: node.port,
+                                role: node.role,
+                                neighbors: node.neighbors,
+                                latitude: node.latitude,
+                                longitude: node.longitude,
+                                timestamp: node.timestamp,
+                                federation: node.federation,
+                                round: node.round,
+                                scenario_name: node.scenario_name,
+                                hash: node.hash,
+                                malicious: node.malicious,
+                                status: node.status
+                            };
 
-                        if (sourceData.status && sourceData.neighbors) {
-                            const neighbors = sourceData.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '');
-                            neighbors.forEach(neighbor => {
-                                const [neighborIP, neighborPort] = neighbor.split(':');
-                                const targetNode = data.nodes.find(n => n.ip === neighborIP && n.port === neighborPort);
-                                if (targetNode && targetNode.status) {
-                                    this.gData.links.push({
-                                        source: `${sourceData.ip}:${sourceData.port}`,
-                                        target: `${neighborIP}:${neighborPort}`,
-                                        value: this.randomFloatFromInterval(1.0, 1.3)
-                                    });
-                                }
+                            if (!nodeData.status) {
+                                this.offlineNodes.add(nodeData.ip);
+                                this.log(`Node ${nodeData.ip}:${nodeData.port} marked as offline from initial data`);
+                            }
+
+                            this.updateTableRow(nodeData);
+
+                            this.updateQueue.push(nodeData);
+
+                            this.gData.nodes.push({
+                                id: nodeData.idx,
+                                ip: nodeData.ip,
+                                port: nodeData.port,
+                                ipport: nodeId,
+                                role: nodeData.role,
+                                malicious: nodeData.malicious,
+                                color: !nodeData.status ? '#ff0000' : this.getNodeColor({ ipport: nodeId, role: nodeData.role, malicious: nodeData.malicious })
                             });
-                        }
-                    });
+                        });
 
-                    // Process queue and update visualizations
-                    this.processQueue();
-                    this.updateGraph();
-                } else {
-                    console.warn('No nodes in initial data');
-                }
-            })
-            .catch(error => {
-                console.error('Error loading initial data:', error);
-                showAlert('danger', 'Error loading initial data. Please refresh the page.');
-            });
+                        // Process queue and update visualizations
+                        this.processQueue();
+                        this.updateGraph();
+                    } else {
+                        this.log('No nodes in initial data');
+                    }
+                    this.isInitialDataLoaded = true;
+                    this.isLoadingInitialData = false;
+                    this.log('Initial data load completed');
+                    resolve();
+                })
+                .catch(error => {
+                    this.error('Error loading initial data:', error);
+                    this.isLoadingInitialData = false;
+                    reject(error);
+                });
+        });
+
+        return this.initialDataPromise;
     }
 
     processInitialData(data) {
-        console.log('Processing initial data:', data);
+        this.log('Processing initial data:', data);
         if (!data.nodes_table) {
-            console.warn('No nodes table in initial data');
+            this.warn('No nodes table in initial data');
             return;
         }
 
@@ -269,28 +335,28 @@ class Monitor {
         // First pass: create all nodes and track offline nodes
         data.nodes_table.forEach(node => {
             try {
-                console.log('Processing node:', node);
+                this.log('Processing node:', node);
                 const nodeData = {
-                    uid: node[0],
-                    idx: node[1],
-                    ip: node[2],
-                    port: node[3],
-                    role: node[4],
-                    neighbors: node[5] || "",
-                    latitude: parseFloat(node[6]) || 0,
-                    longitude: parseFloat(node[7]) || 0,
-                    timestamp: node[8],
-                    federation: node[9],
-                    round: node[10],
-                    malicious: node[13],
-                    status: node[14]
+                    uid: node.uid,
+                    idx: node.idx,
+                    ip: node.ip,
+                    port: node.port,
+                    role: node.role,
+                    neighbors: node.neighbors || "",
+                    latitude: parseFloat(node.latitude) || 0,
+                    longitude: parseFloat(node.longitude) || 0,
+                    timestamp: node.timestamp,
+                    federation: node.federation,
+                    round: node.round,
+                    malicious: node.malicious,
+                    status: node.status
                 };
 
-                console.log('Processed node data:', nodeData);
+                this.log('Processed node data:', nodeData);
 
                 // Validate coordinates
                 if (isNaN(nodeData.latitude) || isNaN(nodeData.longitude)) {
-                    console.warn('Invalid coordinates in initial data for node:', nodeData.uid);
+                    this.warn('Invalid coordinates in initial data for node:', nodeData.uid);
                     // Use default coordinates if invalid
                     nodeData.latitude = 38.023522;
                     nodeData.longitude = -1.174389;
@@ -299,7 +365,7 @@ class Monitor {
                 // Track offline nodes
                 if (!nodeData.status) {
                     this.offlineNodes.add(nodeData.ip);
-                    console.log('Node marked as offline during initialization:', nodeData.ip);
+                    this.log('Node marked as offline during initialization:', nodeData.ip);
                 }
 
                 // Set initial timestamp
@@ -311,7 +377,7 @@ class Monitor {
 
                 // Update map
                 this.updateQueue.push(nodeData);
-                console.log('Added node to update queue:', nodeData.uid);
+                this.log('Added node to update queue:', nodeData.uid);
 
                 // Add node to graph data - ensure uniqueness
                 const uniqueNodeId = `${nodeData.ip}:${nodeData.port}`;
@@ -325,48 +391,48 @@ class Monitor {
                         malicious: nodeData.malicious,
                         color: this.getNodeColor({ ipport: uniqueNodeId, role: nodeData.role, malicious: nodeData.malicious })
                     });
-                    console.log('Added unique node:', uniqueNodeId);
+                    this.log('Added unique node:', uniqueNodeId);
                 } else {
-                    console.log('Skipping duplicate node:', uniqueNodeId);
+                    this.log('Skipping duplicate node:', uniqueNodeId);
                 }
             } catch (error) {
-                console.error('Error processing node data:', error);
+                this.error('Error processing node data:', error);
             }
         });
 
         // Convert unique nodes map to array
         this.gData.nodes = Array.from(uniqueNodes.values());
-        console.log('Total unique nodes:', this.gData.nodes.length);
+        this.log('Total unique nodes:', this.gData.nodes.length);
 
         // Second pass: create links only between online nodes
-        console.log('Creating graph with', this.gData.nodes.length, 'nodes');
+        this.log('Creating graph with', this.gData.nodes.length, 'nodes');
         for (let i = 0; i < this.gData.nodes.length; i++) {
             const sourceNode = this.gData.nodes[i];
             const sourceIP = sourceNode.ip;
-            
+
             // Skip if source node is offline
             if (this.offlineNodes.has(sourceIP)) {
-                console.log('Skipping links for offline source node:', sourceIP);
+                this.log('Skipping links for offline source node:', sourceIP);
                 continue;
             }
 
             for (let j = i + 1; j < this.gData.nodes.length; j++) {
                 const targetNode = this.gData.nodes[j];
                 const targetIP = targetNode.ip;
-                
+
                 // Skip if target node is offline
                 if (this.offlineNodes.has(targetIP)) {
-                    console.log('Skipping link to offline target node:', targetIP);
+                    this.log('Skipping link to offline target node:', targetIP);
                     continue;
                 }
-                
+
                 // Add bidirectional links only between online nodes
                 this.gData.links.push({
                     source: sourceNode.ipport,
                     target: targetNode.ipport,
                     value: this.randomFloatFromInterval(1.0, 1.3)
                 });
-                
+
                 this.gData.links.push({
                     source: targetNode.ipport,
                     target: sourceNode.ipport,
@@ -377,20 +443,16 @@ class Monitor {
 
         // Process queue immediately
         this.processQueue();
-        
+
         // Initial graph update
         this.updateGraph();
-        console.log('Initial data processing complete. Total links:', this.gData.links.length);
+        this.log('Initial data processing complete. Total links:', this.gData.links.length);
     }
 
     updateGraphData(data) {
         const nodeId = `${data.ip}:${data.port}`;
-        console.log('Updating graph data for node:', nodeId);
-        console.log('Current graph data:', {
-            nodes: this.gData.nodes,
-            links: this.gData.links
-        });
-        
+        this.log('Updating graph data for node:', nodeId);
+
         // Add or update node - ensure no duplication
         const existingNodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
         if (existingNodeIndex === -1) {
@@ -404,7 +466,7 @@ class Monitor {
                 malicious: data.malicious,
                 color: this.getNodeColor({ ipport: nodeId, role: data.role, malicious: data.malicious })
             };
-            console.log('Adding new node to graph:', newNode);
+            this.log('Adding new node to graph:', newNode);
             this.gData.nodes.push(newNode);
         } else {
             // Update existing node
@@ -414,34 +476,17 @@ class Monitor {
                 malicious: data.malicious,
                 color: this.getNodeColor({ ipport: nodeId, role: data.role, malicious: data.malicious })
             };
-            console.log('Updating existing node in graph:', updatedNode);
+            this.log('Updating existing node in graph:', updatedNode);
             this.gData.nodes[existingNodeIndex] = updatedNode;
         }
 
-        // Helper function to get IP from source/target
-        const getIPFromLink = (linkEnd) => {
-            if (typeof linkEnd === 'string') {
-                return linkEnd.split(':')[0];
-            } else if (linkEnd && typeof linkEnd === 'object') {
-                return linkEnd.ipport ? linkEnd.ipport.split(':')[0] : linkEnd.ip;
-            }
-            return '';
-        };
-
-        // Normalize all existing links to use string IDs
-        this.gData.links = this.gData.links.map(link => ({
-            source: typeof link.source === 'object' ? link.source.ipport : link.source,
-            target: typeof link.target === 'object' ? link.target.ipport : link.target,
-            value: link.value
-        }));
-
         // If node is offline, remove its links but preserve others
         if (!data.status || this.offlineNodes.has(data.ip)) {
-            console.log('Node is offline, removing its links');
+            this.log('Node is offline, removing its links');
             this.gData.links = this.gData.links.filter(link => {
-                const sourceIP = getIPFromLink(link.source);
-                const targetIP = getIPFromLink(link.target);
-                return sourceIP !== data.ip && targetIP !== data.ip;
+                const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
+                const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
+                return sourceIP !== nodeId && targetIP !== nodeId;
             });
             return;
         }
@@ -450,73 +495,65 @@ class Monitor {
         if (data.neighbors) {
             // Parse neighbors using consistent format
             const neighbors = data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '');
-            console.log('Processing neighbors:', neighbors);
-            
+            this.log('Processing neighbors:', neighbors);
+
             // Get current links for this node
             const currentLinks = this.gData.links.filter(link => {
-                const sourceIP = getIPFromLink(link.source);
-                const targetIP = getIPFromLink(link.target);
-                return sourceIP === data.ip || targetIP === data.ip;
-            });
-            
-            // Remove links to offline neighbors
-            this.gData.links = this.gData.links.filter(link => {
-                if (getIPFromLink(link.source) === data.ip || getIPFromLink(link.target) === data.ip) {
-                    const neighborId = getIPFromLink(link.source) === data.ip ? link.target : link.source;
-                    const neighborIP = getIPFromLink(neighborId);
-                    return !this.offlineNodes.has(neighborIP);
-                }
-                return true;
+                const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
+                const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
+                return sourceIP === nodeId || targetIP === nodeId;
             });
 
-            // Add new links to online neighbors
-            neighbors.forEach(neighbor => {
-                const neighborIP = neighbor.split(':')[0];
-                if (this.offlineNodes.has(neighborIP)) {
-                    console.log('Skipping offline neighbor:', neighbor);
-                    return;
-                }
+            // Create a set of current neighbor IDs
+            const currentNeighbors = new Set(
+                currentLinks.map(link => {
+                    const neighborId = link.source === nodeId ? link.target : link.source;
+                    return neighborId;
+                })
+            );
 
-                const normalizedNeighbor = neighbor.includes(':') ? neighbor : `${neighbor}:${data.port}`;
-                const neighborNode = this.gData.nodes.find(n => 
-                    n.ipport === normalizedNeighbor || 
-                    n.ipport.split(':')[0] === neighborIP
-                );
+            // Create a set of new neighbor IDs
+            const newNeighbors = new Set(
+                neighbors.map(neighbor => {
+                    const [neighborIP, neighborPort] = neighbor.split(':');
+                    return `${neighborIP}:${neighborPort || data.port}`;
+                })
+            );
 
-                if (neighborNode) {
-                    // Check if link already exists
-                    const linkExists = this.gData.links.some(link => {
-                        const sourceIP = getIPFromLink(link.source);
-                        const targetIP = getIPFromLink(link.target);
-                        return (sourceIP === data.ip && targetIP === neighborIP) ||
-                               (sourceIP === neighborIP && targetIP === data.ip);
-                    });
+            // Only update if there are actual changes in neighbors
+            if (!this.areSetsEqual(currentNeighbors, newNeighbors)) {
+                this.log('Neighbor changes detected, updating links');
 
-                    if (!linkExists) {
-                        console.log('Adding new link between', nodeId, 'and', normalizedNeighbor);
-                        this.gData.links.push({
-                            source: nodeId,
-                            target: normalizedNeighbor,
-                            value: this.randomFloatFromInterval(1.0, 1.3)
-                        });
+                // Remove existing links for this node
+                this.gData.links = this.gData.links.filter(link => {
+                    const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
+                    const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
+                    return sourceIP !== nodeId && targetIP !== nodeId;
+                });
+
+                // Add new links for online neighbors
+                neighbors.forEach(neighbor => {
+                    const neighborIP = neighbor.split(':')[0];
+                    if (!this.offlineNodes.has(neighborIP)) {
+                        const normalizedNeighbor = neighbor.includes(':') ? neighbor : `${neighbor}:${data.port}`;
+                        const neighborNode = this.gData.nodes.find(n =>
+                            n.ipport === normalizedNeighbor ||
+                            n.ipport.split(':')[0] === neighborIP
+                        );
+
+                        if (neighborNode) {
+                            this.gData.links.push({
+                                source: nodeId,
+                                target: normalizedNeighbor,
+                                value: 1.0
+                            });
+                        }
                     }
-                }
-            });
+                });
+            } else {
+                this.log('No neighbor changes detected, skipping link update');
+            }
         }
-
-        // Remove duplicate links
-        this.gData.links = this.gData.links.filter((link, index, self) =>
-            index === self.findIndex((l) => {
-                const sourceIP1 = getIPFromLink(link.source);
-                const targetIP1 = getIPFromLink(link.target);
-                const sourceIP2 = getIPFromLink(l.source);
-                const targetIP2 = getIPFromLink(l.target);
-                return (sourceIP1 === sourceIP2 && targetIP1 === targetIP2) ||
-                       (sourceIP1 === targetIP2 && targetIP1 === sourceIP2);
-            })
-        );
-
-        console.log('Final links after update:', this.gData.links);
     }
 
     randomFloatFromInterval(min, max) {
@@ -541,9 +578,9 @@ class Monitor {
             transparent: true,
             opacity: 0.8,
         });
-        
+
         const sphere = new THREE.Mesh(
-            new THREE.SphereGeometry(sphereRadius, 32, 32), 
+            new THREE.SphereGeometry(sphereRadius, 32, 32),
             material
         );
         group.add(sphere);
@@ -568,12 +605,12 @@ class Monitor {
         if (this.offlineNodes.has(node.ip)) {
             return '#ff0000'; // Red color for offline nodes
         }
-        
+
         // Check if the node is malicious
         if (node.malicious === "True" || node.malicious === "true") {
             return '#000000'; // Black color for malicious nodes
         }
-        
+
         switch(node.role) {
             case 'trainer': return '#7570b3';
             case 'aggregator': return '#d95f02';
@@ -610,99 +647,67 @@ class Monitor {
                         this.handleNodeRemove(data);
                         break;
                     case 'control':
-                        console.log('Control message received:', data);
+                        this.log('Control message received:', data);
                         break;
                     default:
-                        console.log('Unknown message type:', data.type);
+                        this.log('Unknown message type:', data.type);
                 }
             } catch (e) {
-                console.error('Error parsing WebSocket message:', e);
+                this.error('Error parsing WebSocket message:', e);
             }
         });
     }
 
     handleNodeUpdate(data) {
         try {
-            // Validate required fields
-            if (!data.uid || !data.ip) {
-                console.warn('Missing required fields for node update:', data);
+            // Skip updates if initial data is not loaded yet or if we're still loading initial data
+            if (!this.isInitialDataLoaded || this.isLoadingInitialData) {
+                this.log('Skipping node update - initial data not loaded yet or still loading');
                 return;
             }
 
-            console.log('Handling node update:', data);
+            // Validate required fields
+            if (!data.uid || !data.ip) {
+                this.warn('Missing required fields for node update:', data);
+                return;
+            }
+
+            const nodeId = `${data.ip}:${data.port}`;
+            
+            // Check if this node already exists
+            const existingNode = this.gData.nodes.find(n => n.ipport === nodeId);
+            if (existingNode) {
+                this.log('Updating existing node:', nodeId);
+            } else {
+                this.log('Adding new node:', nodeId);
+            }
+
+            this.log('Handling node update:', data);
 
             // Update timestamp for this node
-            const nodeId = `${data.ip}:${data.port}`;
             this.nodeTimestamps.set(nodeId, Date.now());
 
             // First update the table to show changes immediately
             this.updateNode(data);
 
-            // Update graph data
-            const existingNodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
-            if (existingNodeIndex === -1) {
-                this.gData.nodes.push({
-                    id: data.idx,
-                    ip: data.ip,
-                    port: data.port,
-                    ipport: nodeId,
-                    role: data.role,
-                    malicious: data.malicious,
-                    color: this.getNodeColor({ ipport: nodeId, role: data.role, malicious: data.malicious })
-                });
-            } else {
-                this.gData.nodes[existingNodeIndex] = {
-                    ...this.gData.nodes[existingNodeIndex],
-                    role: data.role,
-                    malicious: data.malicious,
-                    color: this.getNodeColor({ ipport: nodeId, role: data.role, malicious: data.malicious })
-                };
-            }
+            // Update graph data with new topology information
+            this.updateGraphData(data);
 
-            // Handle links
-            if (data.neighbors) {
-                const neighbors = data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '');
-                
-                // Remove existing links for this node
-                this.gData.links = this.gData.links.filter(link => {
-                    const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
-                    const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
-                    return sourceIP !== nodeId && targetIP !== nodeId;
-                });
-
-                // Add new links for online neighbors
-                neighbors.forEach(neighbor => {
-                    const neighborIP = neighbor.split(':')[0];
-                    if (!this.offlineNodes.has(neighborIP)) {
-                        const normalizedNeighbor = neighbor.includes(':') ? neighbor : `${neighbor}:${data.port}`;
-                        const neighborNode = this.gData.nodes.find(n => 
-                            n.ipport === normalizedNeighbor || 
-                            n.ipport.split(':')[0] === neighborIP
-                        );
-
-                        if (neighborNode) {
-                            this.gData.links.push({
-                                source: nodeId,
-                                target: normalizedNeighbor,
-                                value: this.randomFloatFromInterval(1.0, 1.3)
-                            });
-                        }
-                    }
-                });
-            }
-
-            // Update the graph
+            // Queue the graph update
             this.updateGraph();
 
-            // Process map updates immediately
-            this.processUpdate(data);
+            // Process map updates immediately with neighbor distances
+            this.processUpdate({
+                ...data,
+                neighbors_distance: data.neighbors_distance || {}
+            });
 
             // Check if all nodes are offline
             this.checkAllNodesOffline();
 
-            console.log('Node update completed successfully');
+            this.log('Node update completed successfully');
         } catch (error) {
-            console.error('Error handling node update:', error);
+            this.error('Error handling node update:', error);
         }
     }
 
@@ -711,15 +716,15 @@ class Monitor {
         if (!data) return false;
 
         const nodeId = `${data.ip}:${data.port}`;
-        const currentLinks = this.gData.links.filter(link => 
+        const currentLinks = this.gData.links.filter(link =>
             link.source === nodeId || link.target === nodeId
         );
-        
+
         if (!data.neighbors) return false;
-        
+
         // Parse neighbors using consistent format
         const neighbors = data.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '');
-        
+
         // Create sets of current and new neighbors for comparison
         const currentNeighbors = new Set(
             currentLinks.map(link => {
@@ -727,18 +732,18 @@ class Monitor {
                 return neighborId.split(':')[0]; // Compare only IPs
             })
         );
-        
+
         const newNeighbors = new Set(
             neighbors.map(neighbor => neighbor.split(':')[0]) // Compare only IPs
         );
-        
+
         // Check if there are any differences in the sets
         if (currentNeighbors.size !== newNeighbors.size) return true;
-        
+
         for (const neighbor of newNeighbors) {
             if (!currentNeighbors.has(neighbor)) return true;
         }
-        
+
         return false;
     }
 
@@ -746,7 +751,7 @@ class Monitor {
         try {
             // Validate required fields
             if (!data.uid || !data.ip) {
-                console.warn('Missing required fields for node removal:', data);
+                this.warn('Missing required fields for node removal:', data);
                 return;
             }
 
@@ -756,31 +761,31 @@ class Monitor {
             this.updateGraphData(data);
             this.updateGraph();
         } catch (error) {
-            console.error('Error handling node removal:', error);
+            this.error('Error handling node removal:', error);
         }
     }
 
     updateNode(data) {
         if (!data || !data.uid) {
-            console.warn('Invalid or missing data for node update:', data);
+            this.warn('Invalid or missing data for node update:', data);
             return;
         }
 
         let nodeRow = document.querySelector(`#node-${data.uid}`);
-        
+
         // If row doesn't exist, create it
         if (!nodeRow) {
-            console.log('Creating new row for node:', data.uid);
+            this.log('Creating new row for node:', data.uid);
             const tableBody = document.querySelector('#table-nodes tbody');
             if (!tableBody) {
-                console.error('Table body not found');
+                this.error('Table body not found');
                 return;
             }
 
             // Create new row
             nodeRow = document.createElement('tr');
             nodeRow.id = `node-${data.uid}`;
-            
+
             // Create cells matching the HTML template structure
             const cells = [
                 { class: 'py-3', content: '' }, // IDX
@@ -802,7 +807,7 @@ class Monitor {
 
             // Add row to table
             tableBody.appendChild(nodeRow);
-            console.log('New row created for node:', data.uid);
+            this.log('New row created for node:', data.uid);
         }
 
         const nodeId = `${data.ip}:${data.port}`;  // Use full IP:port as nodeId
@@ -812,15 +817,15 @@ class Monitor {
         // Update offlineNodes set based on status
         if (isNowOffline) {
             this.offlineNodes.add(nodeId);
-            console.log('Node marked as offline:', nodeId);
-            
+            this.log('Node marked as offline:', nodeId);
+
             // Remove all links for this node
             this.removeNodeLinks(data);
-            
+
             // Force immediate graph update when node goes offline
             this.updateGraphData(data);
             this.updateGraph();
-            
+
             // Update marker appearance
             if (this.droneMarkers[data.uid]) {
                 this.droneMarkers[data.uid].setIcon(this.droneIconOffline);
@@ -828,8 +833,8 @@ class Monitor {
             }
         } else {
             this.offlineNodes.delete(nodeId);
-            console.log('Node marked as online:', nodeId);
-            
+            this.log('Node marked as online:', nodeId);
+
             // Update marker appearance
             if (this.droneMarkers[data.uid]) {
                 this.droneMarkers[data.uid].setIcon(this.droneIcon);
@@ -878,7 +883,7 @@ class Monitor {
             // Update Status
             const statusCell = nodeRow.querySelector('td:nth-child(6)');
             if (statusCell) {
-                statusCell.innerHTML = data.status 
+                statusCell.innerHTML = data.status
                     ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
                     : '<span class="badge bg-danger-subtle text-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
             }
@@ -893,7 +898,7 @@ class Monitor {
                         </a>
                     </li>
                 ` : '';
-                
+
                 actionsCell.innerHTML = `
                     <div class="dropdown d-flex justify-content-center">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
@@ -922,9 +927,9 @@ class Monitor {
                 `;
             }
 
-            console.log('Table updated for node:', data.uid);
+            this.log('Table updated for node:', data.uid);
         } catch (error) {
-            console.error('Error updating table cells:', error);
+            this.error('Error updating table cells:', error);
         }
 
         // Update map position
@@ -933,30 +938,30 @@ class Monitor {
 
     removeNodeLinks(data) {
         if (!data || !data.ip) {
-            console.warn('Invalid data provided to removeNodeLinks:', data);
+            this.warn('Invalid data provided to removeNodeLinks:', data);
             return;
         }
 
         const nodeId = `${data.ip}:${data.port}`;
-        console.log('Removing links for node:', nodeId);
-        
+        this.log('Removing links for node:', nodeId);
+
         // Remove links from graph data
         const previousLinkCount = this.gData.links.length;
-        
+
         // Remove all links where this node is either source or target
         this.gData.links = this.gData.links.filter(link => {
-            const sourceId = typeof link.source === 'object' ? link.source.ipport : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.ipport : link.target;
-            return sourceId !== nodeId && targetId !== nodeId;
+            const sourceIP = typeof link.source === 'object' ? link.source.ipport : link.source;
+            const targetIP = typeof link.target === 'object' ? link.target.ipport : link.target;
+            return sourceIP !== nodeId && targetIP !== nodeId;
         });
-        
-        console.log(`Removed ${previousLinkCount - this.gData.links.length} links for node ${nodeId}`);
-        
+
+        this.log(`Removed ${previousLinkCount - this.gData.links.length} links for node ${nodeId}`);
+
         // Remove lines from map
         if (data.uid && this.droneLines[data.uid]) {
             this.cleanupDroneLines(data.uid);
         }
-        
+
         // Update any related lines from other nodes
         if (data.uid) {
             this.updateAllRelatedLines(data.uid);
@@ -965,12 +970,12 @@ class Monitor {
         // Also remove links from other nodes to this offline node
         Object.entries(this.droneMarkers).forEach(([uid, marker]) => {
             if (marker.neighbors) {
-                const neighbors = Array.isArray(marker.neighbors) 
-                    ? marker.neighbors 
-                    : (typeof marker.neighbors === 'string' 
+                const neighbors = Array.isArray(marker.neighbors)
+                    ? marker.neighbors
+                    : (typeof marker.neighbors === 'string'
                         ? marker.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
                         : []);
-                
+
                 // If this marker has the offline node as a neighbor, update its lines
                 if (neighbors.some(ip => ip.startsWith(data.ip))) {
                     this.updateNeighborLines(uid, marker.getLatLng(), neighbors, true);
@@ -983,74 +988,54 @@ class Monitor {
         if (data) {
             this.updateGraphData(data);
         }
-        
-        // Helper function to get IP from source/target
-        const getIPFromLink = (linkEnd) => {
-            if (typeof linkEnd === 'string') {
-                return linkEnd.split(':')[0];
-            } else if (linkEnd && typeof linkEnd === 'object') {
-                return linkEnd.ipport ? linkEnd.ipport.split(':')[0] : linkEnd.ip;
+
+        // Debounce graph updates to prevent multiple rapid updates
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        this.updateTimeout = setTimeout(() => {
+            if (this.pendingGraphUpdate) {
+                this.log('Skipping graph update - another update is pending');
+                return;
             }
-            return '';
-        };
 
-        // First, remove all links involving offline nodes
-        this.gData.links = this.gData.links.filter(link => {
-            const sourceIP = getIPFromLink(link.source);
-            const targetIP = getIPFromLink(link.target);
-            const sourceOffline = this.offlineNodes.has(sourceIP);
-            const targetOffline = this.offlineNodes.has(targetIP);
-            
-            if (sourceOffline || targetOffline) {
-                console.log(`Removing link between ${sourceIP} and ${targetIP} due to offline node`);
-                return false;
-            }
-            return true;
-        });
+            this.pendingGraphUpdate = true;
+            try {
+                // Create a new array of nodes with fixed positions
+                const layoutedNodes = this.gData.nodes.map((node, index) => {
+                    const angle = (2 * Math.PI * index) / this.gData.nodes.length;
+                    const radius = 50;
 
-        // Ensure all links have valid source and target nodes
-        this.gData.links = this.gData.links.filter(link => {
-            const sourceExists = this.gData.nodes.some(n => n.ipport === link.source);
-            const targetExists = this.gData.nodes.some(n => n.ipport === link.target);
-            return sourceExists && targetExists;
-        });
-
-        // Add links only between online nodes
-        this.gData.nodes.forEach(node => {
-            if (!this.offlineNodes.has(node.ip)) {
-                const nodeId = node.ipport;
-                const onlineNeighbors = this.gData.nodes.filter(n => 
-                    !this.offlineNodes.has(n.ip) && n.ipport !== nodeId
-                );
-                
-                onlineNeighbors.forEach(neighbor => {
-                    const linkExists = this.gData.links.some(link => 
-                        (link.source === nodeId && link.target === neighbor.ipport) ||
-                        (link.source === neighbor.ipport && link.target === nodeId)
-                    );
-                    
-                    if (!linkExists) {
-                        this.gData.links.push({
-                            source: nodeId,
-                            target: neighbor.ipport,
-                            value: 1.0
-                        });
-                    }
+                    return {
+                        ...node,
+                        x: radius * Math.cos(angle),
+                        y: radius * Math.sin(angle),
+                        z: 0,
+                        fx: radius * Math.cos(angle),
+                        fy: radius * Math.sin(angle),
+                        fz: 0
+                    };
                 });
+
+                // Create a new array of links with proper references
+                const stableLinks = this.gData.links.map(link => ({
+                    source: typeof link.source === 'object' ? link.source.ipport : link.source,
+                    target: typeof link.target === 'object' ? link.target.ipport : link.target,
+                    value: 1.0
+                }));
+
+                this.log('Updating graph with nodes:', layoutedNodes.length, 'and links:', stableLinks.length);
+
+                // Update the graph with new data
+                this.Graph.graphData({
+                    nodes: layoutedNodes,
+                    links: stableLinks
+                });
+            } finally {
+                this.pendingGraphUpdate = false;
             }
-        });
-
-        // Apply fixed layout to nodes
-        const layoutedNodes = this.layoutNodes([...this.gData.nodes]);
-
-        // Update the graph with new data
-        this.Graph.graphData({
-            nodes: layoutedNodes,
-            links: this.gData.links
-        });
-
-        // Force a redraw to ensure links are visible
-        this.Graph.refresh();
+        }, 100); // 100ms debounce
     }
 
     initializeEventListeners() {
@@ -1071,7 +1056,7 @@ class Monitor {
                         }
                     })
                     .catch(error => {
-                        console.error('Error:', error);
+                        this.error('Error:', error);
                         showAlert('danger', 'Error downloading file');
                     });
             });
@@ -1079,20 +1064,30 @@ class Monitor {
     }
 
     processQueue() {
-        while (this.updateQueue.length > 0) {
-            const data = this.updateQueue.shift();
-            console.log('Processing queue item:', data);
-            this.processUpdate(data);
+        if (this.processingUpdates) {
+            this.log('Already processing updates, skipping');
+            return;
+        }
+
+        this.processingUpdates = true;
+        try {
+            while (this.updateQueue.length > 0) {
+                const data = this.updateQueue.shift();
+                this.log('Processing queue item:', data);
+                this.processUpdate(data);
+            }
+        } finally {
+            this.processingUpdates = false;
         }
     }
 
     processUpdate(data) {
         try {
-            console.log('Processing update for node:', data.uid);
-            
+            this.log('Processing update for node:', data.uid);
+
             // Validate required fields
             if (!data.uid || !data.ip) {
-                console.warn('Missing required fields for node update:', data);
+                this.warn('Missing required fields for node update:', data);
                 return;
             }
 
@@ -1100,10 +1095,10 @@ class Monitor {
             const lat = parseFloat(data.latitude);
             const lng = parseFloat(data.longitude);
 
-            console.log('Coordinates:', { lat, lng });
+            this.log('Coordinates:', { lat, lng });
 
             if (isNaN(lat) || isNaN(lng)) {
-                console.warn('Invalid coordinates for node:', data.uid, 'lat:', data.latitude, 'lng:', data.longitude);
+                this.warn('Invalid coordinates for node:', data.uid, 'lat:', data.latitude, 'lng:', data.longitude);
                 // Use default coordinates if invalid
                 data.latitude = 38.023522;
                 data.longitude = -1.174389;
@@ -1114,49 +1109,47 @@ class Monitor {
                 ...data,
                 latitude: parseFloat(data.latitude),
                 longitude: parseFloat(data.longitude),
-                neighbors: data.neighbors || ""
+                neighbors: data.neighbors || "",
+                neighbors_distance: data.neighbors_distance || {}
             };
 
-            console.log('Validated node data:', nodeData);
+            this.log('Validated node data:', nodeData);
 
             const newLatLng = new L.LatLng(nodeData.latitude, nodeData.longitude);
-            
+
             // Parse neighbors string into array, handling both space and comma separators
-            const neighborsIPs = nodeData.neighbors 
+            const neighborsIPs = nodeData.neighbors
                 ? nodeData.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
                 : [];
 
-            console.log('Parsed neighbor IPs:', neighborsIPs);
+            this.log('Parsed neighbor IPs:', neighborsIPs);
 
             // First update the marker
-            console.log('Updating drone position for node:', nodeData.uid);
+            this.log('Updating drone position for node:', nodeData.uid);
             this.updateDronePosition(
-                nodeData.uid, 
-                nodeData.ip, 
-                nodeData.latitude, 
-                nodeData.longitude, 
-                neighborsIPs, 
+                nodeData.uid,
+                nodeData.ip,
+                nodeData.latitude,
+                nodeData.longitude,
+                neighborsIPs,
                 nodeData.neighbors_distance
             );
 
-            // Then immediately update the lines for this node
-            if (neighborsIPs.length > 0) {
-                console.log('Updating neighbor lines for node:', nodeData.uid);
-                this.updateNeighborLines(nodeData.uid, newLatLng, neighborsIPs, true);
-            }
+            // Always update lines, even if there are no neighbors (this will clean up existing lines)
+            this.updateNeighborLines(nodeData.uid, newLatLng, neighborsIPs, true);
 
-            // Finally update any related lines from other nodes
+            // Update any related lines from other nodes
             this.updateAllRelatedLines(nodeData.uid);
         } catch (error) {
-            console.error('Error processing update:', error);
+            this.error('Error processing update:', error);
         }
     }
 
     updateDronePosition(uid, ip, lat, lng, neighborIPs, neighborsDistance) {
-        console.log('Updating drone position:', { uid, ip, lat, lng });
+        this.log('Updating drone position:', { uid, ip, lat, lng });
         const droneId = uid;
         const newLatLng = new L.LatLng(lat, lng);
-        
+
         // Create popup content with node information
         const popupContent = `
             <div class="drone-popup">
@@ -1167,7 +1160,7 @@ class Monitor {
             </div>`;
 
         if (!this.droneMarkers[droneId]) {
-            console.log('Creating new marker for node:', droneId);
+            this.log('Creating new marker for node:', droneId);
             // Create new marker
             const marker = L.marker(newLatLng, {
                 icon: this.offlineNodes.has(ip) ? this.droneIconOffline : this.droneIcon,
@@ -1193,9 +1186,9 @@ class Monitor {
             marker.neighbors = neighborIPs;
             marker.neighbors_distance = neighborsDistance;
             this.droneMarkers[droneId] = marker;
-            console.log('Marker created and added to map:', marker);
+            this.log('Marker created and added to map:', marker);
         } else {
-            console.log('Updating existing marker for node:', droneId);
+            this.log('Updating existing marker for node:', droneId);
             // Update existing marker
             if (this.offlineNodes.has(ip)) {
                 this.droneMarkers[droneId].setIcon(this.droneIconOffline);
@@ -1209,25 +1202,20 @@ class Monitor {
             this.droneMarkers[droneId].getPopup().setContent(popupContent);
             this.droneMarkers[droneId].neighbors = neighborIPs;
             this.droneMarkers[droneId].neighbors_distance = neighborsDistance;
-            console.log('Marker updated:', this.droneMarkers[droneId]);
+            this.log('Marker updated:', this.droneMarkers[droneId]);
         }
     }
 
     updateNeighborLines(droneId, droneLatLng, neighborsIPs, condition) {
-        console.log('Updating neighbor lines for drone:', droneId, 'with neighbors:', neighborsIPs);
-        console.log('Current drone position:', droneLatLng);
-        
+        this.log('Updating neighbor lines for drone:', droneId, 'with neighbors:', neighborsIPs);
+        this.log('Current drone position:', droneLatLng);
+
         // Clean up existing lines for this drone
         this.cleanupDroneLines(droneId);
 
-        if (!this.droneMarkers[droneId]) {
-            console.warn('No marker found for drone:', droneId);
-            return;
-        }
-
-        // Skip if current drone is offline
-        if (this.offlineNodes.has(this.droneMarkers[droneId].ip)) {
-            console.log('Skipping line creation - current drone is offline:', this.droneMarkers[droneId].ip);
+        // If no neighbors or drone is offline, don't create any lines
+        if (!neighborsIPs || neighborsIPs.length === 0 || !this.droneMarkers[droneId] || this.offlineNodes.has(this.droneMarkers[droneId].ip)) {
+            this.log('No neighbors or drone is offline, skipping line creation');
             return;
         }
 
@@ -1241,20 +1229,20 @@ class Monitor {
             // Extract IP from IP:port format if present
             const neighborIPOnly = neighborIP.split(':')[0];
             const neighborMarker = this.findMarkerByIP(neighborIPOnly);
-            
+
             if (neighborMarker) {
                 // Skip if neighbor is offline
                 if (this.offlineNodes.has(neighborIPOnly)) {
-                    console.log('Skipping line creation - neighbor is offline:', neighborIPOnly);
+                    this.log('Skipping line creation - neighbor is offline:', neighborIPOnly);
                     return;
                 }
 
-                console.log('Found neighbor marker for IP:', neighborIPOnly);
+                this.log('Found neighbor marker for IP:', neighborIPOnly);
                 const neighborLatLng = neighborMarker.getLatLng();
-                console.log('Neighbor position:', neighborLatLng);
-                
-                console.log('Creating line between:', droneLatLng, 'and', neighborLatLng);
-                
+                this.log('Neighbor position:', neighborLatLng);
+
+                this.log('Creating line between:', droneLatLng, 'and', neighborLatLng);
+
                 try {
                     // Create the line with explicit coordinates
                     const line = L.polyline(
@@ -1262,7 +1250,7 @@ class Monitor {
                             [droneLatLng.lat, droneLatLng.lng],
                             [neighborLatLng.lat, neighborLatLng.lng]
                         ],
-                        { 
+                        {
                             color: '#4CAF50',
                             weight: 3,
                             opacity: 1.0,
@@ -1272,20 +1260,28 @@ class Monitor {
 
                     // Add popup with distance information
                     try {
-                        const distance = condition 
-                            ? (this.droneMarkers[droneId].neighbors_distance && 
-                               this.droneMarkers[droneId].neighbors_distance[neighborIP])
-                            : (neighborMarker.neighbors_distance && 
-                               neighborMarker.neighbors_distance[this.droneMarkers[droneId].ip]);
+                        const currentMarker = this.droneMarkers[droneId];
+                        const neighborFullIP = neighborIP.includes(':') ? neighborIP : `${neighborIP}:${currentMarker.port}`;
                         
+                        // Get distance from the current marker's neighbors_distance object
+                        const distance = currentMarker.neighbors_distance && 
+                                      currentMarker.neighbors_distance[neighborFullIP];
+
+                        this.log('Distance data:', {
+                            marker: currentMarker,
+                            neighborFullIP,
+                            neighbors_distance: currentMarker.neighbors_distance,
+                            distance
+                        });
+
                         line.bindPopup(`
                             <div class="line-popup">
-                                <p><strong>Distance:</strong> ${distance ? distance + ' m' : 'Calculating...'}</p>
+                                <p><strong>Distance:</strong> ${distance ? distance.toFixed(2) + ' m' : 'Calculating...'}</p>
                                 <p><strong>Status:</strong> Online</p>
                             </div>
                         `);
                     } catch (err) {
-                        console.warn('Error binding popup to line:', err);
+                        this.warn('Error binding popup to line:', err);
                         line.bindPopup('Distance: Calculating...');
                     }
 
@@ -1296,32 +1292,32 @@ class Monitor {
 
                     // Add the line to the layer group
                     this.lineLayer.addLayer(line);
-                    console.log('Line added to line layer');
+                    this.log('Line added to line layer');
 
                     // Store the line
                     this.droneLines[droneId].push(line);
-                    console.log('Line stored in droneLines array');
+                    this.log('Line stored in droneLines array');
 
                 } catch (error) {
-                    console.error('Error creating/adding line:', error);
+                    this.error('Error creating/adding line:', error);
                 }
             } else {
-                console.warn('No marker found for neighbor IP:', neighborIPOnly);
+                this.warn('No marker found for neighbor IP:', neighborIPOnly);
             }
         });
     }
 
     cleanupDroneLines(droneId) {
-        console.log('Cleaning up lines for drone:', droneId);
+        this.log('Cleaning up lines for drone:', droneId);
         if (this.droneLines[droneId]) {
             this.droneLines[droneId].forEach(line => {
                 if (line) {
                     try {
                         // Remove from layer group
                         this.lineLayer.removeLayer(line);
-                        console.log('Line removed from layer');
+                        this.log('Line removed from layer');
                     } catch (error) {
-                        console.error('Error removing line:', error);
+                        this.error('Error removing line:', error);
                     }
                 }
             });
@@ -1333,28 +1329,28 @@ class Monitor {
         // Get the current drone's IP
         const currentDroneIP = this.droneMarkers[droneId]?.ip;
         if (!currentDroneIP) {
-            console.warn('No IP found for drone:', droneId);
+            this.warn('No IP found for drone:', droneId);
             return;
         }
 
-        console.log('Updating related lines for drone:', droneId, 'with IP:', currentDroneIP);
+        this.log('Updating related lines for drone:', droneId, 'with IP:', currentDroneIP);
 
         // Update lines for all drones that have this drone as a neighbor
         Object.entries(this.droneMarkers).forEach(([id, marker]) => {
             if (id !== droneId && marker.neighbors) {
-                console.log('Processing marker:', id, 'with neighbors:', marker.neighbors, 'type:', typeof marker.neighbors);
-                
+                this.log('Processing marker:', id, 'with neighbors:', marker.neighbors, 'type:', typeof marker.neighbors);
+
                 // Handle both string and array formats for neighbors
-                const neighborIPs = Array.isArray(marker.neighbors) 
-                    ? marker.neighbors 
-                    : (typeof marker.neighbors === 'string' 
+                const neighborIPs = Array.isArray(marker.neighbors)
+                    ? marker.neighbors
+                    : (typeof marker.neighbors === 'string'
                         ? marker.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '')
                         : []);
-                
-                console.log('Processed neighbor IPs:', neighborIPs);
-                
+
+                this.log('Processed neighbor IPs:', neighborIPs);
+
                 if (neighborIPs.some(ip => ip.startsWith(currentDroneIP))) {
-                    console.log('Found matching neighbor, updating lines');
+                    this.log('Found matching neighbor, updating lines');
                     this.updateNeighborLines(
                         id,
                         marker.getLatLng(),
@@ -1369,20 +1365,20 @@ class Monitor {
     findMarkerByIP(ip) {
         // Handle both IP and IP:port formats
         const ipOnly = ip.split(':')[0];
-        console.log('Looking for marker with IP:', ipOnly);
-        console.log('Available markers:', Object.values(this.droneMarkers).map(m => m.ip));
-        
+        this.log('Looking for marker with IP:', ipOnly);
+        this.log('Available markers:', Object.values(this.droneMarkers).map(m => m.ip));
+
         const marker = Object.values(this.droneMarkers).find(marker => {
             const markerIP = marker.ip.split(':')[0];
             const matches = markerIP === ipOnly;
             if (matches) {
-                console.log('Found matching marker:', markerIP);
+                this.log('Found matching marker:', markerIP);
             }
             return matches;
         });
-        
+
         if (!marker) {
-            console.warn('No marker found for IP:', ipOnly);
+            this.warn('No marker found for IP:', ipOnly);
         }
         return marker;
     }
@@ -1392,12 +1388,12 @@ class Monitor {
         setInterval(() => {
             const currentTime = Date.now();
             const staleThreshold = 20000; // 20 seconds in milliseconds
-            
+
             // Check all nodes for staleness
             this.nodeTimestamps.forEach((timestamp, nodeId) => {
                 const timeSinceLastUpdate = currentTime - timestamp;
                 if (timeSinceLastUpdate > staleThreshold) {
-                    console.log(`Node ${nodeId} is stale (${timeSinceLastUpdate}ms since last update)`);
+                    this.log(`Node ${nodeId} is stale (${timeSinceLastUpdate}ms since last update)`);
                     this.markNodeAsOffline(nodeId);
                 }
             });
@@ -1408,15 +1404,15 @@ class Monitor {
         // Find the node data from our existing data structures
         const node = this.gData.nodes.find(n => n.ipport === nodeId);
         if (!node) {
-            console.warn(`Node ${nodeId} not found in graph data`);
+            this.warn(`Node ${nodeId} not found in graph data`);
             return;
         }
 
-        console.log(`Marking node ${nodeId} as offline`);
-        
+        this.log(`Marking node ${nodeId} as offline`);
+
         // Add to offline nodes set
         this.offlineNodes.add(node.ip);
-        
+
         // Update node color in graph data
         const nodeIndex = this.gData.nodes.findIndex(n => n.ipport === nodeId);
         if (nodeIndex !== -1) {
@@ -1435,7 +1431,7 @@ class Monitor {
         if (marker) {
             marker.setIcon(this.droneIconOffline);
             marker.getElement().classList.add('drone-offline');
-            
+
             // Remove all lines connected to this node
             if (this.droneLines[marker.uid]) {
                 this.cleanupDroneLines(marker.uid);
@@ -1445,12 +1441,12 @@ class Monitor {
         // Find the node's UID from the markers
         const nodeEntry = Object.entries(this.droneMarkers).find(([_, m]) => m.ip === node.ip);
         if (!nodeEntry) {
-            console.warn(`No marker found for node ${nodeId}`);
+            this.warn(`No marker found for node ${nodeId}`);
             return;
         }
 
         const [uid, _] = nodeEntry;
-        
+
         // Update table status
         const nodeRow = document.querySelector(`#node-${uid}`);
         if (nodeRow) {
@@ -1459,16 +1455,16 @@ class Monitor {
                 statusCell.innerHTML = '<span class="badge bg-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
             }
         }
-        
+
         // Update graph visualization
         this.updateGraph();
-        
+
         // Update map visualization
         this.updateAllRelatedLines(uid);
     }
 
     startPeriodicStatusCheck() {
-        console.log("Starting periodic status check");
+        this.log("Starting periodic status check");
         this.checkNodeStatus();
 
         setInterval(() => this.checkNodeStatus(), 5000);
@@ -1476,22 +1472,45 @@ class Monitor {
 
     async checkNodeStatus() {
         try {
+            // Skip status check if we're still loading initial data
+            if (this.isLoadingInitialData) {
+                this.log('Skipping status check - initial data still loading');
+                return;
+            }
+
+            // Wait for initial data to be loaded if it hasn't completed yet
+            if (this.initialDataPromise && !this.isInitialDataLoaded) {
+                this.log('Waiting for initial data to complete before status check');
+                await this.initialDataPromise;
+            }
+
             const response = await fetch(`/platform/api/dashboard/${this.scenarioName}/monitor`);
             if (!response.ok) {
-                console.error('Failed to fetch node status');
+                this.error('Failed to fetch node status');
                 return;
             }
-            
+
             const data = await response.json();
             if (!data.nodes || data.nodes.length === 0) {
-                console.warn('No nodes in status check response');
+                this.warn('No nodes in status check response');
                 return;
             }
 
-            console.log('Received status check data:', data);
+            this.log('Received status check data:', data);
 
-            this.offlineNodes.clear();
+            // Create a Set to track processed nodes in this status check
+            const processedNodes = new Set();
+
             data.nodes.forEach(node => {
+                const nodeId = `${node.ip}:${node.port}`;
+                
+                // Skip if we've already processed this node in this status check
+                if (processedNodes.has(nodeId)) {
+                    this.log('Skipping duplicate node in status check:', nodeId);
+                    return;
+                }
+                processedNodes.add(nodeId);
+
                 const nodeData = {
                     uid: node.uid,
                     idx: node.idx,
@@ -1512,62 +1531,66 @@ class Monitor {
 
                 if (!nodeData.status) {
                     this.offlineNodes.add(nodeData.ip);
-                    console.log(`Node ${nodeData.ip}:${nodeData.port} marked as offline from status check`);
+                    this.log(`Node ${nodeData.ip}:${nodeData.port} marked as offline from status check`);
                 }
 
                 // Update table row
-                console.log("Updating table row for node:", nodeData);
+                this.log("Updating table row for node:", nodeData);
                 this.updateTableRow(nodeData);
 
                 // Update map marker if it exists
                 if (this.droneMarkers[nodeData.uid]) {
+                    // Preserve existing neighbor distances
+                    const existingMarker = this.droneMarkers[nodeData.uid];
+                    const neighborsDistance = existingMarker.neighbors_distance || {};
+                    
                     this.updateDronePosition(
                         nodeData.uid,
                         nodeData.ip,
                         parseFloat(nodeData.latitude),
                         parseFloat(nodeData.longitude),
                         nodeData.neighbors ? nodeData.neighbors.split(/[\s,]+/).filter(ip => ip.trim() !== '') : [],
-                        null
+                        neighborsDistance
                     );
                 }
             });
 
             this.updateGraphDataFromStatus(data.nodes);
-            
+
             // Update all visualizations
             this.updateGraph();
             this.updateAllMarkers();
             this.updateAllRelatedLines();
-            
+
             // Check if all nodes are offline
             this.checkAllNodesOffline();
         } catch (error) {
-            console.error('Error in status check:', error);
+            this.error('Error in status check:', error);
         }
     }
 
     updateTableRow(data) {
         // Validate required data
         if (!data || !data.uid) {
-            console.warn('Invalid or missing data for table row update:', data);
+            this.warn('Invalid or missing data for table row update:', data);
             return;
         }
 
         let nodeRow = document.querySelector(`#node-${data.uid}`);
-        
+
         // If row doesn't exist, create it
         if (!nodeRow) {
-            console.log('Creating new row for node:', data.uid);
+            this.log('Creating new row for node:', data.uid);
             const tableBody = document.querySelector('#table-nodes tbody');
             if (!tableBody) {
-                console.error('Table body not found');
+                this.error('Table body not found');
                 return;
             }
 
             // Create new row
             nodeRow = document.createElement('tr');
             nodeRow.id = `node-${data.uid}`;
-            
+
             // Create cells with initial values
             const cells = [
                 { class: 'py-3', content: data.idx || '0' }, // IDX
@@ -1581,7 +1604,7 @@ class Monitor {
                 { class: 'py-3', content: data.malicious === "True" || data.malicious === "true"
                     ? '<span class="badge bg-dark"><i class="fa fa-skull me-1"></i>Malicious</span>'
                     : '<span class="badge bg-secondary"><i class="fa fa-shield-alt me-1"></i>Benign</span>' }, // Behaviour
-                { class: 'py-3', content: data.status 
+                { class: 'py-3', content: data.status
                     ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
                     : '<span class="badge bg-danger-subtle text-danger"><i class="fa fa-circle me-1"></i>Offline</span>' }, // Status
                 { class: 'py-3', content: `
@@ -1628,7 +1651,7 @@ class Monitor {
 
             // Add row to table
             tableBody.appendChild(nodeRow);
-            console.log('New row created with initial values for node:', data.uid);
+            this.log('New row created with initial values for node:', data.uid);
             return; // Exit since we've already set all values
         }
 
@@ -1673,7 +1696,7 @@ class Monitor {
             // Update Status
             const statusCell = nodeRow.querySelector('td:nth-child(6)');
             if (statusCell) {
-                statusCell.innerHTML = data.status 
+                statusCell.innerHTML = data.status
                     ? '<span class="badge bg-success"><i class="fa fa-circle me-1"></i>Online</span>'
                     : '<span class="badge bg-danger-subtle text-danger"><i class="fa fa-circle me-1"></i>Offline</span>';
             }
@@ -1688,7 +1711,7 @@ class Monitor {
                         </a>
                     </li>
                 ` : '';
-                
+
                 actionsCell.innerHTML = `
                     <div class="dropdown d-flex justify-content-center">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
@@ -1717,7 +1740,7 @@ class Monitor {
                 `;
             }
         } catch (error) {
-            console.error('Error updating table cells:', error);
+            this.error('Error updating table cells:', error);
         }
     }
 
@@ -1775,22 +1798,42 @@ class Monitor {
     checkAllNodesOffline() {
         // Get all unique node IPs from markers
         const allNodeIPs = new Set(Object.values(this.droneMarkers).map(marker => marker.ip));
-        
+
         // Check if all nodes are in the offlineNodes set
         const allOffline = allNodeIPs.size > 0 && Array.from(allNodeIPs).every(ip => this.offlineNodes.has(ip));
-        
-        if (allOffline) {
-            // Update scenario status badge to "Finished"
-            const statusBadge = document.getElementById('scenario_status');
-            if (statusBadge) {
+
+        // Update scenario status badge
+        const statusBadge = document.getElementById('scenario_status');
+        if (statusBadge) {
+            if (allNodeIPs.size === 0) {
+                // Show Running status when there are no nodes
+                statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
+            } else if (allOffline) {
                 statusBadge.className = 'badge bg-danger-subtle text-danger px-3 py-2 ms-3';
                 statusBadge.innerHTML = '<i class="fa fa-times-circle me-2"></i>Finished';
+                const stopButton = document.getElementById('stop_button');
+                if (stopButton) {
+                    stopButton.style.display = 'none';
+                }
+            } else {
+                statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
             }
         }
+    }
+
+    // Helper method to compare two sets
+    areSetsEqual(a, b) {
+        if (a.size !== b.size) return false;
+        for (const item of a) {
+            if (!b.has(item)) return false;
+        }
+        return true;
     }
 }
 
 // Initialize monitor when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new Monitor();
-}); 
+});

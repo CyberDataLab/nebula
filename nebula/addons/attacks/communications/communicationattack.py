@@ -1,9 +1,11 @@
 import logging
 import random
+import random
 import types
 from abc import abstractmethod
 
 from nebula.addons.attacks.attacks import Attack
+from nebula.core.network.communications import CommunicationsManager
 
 
 class CommunicationAttack(Attack):
@@ -46,19 +48,21 @@ class CommunicationAttack(Attack):
             if self.selection_interval:
                 if self.last_selection_round % self.selection_interval == 0:
                     logging.info("Recalculating targets...")
-                    all_nodes = await self.engine.cm.get_addrs_current_connections(only_direct=True)
+                    all_nodes = await CommunicationsManager.get_instance().get_addrs_current_connections(only_direct=True)
                     num_targets = max(1, int(len(all_nodes) * (self.selectivity_percentage / 100)))
                     self.targets = set(random.sample(list(all_nodes), num_targets))
             elif not self.targets:
                 logging.info("Calculating targets...")
-                all_nodes = await self.engine.cm.get_addrs_current_connections(only_direct=True)
+                all_nodes = await CommunicationsManager.get_instance().get_addrs_current_connections(only_direct=True)
                 num_targets = max(1, int(len(all_nodes) * (self.selectivity_percentage / 100)))
                 self.targets = set(random.sample(list(all_nodes), num_targets))
         else:
             logging.info("All neighbors selected as targets")
-            self.targets = await self.engine.cm.get_addrs_current_connections(only_direct=True)
+            self.targets = await CommunicationsManager.get_instance().get_addrs_current_connections(only_direct=True)
 
         logging.info(f"Selected {self.selectivity_percentage}% targets from neighbors: {self.targets}")
+        self.last_selection_round += 1
+
         self.last_selection_round += 1
 
     async def _inject_malicious_behaviour(self):

@@ -1,15 +1,13 @@
 import asyncio
 import logging
 import subprocess
-from typing import TYPE_CHECKING
+from functools import cached_property
 
 from nebula.addons.networksimulation.networksimulator import NetworkSimulator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import GPSEvent
+from nebula.core.network.communications import CommunicationsManager
 from nebula.core.utils.locker import Locker
-
-if TYPE_CHECKING:
-    from nebula.core.network.communications import CommunicationsManager
 
 
 class NebulaNS(NetworkSimulator):
@@ -21,8 +19,7 @@ class NebulaNS(NetworkSimulator):
     }
     IP_MULTICAST = "239.255.255.250"
 
-    def __init__(self, communication_manager: "CommunicationsManager", changing_interval, interface, verbose=False):
-        self._cm = communication_manager
+    def __init__(self, changing_interval, interface, verbose=False):
         self._refresh_interval = changing_interval
         self._node_interface = interface
         self._verbose = verbose
@@ -31,9 +28,16 @@ class NebulaNS(NetworkSimulator):
         self._current_network_conditions = {}
         self._running = False
 
+    @cached_property
+    def cm(self):
+        return CommunicationsManager.get_instance()
+
     async def start(self):
         logging.info("🌐  Nebula Network Simulator starting...")
         self._running = True
+        grace_time = self.cm.config.participant["mobility_args"]["grace_time_mobility"]
+        # if self._verbose: logging.info(f"Waiting {grace_time}s to start applying network conditions based on distances between devices")
+        # await asyncio.sleep(grace_time)
         await EventManager.get_instance().subscribe_addonevent(
             GPSEvent, self._change_network_conditions_based_on_distances
         )
@@ -213,7 +217,7 @@ class NebulaNS(NetworkSimulator):
 
             match = re.match(r"([\d.]+)", value)
             if not match:
-                raise ValueError(f"Invalid format: {value}")
+                raise ValueError(f"Formato inválido: {value}")
             return float(match.group(1))
 
         if self._verbose:
@@ -224,11 +228,11 @@ class NebulaNS(NetworkSimulator):
 
         thresholds = sorted(th.keys())
 
-        # If the distance is less than the first threshold, return the best condition
+        # Si la distancia es menor que el primer umbral, devolver la mejor condición
         if distance < thresholds[0]:
             conditions = {"bandwidth": th[thresholds[0]]["bandwidth"], "delay": th[thresholds[0]]["delay"]}
 
-        # Find the section in which the distance is located.
+        # Encontrar el tramo en el que se encuentra la distancia
         for i in range(len(thresholds) - 1):
             lower_bound = thresholds[i]
             upper_bound = thresholds[i + 1]
@@ -241,7 +245,7 @@ class NebulaNS(NetworkSimulator):
                 lower_cond = th[lower_bound]
                 upper_cond = th[upper_bound]
 
-                # Extract numerical values and units
+                # Extraer valores numéricos y unidades
                 lower_bandwidth_value = extract_number(lower_cond["bandwidth"])
                 upper_bandwidth_value = extract_number(upper_cond["bandwidth"])
                 lower_bandwidth_unit = lower_cond["bandwidth"].replace(str(lower_bandwidth_value), "")
@@ -251,22 +255,22 @@ class NebulaNS(NetworkSimulator):
                 upper_delay_value = extract_number(upper_cond["delay"])
                 delay_unit = lower_cond["delay"].replace(str(lower_delay_value), "")
 
-                # Calculate progress in the leg (0 to 1)
+                # Calcular el progreso en el tramo (0 a 1)
                 progress = (distance - lower_bound) / (upper_bound - lower_bound)
                 if self._verbose:
                     logging.info(f"Progress between the bounds: {progress}")
 
-                # Linear interpolation of values
+                # Interpolación lineal de valores
                 bandwidth_value = lower_bandwidth_value - progress * (lower_bandwidth_value - upper_bandwidth_value)
                 delay_value = lower_delay_value + progress * (upper_delay_value - lower_delay_value)
 
-                # Reconstruct values with original units
+                # Reconstruir valores con unidades originales
                 bandwidth = f"{round(bandwidth_value, 2)}{lower_bandwidth_unit}"
                 delay = f"{round(delay_value, 2)}{delay_unit}"
 
                 conditions = {"bandwidth": bandwidth, "delay": delay}
 
-        # If the distance is infinite, return the last value
+        # Si la distancia es infinita, devolver el último valor
         if not conditions:
             conditions = {"bandwidth": th[float("inf")]["bandwidth"], "delay": th[float("inf")]["delay"]}
         if self._verbose:

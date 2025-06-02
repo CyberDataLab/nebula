@@ -1,6 +1,4 @@
-import csv
 import logging
-import os
 import random
 import time
 from datetime import datetime
@@ -43,14 +41,24 @@ class Metrics:
 
         self.model_arrival_latency = {"latency": latency, "round": num_round, "round_received": current_round}
 
+        self.model_arrival_latency = {"latency": latency, "round": num_round, "round_received": current_round}
+
         self.messages = []
         self.similarity = []
 
 
 class Reputation:
     """
-    Class to define the reputation of a participant.
+    Class to define and manage the reputation of a participant in the network.
+
+    The class handles collection of metrics, calculation of static and dynamic reputation,
+    updating history, and communication of reputation scores to neighbors.
     """
+
+    def __init__(self, engine: "Engine", config: "Config"):
+        """
+        Initialize the Reputation system.
+        """
 
     def __init__(self, engine: "Engine", config: "Config"):
         self._engine = engine
@@ -91,9 +99,7 @@ class Reputation:
                 "model_arrival_latency",
                 "fraction_parameters_changed",
             ]
-            self._reputation_metrics = {
-                key: key in self._reputation_metrics for key in expected_metrics
-        }
+            self._reputation_metrics = {key: key in self._reputation_metrics for key in expected_metrics}
         self._initial_reputation = float(self._config.participant["defense_args"]["initial_reputation"])
         self._weighting_factor = self._config.participant["defense_args"]["weighting_factor"]
         self._weight_model_arrival_latency = float(
@@ -177,7 +183,9 @@ class Reputation:
 
     async def setup(self):
         """
-        Setup the reputation system.
+        Setup the reputation system by subscribing to various events.
+
+        This function enables the reputation system and subscribes to events based on active metrics.
         """
         if self._with_reputation:
             logging.info("Reputation system enabled")
@@ -836,7 +844,9 @@ class Reputation:
 
                     if threshold_anomaly:
                         penalization_factor_threshold = (
-                            abs(current_threshold - mean_threshold_prev) / mean_threshold_prev if mean_threshold_prev else 1
+                            abs(current_threshold - mean_threshold_prev) / mean_threshold_prev
+                            if mean_threshold_prev
+                            else 1
                         )
                         threshold_value = 1 - (1 / (1 + np.exp(-penalization_factor_threshold)))
                     else:
@@ -847,6 +857,9 @@ class Reputation:
                     fraction_score = fraction_weight * fraction_value + threshold_weight * threshold_value
 
                     self.fraction_changed_history[key]["mean_fraction"] = (current_fraction + mean_fraction_prev) / 2
+                    self.fraction_changed_history[key]["std_dev_fraction"] = np.sqrt(
+                        ((current_fraction - mean_fraction_prev) ** 2 + std_dev_fraction_prev**2) / 2
+                    )
                     self.fraction_changed_history[key]["std_dev_fraction"] = np.sqrt(
                         ((current_fraction - mean_fraction_prev) ** 2 + std_dev_fraction_prev**2) / 2
                     )
@@ -913,7 +926,9 @@ class Reputation:
             difference = 0
 
             if current_round >= 1:
-                target_round = current_round - 1 if (current_round - 1) in self.model_arrival_latency_history else current_round
+                target_round = (
+                    current_round - 1 if (current_round - 1) in self.model_arrival_latency_history else current_round
+                )
 
                 all_latencies = [
                     data["latency"]
@@ -1031,7 +1046,8 @@ class Reputation:
             current_addr_nei = (addr, nei)
 
             relevant_messages = [
-                msg for msg in messages_number_message
+                msg
+                for msg in messages_number_message
                 if msg["key"] == current_addr_nei and msg["current_round"] == current_round
             ]
             messages_count = len(relevant_messages)
@@ -1048,15 +1064,11 @@ class Reputation:
 
             counts_all_neighbors = list(neighbor_counts.values())
 
-            percentile_reference = (
-                np.percentile(counts_all_neighbors, 25) if counts_all_neighbors else 0
-            )
+            percentile_reference = np.percentile(counts_all_neighbors, 25) if counts_all_neighbors else 0
             std_dev = np.std(counts_all_neighbors) if counts_all_neighbors else 0
-            mean_messages_all_neighbors = (
-                np.mean(counts_all_neighbors) if counts_all_neighbors else 0
-            )
+            mean_messages_all_neighbors = np.mean(counts_all_neighbors) if counts_all_neighbors else 0
             aument_mean = mean_messages_all_neighbors * 2 if current_round <= 3 else mean_messages_all_neighbors * 1.1
-            #aument_mean =  mean_messages_all_neighbors * 1.8 if current_round <= 1 else mean_messages_all_neighbors * 1.1
+            # aument_mean =  mean_messages_all_neighbors * 1.8 if current_round <= 1 else mean_messages_all_neighbors * 1.1
 
             relative_increase = (
                 (messages_count - percentile_reference) / percentile_reference if percentile_reference > 0 else 0
@@ -1067,16 +1079,20 @@ class Reputation:
             was_penalized = False
             if relative_increase > dynamic_margin:
                 penalty_ratio = np.log1p(relative_increase - dynamic_margin) / (np.log1p(dynamic_margin + 1e-6) + 1e-6)
-                normalized_messages *= np.exp(-penalty_ratio**2)
+                normalized_messages *= np.exp(-(penalty_ratio**2))
 
             extra_penalty = 0.0
             if mean_messages_all_neighbors > 0 and messages_count > aument_mean:
                 extra_penalty = (messages_count - mean_messages_all_neighbors) / (mean_messages_all_neighbors + 1e-6)
                 amplification = 1 + (aument_mean / (mean_messages_all_neighbors + 1e-6))
-                normalized_messages *= np.exp(-(extra_penalty * amplification) ** 2)
+                normalized_messages *= np.exp(-((extra_penalty * amplification) ** 2))
 
             if was_penalized and current_round > 1:
-                prev_score = self.number_message_history.get((addr, nei), {}).get(current_round - 1, {}).get("normalized_messages")
+                prev_score = (
+                    self.number_message_history.get((addr, nei), {})
+                    .get(current_round - 1, {})
+                    .get("normalized_messages")
+                )
                 if prev_score is not None and prev_score < 0.9:
                     normalized_messages *= 0.9
 
@@ -1084,9 +1100,7 @@ class Reputation:
 
             if (addr, nei) not in self.number_message_history:
                 self.number_message_history[(addr, nei)] = {}
-            self.number_message_history[(addr, nei)][current_round] = {
-                "normalized_messages": normalized_messages
-            }
+            self.number_message_history[(addr, nei)][current_round] = {"normalized_messages": normalized_messages}
 
             normalized_messages = max(0.001, normalized_messages)
 
@@ -1137,25 +1151,19 @@ class Reputation:
             if messages_number_message_normalized > 0 and current_round >= 1:
                 past_values = []
                 for r in range(current_round - 3, current_round):
-                    val = (
-                        self.number_message_history.get(key, {})
-                        .get(r, {})
-                        .get("avg_number_message", None)
-                    )
+                    val = self.number_message_history.get(key, {}).get(r, {}).get("avg_number_message", None)
                     if val is not None and val != 0:
                         past_values.append(val)
 
                 if past_values:
                     avg_past = sum(past_values) / len(past_values)
-                    #avg_number_message = messages_number_message_normalized * 0.9 + avg_past * 0.1
+                    # avg_number_message = messages_number_message_normalized * 0.9 + avg_past * 0.1
                     avg_number_message = messages_number_message_normalized * 0.1 + avg_past * 0.9
                 else:
                     avg_number_message = messages_number_message_normalized
             elif messages_number_message_normalized == 0 and current_round >= 1:
                 previous_avg = (
-                    self.number_message_history.get(key, {})
-                    .get(current_round - 1, {})
-                    .get("avg_number_message", None)
+                    self.number_message_history.get(key, {}).get(current_round - 1, {}).get("avg_number_message", None)
                 )
                 avg_number_message = previous_avg * 0.1 if previous_avg is not None else 0
             elif messages_number_message_normalized < 0 and current_round >= 1:

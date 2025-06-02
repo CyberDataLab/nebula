@@ -15,6 +15,8 @@
 <!-- Modal participant -->
 <div class="modal fade" id="participant-modal" tabindex="-1" role="dialog" aria-labelledby="participant-modal-title"
     aria-hidden="true">
+<div class="modal fade" id="participant-modal" tabindex="-1" role="dialog" aria-labelledby="participant-modal-title"
+    aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -536,16 +538,16 @@
                         <div class="form-check form-check-inline" id="noise-type-container" style="display: none;">
                             <select class="form-control" id="noise_type" name="noise-type"
                                 style="display: inline; width: 20%">
-                                <option selected>Salt</option>
-                                <option>Gaussian</option>
+                                <option selected>Gaussian</option>
+                                <option>Salt</option>
                                 <option>S&P</option>
                             </select>
                         </div>
                         <h5 id="targeted-title" class="step-title" style="display: none;">Targeted</h5>
                         <div class="form-check form-check-inline" id="targeted-container" style="display: none;">
                             <div class="form-check form-switch" style="margin-bottom: 20px;">
-                                <input class="form-check-input" type="checkbox" id="targeted" checked="false"
-                                    style="display: inline; width: 80px; height: 30px;">
+                                <input class="form-check-input" type="checkbox" id="targeted"
+                                        style="display: inline; width: 80px; height: 30px;">
                             </div>
                         </div>
                         <h5 id="target_label-title" class="step-title" style="display: none;">Target label</h5>
@@ -621,6 +623,8 @@
                         <input class="form-control" type="number" id="initial-reputation" name="initialReputation"
                             step="0.01" style="display: inline; width: 80%" value="0.2" min="0.1" max="1">
                         <small id="reputationInitializationHelp" class="form-text text-muted">
+                            <i id="reputationInitializationHelpIcon" class="fa fa-info-circle"
+                                style="cursor: pointer;"></i>
                             <i id="reputationInitializationHelpIcon" class="fa fa-info-circle"
                                 style="cursor: pointer;"></i>
                         </small>
@@ -719,6 +723,10 @@
                         <label class="form-check-label" for="mobility-btn">Enable Mobility</label>
                     </div>
                     <div id="mobility-options" style="display: none; margin-left: 10px">
+                        <h5 class="step-title">Network simulation</h5>
+                        <div class="form-check form-switch" style="margin-left: 23px; margin-bottom: 20px;">
+                            <input class="form-check-input" type="checkbox" id="networkSimulation" style="display: inline; width: 80px; height: 30px;">
+                        </div>
                         <h5 class="step-title">Type of mobility</h5>
                         <div class="form-check form-check-inline">
                             <select class="form-control" id="mobilitySelect" name="mobility" style="display: inline">
@@ -730,7 +738,7 @@
                         <h5 class="step-title">Radius of federation (m)</h5>
                         <div class="form-check form-check-inline">
                             <input type="number" class="form-control" id="radiusFederation" placeholder="meters" min="0"
-                                value="100" style="display: inline; width: 80%">
+                                value="500" style="display: inline; width: 80%">
                         </div>
                         <h5 class="step-title">Scheme of mobility</h5>
                         <div class="form-check form-check-inline">
@@ -766,12 +774,87 @@
                                 placeholder="Number of additional participants" min="0" value="0"
                                 style="display: inline; width: 80%">
                         </div>
+                        <h5 class="step-title" id="connectionDelaytitle" style="display: none;">Same connection delay</h5>
+                        <div class="form-check form-switch" id="connectionDelayDiv" style="display: none; margin-left: 23px; margin-bottom: 20px;">
+                            <input class="form-check-input" type="checkbox" id="connectionDelaySwitch" checked style="display: inline; width: 80px; height: 30px; margin-right: 20px;">
+                            <input type="number" class="form-control" id="connectionDelay"
+                                placeholder="Connection delay" min="1" value="1"
+                                style="display: inline; width: 10%">
+                            <small id="connectionDelayHelp" class="form-text text-muted">
+                                <i id="connectionDelayHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                            </small>
+                        </div>
                         <div id="additional-participants-items"></div>
                         <h5 class="step-title">Schema of deployment</h5>
                         <div class="form-check form-check-inline">
                             <select class="form-control" id="schemaAdditionalParticipantsSelect"
                                 name="schemaAdditionalParticipants" style="display: inline" disabled>
                                 <option value="random" selected>Random</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <!-- Situational awareness -->
+                <div class="form-group row container-shadow tiny grey" style="display: none;">
+                    <h5 class="step-number">Situtational Awareness <i class="fa fa-binoculars"></i>
+                        <input type="checkbox" id="sa-lock" onchange="lock()" style="display: none;">
+                        <label for="sa-lock" class="icon-container" style="float: right;">
+                            <i class="fa fa-lock"></i>
+                        </label>
+                    </h5>
+                    <h5 class="step-title">Enable/Disable SA</h5>
+                    <div class="form-check form-switch" style="margin-left: 23px;">
+                        <input class="form-check-input" type="checkbox" id="situationalAwarenessSwitch" style="display: inline; width: 80px; height: 30px;" checked>
+                    </div>
+                    <div id="sa-settings" style="margin-top: 10px; display:block;">
+                        <h5 class="step-title">Strict Topology</h5>
+                        <div class="form-check form-switch" style="margin-left: 23px;">
+                            <input class="form-check-input" type="checkbox" id="StrictTopologySwitch" style="display: inline; width: 80px; height: 30px;">
+                        </div>
+                    </div>
+                    <div id="sa-discovery-settings" style="margin-top: 10px; display:bock;">
+                        <hr class="styled">
+                        <h5 class="step-title">SA Discovery</h5>
+                        <div id="SADiscovery-options" style="display: block;">
+                            <h5 class="step-title"><span style="font-weight:500;">Candidate Selector</span></h5>
+                            <div class="form-check form-check-inline">
+                                <select class="form-control" id="candidate-selector-select"
+                                    style="display: inline; width:100%">
+                                    <option selected>Distance</option>
+                                    <option>Random</option>
+                                    <option>Ring</option>
+                                    <option>Fully</option>
+                                </select>
+                            </div>
+                            <h5 class="step-title"><span style="font-weight:500;">Model Handler</span></h5>
+                            <div class="form-check form-check-inline">
+                                <select class="form-control" id="model-handler-select"
+                                    style="display: inline; width:100%">
+                                    <option selected>std</option>
+                                    <option>default</option>
+                                    <option>aggregator</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="sa-reasoner-settings" style="margin-top: 10px; display:block;">
+                        <hr class="styled">
+                        <h5 class="step-title">SA Reasoner</h5>
+                        <h5 class="step-title"><span style="font-weight:500;">Arbitration Policy</span></h5>
+                        <div class="form-check form-check-inline">
+                            <select class="form-control" id="arbitration-policy-select"
+                                style="display: inline; width:100%">
+                                <option selected>sap</option>
+                            </select>
+                        </div>
+                        <h5 class="step-title" style="margin-top: 20px;"><span style="font-weight:500;">Neighbor Policy</span></h5>
+                        <div class="form-check form-check-inline">
+                            <select class="form-control" id="neighbor-policy-select"
+                                style="display: inline; width:100%">
+                                <option selected>Distance</option>
+                                <option>Random</option>
+                                <option>Ring</option>
+                                <option>Fully</option>
                             </select>
                         </div>
                     </div>
