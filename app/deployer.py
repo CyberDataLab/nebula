@@ -585,7 +585,7 @@ class Deployer:
         ports_waf = [80]
 
         host_config_waf = client.api.create_host_config(
-            binds=[f"{os.environ['NEBULA_LOGS_DIR']}/waf/nginx:/var/log/nginx"],
+            binds=[f"{self.log_dir}/waf/nginx:/var/log/nginx"],
             privileged=True,
             port_bindings={80: self.waf_port},
         )
@@ -668,7 +668,7 @@ class Deployer:
 
         host_config_promtail = client.api.create_host_config(
             binds=[
-                f"{os.environ['NEBULA_LOGS_DIR']}/waf/nginx:/var/log/nginx",
+                f"{self.log_dir}/waf/nginx:/var/log/nginx",
             ],
         )
 
@@ -699,7 +699,7 @@ class Deployer:
 
     @staticmethod
     def stop_all():
-        logging.info("Closing NEBULA (exiting from components)... Please wait")
+        print("Closing NEBULA (exiting from components)... Please wait")
         try:
             Deployer.stop_frontend()
             Deployer.stop_controller()
@@ -713,4 +713,6 @@ class Deployer:
             os.kill(pid, signal.SIGKILL)
             sys.exit(0)
         except Exception as e:
-            logging.info(f"Nebula is closed with errors {e}")
+            print(f"Nebula is closed with errors {e}")
+        finally:
+            sys.exit(0)
