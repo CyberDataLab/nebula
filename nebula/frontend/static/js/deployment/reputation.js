@@ -65,19 +65,19 @@ const ReputationManager = (function() {
             initialReputation: parseFloat(document.getElementById("initial-reputation").value),
             weightingFactor: document.getElementById("weighting-factor").value,
             metrics: {
-                modelSimilarity: {
+                model_similarity: {
                     enabled: document.getElementById("model-similarity").checked,
                     weight: parseFloat(document.getElementById("weight-model-similarity").value)
                 },
-                numMessages: {
+                num_messages: {
                     enabled: document.getElementById("num-messages").checked,
                     weight: parseFloat(document.getElementById("weight-num-messages").value)
                 },
-                modelArrivalLatency: {
+                model_arrival_latency: {
                     enabled: document.getElementById("model-arrival-latency").checked,
                     weight: parseFloat(document.getElementById("weight-model-arrival-latency").value)
                 },
-                fractionParametersChanged: {
+                fraction_parameters_changed: {
                     enabled: document.getElementById("fraction-parameters-changed").checked,
                     weight: parseFloat(document.getElementById("weight-fraction-parameters-changed").value)
                 }

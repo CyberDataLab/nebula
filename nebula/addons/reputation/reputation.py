@@ -111,11 +111,19 @@ class Reputation:
 
         # Extract weights from metrics if using static weighting
         if self._weighting_factor == "static":
-            self._weight_model_arrival_latency = float(self._metrics.get("modelArrivalLatency", {}).get("weight", 0.25))
-            self._weight_model_similarity = float(self._metrics.get("modelSimilarity", {}).get("weight", 0.25))
-            self._weight_num_messages = float(self._metrics.get("numMessages", {}).get("weight", 0.25))
-            self._weight_fraction_params_changed = float(self._metrics.get("fractionParametersChanged", {}).get("weight", 0.25))
+            self._weight_model_arrival_latency = float(
+                self._metrics.get("model_arrival_latency", {}).get("weight", 0.25)
+            )
+            self._weight_model_similarity = float(self._metrics.get("model_similarity", {}).get("weight", 0.25))
+            self._weight_num_messages = float(self._metrics.get("num_messages", {}).get("weight", 0.25))
+            self._weight_fraction_params_changed = float(
+                self._metrics.get("fraction_parameters_changed", {}).get("weight", 0.25)
+            )
         else:
+            self._metrics["model_arrival_latency"]["weight"] = 0.25
+            self._metrics["model_similarity"]["weight"] = 0.25
+            self._metrics["num_messages"]["weight"] = 0.25
+            self._metrics["fraction_parameters_changed"]["weight"] = 0.25
             self._weight_model_arrival_latency = 0.25
             self._weight_model_similarity = 0.25
             self._weight_num_messages = 0.25
@@ -212,18 +220,21 @@ class Reputation:
         if self._enabled:
             await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self.on_round_start)
             await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.calculate_reputation)
-            if self._metrics.get("modelSimilarity", {}).get("enabled", False):
+            if self._metrics.get("model_similarity", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_similarity)
-            if self._metrics.get("fractionParametersChanged", {}).get("enabled", False):
+            if self._metrics.get("fraction_parameters_changed", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe_node_event(
                     UpdateReceivedEvent, self.recollect_fraction_of_parameters_changed
                 )
-            if self._metrics.get("numMessages", {}).get("enabled", False):
+            if self._metrics.get("num_messages", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe(("model", "update"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("model", "initialization"), self.recollect_number_message)
-                await EventManager.get_instance().subscribe(("model", "aggregation"), self.recollect_number_message)
+                await EventManager.get_instance().subscribe(("control", "alive"), self.recollect_number_message)
+                await EventManager.get_instance().subscribe(
+                    ("federation", "federation_models_included"), self.recollect_number_message
+                )
                 await EventManager.get_instance().subscribe(("reputation", "share"), self.recollect_number_message)
-            if self._metrics.get("modelArrivalLatency", {}).get("enabled", False):
+            if self._metrics.get("model_arrival_latency", {}).get("enabled", False):
                 await EventManager.get_instance().subscribe_node_event(
                     UpdateReceivedEvent, self.recollect_model_arrival_latency
                 )
@@ -372,7 +383,7 @@ class Reputation:
 
         for nei in neighbors:
             metric_values = {}
-            for metric_name in self.history_data.keys():
+            for metric_name in self.history_data:
                 if self._metrics.get(metric_name, False):
                     for entry in self.history_data.get(metric_name, []):
                         if (
@@ -501,10 +512,7 @@ class Reputation:
                         if "metric_value" in entry and entry["metric_value"] != 0
                     ]
 
-                    if metric_values:
-                        mean_value = np.mean(metric_values)
-                    else:
-                        mean_value = 0
+                    mean_value = np.mean(metric_values) if metric_values else 0
 
                     deviation = abs(current_value - mean_value)
                     desviations[metric_name] = deviation
@@ -528,7 +536,7 @@ class Reputation:
                             metric_name: weight / total_weight for metric_name, weight in normalized_weights.items()
                         }
                     else:
-                        normalized_weights = {metric_name: 1 / num_active_metrics for metric_name in active_metrics}
+                        normalized_weights = dict.fromkeys(active_metrics, 1 / num_active_metrics)
 
                 mean_deviation = np.mean(list(desviations.values()))
                 dynamic_min_weight = max(0.1, mean_deviation / (mean_deviation + 1))
@@ -547,7 +555,7 @@ class Reputation:
                         adjusted_weights[metric_name] /= total_adjusted_weight
                     total_adjusted_weight = 1
             else:
-                adjusted_weights = {metric_name: 1 / num_active_metrics for metric_name in active_metrics}
+                adjusted_weights = dict.fromkeys(active_metrics, 1 / num_active_metrics)
 
             for metric_name, current_value in active_metrics.items():
                 weight = adjusted_weights.get(metric_name, -1)
