@@ -543,7 +543,6 @@ class ScenarioManagement:
             else:
                 participant_config["adversarial_args"]["attack_params"] = {"attacks": "No Attack"}
             participant_config["defense_args"]["with_reputation"] = node_config["with_reputation"]
-<<<<<<< HEAD:nebula/scenarios.py
             if isinstance(self.scenario.reputation_metrics, list):
                 metrics_list = self.scenario.reputation_metrics
                 metrics_dict = {
@@ -555,9 +554,6 @@ class ScenarioManagement:
                 participant_config["defense_args"]["reputation_metrics"] = metrics_dict
             else:
                 participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
-=======
-            participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
->>>>>>> origin/main:nebula/controller/scenarios.py
             participant_config["defense_args"]["initial_reputation"] = self.scenario.initial_reputation
             participant_config["defense_args"]["weighting_factor"] = self.scenario.weighting_factor
             participant_config["defense_args"]["weight_model_arrival_latency"] = (
