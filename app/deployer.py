@@ -496,12 +496,6 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        try:
-            subprocess.check_call(["nvidia-smi"])
-            self.gpu_available = True
-        except Exception:
-            logging.info("No GPU available for the frontend, nodes will be deploy in CPU mode")
-
         network_name = f"{os.environ['USER']}_nebula-net-base"
 
         # Create the Docker network
