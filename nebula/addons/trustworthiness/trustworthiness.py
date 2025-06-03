@@ -10,6 +10,7 @@ import pickle
 from nebula.addons.trustworthiness.calculation import stop_emissions_tracking_and_save
 from nebula.addons.trustworthiness.utils import save_results_csv
 from codecarbon import EmissionsTracker
+import asyncio
 
 """                                                     ##############################
                                                         #       TRUST WORKLOADS      #
@@ -37,7 +38,11 @@ class TrustWorkload(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    async def finish_experiment_role_actions(self, trust_config, experiment_name):
+    async def finish_experiment_role_pre_actions(self):
+        raise NotImplementedError
+    
+    @abstractmethod
+    async def finish_experiment_role_post_actions(self, trust_config, experiment_name):
         raise NotImplementedError
 
 class TrustWorkloadTrainer(TrustWorkload):
@@ -64,10 +69,13 @@ class TrustWorkloadTrainer(TrustWorkload):
     def get_metrics(self):
         return (self._current_loss, self._current_accuracy)
     
-    async def finish_experiment_role_actions(self, trust_config, experiment_name):
+    async def finish_experiment_role_pre_actions(self):
         with open(self._train_loader_file, 'rb') as file:
             train_loader = pickle.load(file)
         self._sample_size = len(train_loader)
+        
+    async def finish_experiment_role_post_action(self, trust_config, experiment_name):
+        pass
         
     async def _process_round_end_event(self, ree: RoundEndEvent):
         scenario_name = self._engine.config.participant["scenario_args"]["name"]
@@ -103,7 +111,10 @@ class TrustWorkloadServer(TrustWorkload):
     def get_metrics(self):
         return (self._current_loss, self._current_accuracy)
     
-    async def finish_experiment_role_actions(self, trust_config, experiment_name):
+    async def finish_experiment_role_pre_actions(self):
+        pass
+    
+    async def finish_experiment_role_post_actions(self, trust_config, experiment_name):
         from datetime  import datetime
         self._end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         await self._generate_factsheet(trust_config, experiment_name)
@@ -204,7 +215,7 @@ class Trustworthiness():
         logging.info("log2")
         
     async def _process_experiment_finish_event(self, efe: ExperimentFinishEvent):
-        await self.tw.finish_experiment_role_actions(self._trust_config, self._experiment_name)
+        await self.tw.finish_experiment_role_pre_actions()
         
         last_loss, last_accuracy = self.tw.get_metrics()
         
@@ -224,6 +235,8 @@ class Trustworthiness():
         # Last operations
         save_results_csv(self._experiment_name, self._idx, bytes_sent, bytes_recv, last_loss, last_accuracy)
         stop_emissions_tracking_and_save(self._tracker, self._trust_dir_files, self._emissions_file, self._role.value, workload, sample_size)
+        asyncio.sleep(30)
+        await self.tw.finish_experiment_role_post_actions(self._trust_config, self._experiment_name)
 
     def _factory_trust_workload(self, role: Role, engine: Engine, idx, trust_files_route) -> TrustWorkload:  
         trust_workloads = {
