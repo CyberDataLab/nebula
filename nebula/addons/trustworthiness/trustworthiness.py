@@ -1,9 +1,11 @@
+import logging
+from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import ExperimentFinishEvent, RoundEndEvent, TestMetricsEvent
 from nebula.core.eventmanager import EventManager
 from nebula.core.role import Role
 from abc import ABC, abstractmethod
 from nebula.config.config import Config
-from nebula.core.engine import Engine, ServerNode
+from nebula.core.engine import Engine
 import pickle
 from nebula.addons.trustworthiness.calculation import stop_emissions_tracking_and_save
 from nebula.addons.trustworthiness.utils import save_results_csv
@@ -81,7 +83,7 @@ class TrustWorkloadTrainer(TrustWorkload):
     
 class TrustWorkloadServer(TrustWorkload):
     
-    def __init__(self,  engine: ServerNode, idx, trust_files_route):
+    def __init__(self,  engine, idx, trust_files_route):
         self._workload = 'aggregation'
         self._sample_size = 0
         self._current_loss = None
@@ -102,7 +104,8 @@ class TrustWorkloadServer(TrustWorkload):
         return (self._current_loss, self._current_accuracy)
     
     async def finish_experiment_role_actions(self, trust_config, experiment_name):
-        self._end_time = ServerNode.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        from datetime  import datetime
+        self._end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         await self._generate_factsheet(trust_config, experiment_name)
         
     async def _generate_factsheet(self, trust_config, experiment_name):
@@ -160,16 +163,20 @@ class TrustWorkloadServer(TrustWorkload):
 """
 
 class Trustworthiness():
-    def _init_(self, engine: Engine, config: Config):
+    def __init__(self, engine: Engine, config: Config):
+        print_msg_box(
+            msg=f"Name Trustworthiness Module\nRole: {engine.role.value}",
+            indent=2,
+        )
         self._engine = engine
         self._config = config
         self._trust_config = self._config.participant["trust_args"]["scenario"]
-        self._trust_dir_files = f"/nebula/app/logs/{self._experiment_name}/trustworthiness"
         self._experiment_name = self._config.participant["scenario_args"]["name"]
+        self._trust_dir_files = f"/nebula/app/logs/{self._experiment_name}/trustworthiness"
         self._emissions_file = 'emissions.csv'
         self._role: Role = engine.role
         self._idx = self._config.participant["device_args"]["idx"]
-        self._trust_workload: TrustWorkload = self._factory_trust_workload(self._role, self._engine, self._idx, self._trust_dir_files)
+        self._trust_workload: TrustWorkload = self._factory_trust_workload(self._role, self._engine, self._idx, self._trust_dir_files)       
         
         # EmissionsTracker from codecarbon to measure the emissions during the aggregation step in the server
         self._tracker= EmissionsTracker(tracking_mode='process', log_level='error', save_to_file=False)
@@ -182,14 +189,19 @@ class Trustworthiness():
     async def start(self):
         await self._create_trustworthiness_directory()
         await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._process_experiment_finish_event)
+        await self.tw.init()
+        logging.info("before trackker")
         self._tracker.start()
+        logging.info("after trackker")
         
     async def _create_trustworthiness_directory(self):
         import os
+        logging.info("log1")
         trust_dir = os.path.join(os.environ.get("NEBULA_LOGS_DIR"), self._experiment_name, "trustworthiness")
         # Create a directory to save files to calcutate trust
         os.makedirs(trust_dir, exist_ok=True)
         os.chmod(trust_dir, 0o777)
+        logging.info("log2")
         
     async def _process_experiment_finish_event(self, efe: ExperimentFinishEvent):
         await self.tw.finish_experiment_role_actions(self._trust_config, self._experiment_name)

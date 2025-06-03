@@ -11,16 +11,16 @@ class Role(Enum):
     IDLE = "idle"
     SERVER = "server"
     
-def factory_node_role(self, rol: str) -> Role:
-    if rol == "trainer":
+def factory_node_role(role: str) -> Role:
+    if role == "trainer":
         return Role.TRAINER
-    elif rol == "aggregator":
+    elif role == "aggregator":
         return Role.AGGREGATOR
-    elif rol == "proxy":
+    elif role == "proxy":
         return Role.PROXY
-    elif rol == "idle":
+    elif role == "idle":
         return Role.IDLE
-    elif rol == "server":
+    elif role == "server":
         return Role.SERVER
     else:
         return ""
