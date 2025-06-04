@@ -22,7 +22,7 @@ class TrustWorkloadException(Exception):
 
 class TrustWorkload(ABC):
     @abstractmethod
-    async def init(self):
+    async def init(self, experiment_name):
         raise NotImplementedError
     
     @abstractmethod
@@ -56,9 +56,26 @@ class TrustWorkloadTrainer(TrustWorkload):
         self._current_loss = None
         self._current_accuracy = None
         
-    async def init(self):
+    async def init(self, experiment_name):
         await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._process_round_end_event)
         await EventManager.get_instance().subscribe_addonevent(TestMetricsEvent, self._process_test_metrics_event)
+        await self._create_pk_files(experiment_name)
+            
+    async def _create_pk_files(self, experiment_name):
+        # Save data to local files to calculate the trustworthyness
+        train_loader_filename = f"/nebula/app/logs/{experiment_name}/trustworthiness/participant_{self._idx}_train_loader.pk"
+        test_loader_filename = f"/nebula/app/logs/{experiment_name}/trustworthiness/participant_{self._idx}_test_loader.pk"
+        self._engine.trainer.datamodule.setup(stage="fit")
+        train_loader = self._engine.trainer.datamodule.train_dataloader()
+        self._engine.trainer.datamodule.setup(stage="test")
+        test_loader = self._engine.trainer.datamodule.test_dataloader()[0]
+        
+        with open(train_loader_filename, 'wb') as f:
+            pickle.dump(train_loader, f)
+            f.close()
+        with open(test_loader_filename, 'wb') as f:
+            pickle.dump(test_loader, f)
+            f.close()
         
     def get_workload(self):
         return self._workload
@@ -99,7 +116,7 @@ class TrustWorkloadServer(TrustWorkload):
         self._start_time = engine._start_time
         self._end_time = None
         
-    async def init(self):
+    async def init(self, experiment_name):
         await EventManager.get_instance().subscribe_addonevent(TestMetricsEvent, self._process_test_metrics_event)   
         
     def get_workload(self):
@@ -200,7 +217,7 @@ class Trustworthiness():
     async def start(self):
         await self._create_trustworthiness_directory()
         await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._process_experiment_finish_event)
-        await self.tw.init()
+        await self.tw.init(self._experiment_name)
         logging.info("before trackker")
         self._tracker.start()
         logging.info("after trackker")
