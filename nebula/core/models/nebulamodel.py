@@ -301,7 +301,15 @@ class NebulaModel(pl.LightningModule, ABC):
 
         Returns:
         """
+        x, y = batch
+        y_pred = self.forward(x)
+        loss = self.criterion(y_pred, y)
+        y_pred_classes = torch.argmax(y_pred, dim=1)
+        accuracy = torch.mean((y_pred_classes == y).float())
+        
         if dataloader_idx == 0:
+            self.log(f"val_loss", loss, on_epoch=True, prog_bar=False)
+            self.log(f"val_accuracy", accuracy, on_epoch=True, prog_bar=False)
             return self.step(batch, batch_idx=batch_idx, phase="Test (Local)")
         else:
             return self.step(batch, batch_idx=batch_idx, phase="Test (Global)")

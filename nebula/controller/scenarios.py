@@ -1042,7 +1042,7 @@ class ScenarioManagement:
             name = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{self.user}-participant{node['device_args']['idx']}"
 
             if node["device_args"]["accelerator"] == "gpu":
-                environment = {"NVIDIA_DISABLE_REQUIRE": True, "NEBULA_LOGS_DIR": "/nebula/app/logs/",}
+                environment = {"NVIDIA_DISABLE_REQUIRE": True, "NEBULA_LOGS_DIR": "/nebula/app/logs/", "NEBULA_CONFIG_DIR": "/nebula/app/config/"}
                 host_config = client.api.create_host_config(
                     binds=[f"{self.root_path}:/nebula", "/var/run/docker.sock:/var/run/docker.sock"],
                     privileged=True,
@@ -1050,7 +1050,7 @@ class ScenarioManagement:
                     extra_hosts={"host.docker.internal": "host-gateway"},
                 )
             else:
-                environment = {"NEBULA_LOGS_DIR": "/nebula/app/logs/",}
+                environment = {"NEBULA_LOGS_DIR": "/nebula/app/logs/", "NEBULA_CONFIG_DIR": "/nebula/app/config/"}
                 host_config = client.api.create_host_config(
                     binds=[f"{self.root_path}:/nebula", "/var/run/docker.sock:/var/run/docker.sock"],
                     privileged=True,

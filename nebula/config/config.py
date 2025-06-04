@@ -48,6 +48,13 @@ class Config:
     def get_train_logging_config(self):
         # TBD
         pass
+    
+    def reset_logging_configuration(self):
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+            
+        self.__set_default_logging(mode="a")
+        self.__set_training_logging(mode="a")
 
     def __default_config(self):
         self.participant["device_args"]["name"] = (
@@ -57,7 +64,7 @@ class Config:
             f"{self.participant['network_args']['ip']}:{self.participant['network_args']['port']}"
         )
 
-    def __set_default_logging(self):
+    def __set_default_logging(self, mode="w"):
         experiment_name = self.participant["scenario_args"]["name"]
         self.log_dir = os.path.join(self.participant["tracking_args"]["log_dir"], experiment_name)
         if not os.path.exists(self.log_dir):
@@ -69,7 +76,7 @@ class Config:
             file_handler,
             file_handler_only_debug,
             exp_errors_file_handler,
-        ) = self.__setup_logging(self.log_filename)
+        ) = self.__setup_logging(self.log_filename, mode=mode)
 
         level = logging.DEBUG if self.participant["device_args"]["logging"] else logging.CRITICAL
         logging.basicConfig(
@@ -82,7 +89,7 @@ class Config:
             ],
         )
 
-    def __setup_logging(self, log_filename):
+    def __setup_logging(self, log_filename, mode="w"):
         info_file_format = (
             f"%(asctime)s - {self.participant['device_args']['name']} - [%(filename)s:%(lineno)d] %(message)s"
         )
@@ -93,18 +100,18 @@ class Config:
         console_handler.setLevel(logging.CRITICAL)
         console_handler.setFormatter(Formatter(log_console_format))
 
-        file_handler = FileHandler(f"{log_filename}.log", mode="w", encoding="utf-8")
+        file_handler = FileHandler(f"{log_filename}.log", mode=mode, encoding="utf-8")
         file_handler.setLevel(logging.INFO if self.participant["device_args"]["logging"] else logging.CRITICAL)
         file_handler.setFormatter(Formatter(info_file_format))
 
-        file_handler_only_debug = FileHandler(f"{log_filename}_debug.log", mode="w", encoding="utf-8")
+        file_handler_only_debug = FileHandler(f"{log_filename}_debug.log", mode=mode, encoding="utf-8")
         file_handler_only_debug.setLevel(
             logging.DEBUG if self.participant["device_args"]["logging"] else logging.CRITICAL
         )
         file_handler_only_debug.addFilter(lambda record: record.levelno == logging.DEBUG)
         file_handler_only_debug.setFormatter(Formatter(debug_file_format))
 
-        exp_errors_file_handler = FileHandler(f"{log_filename}_error.log", mode="w", encoding="utf-8")
+        exp_errors_file_handler = FileHandler(f"{log_filename}_error.log", mode=mode, encoding="utf-8")
         exp_errors_file_handler.setLevel(
             logging.WARNING if self.participant["device_args"]["logging"] else logging.CRITICAL
         )
@@ -117,7 +124,7 @@ class Config:
             exp_errors_file_handler,
         )
 
-    def __set_training_logging(self):
+    def __set_training_logging(self, mode="w"):
         training_log_filename = f"{self.log_filename}_training"
         info_file_format = (
             f"%(asctime)s - {self.participant['device_args']['name']} - [%(filename)s:%(lineno)d] %(message)s"
@@ -129,7 +136,7 @@ class Config:
         console_handler.setLevel(logging.CRITICAL)
         console_handler.setFormatter(Formatter(log_console_format))
 
-        file_handler = FileHandler(f"{training_log_filename}.log", mode="w", encoding="utf-8")
+        file_handler = FileHandler(f"{training_log_filename}.log", mode=mode, encoding="utf-8")
         file_handler.setLevel(level)
         file_handler.setFormatter(Formatter(info_file_format))
 

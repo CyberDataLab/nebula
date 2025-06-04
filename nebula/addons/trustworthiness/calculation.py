@@ -17,6 +17,8 @@ from codecarbon import EmissionsTracker
 from scipy.stats import variation
 from torch import nn, optim
 
+from nebula.addons.trustworthiness.utils import read_csv
+
 dirname = os.path.dirname(__file__)
 logger = logging.getLogger(__name__)
 
@@ -285,7 +287,7 @@ def get_bytes_models(models_files):
     return avg_model_size
 
 
-def get_bytes_sent_recv(bytes_sent_files, bytes_recv_files):
+def get_bytes_sent_recv(scenario_name):
     """
     Calculates the mean bytes sent and received of the nodes.
 
@@ -298,29 +300,23 @@ def get_bytes_sent_recv(bytes_sent_files, bytes_recv_files):
     """
     total_upload_bytes = 0
     total_download_bytes = 0
-    number_files = len(bytes_sent_files)
 
-    for file_bytes_sent, file_bytes_recv in zip(bytes_sent_files, bytes_recv_files, strict=False):
-        with open(file_bytes_sent) as f:
-            bytes_sent = f.read()
+    data_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "data_results.csv")
 
-        with open(file_bytes_recv) as f:
-            bytes_recv = f.read()
+    data = read_csv(data_file)
 
-        total_upload_bytes += int(bytes_sent)
-        total_download_bytes += int(bytes_recv)
+    number_files = len(data)
 
+    total_upload_bytes = int(data["bytes_sent"].sum())
+    total_download_bytes = int(data["bytes_recv"].sum())
+    
     avg_upload_bytes = total_upload_bytes / number_files
     avg_download_bytes = total_download_bytes / number_files
-    return (
-        total_upload_bytes,
-        total_download_bytes,
-        avg_upload_bytes,
-        avg_download_bytes,
-    )
+
+    return total_upload_bytes, total_download_bytes, avg_upload_bytes, avg_download_bytes
 
 
-def get_avg_loss_accuracy(loss_files, accuracy_files):
+def get_avg_loss_accuracy(scenario_name):
     """
     Calculates the mean accuracy and loss models of the nodes.
 
@@ -333,27 +329,21 @@ def get_avg_loss_accuracy(loss_files, accuracy_files):
     """
     total_accuracy = 0
     total_loss = 0
-    number_files = len(loss_files)
-    accuracies = []
 
-    for file_loss, file_accuracy in zip(loss_files, accuracy_files, strict=False):
-        with open(file_loss) as f:
-            loss = f.read()
+    data_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "data_results.csv")
 
-        with open(file_accuracy) as f:
-            accuracy = f.read()
+    data = read_csv(data_file)
 
-        total_loss += float(loss)
-        total_accuracy += float(accuracy)
-        accuracies.append(float(accuracy))
+    number_files = len(data)
 
+    total_loss = data["loss"].sum()
+    total_accuracy = data["accuracy"].sum()
+    
     avg_loss = total_loss / number_files
     avg_accuracy = total_accuracy / number_files
-
-    std_accuracy = statistics.stdev(accuracies)
+    std_accuracy = statistics.stdev(data["accuracy"])
 
     return avg_loss, avg_accuracy, std_accuracy
-
 
 def get_feature_importance_cv(model, test_sample):
     """

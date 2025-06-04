@@ -55,10 +55,13 @@ class TrustWorkloadTrainer(TrustWorkload):
         self._sample_size = None
         self._current_loss = None
         self._current_accuracy = None
+        self._experiment_name = ""
         
     async def init(self, experiment_name):
+        self._experiment_name = experiment_name
         await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._process_round_end_event)
         await EventManager.get_instance().subscribe_addonevent(TestMetricsEvent, self._process_test_metrics_event)
+        await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._process_experiment_finished_event)
         await self._create_pk_files(experiment_name)
             
     async def _create_pk_files(self, experiment_name):
@@ -91,10 +94,10 @@ class TrustWorkloadTrainer(TrustWorkload):
             train_loader = pickle.load(file)
         self._sample_size = len(train_loader)
         
-    async def finish_experiment_role_post_action(self, trust_config, experiment_name):
+    async def finish_experiment_role_post_actions(self, trust_config, experiment_name):
         pass
-        
-    async def _process_round_end_event(self, ree: RoundEndEvent):
+       
+    async def _process_round_end_event(self, ree: RoundEndEvent):        
         scenario_name = self._engine.config.participant["scenario_args"]["name"]
         train_model = f"/nebula/app/logs/{scenario_name}/trustworthiness/participant_{self._idx}_train_model.pk"
         # Save the train model in trustworthy dir
@@ -105,19 +108,30 @@ class TrustWorkloadTrainer(TrustWorkload):
         cur_loss, cur_acc = await tme.get_event_data()
         if cur_loss and cur_acc:
             self._current_loss, self._current_accuracy = cur_loss, cur_acc
+            
+    async def _process_experiment_finished_event(self, efe:ExperimentFinishEvent):        
+        model_file = f"/nebula/app/logs/{self._experiment_name}/trustworthiness/participant_{self._engine.idx}_final_model.pk"
+        
+        # Save model in trustworthy dir
+        with open(model_file, 'wb') as f:
+            pickle.dump(self._engine.trainer.model, f)
     
 class TrustWorkloadServer(TrustWorkload):
     
-    def __init__(self,  engine, idx, trust_files_route):
+    def __init__(self, engine, idx, trust_files_route):
         self._workload = 'aggregation'
         self._sample_size = 0
         self._current_loss = None
         self._current_accuracy = None
         self._start_time = engine._start_time
+        self._engine = engine
         self._end_time = None
+        self._experiment_name = ""
         
     async def init(self, experiment_name):
+        self._experiment_name = experiment_name
         await EventManager.get_instance().subscribe_addonevent(TestMetricsEvent, self._process_test_metrics_event)   
+        await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._process_experiment_finished_event)
         
     def get_workload(self):
         return self._workload
@@ -134,6 +148,9 @@ class TrustWorkloadServer(TrustWorkload):
     async def finish_experiment_role_post_actions(self, trust_config, experiment_name):
         from datetime  import datetime
         self._end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        logging.info("[FER] sleeping")
+        # await asyncio.sleep(30)
+        logging.info("[FER] wake up")
         await self._generate_factsheet(trust_config, experiment_name)
         
     async def _generate_factsheet(self, trust_config, experiment_name):
@@ -142,9 +159,12 @@ class TrustWorkloadServer(TrustWorkload):
         import json
         import os
         
+        logging.info("[FER] factsheet init")
         factsheet = Factsheet()
         factsheet.populate_factsheet_pre_train(trust_config, experiment_name)
+        logging.info("[FER] factsheet pre train done")
         factsheet.populate_factsheet_post_train(experiment_name, self._start_time, self._end_time)
+        logging.info("[FER] factsheet post train done")
         
         data_file_path = os.path.join(os.environ.get('NEBULA_CONFIG_DIR'), experiment_name, "scenario.json")
         with open(data_file_path, 'r') as data_file:
@@ -179,11 +199,19 @@ class TrustWorkloadServer(TrustWorkload):
 
             trust_metric_manager = TrustMetricManager(self._start_time)
             trust_metric_manager.evaluate(experiment_name, weights, use_weights=True)
+            logging.info("[FER] evaluation done")
     
     async def _process_test_metrics_event(self, tme: TestMetricsEvent):
         cur_loss, cur_acc = await tme.get_event_data()
         if cur_loss and cur_acc:
             self._current_loss, self._current_accuracy = cur_loss, cur_acc
+
+    async def _process_experiment_finished_event(self, efe:ExperimentFinishEvent):        
+        model_file = f"/nebula/app/logs/{self._experiment_name}/trustworthiness/participant_{self._engine.idx}_final_model.pk"
+        
+        # Save model in trustworthy dir
+        with open(model_file, 'wb') as f:
+            pickle.dump(self._engine.trainer.model, f)
 
 """                                                     ##############################
                                                         #       TRUSTWORTHINESS      #
@@ -192,6 +220,7 @@ class TrustWorkloadServer(TrustWorkload):
 
 class Trustworthiness():
     def __init__(self, engine: Engine, config: Config):
+        config.reset_logging_configuration()
         print_msg_box(
             msg=f"Name Trustworthiness Module\nRole: {engine.role.value}",
             indent=2,
@@ -216,8 +245,8 @@ class Trustworthiness():
     
     async def start(self):
         await self._create_trustworthiness_directory()
-        await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._process_experiment_finish_event)
         await self.tw.init(self._experiment_name)
+        await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._process_experiment_finish_event)
         logging.info("before trackker")
         self._tracker.start()
         logging.info("after trackker")
@@ -252,7 +281,6 @@ class Trustworthiness():
         # Last operations
         save_results_csv(self._experiment_name, self._idx, bytes_sent, bytes_recv, last_loss, last_accuracy)
         stop_emissions_tracking_and_save(self._tracker, self._trust_dir_files, self._emissions_file, self._role.value, workload, sample_size)
-        asyncio.sleep(30)
         await self.tw.finish_experiment_role_post_actions(self._trust_config, self._experiment_name)
 
     def _factory_trust_workload(self, role: Role, engine: Engine, idx, trust_files_route) -> TrustWorkload:  
