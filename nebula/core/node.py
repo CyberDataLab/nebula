@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import logging
+from collections import Counter
 
 from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10PartitionHandler
@@ -149,6 +150,7 @@ async def main(config):
     dataset = NebulaPartition(handler=handler, config=config)
     dataset.load_partition()
     dataset.log_partition()
+    samples_per_label = Counter(dataset.get_train_labels())
 
     datamodule = DataModule(
         train_set=dataset.train_set,
@@ -159,6 +161,7 @@ async def main(config):
         local_test_set_indices=dataset.local_test_indices,
         num_workers=num_workers,
         batch_size=batch_size,
+        samples_per_label = samples_per_label
     )
 
     trainer = None

@@ -106,6 +106,26 @@ class DockerUtils:
             client.close()  # Ensure the Docker client is closed
 
     @classmethod
+    def check_docker_by_prefix(cls, prefix):
+        try:
+            # Connect to Docker client
+            client = docker.from_env()
+
+            containers = client.containers.list(all=True)  # `all=True` to include stopped containers
+
+            # Iterate through containers and remove those with the matching prefix
+            for container in containers:
+                if container.name.startswith(prefix):
+                    return True
+                
+            return False
+
+        except docker.errors.APIError:
+            logging.exception("Error interacting with Docker")
+        except Exception:
+            logging.exception("Unexpected error")
+
+    @classmethod
     def remove_docker_network(cls, network_name):
         try:
             # Connect to Docker

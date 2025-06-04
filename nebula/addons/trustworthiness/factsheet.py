@@ -67,7 +67,7 @@ class Factsheet:
                         poisoned_node_percent = 0
                         poisoned_sample_percent = 0
                         poisoned_noise_percent = 0
-                    with_reputation = data["with_reputation"]
+                    with_reputation = data["reputation"]["enabled"]
                     is_dynamic_topology = False # data["is_dynamic_topology"]
                     is_dynamic_aggregation = False # data["is_dynamic_aggregation"]
                     target_aggregation = False # data["target_aggregation"]
@@ -125,14 +125,13 @@ class Factsheet:
                     factsheet["configuration"]["trainable_param_num"] = model.count_parameters()
                     factsheet["configuration"]["local_update_steps"] = 1
 
+                    f.seek(0)
+                    f.truncate()
+                    json.dump(factsheet, f, indent=4)
+
             except JSONDecodeError as e:
                 logging.warning(f"{factsheet_file} is invalid")
                 logging.error(e)
-
-            f.seek(0)
-            f.truncate()
-            json.dump(factsheet, f, indent=4)
-            f.close()
 
     def populate_factsheet_post_train(self, scenario_name, start_time, end_time):
         """
@@ -198,14 +197,16 @@ class Factsheet:
 
                 factsheet["fairness"]["selection_cv"] = 1
 
-                count_class_samples(scenario_name, dataloaders_files)
+                # count_class_samples(scenario_name, dataloaders_files)
+                
+                ## FER
 
-                with open(f"{files_dir}/count_class.json", "r") as file:
-                    class_distribution = json.load(file)
+                # with open(f"{files_dir}/count_class.json", "r") as file:
+                #     class_distribution = json.load(file)
 
-                class_samples_sizes = [x for x in class_distribution.values()]
-                class_imbalance = get_cv(list=class_samples_sizes)
-                factsheet["fairness"]["class_imbalance"] = 1 if class_imbalance > 1 else class_imbalance
+                # class_samples_sizes = [x for x in class_distribution.values()]
+                # class_imbalance = get_cv(list=class_samples_sizes)
+                # factsheet["fairness"]["class_imbalance"] = 1 if class_imbalance > 1 else class_imbalance
 
                 with open(train_model_file, "rb") as file:
                     lightning_model = pickle.load(file)
@@ -273,11 +274,10 @@ class Factsheet:
                     factsheet["sustainability"]["emissions_communication_uplink"] = check_field_filled(factsheet, ["sustainability", "emissions_communication_uplink"], factsheet["system"]["total_upload_bytes"] * 2.24e-10 * factsheet["sustainability"]["avg_carbon_intensity_clients"], "")
                     factsheet["sustainability"]["emissions_communication_downlink"] = check_field_filled(factsheet, ["sustainability", "emissions_communication_downlink"], factsheet["system"]["total_download_bytes"] * 2.24e-10 * factsheet["sustainability"]["avg_carbon_intensity_server"], "")
 
-            except JSONDecodeError as e:
-                logging.warning(f"{factsheet_file} is invalid")
-                logging.error(e)
+                f.seek(0)
+                f.truncate()
+                json.dump(factsheet, f, indent=4)
 
-            f.seek(0)
-            f.truncate()
-            json.dump(factsheet, f, indent=4)
-            f.close()
+            except JSONDecodeError as e:
+                logging.info(f"{factsheet_file} is invalid")
+                logging.error(e)
