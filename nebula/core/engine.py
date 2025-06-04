@@ -3,9 +3,9 @@ import logging
 import os
 import socket
 import time
-
 import docker
 
+from nebula.core.role import Role, factory_node_role
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
@@ -19,6 +19,7 @@ from nebula.core.nebulaevents import (
     RoundStartEvent,
     UpdateNeighborEvent,
     UpdateReceivedEvent,
+    ExperimentFinishEvent,
 )
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
@@ -90,13 +91,14 @@ class Engine:
         self.port = config.participant["network_args"]["port"]
         self.addr = config.participant["network_args"]["addr"]
         self.role = config.participant["device_args"]["role"]
+        self.role: Role = factory_node_role(self.role)
         self.name = config.participant["device_args"]["name"]
         self.client = docker.from_env()
 
         print_banner()
 
         print_msg_box(
-            msg=f"Name {self.name}\nRole: {self.role}",
+            msg=f"Name {self.name}\nRole: {self.role.value}",
             indent=2,
             title="Node information",
         )
@@ -570,7 +572,7 @@ class Engine:
             direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
             undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
             logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
-            logging.info(f"[Role {self.role}] Starting learning cycle...")
+            logging.info(f"[Role {self.role.value}] Starting learning cycle...")
             await self.aggregator.update_federation_nodes(expected_nodes)
             await self._extended_learning_cycle()
 
@@ -595,7 +597,12 @@ class Engine:
 
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
+        
         await self.trainer.test()
+        
+        efe = ExperimentFinishEvent()
+        await EventManager.get_instance().publish_node_event(efe)
+        
         print_msg_box(
             msg=f"FL process has been completed successfully (max. {self.total_rounds} rounds reached)",
             indent=2,
@@ -626,156 +633,3 @@ class Engine:
         functionalities. The method is called in the _learning_cycle method.
         """
         pass
-
-
-class MaliciousNode(Engine):
-    def __init__(
-        self,
-        model,
-        datamodule,
-        config=Config,
-        trainer=Lightning,
-        security=False,
-    ):
-        super().__init__(
-            model,
-            datamodule,
-            config,
-            trainer,
-            security,
-        )
-        self.attack = create_attack(self)
-        self.aggregator_bening = self._aggregator
-
-    async def _extended_learning_cycle(self):
-        try:
-            await self.attack.attack()
-        except Exception:
-            attack_name = self.config.participant["adversarial_args"]["attack_params"]["attacks"]
-            logging.exception(f"Attack {attack_name} failed")
-
-        if self.role == "aggregator":
-            await AggregatorNode._extended_learning_cycle(self)
-        if self.role == "trainer":
-            await TrainerNode._extended_learning_cycle(self)
-        if self.role == "server":
-            await ServerNode._extended_learning_cycle(self)
-
-
-class AggregatorNode(Engine):
-    def __init__(
-        self,
-        model,
-        datamodule,
-        config=Config,
-        trainer=Lightning,
-        security=False,
-    ):
-        super().__init__(
-            model,
-            datamodule,
-            config,
-            trainer,
-            security,
-        )
-
-    async def _extended_learning_cycle(self):
-        # Define the functionality of the aggregator node
-        await self.trainer.test()
-        await self.trainning_in_progress_lock.acquire_async()
-        await self.trainer.train()
-        await self.trainning_in_progress_lock.release_async()
-
-        self_update_event = UpdateReceivedEvent(
-            self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round
-        )
-        await EventManager.get_instance().publish_node_event(self_update_event)
-
-        await self.cm.propagator.propagate("stable")
-        await self._waiting_model_updates()
-
-
-class ServerNode(Engine):
-    def __init__(
-        self,
-        model,
-        datamodule,
-        config=Config,
-        trainer=Lightning,
-        security=False,
-    ):
-        super().__init__(
-            model,
-            datamodule,
-            config,
-            trainer,
-            security,
-        )
-
-    async def _extended_learning_cycle(self):
-        # Define the functionality of the server node
-        await self.trainer.test()
-
-        self_update_event = UpdateReceivedEvent(
-            self.trainer.get_model_parameters(), self.trainer.BYPASS_MODEL_WEIGHT, self.addr, self.round
-        )
-        await EventManager.get_instance().publish_node_event(self_update_event)
-
-        await self._waiting_model_updates()
-        await self.cm.propagator.propagate("stable")
-
-
-class TrainerNode(Engine):
-    def __init__(
-        self,
-        model,
-        datamodule,
-        config=Config,
-        trainer=Lightning,
-        security=False,
-    ):
-        super().__init__(
-            model,
-            datamodule,
-            config,
-            trainer,
-            security,
-        )
-
-    async def _extended_learning_cycle(self):
-        # Define the functionality of the trainer node
-        logging.info("Waiting global update | Assign _waiting_global_update = True")
-
-        await self.trainer.test()
-        await self.trainer.train()
-
-        self_update_event = UpdateReceivedEvent(
-            self.trainer.get_model_parameters(), self.trainer.get_model_weight(), self.addr, self.round, local=True
-        )
-        await EventManager.get_instance().publish_node_event(self_update_event)
-
-        await self.cm.propagator.propagate("stable")
-        await self._waiting_model_updates()
-
-
-class IdleNode(Engine):
-    def __init__(
-        self,
-        model,
-        datamodule,
-        config=Config,
-        trainer=Lightning,
-        security=False,
-    ):
-        super().__init__(
-            model,
-            datamodule,
-            config,
-            trainer,
-            security,
-        )
-
-    async def _extended_learning_cycle(self):
-        # Define the functionality of the idle node
-        logging.info("Waiting global update | Assign _waiting_global_update = True")
-        await self._waiting_model_updates()

@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-
+from nebula.config.config import Config
 from nebula.addons.functions import print_msg_box
 from nebula.addons.gps.gpsmodule import factory_gpsmodule
 from nebula.addons.mobility import Mobility
@@ -10,13 +10,19 @@ if TYPE_CHECKING:
 
 
 class AddondManager:
-    def __init__(self, engine: "Engine", config):
+    def __init__(self, engine: "Engine", config: Config):
         self._engine = engine
         self._config = config
         self._addons = []
 
     async def deploy_additional_services(self):
         print_msg_box(msg="Deploying Additional Services", indent=2, title="Addons Manager")
+        if self._config.participant["trustworthiness"]:
+            from nebula.addons.trustworthiness.trustworthiness import Trustworthiness
+            
+            trustworthiness = Trustworthiness(self._engine, self._config)
+            self._addons.append(trustworthiness)
+            
         if self._config.participant["mobility_args"]["mobility"]:
             mobility = Mobility(self._config, verbose=False)
             self._addons.append(mobility)

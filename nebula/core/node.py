@@ -23,7 +23,6 @@ from nebula.core.datasets.emnist.emnist import EMNISTPartitionHandler
 from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTPartitionHandler
 from nebula.core.datasets.mnist.mnist import MNISTPartitionHandler
 from nebula.core.datasets.nebuladataset import NebulaPartition
-from nebula.core.engine import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
 from nebula.core.models.cifar10.cnn import CIFAR10ModelCNN
 from nebula.core.models.cifar10.cnnV2 import CIFAR10ModelCNN_V2
 from nebula.core.models.cifar10.cnnV3 import CIFAR10ModelCNN_V3
@@ -38,6 +37,7 @@ from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
 from nebula.core.role import Role
+from nebula.core.noderole import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
 from nebula.core.training.lightning import Lightning
 from nebula.core.training.siamese import Siamese
 
@@ -175,13 +175,13 @@ async def main(config):
     if config.participant["device_args"]["malicious"]:
         node_cls = MaliciousNode
     else:
-        if config.participant["device_args"]["role"] == Role.AGGREGATOR:
+        if config.participant["device_args"]["role"] == Role.AGGREGATOR.value:
             node_cls = AggregatorNode
-        elif config.participant["device_args"]["role"] == Role.TRAINER:
+        elif config.participant["device_args"]["role"] == Role.TRAINER.value:
             node_cls = TrainerNode
-        elif config.participant["device_args"]["role"] == Role.SERVER:
+        elif config.participant["device_args"]["role"] == Role.SERVER.value:
             node_cls = ServerNode
-        elif config.participant["device_args"]["role"] == Role.IDLE:
+        elif config.participant["device_args"]["role"] == Role.IDLE.value:
             node_cls = IdleNode
         else:
             raise ValueError(f"Role {config.participant['device_args']['role']} not supported")

@@ -7,6 +7,7 @@ import ReputationManager from './reputation.js';
 import SaManager from './situational-awareness.js';
 import GraphSettings from './graph-settings.js';
 import Utils from './utils.js';
+import TrustworthinessManager from './trustworthiness.js';
 
 const DeploymentManager = (function() {
     function initialize() {
@@ -29,6 +30,7 @@ const DeploymentManager = (function() {
         MobilityManager.initializeMobility();
         ReputationManager.initializeReputationSystem();
         SaManager.initializeSa();
+        TrustworthinessManager.initializeTrustworthinessSystem();
         GraphSettings.initializeDistanceControls();
 
         // Make modules globally available
@@ -38,6 +40,7 @@ const DeploymentManager = (function() {
         window.MobilityManager = MobilityManager;
         window.ReputationManager = ReputationManager;
         window.SaManager = SaManager;
+        window.TrustworthinessManager = TrustworthinessManager;
         window.GraphSettings = GraphSettings;
         window.DeploymentManager = DeploymentManager;
         window.Utils = Utils;

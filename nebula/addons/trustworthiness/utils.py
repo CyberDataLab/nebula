@@ -36,14 +36,18 @@ def count_class_samples(scenario_name, dataloaders_files):
 
     for dataloader in dataloaders:
         for batch, labels in dataloader:
-            for b, label in zip(batch, labels, strict=False):
+            for b, label in zip(batch, labels):
                 l = hashids.encode(label.item())
                 if l in result:
                     result[l] += 1
                 else:
                     result[l] = 1
 
-    name_file = f"{dirname}/files/{scenario_name}/count_class.json"
+    try:
+        name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "count_class.json")
+    except:
+        name_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "count_class.json")
+        
     with open(name_file, "w") as f:
         json.dump(result, f)
 
@@ -61,15 +65,16 @@ def get_entropy(client_id, scenario_name, dataloader):
     result = {}
     client_entropy = {}
 
-    name_file = f"{dirname}/files/{scenario_name}/entropy.json"
+    name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "entropy.json")
+        
     if os.path.exists(name_file):
-        with open(name_file) as f:
+        with open(name_file, "r") as f:
             client_entropy = json.load(f)
 
     client_id_hash = hashids.encode(client_id)
 
     for batch, labels in dataloader:
-        for b, label in zip(batch, labels, strict=False):
+        for b, label in zip(batch, labels):
             l = hashids.encode(label.item())
             if l in result:
                 result[l] += 1
@@ -200,55 +205,25 @@ def write_results_json(out_file, dict):
         json.dump(dict, f, indent=4)
 
 
-def save_results_csv(
-    scenario_name: str,
-    id: int,
-    bytes_sent: int,
-    bytes_recv: int,
-    accuracy: float,
-    loss: float,
-    finish: bool,
-):
-    outdir = f"{dirname}/files/{scenario_name}"
-    filename = "data_results.csv"
-    data_results_file = os.path.join(outdir, filename)
+def save_results_csv(scenario_name: str, id: int, bytes_sent: int, bytes_recv: int, accuracy: float, loss: float):
+    try:
+        data_results_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "data_results.csv")
+    except:
+        data_results_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "data_results.csv")
+        
     if exists(data_results_file):
         df = pd.read_csv(data_results_file)
     else:
-        # Crear un DataFrame con columnas especificadas
-        df = pd.DataFrame(columns=["id", "bytes_sent", "bytes_recv", "accuracy", "loss", "finish"])
-
+        df = pd.DataFrame(columns=["id", "bytes_sent", "bytes_recv", "accuracy", "loss"])
+        
     try:
-        if id not in df["id"].values:
-            # Si no existe, agregar una nueva entrada con el ID del nodo
-            df = pd.concat(
-                [
-                    df,
-                    pd.DataFrame({
-                        "id": id,
-                        "bytes_sent": None,
-                        "bytes_recv": None,
-                        "accuracy": None,
-                        "loss": None,
-                        "finish": False,
-                    }),
-                ],
-                ignore_index=True,
-            )
+        # Add new entry to DataFrame
+        new_data = pd.DataFrame({'id': [id], 'bytes_sent': [bytes_sent],
+                                    'bytes_recv': [bytes_recv], 'accuracy': [accuracy],
+                                    'loss': [loss]})
+        df = pd.concat([df, new_data], ignore_index=True)
 
-            df.to_csv(data_results_file, encoding="utf-8", index=False)
-        else:
-            if bytes_sent is not None:
-                df.loc[df["id"] == id, "bytes_sent"] = bytes_sent
-            if bytes_recv is not None:
-                df.loc[df["id"] == id, "bytes_recv"] = bytes_recv
-            if accuracy is not None:
-                df.loc[df["id"] == id, "accuracy"] = accuracy
-            if loss is not None:
-                df.loc[df["id"] == id, "loss"] = loss
-            if finish:
-                df.loc[df["id"] == id, "finish"] = True
-            df.to_csv(data_results_file, encoding="utf-8", index=False)
+        df.to_csv(data_results_file, encoding='utf-8', index=False)
 
     except Exception as e:
         logger.warning(e)

@@ -93,6 +93,7 @@ class DataModule(LightningDataModule):
                 "Train dataset not initialized. Please call setup('fit') before requesting train_dataloader."
             )
         logging_training.info(f"Train set size: {len(self.data_train)}")
+        logging.info("[FER] train_dataloader")
         return DataLoader(
             self.data_train,
             batch_size=self.batch_size,
@@ -124,6 +125,7 @@ class DataModule(LightningDataModule):
             )
         logging_training.info(f"Local test set size: {len(self.local_te_subset)}")
         logging_training.info(f"Global test set size: {len(self.global_te_subset)}")
+        logging.info("[FER] test_dataloader")
         return [
             DataLoader(
                 self.local_te_subset,

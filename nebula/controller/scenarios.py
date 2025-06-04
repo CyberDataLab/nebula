@@ -71,6 +71,31 @@ class Scenario:
         mobile_participants_percent,
         additional_participants,
         schema_additional_participants,
+        with_trustworthiness,
+        robustness_pillar,
+        resilience_to_attacks,
+        algorithm_robustness,
+        client_reliability,
+        privacy_pillar,
+        technique,
+        uncertainty,
+        indistinguishability,
+        fairness_pillar,
+        selection_fairness,
+        performance_fairness,
+        class_distribution,
+        explainability_pillar,
+        interpretability,
+        post_hoc_methods,
+        accountability_pillar,
+        factsheet_completeness,
+        architectural_soundness_pillar,
+        client_management,
+        optimization,
+        sustainability_pillar,
+        energy_source,
+        hardware_efficiency,
+        federation_complexity,
         random_topology_probability,
         with_sa,
         strict_topology,
@@ -164,6 +189,31 @@ class Scenario:
         self.round_frequency = round_frequency
         self.mobile_participants_percent = mobile_participants_percent
         self.additional_participants = additional_participants
+        self.with_trustworthiness = with_trustworthiness
+        self.robustness_pillar = robustness_pillar,
+        self.resilience_to_attacks = resilience_to_attacks,
+        self.algorithm_robustness = algorithm_robustness,
+        self.client_reliability = client_reliability,
+        self.privacy_pillar = privacy_pillar,
+        self.technique = technique,
+        self.uncertainty = uncertainty,
+        self.indistinguishability = indistinguishability,
+        self.fairness_pillar = fairness_pillar,
+        self.selection_fairness = selection_fairness,
+        self.performance_fairness = performance_fairness,
+        self.class_distribution = class_distribution,
+        self.explainability_pillar = explainability_pillar,
+        self.interpretability = interpretability,
+        self.post_hoc_methods = post_hoc_methods,
+        self.accountability_pillar = accountability_pillar,
+        self.factsheet_completeness = factsheet_completeness,
+        self.architectural_soundness_pillar = architectural_soundness_pillar,
+        self.client_management = client_management,
+        self.optimization = optimization,
+        self.sustainability_pillar = sustainability_pillar,
+        self.energy_source = energy_source,
+        self.hardware_efficiency = hardware_efficiency,
+        self.federation_complexity = federation_complexity,
         self.schema_additional_participants = schema_additional_participants
         self.random_topology_probability = random_topology_probability
         self.with_sa = with_sa
@@ -555,6 +605,35 @@ class ScenarioManagement:
                         "sa_network": {"neighbor_policy": self.scenario.sar_neighbor_policy, "verbose": True},
                     },
                 }
+            participant_config["trustworthiness"] = self.scenario.with_trustworthiness
+            if self.scenario.with_trustworthiness:            
+                participant_config["trust_args"] = {
+                    "robustness_pillar": self.scenario.robustness_pillar,
+                    "resilience_to_attacks": self.scenario.resilience_to_attacks,
+                    "algorithm_robustness": self.scenario.algorithm_robustness,
+                    "client_reliability": self.scenario.client_reliability,
+                    "privacy_pillar": self.scenario.privacy_pillar,
+                    "technique": self.scenario.technique,
+                    "uncertainty": self.scenario.uncertainty,
+                    "indistinguishability": self.scenario.indistinguishability,
+                    "fairness_pillar": self.scenario.fairness_pillar,
+                    "selection_fairness": self.scenario.selection_fairness,
+                    "performance_fairness": self.scenario.performance_fairness,
+                    "class_distribution": self.scenario.class_distribution,
+                    "explainability_pillar": self.scenario.explainability_pillar,
+                    "interpretability": self.scenario.interpretability,
+                    "post_hoc_methods": self.scenario.post_hoc_methods,
+                    "accountability_pillar":self.scenario.accountability_pillar,
+                    "factsheet_completeness": self.scenario.factsheet_completeness,
+                    "architectural_soundness_pillar":self.scenario.architectural_soundness_pillar,
+                    "client_management": self.scenario.client_management,
+                    "optimization": self.scenario.optimization,
+                    "sustainability_pillar": self.scenario.sustainability_pillar,
+                    "energy_source": self.scenario.energy_source,
+                    "hardware_efficiency": self.scenario.hardware_efficiency,
+                    "federation_complexity": self.scenario.federation_complexity,
+                    "scenario": scenario
+                }
 
             with open(participant_file, "w") as f:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
@@ -939,7 +1018,7 @@ class ScenarioManagement:
             name = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{self.user}-participant{node['device_args']['idx']}"
 
             if node["device_args"]["accelerator"] == "gpu":
-                environment = {"NVIDIA_DISABLE_REQUIRE": True}
+                environment = {"NVIDIA_DISABLE_REQUIRE": True, "NEBULA_LOGS_DIR": "/nebula/app/logs/", "NEBULA_CONFIG_DIR": "/nebula/app/config/"}
                 host_config = client.api.create_host_config(
                     binds=[f"{self.root_path}:/nebula", "/var/run/docker.sock:/var/run/docker.sock"],
                     privileged=True,
@@ -947,7 +1026,7 @@ class ScenarioManagement:
                     extra_hosts={"host.docker.internal": "host-gateway"},
                 )
             else:
-                environment = ""
+                environment = {"NEBULA_LOGS_DIR": "/nebula/app/logs/", "NEBULA_CONFIG_DIR": "/nebula/app/config/"}
                 host_config = client.api.create_host_config(
                     binds=[f"{self.root_path}:/nebula", "/var/run/docker.sock:/var/run/docker.sock"],
                     privileged=True,

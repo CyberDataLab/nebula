@@ -90,7 +90,6 @@ class RoundEndEvent(NodeEvent):
 class ExperimentFinishEvent(NodeEvent):
     def __init__(self):
         """Event triggered when experiment is going to finish."""
-        pass
 
     def __str__(self):
         return "Experiment finished"
@@ -306,3 +305,14 @@ class ChangeLocationEvent(AddonEvent):
 
     async def get_event_data(self):
         return (self.latitude, self.longitude)
+    
+class TestMetricsEvent(AddonEvent):
+    def __init__(self, loss, accuracy):
+        self._loss = loss
+        self._accuracy = accuracy
+
+    def __str__(self):
+        return "TestMetricsEvent"
+
+    async def get_event_data(self):
+        return (self._loss, self._accuracy)
