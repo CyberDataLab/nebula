@@ -151,9 +151,6 @@ class TrustWorkloadServer(TrustWorkload):
     async def finish_experiment_role_post_actions(self, trust_config, experiment_name):
         from datetime  import datetime
         self._end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        logging.info("[FER] sleeping")
-        # await asyncio.sleep(30)
-        logging.info("[FER] wake up")
         await self._generate_factsheet(trust_config, experiment_name)
         
     async def _generate_factsheet(self, trust_config, experiment_name):
@@ -162,13 +159,10 @@ class TrustWorkloadServer(TrustWorkload):
         import json
         import os
         
-        logging.info("[FER] factsheet init")
         factsheet = Factsheet()
         factsheet.populate_factsheet_pre_train(trust_config, experiment_name)
-        logging.info("[FER] factsheet pre train done")
         class_counter = self._engine.trainer.datamodule.get_samples_per_label()
         factsheet.populate_factsheet_post_train(experiment_name, self._start_time, self._end_time, class_counter)
-        logging.info("[FER] factsheet post train done")
         
         data_file_path = os.path.join(os.environ.get('NEBULA_CONFIG_DIR'), experiment_name, "scenario.json")
         with open(data_file_path, 'r') as data_file:
@@ -203,7 +197,6 @@ class TrustWorkloadServer(TrustWorkload):
 
             trust_metric_manager = TrustMetricManager(self._start_time)
             trust_metric_manager.evaluate(experiment_name, weights, use_weights=True)
-            #logging.info("[FER] evaluation done")
         logging.info("Trust work DONE")
     
     async def _process_test_metrics_event(self, tme: TestMetricsEvent):

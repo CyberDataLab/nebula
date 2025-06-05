@@ -17,8 +17,6 @@ from nebula.addons.trustworthiness.utils import count_all_class_samples, read_cs
 
 dirname = os.path.dirname(__file__)
 
-
-
 class Factsheet:
     def __init__(self):
         """
@@ -172,8 +170,6 @@ class Factsheet:
 
                 with open(f"{files_dir}/entropy.json", "r") as file:
                     entropy_distribution = json.load(file)
-                      
-                logging.info(f"[ALEX] entropy_distribution: {entropy_distribution}")
 
                 values = np.array(list(entropy_distribution.values()))
 
@@ -203,12 +199,8 @@ class Factsheet:
 
                 count_all_class_samples(scenario_name)
                 
-                # # FER
-
                 with open(f"{files_dir}/count_class.json", "r") as file:
                     class_distribution = json.load(file)
-                    
-                logging.info(f"[ALEX] class_distribution: {class_distribution}")
 
                 class_samples_sizes = [x for x in class_distribution.values()]
                 class_imbalance = get_cv(list=class_samples_sizes)
@@ -225,8 +217,6 @@ class Factsheet:
                 #     model = SyscallModelMLP()
                 # else:
                 #     model = CIFAR10ModelCNN()
-
-                logging.info(f"[ALEX] parte de training hecha")
                 
                 model.load_state_dict(lightning_model.state_dict())
 
