@@ -36,7 +36,7 @@ class DataModule(LightningDataModule):
         self.num_workers = num_workers
         self.val_percent = val_percent
         self.seed = seed
-        self.samples_per_label = samples_per_label
+        self._samples_per_label = samples_per_label
 
         self.model_weight = None
 
@@ -46,6 +46,9 @@ class DataModule(LightningDataModule):
         self.data_val = None
         self.global_te_subset = None
         self.local_te_subset = None
+        
+    def get_samples_per_label(self):
+        return self._samples_per_label
 
     def setup(self, stage=None):
         if stage in (None, "fit"):

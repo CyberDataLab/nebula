@@ -133,7 +133,7 @@ class Factsheet:
                 logging.warning(f"{factsheet_file} is invalid")
                 logging.error(e)
 
-    def populate_factsheet_post_train(self, scenario_name, start_time, end_time):
+    def populate_factsheet_post_train(self, scenario_name, start_time, end_time, class_counter):
         """
         Populates the factsheet with values after the training.
 
@@ -197,16 +197,16 @@ class Factsheet:
 
                 factsheet["fairness"]["selection_cv"] = 1
 
-                # count_class_samples(scenario_name, dataloaders_files)
+                count_class_samples(scenario_name, dataloaders_files, class_counter)
                 
-                ## FER
+                # FER
 
-                # with open(f"{files_dir}/count_class.json", "r") as file:
-                #     class_distribution = json.load(file)
+                with open(f"{files_dir}/count_class.json", "r") as file:
+                    class_distribution = json.load(file)
 
-                # class_samples_sizes = [x for x in class_distribution.values()]
-                # class_imbalance = get_cv(list=class_samples_sizes)
-                # factsheet["fairness"]["class_imbalance"] = 1 if class_imbalance > 1 else class_imbalance
+                class_samples_sizes = [x for x in class_distribution.values()]
+                class_imbalance = get_cv(list=class_samples_sizes)
+                factsheet["fairness"]["class_imbalance"] = 1 if class_imbalance > 1 else class_imbalance
 
                 with open(train_model_file, "rb") as file:
                     lightning_model = pickle.load(file)

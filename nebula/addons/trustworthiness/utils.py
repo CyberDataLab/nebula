@@ -10,13 +10,14 @@ from hashids import Hashids
 from scipy.stats import entropy
 
 from nebula.addons.trustworthiness import calculation
+from collections import Counter
 
 hashids = Hashids()
 logger = logging.getLogger(__name__)
 dirname = os.path.dirname(__file__)
 
 
-def count_class_samples(scenario_name, dataloaders_files):
+def count_class_samples(scenario_name, dataloaders_files, class_counter: Counter = None):
     """
     Counts the number of samples by class.
 
@@ -28,20 +29,23 @@ def count_class_samples(scenario_name, dataloaders_files):
 
     result = {}
     dataloaders = []
+    
+    if class_counter:
+        result = dict(class_counter)
+    else:
+        for file in dataloaders_files:
+            with open(file, "rb") as f:
+                dataloader = pickle.load(f)
+                dataloaders.append(dataloader)
 
-    for file in dataloaders_files:
-        with open(file, "rb") as f:
-            dataloader = pickle.load(f)
-            dataloaders.append(dataloader)
-
-    for dataloader in dataloaders:
-        for batch, labels in dataloader:
-            for b, label in zip(batch, labels):
-                l = hashids.encode(label.item())
-                if l in result:
-                    result[l] += 1
-                else:
-                    result[l] = 1
+        for dataloader in dataloaders:
+            for batch, labels in dataloader:
+                for b, label in zip(batch, labels):
+                    l = hashids.encode(label.item())
+                    if l in result:
+                        result[l] += 1
+                    else:
+                        result[l] = 1
 
     try:
         name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "count_class.json")

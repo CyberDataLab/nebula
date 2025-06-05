@@ -124,7 +124,7 @@ class TrustWorkloadServer(TrustWorkload):
         self._current_loss = None
         self._current_accuracy = None
         self._start_time = engine._start_time
-        self._engine = engine
+        self._engine: Engine = engine
         self._end_time = None
         self._experiment_name = ""
         
@@ -163,7 +163,8 @@ class TrustWorkloadServer(TrustWorkload):
         factsheet = Factsheet()
         factsheet.populate_factsheet_pre_train(trust_config, experiment_name)
         logging.info("[FER] factsheet pre train done")
-        factsheet.populate_factsheet_post_train(experiment_name, self._start_time, self._end_time)
+        class_counter = self._engine.trainer.datamodule.get_samples_per_label()
+        factsheet.populate_factsheet_post_train(experiment_name, self._start_time, self._end_time, class_counter)
         logging.info("[FER] factsheet post train done")
         
         # data_file_path = os.path.join(os.environ.get('NEBULA_CONFIG_DIR'), experiment_name, "scenario.json")
