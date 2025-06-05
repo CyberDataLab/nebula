@@ -50,7 +50,6 @@ NEBULA boasts a **modular architecture** that consists of three core elements:
 - **Model-agnostic**: Compatible with a wide range of machine learning algorithms, from deep learning to traditional methods.
 - **Network communication**: Secure and efficient device communication with features like compression, network failure tolerance, and condition simulation.
 - **Trustworthiness**: Ensure the integrity of the learning process by verifying the reliability of the federation.
-- **Blockchain integration**: Support for blockchain technologies to enhance security and transparency.
 - **Security**: Implement security mechanisms to protect the learning process from adversarial attacks.
 - **Real-time monitoring**: Provides live performance metrics and visualizations during the learning process.
 
@@ -152,7 +151,6 @@ We would like to thank the following projects for their contributions which have
 - [Tensorboard](https://github.com/tensorflow/tensorboard) for the visualization tools and monitoring capabilities
 - Different datasets ([nebula/core/datasets](https://github.com/CyberDataLab/nebula/tree/main/nebula/core/datasets)) and models ([nebula/core/models](https://github.com/CyberDataLab/nebula/tree/main/nebula/core/models)) for testing and validation purposes
 - [FastAPI](https://github.com/tiangolo/fastapi) for the RESTful API
-- [Web3](https://github.com/ethereum/web3.py) for the blockchain integration
 - [Fedstellar](https://github.com/CyberDataLab/fedstellar) platform and [p2pfl](https://github.com/pguijas/p2pfl/) library
 - [Adversarial Robustness Toolbox (ART)](https://github.com/Trusted-AI/adversarial-robustness-toolbox) for the implementation of adversarial attacks
 - [D3.js](https://github.com/d3/d3-force) for the network visualizations

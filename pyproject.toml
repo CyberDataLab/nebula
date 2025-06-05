@@ -6,7 +6,7 @@ authors = [{name = "Enrique Tomás Martínez Beltrán", email = "enriquetomas@um
 maintainers = [{name = "Enrique Tomás Martínez Beltrán", email = "enriquetomas@um.es"}]
 readme = "README.md"
 keywords = [
-    "nebula", "federated learning", "decentralized", "privacy", "security", "blockchain", "docker", "gpu", "nvidia",
+    "nebula", "federated learning", "decentralized", "privacy", "security", "docker", "gpu", "nvidia",
     "cuda", "pytorch", "communication", "networking", "distributed", "machine learning", "deep learning", "ai",
     "artificial intelligence", "data science", "data privacy", "data security", "data protection", "data sharing"
 ]

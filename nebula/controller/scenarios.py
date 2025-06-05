@@ -13,7 +13,6 @@ from datetime import datetime
 import docker
 import tensorboard_reducer as tbr
 
-from nebula.addons.blockchain.blockchain_deployer import BlockchainDeployer
 from nebula.addons.topologymanager import TopologyManager
 from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
@@ -488,7 +487,6 @@ class ScenarioManagement:
 
         self.topologymanager = None
         self.env_path = None
-        self.use_blockchain = self.scenario.agg_algorithm == "BlockchainReputation"
 
         # Create Scenario management dirs
         os.makedirs(self.config_dir, exist_ok=True)
@@ -515,7 +513,6 @@ class ScenarioManagement:
             "log_dir": self.log_dir,
             "cert_dir": self.cert_dir,
             "env": None,
-            "use_blockchain": self.use_blockchain,
         }
 
         settings_file = os.path.join(self.config_dir, "settings.json")
@@ -646,25 +643,6 @@ class ScenarioManagement:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
 
     @staticmethod
-    def stop_blockchain():
-        if sys.platform == "win32":
-            try:
-                # Comando adaptado para PowerShell en Windows
-                command = "docker ps -a --filter 'label=com.docker.compose.project=blockchain' --format '{{.ID}}' | ForEach-Object { docker rm --force --volumes $_ } | Out-Null"
-                os.system(f'powershell.exe -Command "{command}"')
-            except Exception as e:
-                logging.exception(f"Error while killing docker containers: {e}")
-        else:
-            try:
-                process = subprocess.Popen(
-                    "docker ps -a --filter 'label=com.docker.compose.project=blockchain' --format '{{.ID}}' | xargs -n 1 docker rm --force --volumes  >/dev/null 2>&1",
-                    shell=True,
-                )
-                process.wait()
-            except subprocess.CalledProcessError:
-                logging.exception("Docker Compose failed to stop blockchain or blockchain already exited.")
-
-    @staticmethod
     def stop_participants(scenario_name=None):
         # When stopping the nodes, we need to remove the current_scenario_commands.sh file -> it will cause the nodes to stop using PIDs
         try:
@@ -704,7 +682,6 @@ class ScenarioManagement:
     def stop_nodes():
         logging.info("Closing NEBULA nodes... Please wait")
         ScenarioManagement.stop_participants()
-        ScenarioManagement.stop_blockchain()
 
     def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
         logging.info(f"Generating the scenario {self.scenario_name} at {self.start_date_scenario}")
@@ -901,8 +878,6 @@ class ScenarioManagement:
         logging.info(f"Splitting {dataset_name} dataset... Done")
 
         if self.scenario.deployment in ["docker", "process", "physical"]:
-            if self.use_blockchain:
-                self.start_blockchain()
             if self.scenario.deployment == "docker":
                 self.start_nodes_docker()
             elif self.scenario.deployment == "physical":
@@ -982,30 +957,6 @@ class ScenarioManagement:
         topologymanager.add_nodes(nodes_ip_port)
         return topologymanager
 
-    def start_blockchain(self):
-        BlockchainDeployer(
-            config_dir=f"{self.config_dir}/blockchain",
-            input_dir="/nebula/nebula/addons/blockchain",
-        )
-        try:
-            logging.info("Blockchain is being deployed")
-            subprocess.check_call([
-                "docker",
-                "compose",
-                "-f",
-                f"{self.config_dir}/blockchain/blockchain-docker-compose.yml",
-                "up",
-                "--remove-orphans",
-                "--force-recreate",
-                "-d",
-                "--build",
-            ])
-        except subprocess.CalledProcessError:
-            logging.exception(
-                "Docker Compose failed to start Blockchain, please check if Docker Compose is installed (https://docs.docker.com/compose/install/) and Docker Engine is running."
-            )
-            raise
-
     def start_nodes_docker(self):
         logging.info("Starting nodes using Docker Compose...")
         logging.info(f"env path: {self.env_path}")
@@ -1050,21 +1001,12 @@ class ScenarioManagement:
                 f"{start_command} && ifconfig && echo '{base}.1 host.docker.internal' >> /etc/hosts && python /nebula/nebula/core/node.py /nebula/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json",
             ]
 
-            if self.use_blockchain:
-                networking_config = client.api.create_networking_config({
-                    f"{network_name}": client.api.create_endpoint_config(
-                        ipv4_address=f"{base}.{i}",
-                    ),
-                    f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
-                    "chainnet": client.api.create_endpoint_config(),
-                })
-            else:
-                networking_config = client.api.create_networking_config({
-                    f"{network_name}": client.api.create_endpoint_config(
-                        ipv4_address=f"{base}.{i}",
-                    ),
-                    f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
-                })
+            networking_config = client.api.create_networking_config({
+                f"{network_name}": client.api.create_endpoint_config(
+                    ipv4_address=f"{base}.{i}",
+                ),
+                f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
+            })
 
             node["tracking_args"]["log_dir"] = "/nebula/app/logs"
             node["tracking_args"]["config_dir"] = f"/nebula/app/config/{self.scenario_name}"

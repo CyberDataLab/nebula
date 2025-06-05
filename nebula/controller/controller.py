@@ -322,7 +322,6 @@ async def stop_scenario(
     DockerUtils.remove_docker_network(
         f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(username).lower()}-nebula-net-scenario"
     )
-    ScenarioManagement.stop_blockchain()
     try:
         if all:
             scenario_set_all_status_to_finished()

@@ -558,7 +558,6 @@ class Deployer:
 
         This is used to cleanly shut down the controller-related containers.
         """
-        ScenarioManagement.stop_blockchain()
         ScenarioManagement.stop_participants()
         DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-controller")
 

@@ -146,7 +146,6 @@ class Aggregator(ABC):
 
 
 def create_aggregator(config, engine) -> Aggregator:
-    from nebula.core.aggregation.blockchainReputation import BlockchainReputation
     from nebula.core.aggregation.fedavg import FedAvg
     from nebula.core.aggregation.krum import Krum
     from nebula.core.aggregation.median import Median
@@ -157,7 +156,6 @@ def create_aggregator(config, engine) -> Aggregator:
         "Krum": Krum,
         "Median": Median,
         "TrimmedMean": TrimmedMean,
-        "BlockchainReputation": BlockchainReputation,
     }
     algorithm = config.participant["aggregator_args"]["algorithm"]
     aggregator = ALGORITHM_MAP.get(algorithm)
