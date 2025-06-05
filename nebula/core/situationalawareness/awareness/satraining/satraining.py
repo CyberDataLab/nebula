@@ -37,7 +37,7 @@ class SATraining(SAMComponent):
                 - 'training_policy': Training policy name to be used.
         """
         print_msg_box(
-            msg=f"Starting Training SA\nTraining policy: {training_policy}",
+            msg=f"Starting Training SA\nTraining policy: {config['training_policy']}",
             indent=2,
             title="Training SA module",
         )

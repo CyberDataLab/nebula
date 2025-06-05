@@ -19,10 +19,10 @@ def factory_training_policy(training_policy, config) -> TrainingPolicy:
     from nebula.core.situationalawareness.awareness.satraining.trainingpolicy.fastreboot import FastReboot
     
     options = {
-        "bps": BPSTrainingPolicy,   # "Broad-Propagation Strategy"  (BPS) -- default value
-        "qds": QDSTrainingPolicy,   # "Quality-Driven Selection"    (QDS)
-        "hts": HTSTrainingPolicy,   # "Hybrid Training Strategy"    (HTS)
-        "frts": FastReboot,         # "Fast Reboot Training Strategy" (FRTS)
+        "Broad-Propagation Strategy": BPSTrainingPolicy,   # "Broad-Propagation Strategy"  (BPS) -- default value
+        "Quality-Driven Selection": QDSTrainingPolicy,   # "Quality-Driven Selection"    (QDS)
+        "Hybrid Training Strategy": HTSTrainingPolicy,   # "Hybrid Training Strategy"    (HTS)
+        "Fast Reboot Training Strategy": FastReboot,         # "Fast Reboot Training Strategy" (FRTS)
     } 
     
     cs = options.get(training_policy, BPSTrainingPolicy)

@@ -2185,6 +2185,7 @@ async def nebula_dashboard_deployment_run(
         raise HTTPException(status_code=401)
 
     data = await request.json()
+    logging.info(f"[FER] scenario {data}")
     user_data = user_data_store[session["user"]]
 
     if user_data.scenarios_list_length < 1:

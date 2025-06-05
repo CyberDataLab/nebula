@@ -791,20 +791,20 @@
                     </div>
                 </div>
                 <!-- Situational awareness -->
-                <div class="form-group row container-shadow tiny grey" style="display: none;">
+                <div class="form-group row container-shadow tiny grey" style="display: block;">
                     <h5 class="step-number">Situtational Awareness <i class="fa fa-binoculars"></i>
                     </h5>
                     <h5 class="step-title">Enable/Disable SA</h5>
-                    <div class="form-check form-switch" style="margin-left: 23px;">
+                    <div class="form-check form-switch" style="margin-left: 23px; margin-bottom: 10px;">
                         <input class="form-check-input" type="checkbox" id="situationalAwarenessSwitch" style="display: inline; width: 80px; height: 30px;" checked>
                     </div>
-                    <div id="sa-settings" style="margin-top: 10px; display:block;">
+                    <div id="sa-settings" style="margin-top: 25px; display:none;">
                         <h5 class="step-title">Strict Topology</h5>
                         <div class="form-check form-switch" style="margin-left: 23px;">
-                            <input class="form-check-input" type="checkbox" id="StrictTopologySwitch" style="display: inline; width: 80px; height: 30px;">
+                            <input class="form-check-input" type="checkbox" id="strictTopologySwitch" style="display: inline; width: 80px; height: 30px;">
                         </div>
                     </div>
-                    <div id="sa-discovery-settings" style="margin-top: 10px; display:bock;">
+                    <div id="sa-discovery-settings" style="margin-top: 10px; display:none;">
                         <hr class="styled">
                         <h5 class="step-title">SA Discovery</h5>
                         <div id="SADiscovery-options" style="display: block;">
@@ -829,7 +829,7 @@
                             </div>
                         </div>
                     </div>
-                    <div id="sa-reasoner-settings" style="margin-top: 10px; display:block;">
+                    <div id="sa-reasoner-settings" style="margin-top: 10px; display:none;">
                         <hr class="styled">
                         <h5 class="step-title">SA Reasoner</h5>
                         <h5 class="step-title"><span style="font-weight:500;">Arbitration Policy</span></h5>
@@ -847,6 +847,19 @@
                                 <option>Random</option>
                                 <option>Ring</option>
                                 <option>Fully</option>
+                            </select>
+                        </div>
+                        <h5 class="step-title"><span style="font-weight:500;">Enable/Disable SAR training</span></h5>
+                        <div class="form-check form-switch" style="margin-left: 23px;">
+                            <input class="form-check-input" type="checkbox" id="situationalAwarenessTraining" style="display: inline; width: 80px; height: 30px;" checked>
+                        </div>
+                        <h5 class="step-title" id="training-policy-title" style="margin-top: 25px; display: none;"><span style="font-weight:500;">Training Policy</span></h5>
+                        <div class="form-check form-check-inline" id="training-policy-container" style="display: none;">
+                            <select class="form-control" id="training-policy-select" style="width:100%">
+                                <option selected>Broad-Propagation Strategy</option>
+                                <option>Quality-Driven Selection</option>
+                                <option>Hybrid Training Strategy</option>
+                                <option>Fast Reboot Training Strategy</option>
                             </select>
                         </div>
                     </div>

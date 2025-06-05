@@ -15,8 +15,8 @@ class HTSTrainingPolicy(TrainingPolicy):
     """
     
     TRAINING_POLICY = {
-        "qds",
-        "frts",
+        "Quality-Driven Selection",
+        "Fast Reboot Training Strategy",
     }
     
     def __init__(self, config):

@@ -103,6 +103,8 @@ class Scenario:
         sad_model_handler,
         sar_arbitration_policy,
         sar_neighbor_policy,
+        sar_training,
+        sar_training_policy,
     ):
         """
         Initialize a Scenario instance.
@@ -152,6 +154,8 @@ class Scenario:
             sad_model_handler (str): Model handler for SAD.
             sar_arbitration_policy (str): Arbitration policy for SAR.
             sar_neighbor_policy (str): Neighbor policy for SAR.
+            sar_training (bool): Wheter SAR training is enabled.
+            sar_training_policy (str): Training policy for SAR.
         """
         self.scenario_title = scenario_title
         self.scenario_description = scenario_description
@@ -222,6 +226,8 @@ class Scenario:
         self.sad_model_handler = sad_model_handler
         self.sar_arbitration_policy = sar_arbitration_policy
         self.sar_neighbor_policy = sar_neighbor_policy
+        self.sar_training = sar_training
+        self.sar_training_policy = sar_training_policy
 
     def attack_node_assign(
         self,
@@ -601,10 +607,9 @@ class ScenarioManagement:
                     "sa_reasoner": {
                         "arbitration_policy": self.scenario.sar_arbitration_policy,
                         "verbose": True,
-                        "sar_components": {"sa_network": True}, # add here "sa_training": True when selected
+                        "sar_components": {"sa_network": True, "sa_training": self.scenario.sar_training},
                         "sa_network": {"neighbor_policy": self.scenario.sar_neighbor_policy, "verbose": True},
-                        # add here sa_training config parameters
-                        # "sa_training": {"training_policy": (e.g) self.scenario.sar_training_policy, "verbose": True},
+                        "sa_training": {"training_policy": self.scenario.sar_training_policy, "verbose": True},
                     },
                 }
             participant_config["trustworthiness"] = self.scenario.with_trustworthiness
