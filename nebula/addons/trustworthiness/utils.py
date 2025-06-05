@@ -31,7 +31,7 @@ def count_class_samples(scenario_name, dataloaders_files, class_counter: Counter
     dataloaders = []
     
     if class_counter:
-        result = dict(class_counter)
+        result = {hashids.encode(int(class_id)): count for class_id, count in class_counter.items()}
     else:
         for file in dataloaders_files:
             with open(file, "rb") as f:
