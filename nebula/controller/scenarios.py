@@ -601,8 +601,10 @@ class ScenarioManagement:
                     "sa_reasoner": {
                         "arbitration_policy": self.scenario.sar_arbitration_policy,
                         "verbose": True,
-                        "sar_components": {"sa_network": True},
+                        "sar_components": {"sa_network": True}, # add here "sa_training": True when selected
                         "sa_network": {"neighbor_policy": self.scenario.sar_neighbor_policy, "verbose": True},
+                        # add here sa_training config parameters
+                        # "sa_training": {"training_policy": (e.g) self.scenario.sar_training_policy, "verbose": True},
                     },
                 }
             participant_config["trustworthiness"] = self.scenario.with_trustworthiness
