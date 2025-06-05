@@ -11,6 +11,7 @@ from nebula.addons.trustworthiness.calculation import stop_emissions_tracking_an
 from nebula.addons.trustworthiness.utils import save_results_csv
 from codecarbon import EmissionsTracker
 import asyncio
+from collections import Counter
 
 """                                                     ##############################
                                                         #       TRUST WORKLOADS      #
@@ -115,6 +116,8 @@ class TrustWorkloadTrainer(TrustWorkload):
         # Save model in trustworthy dir
         with open(model_file, 'wb') as f:
             pickle.dump(self._engine.trainer.model, f)
+        
+        
     
 class TrustWorkloadServer(TrustWorkload):
     
@@ -199,8 +202,9 @@ class TrustWorkloadServer(TrustWorkload):
             }
 
             trust_metric_manager = TrustMetricManager(self._start_time)
-            # trust_metric_manager.evaluate(experiment_name, weights, use_weights=True)
-            logging.info("[FER] evaluation done")
+            trust_metric_manager.evaluate(experiment_name, weights, use_weights=True)
+            #logging.info("[FER] evaluation done")
+        logging.info("Trust work DONE")
     
     async def _process_test_metrics_event(self, tme: TestMetricsEvent):
         cur_loss, cur_acc = await tme.get_event_data()
@@ -262,6 +266,10 @@ class Trustworthiness():
         logging.info("log2")
         
     async def _process_experiment_finish_event(self, efe: ExperimentFinishEvent):
+        from nebula.addons.trustworthiness.utils import save_class_count_per_participant
+        class_counter = self._engine.trainer.datamodule.get_samples_per_label()
+        save_class_count_per_participant(self._experiment_name, class_counter, self._idx)
+        
         await self.tw.finish_experiment_role_pre_actions()
         
         last_loss, last_accuracy = self.tw.get_metrics()
@@ -283,7 +291,7 @@ class Trustworthiness():
         save_results_csv(self._experiment_name, self._idx, bytes_sent, bytes_recv, last_loss, last_accuracy)
         stop_emissions_tracking_and_save(self._tracker, self._trust_dir_files, self._emissions_file, self._role.value, workload, sample_size)
         await self.tw.finish_experiment_role_post_actions(self._trust_config, self._experiment_name)
-
+        
     def _factory_trust_workload(self, role: Role, engine: Engine, idx, trust_files_route) -> TrustWorkload:  
         trust_workloads = {
             Role.TRAINER: TrustWorkloadTrainer, 

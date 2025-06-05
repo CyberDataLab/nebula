@@ -12,7 +12,7 @@ import pandas as pd
 from nebula.core.models.mnist.mlp import MNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.addons.trustworthiness.calculation import get_elapsed_time, get_bytes_models, get_bytes_sent_recv, get_avg_loss_accuracy, get_cv, get_clever_score, get_feature_importance_cv
-from nebula.addons.trustworthiness.utils import count_class_samples, read_csv, check_field_filled, get_entropy
+from nebula.addons.trustworthiness.utils import count_all_class_samples, read_csv, check_field_filled, get_entropy, get_all_data_entropy
 # from nebula.core.models.syscall.mlp import SyscallModelMLP
 
 dirname = os.path.dirname(__file__)
@@ -160,16 +160,20 @@ class Factsheet:
                 train_model_file = f"{files_dir}/participant_1_train_model.pk"
                 emissions_file = os.path.join(files_dir, "emissions.csv")
 
-                # Entropy
-                i = 0
-                for file in dataloaders_files:
-                    with open(file, "rb") as file:
-                        dataloader = pickle.load(file)
-                    get_entropy(i, scenario_name, dataloader)
-                    i += 1
+                # # Entropy
+                # i = 0
+                # for file in dataloaders_files:
+                #     with open(file, "rb") as file:
+                #         dataloader = pickle.load(file)
+                #     get_entropy(i, scenario_name, dataloader)
+                #     i += 1
+                
+                get_all_data_entropy(scenario_name)
 
                 with open(f"{files_dir}/entropy.json", "r") as file:
                     entropy_distribution = json.load(file)
+                      
+                logging.info(f"[ALEX] entropy_distribution: {entropy_distribution}")
 
                 values = np.array(list(entropy_distribution.values()))
 
@@ -197,12 +201,14 @@ class Factsheet:
 
                 factsheet["fairness"]["selection_cv"] = 1
 
-                count_class_samples(scenario_name, dataloaders_files, class_counter)
+                count_all_class_samples(scenario_name)
                 
-                # FER
+                # # FER
 
                 with open(f"{files_dir}/count_class.json", "r") as file:
                     class_distribution = json.load(file)
+                    
+                logging.info(f"[ALEX] class_distribution: {class_distribution}")
 
                 class_samples_sizes = [x for x in class_distribution.values()]
                 class_imbalance = get_cv(list=class_samples_sizes)
@@ -220,6 +226,8 @@ class Factsheet:
                 # else:
                 #     model = CIFAR10ModelCNN()
 
+                logging.info(f"[ALEX] parte de training hecha")
+                
                 model.load_state_dict(lightning_model.state_dict())
 
                 with open(test_dataloader_file, "rb") as file:

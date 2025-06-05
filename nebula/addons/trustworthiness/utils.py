@@ -17,6 +17,36 @@ logger = logging.getLogger(__name__)
 dirname = os.path.dirname(__file__)
 
 
+def save_class_count_per_participant(experiment_name, class_counter: Counter, idx):
+    class_count = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(idx)}_class_count.json")
+    result = {hashids.encode(int(class_id)): count for class_id, count in class_counter.items()}
+    with open(class_count, "w") as f:
+        json.dump(result, f)
+
+def count_all_class_samples(experiment_name):
+    participant_id = 0
+    global_class_count = {}
+
+    while True:
+        data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
+
+        if not os.path.exists(data_class_count_file):
+            break
+
+        with open(data_class_count_file, "r") as f:
+            class_count = json.load(f)
+
+        for class_hash, count in class_count.items():
+            global_class_count[class_hash] = global_class_count.get(class_hash, 0) + count
+
+        participant_id += 1
+
+    # Guardar conteo total en class_count.json
+    output_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'),experiment_name, "trustworthiness", "count_class.json")
+
+    with open(output_file, "w") as f:
+        json.dump(global_class_count, f, indent=2)
+
 def count_class_samples(scenario_name, dataloaders_files, class_counter: Counter = None):
     """
     Counts the number of samples by class.
@@ -56,6 +86,35 @@ def count_class_samples(scenario_name, dataloaders_files, class_counter: Counter
         json.dump(result, f)
 
 
+def get_all_data_entropy(experiment_name):
+    participant_id = 0
+    data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
+    entropy_per_participant = {}
+    
+    while True:
+        data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
+
+        if not os.path.exists(data_class_count_file):
+            break
+
+        with open(data_class_count_file, "r") as f:
+            class_count = json.load(f)
+
+        total = sum(class_count.values())
+        if total == 0:
+            entropy_value = 0.0
+        else:
+            probabilities = [count / total for count in class_count.values()]
+            entropy_value = entropy(probabilities, base=2)
+
+        entropy_per_participant[str(participant_id)] = round(entropy_value, 6)
+        participant_id += 1
+        
+    name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'),experiment_name, "trustworthiness", "entropy.json")
+
+    with open(name_file, "w") as f:
+        json.dump(entropy_per_participant, f, indent=2)
+       
 def get_entropy(client_id, scenario_name, dataloader):
     """
     Get the entropy of each client in the scenario.
@@ -72,6 +131,7 @@ def get_entropy(client_id, scenario_name, dataloader):
     name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "entropy.json")
         
     if os.path.exists(name_file):
+        logging.info(f"entropy fiel already exists.. loading.")
         with open(name_file, "r") as f:
             client_entropy = json.load(f)
 
