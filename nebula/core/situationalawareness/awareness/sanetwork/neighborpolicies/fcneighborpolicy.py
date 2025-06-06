@@ -5,6 +5,25 @@ from nebula.core.utils.locker import Locker
 
 
 class FCNeighborPolicy(NeighborPolicy):
+    """
+    Neighbor policy for fully-connected (FC) structured topologies.
+
+    This policy assumes a fully-connected topology where every node should attempt 
+    to connect to all known nodes. It always accepts incoming neighbor connections 
+    and considers the neighbor list incomplete if there are known nodes that are not yet connected.
+
+    The goal is to maintain full connectivity across all known nodes in the federation.
+
+    Attributes:
+        max_neighbors (int | None): Unused in FC topology, but kept for compatibility.
+        nodes_known (set[str]): Set of all known node IDs discovered in the federation.
+        neighbors (set[str]): Set of currently connected neighbor node IDs.
+        addr (str | None): The address of this node (used for self-identification).
+        neighbors_lock (Locker): Async lock for safe access to `neighbors`.
+        nodes_known_lock (Locker): Async lock for safe access to `nodes_known`.
+        _verbose (bool): Whether to enable verbose logging for debugging purposes.
+    """
+    
     def __init__(self):
         self.max_neighbors = None
         self.nodes_known = set()

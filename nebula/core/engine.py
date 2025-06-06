@@ -160,22 +160,27 @@ class Engine:
 
     @property
     def cm(self):
+        """Communication Manager"""
         return self._cm
 
     @property
     def reporter(self):
+        """Reporter"""
         return self._reporter
 
     @property
     def aggregator(self):
+        """Aggregator"""
         return self._aggregator
 
     @property
     def trainer(self):
+        """Trainer"""
         return self._trainer
 
     @property
     def sa(self):
+        """Situational Awareness Module"""
         return self._situational_awareness
 
     def get_aggregator_type(self):
@@ -376,6 +381,13 @@ class Engine:
     """
 
     async def _aditional_node_start(self):
+        """
+        Starts the initialization process for an additional node joining the federation.
+
+        This method triggers the situational awareness module to initiate a late connection
+        process to discover and join the federation. Once connected, it starts the learning
+        process asynchronously.
+        """
         logging.info(f"Aditional node | {self.addr} | going to stablish connection with federation")
         await self.sa.start_late_connection_process()
         # continue ..
@@ -383,11 +395,32 @@ class Engine:
         asyncio.create_task(self._start_learning_late())
 
     async def update_neighbors(self, removed_neighbor_addr, neighbors, remove=False):
+        """
+        Updates the internal list of federation neighbors and publishes a neighbor update event.
+
+        Args:
+            removed_neighbor_addr (str): Address of the neighbor that was removed (or affected).
+            neighbors (set): The updated set of current federation neighbors.
+            remove (bool): Flag indicating whether the specified neighbor was removed (True) 
+                        or added (False).
+
+        Publishes:
+            UpdateNeighborEvent: An event describing the neighbor update, for use by listeners.
+        """
         await self.update_federation_nodes(neighbors)
         updt_nei_event = UpdateNeighborEvent(removed_neighbor_addr, remove)
         asyncio.create_task(EventManager.get_instance().publish_node_event(updt_nei_event))
 
     async def broadcast_models_include(self, age: AggregationEvent):
+        """
+        Broadcasts a message to federation neighbors indicating that aggregation is ready.
+
+        Args:
+            age (AggregationEvent): The event containing information about the completed aggregation.
+
+        Sends:
+            federation_models_included: A message containing the round number of the aggregation.
+        """
         logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
         message = self.cm.create_message(
             "federation", "federation_models_included", [str(arg) for arg in [self.get_round()]]
@@ -395,12 +428,39 @@ class Engine:
         asyncio.create_task(self.cm.send_message_to_neighbors(message))
 
     async def update_model_learning_rate(self, new_lr):
+        """
+        Updates the learning rate of the current training model.
+
+        Args:
+            new_lr (float): The new learning rate to apply to the trainer model.
+
+        This method ensures that the operation is protected by a lock to avoid
+        conflicts with ongoing training operations.
+        """
         await self.trainning_in_progress_lock.acquire_async()
         logging.info("Update | learning rate modified...")
         self.trainer.update_model_learning_rate(new_lr)
         await self.trainning_in_progress_lock.release_async()
 
     async def _start_learning_late(self):
+        """
+        Initializes the training process for a node joining the federation after it has already started.
+
+        This method retrieves the training configuration from the situational awareness module,
+        including the model parameters, total number of training rounds, current round, and number
+        of epochs. It initializes the model and the trainer accordingly, and starts the learning cycle.
+
+        Locks:
+            - Acquires and releases `learning_cycle_lock` to ensure exclusive access during setup.
+            - Acquires and updates `round` via `round_lock`.
+            - Releases `federation_ready_lock` to indicate that the node is ready to begin learning.
+
+        Handles:
+            - Late start by setting model parameters and synchronization state.
+            - Runtime exceptions gracefully in case of double lock releases or other race conditions.
+
+        Logs important initialization information and direct connection state before training begins.
+        """
         await self.learning_cycle_lock.acquire_async()
         try:
             model_serialized, rounds, round, _epochs = await self.sa.get_trainning_info()
@@ -452,12 +512,36 @@ class Engine:
         logging.info("Started trainer module...")
 
     async def start_communications(self):
+        """
+        Initializes communication with neighboring nodes and registers internal event callbacks.
+
+        This method performs the following steps:
+        1. Registers all event callbacks used by the node.
+        2. Parses the list of initial neighbors from the configuration and initiates communications with them.
+        3. Waits for half of the configured grace time to allow initial network stabilization.
+
+        This grace period provides time for initial peer discovery and message exchange
+        before other services or training processes begin.
+        """
         await self.register_events_callbacks()
         initial_neighbors = self.config.participant["network_args"]["neighbors"].split()
         await self.cm.start_communications(initial_neighbors)
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"] // 2)
 
     async def deploy_components(self):
+        """
+        Initializes and deploys the core components required for node operation in the federation.
+
+        This method performs the following actions:
+        1. Initializes the aggregator, which handles the model aggregation process.
+        2. Optionally initializes the situational awareness module if enabled in the configuration.
+        3. Sets up the reputation system if enabled.
+        4. Starts the reporting service for logging and monitoring purposes.
+        5. Deploys any additional add-ons registered via the addon manager.
+
+        This method ensures all critical and optional components are ready before
+        the federated learning process starts.
+        """
         await self.aggregator.init()
         if "situational_awareness" in self.config.participant:
             await self.sa.init()
@@ -467,6 +551,22 @@ class Engine:
         await self._addon_manager.deploy_additional_services()
 
     async def deploy_federation(self):
+        """
+        Manages the startup logic for the federated learning process.
+
+        The behavior is determined by the configuration:
+        - If the device is responsible for starting the federation:
+        1. Waits for a configured grace period to allow peers to initialize.
+        2. Waits until the network is ready (all nodes are prepared).
+        3. Sends a 'FEDERATION_START' message to notify neighbors.
+        4. Initializes the trainer module and marks the node as ready.
+
+        - If the device is not the starter:
+        1. Sends a 'FEDERATION_READY' message to neighbors.
+        2. Waits passively for a start signal from the initiating node.
+
+        This function ensures proper synchronization and coordination before the federated rounds begin.
+        """
         await self.federation_ready_lock.acquire_async()
         if self.config.participant["device_args"]["start"]:
             logging.info(
@@ -492,6 +592,23 @@ class Engine:
             logging.info("💤  Waiting until receiving the start signal from the start node")
 
     async def _start_learning(self):
+        """
+        Starts the federated learning process from the beginning if no prior round exists.
+
+        This method performs the following sequence:
+        1. Acquires the learning cycle lock to ensure exclusive execution.
+        2. If no round has been initialized:
+        - Reads total rounds and epochs from the configuration.
+        - Sets the initial round to 0 and releases the round lock.
+        - Waits for the federation to be ready if the device is not the starter.
+        - If the device is the starter, it propagates the initial model to neighbors.
+        - Sets the number of epochs and creates the trainer instance.
+        - Initiates the federated learning cycle.
+        3. If a round already exists and the lock is still held, it is released to avoid deadlock.
+
+        This method ensures that the learning process is initialized safely and only once, 
+        synchronizing startup across nodes and managing dependencies on federation readiness.
+        """
         await self.learning_cycle_lock.acquire_async()
         try:
             if self.round is None:
@@ -532,6 +649,19 @@ class Engine:
                 await self.learning_cycle_lock.release_async()
 
     async def _waiting_model_updates(self):
+        """
+        Waits for the model aggregation results and updates the local model accordingly.
+
+        This method:
+        1. Awaits the result of the aggregation from the aggregator component.
+        2. If aggregation parameters are successfully received:
+        - Updates the local model with the aggregated parameters.
+        3. If no parameters are returned:
+        - Logs an error indicating aggregation failure.
+
+        This method is called after local training and before proceeding to the next round,
+        ensuring the model is synchronized with the federation’s latest aggregated state.
+        """
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         params = await self.aggregator.get_aggregation()
         if params is not None:
@@ -553,6 +683,27 @@ class Engine:
         return not (self.round < self.total_rounds)
 
     async def _learning_cycle(self):
+        """
+        Main asynchronous loop for executing the Federated Learning process across multiple rounds.
+
+        This method orchestrates the entire lifecycle of each federated learning round, including:
+        1. Starting each round:
+        - Updating the list of federation nodes.
+        - Publishing a `RoundStartEvent` for local and global monitoring.
+        - Preparing the trainer and aggregator components.
+        2. Running the core learning logic via `_extended_learning_cycle`.
+        3. Ending each round:
+        - Publishing a `RoundEndEvent`.
+        - Releasing and updating the current round state in the configuration.
+        - Invoking callbacks for the trainer to handle end-of-round logic.
+
+        After completing all rounds:
+        - Finalizes the trainer by calling `on_learning_cycle_end()` and optionally performs testing.
+        - Reports the scenario status to the controller if required.
+        - Optionally stops the Docker container if deployed in a containerized environment.
+
+        This function blocks (awaits) until the full FL process concludes.
+        """
         while self.round is not None and self.round < self.total_rounds:
             current_time = time.time()
             print_msg_box(

@@ -2,7 +2,6 @@ import asyncio
 import logging
 import socket
 import struct
-
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import BeaconRecievedEvent, ChangeLocationEvent
 from nebula.core.network.externalconnection.externalconnectionservice import ExternalConnectionService
@@ -34,6 +33,16 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
                 asyncio.create_task(self.handle_beacon_received(msg))
 
     async def respond(self, addr):
+        """
+        Send a unicast HTTP-like response message to a given address.
+
+        This method is typically called when a discovery request is received.
+        It returns metadata indicating that this node is available for
+        participation in a DFL federation.
+
+        Args:
+            addr (tuple): The address (IP, port) to send the response to.
+        """
         try:
             response = (
                 "HTTP/1.1 200 OK\r\n"
@@ -48,6 +57,16 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
             logging.exception(f"Error responding to client: {e}")
 
     async def handle_beacon_received(self, msg):
+        """
+        Process a received beacon message from another node.
+
+        Extracts and parses the beacon content, validates it is not from
+        this same node, and then notifies the associated Nebula service
+        about the presence of a neighbor.
+
+        Args:
+            msg (str): The raw message string received via multicast.
+        """
         lines = msg.split("\r\n")
         beacon_data = {}
 
@@ -66,6 +85,15 @@ class NebulaServerProtocol(asyncio.DatagramProtocol):
         await self.nebula_service.notify_beacon_received(beacon_addr, (latitude, longitude))
 
     def _is_nebula_message(self, msg):
+        """
+        Determine if a message corresponds to the Nebula discovery protocol.
+
+        Args:
+            msg (str): The raw message string to evaluate.
+
+        Returns:
+            bool: True if the message follows the Nebula service format, False otherwise.
+        """
         return "ST: urn:nebula-service" in msg
 
 
@@ -88,6 +116,15 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
         asyncio.create_task(self.keep_search())
 
     async def keep_search(self):
+        """
+        Periodically broadcast search requests to discover other nodes in the federation.
+
+        This loop runs a fixed number of times, each time sending a multicast
+        discovery request and waiting for a predefined interval before repeating.
+
+        When the loop completes, a synchronization event (`search_done`) is set
+        to indicate that the search phase is finished.
+        """
         logging.info("Federation searching loop started")
         # while True:
         for _ in range(self.SEARCH_TRIES):
@@ -96,9 +133,24 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
         self.search_done.set()
 
     async def wait_for_search(self):
+        """
+        Wait for the search phase to complete.
+
+        This coroutine blocks until the `search_done` event is set,
+        signaling that the search loop has finished.
+        """
         await self.search_done.wait()
 
     async def search(self):
+        """
+        Send a multicast discovery message to locate other Nebula nodes.
+
+        Constructs and sends an SSDP-like M-SEARCH request targeted to
+        all devices on the local multicast group. This message indicates
+        interest in finding other participants in the Nebula DFL federation.
+
+        If an error occurs during sending, it is logged as an exception.
+        """
         logging.info("Searching for nodes...")
         try:
             search_request = (
@@ -204,8 +256,8 @@ class NebulaConnectionService(ExternalConnectionService):
             # Advanced socket settings
             sock = transport.get_extra_info("socket")
             if sock is not None:
-                group = socket.inet_aton("239.255.255.250")  # Multicast to binary format.
-                mreq = struct.pack("4sL", group, socket.INADDR_ANY)  # Join multicast group in every interface available
+                group = socket.inet_aton("239.255.255.250")                         # Multicast to binary format.
+                mreq = struct.pack("4sL", group, socket.INADDR_ANY)                 # Join multicast group in every interface available
                 sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)  # SO listen multicast packages
         except Exception as e:
             logging.exception(f"{e}")

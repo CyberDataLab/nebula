@@ -5,6 +5,29 @@ from nebula.core.utils.locker import Locker
 
 
 class RINGCandidateSelector(CandidateSelector):
+    """
+    Candidate selector for ring topology.
+
+    In a ring topology, each node connects to a limited set of neighbors forming a closed loop.
+    This selector chooses exactly one candidate from the pool of candidates that has the fewest neighbors,
+    aiming to maintain a balanced ring by connecting nodes with fewer existing connections, avoiding overcharging
+    as possible.
+
+    Attributes:
+        candidates (list): List of candidate nodes available for selection.
+        candidates_lock (Locker): Async lock to ensure thread-safe access to candidates.
+
+    Methods:
+        set_config(config): Optional configuration, currently unused.
+        add_candidate(candidate): Adds a candidate node to the candidate list.
+        select_candidates(): Selects and returns a single candidate with the minimum number of neighbors.
+        remove_candidates(): Clears the candidates list.
+        any_candidate(): Returns True if there is at least one candidate available.
+
+    Inherits from:
+        CandidateSelector: Base interface for candidate selection strategies.
+    """
+    
     def __init__(self):
         self._candidates = []
         self._rejected_candidates = []

@@ -226,8 +226,6 @@ async def main(config):
     await node.deploy_components()
     await node.deploy_federation()
 
-    # If it is an additional node, it should wait until additional_node_round to connect to the network
-    # In order to do that, it should request the current round to the controller
     if additional_node_status:
         time = config.participant["mobility_args"]["additional_node"]["time_start"]
         logging.info(f"Waiting time to start finding federation: {time}")
