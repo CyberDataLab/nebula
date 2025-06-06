@@ -315,6 +315,26 @@ async def stop_scenario(
     username: str = Body(..., embed=True),
     all: bool = Body(False, embed=True),
 ):
+    """
+    Stops the execution of a federated learning scenario and performs cleanup operations.
+    
+    This endpoint:
+        - Stops all participant containers associated with the specified scenario.
+        - Removes Docker containers and network resources tied to the scenario and user.
+        - Sets the scenario's status to "finished" in the database.
+        - Optionally finalizes all active scenarios if the 'all' flag is set.
+    
+    Args:
+        scenario_name (str): Name of the scenario to stop.
+        username (str): User who initiated the stop operation.
+        all (bool): Whether to stop all running scenarios instead of just one (default: False).
+    
+    Raises:
+        HTTPException: Returns a 500 status code if any step fails.
+    
+    Note:
+        This function does not currently trigger statistics generation.
+    """
     from nebula.controller.scenarios import ScenarioManagement
 
     ScenarioManagement.stop_participants(scenario_name)
