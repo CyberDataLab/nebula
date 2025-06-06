@@ -30,7 +30,6 @@ class Scenario:
     Class to define a scenario for the NEBULA platform.
     It contains all the parameters needed to create a scenario and run it on the platform.
     """
-
     def __init__(
         self,
         scenario_title,
@@ -237,13 +236,53 @@ class Scenario:
         poisoned_noise_percent,
         attack_params,
     ):
-        """Identify which nodes will be attacked"""
+        """
+        Assign and configure attack parameters to nodes within a federated learning network.
+
+        This method:
+            - Validates input attack parameters and percentages.
+            - Determines which nodes will be marked as malicious based on the specified
+              poisoned node percentage and attack type.
+            - Assigns attack roles and parameters to selected nodes.
+            - Supports multiple attack types such as Label Flipping, Sample Poisoning,
+              Model Poisoning, GLL Neuron Inversion, Swapping Weights, Delayer, and Flooding.
+            - Ensures proper validation and setting of attack-specific parameters, including
+              targeting, noise types, delays, intervals, and attack rounds.
+            - Updates nodes' malicious status, reputation, and attack parameters accordingly.
+
+        Args:
+            nodes (dict): Dictionary of nodes with their current attributes.
+            federation (str): Type of federated learning framework (e.g., "DFL").
+            poisoned_node_percent (float): Percentage of nodes to be poisoned (0-100).
+            poisoned_sample_percent (float): Percentage of samples to be poisoned (0-100).
+            poisoned_noise_percent (float): Percentage of noise to apply in poisoning (0-100).
+            attack_params (dict): Dictionary containing attack type and associated parameters.
+
+        Returns:
+            dict: Updated nodes dictionary with assigned malicious roles and attack parameters.
+
+        Raises:
+            ValueError: If any input parameter is invalid or attack type is unrecognized.
+        """
         import logging
         import math
         import random
 
         # Validate input parameters
         def validate_percentage(value, name):
+            """
+            Validate that a given value is a float percentage between 0 and 100.
+
+            Args:
+                value: The value to validate, expected to be convertible to float.
+                name (str): Name of the parameter, used for error messages.
+
+            Returns:
+                float: The validated percentage value.
+
+            Raises:
+                ValueError: If the value is not a float or not within the range [0, 100].
+            """
             try:
                 value = float(value)
                 if not 0 <= value <= 100:
@@ -253,6 +292,19 @@ class Scenario:
                 raise ValueError(f"Invalid {name}: {e!s}")
 
         def validate_positive_int(value, name):
+            """
+            Validate that a given value is a positive integer (including zero).
+
+            Args:
+                value: The value to validate, expected to be convertible to int.
+                name (str): Name of the parameter, used for error messages.
+
+            Returns:
+                int: The validated positive integer value.
+
+            Raises:
+                ValueError: If the value is not an integer or is negative.
+            """
             try:
                 value = int(value)
                 if value < 0:
@@ -431,7 +483,21 @@ class Scenario:
         return nodes
 
     def mobility_assign(self, nodes, mobile_participants_percent):
-        """Assign mobility to nodes"""
+        """
+        Assign mobility status to a subset of nodes based on a specified percentage.
+
+        This method:
+            - Calculates the number of mobile nodes by applying the given percentage.
+            - Randomly selects nodes to be marked as mobile.
+            - Updates each node's "mobility" attribute to True or False accordingly.
+
+        Args:
+            nodes (dict): Dictionary of nodes with their current attributes.
+            mobile_participants_percent (float): Percentage of nodes to be assigned mobility (0-100).
+
+        Returns:
+            dict: Updated nodes dictionary with mobility status assigned.
+        """
         import random
 
         # Number of mobile nodes, round down
@@ -452,6 +518,19 @@ class Scenario:
 
     @classmethod
     def from_dict(cls, data):
+        """
+        Create an instance of the class from a dictionary of attributes.
+
+        This class method:
+            - Copies the input dictionary to prevent modification of the original data.
+            - Instantiates the class using the dictionary unpacked as keyword arguments.
+
+        Args:
+            data (dict): Dictionary containing attributes to initialize the class instance.
+
+        Returns:
+            cls: An instance of the class initialized with the provided data.
+        """
         # Create a copy of the data to avoid modifying the original
         scenario_data = data.copy()
 
@@ -463,6 +542,22 @@ class Scenario:
 
 # Class to manage the current scenario
 class ScenarioManagement:
+    """
+    Initialize the scenario management.
+
+    Args:
+        scenario (dict): Dictionary containing the scenario configuration.
+        user (str, optional): User identifier. Defaults to None.
+
+    Functionality:
+    - Loads the scenario from a dictionary.
+    - Sets up names and paths for configuration and log storage.
+    - Creates necessary directories with proper permissions.
+    - Saves the scenario configuration and management settings as JSON files.
+    - Assigns malicious and mobile nodes according to scenario parameters.
+    - Configures each node individually with parameters for networking, device,
+      attacks, defense, mobility, reporting, trustworthiness, and situational awareness.
+    """
     def __init__(self, scenario, user=None):
         # Current scenario
         self.scenario = Scenario.from_dict(scenario)
@@ -644,6 +739,23 @@ class ScenarioManagement:
 
     @staticmethod
     def stop_participants(scenario_name=None):
+        """
+        Stop running participant nodes by removing the scenario command files.
+
+        This method deletes the 'current_scenario_commands.sh' (or '.ps1' on Windows)
+        file associated with a scenario. Removing this file signals the nodes to stop
+        by terminating their processes.
+
+        Args:
+            scenario_name (str, optional): The name of the scenario to stop. If None,
+                all scenarios' command files will be removed.
+
+        Notes:
+            - If the environment variable NEBULA_CONFIG_DIR is not set, a default
+              configuration directory path is used.
+            - Supports both Linux/macOS ('.sh') and Windows ('.ps1') script files.
+            - Any errors during file removal are logged with the traceback.
+        """
         # When stopping the nodes, we need to remove the current_scenario_commands.sh file -> it will cause the nodes to stop using PIDs
         try:
             nebula_config_dir = os.environ.get("NEBULA_CONFIG_DIR")
@@ -680,10 +792,36 @@ class ScenarioManagement:
 
     @staticmethod
     def stop_nodes():
+        """
+        Stop all running NEBULA nodes.
+    
+        This method logs the shutdown action and calls the stop_participants
+        method to remove all scenario command files, which signals nodes to stop.
+        """
         logging.info("Closing NEBULA nodes... Please wait")
         ScenarioManagement.stop_participants()
 
     def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
+        """
+        Load participant configurations, generate certificates, setup topology, split datasets, 
+        and start nodes according to the scenario deployment type.
+
+        This method:
+        - Generates CA and node certificates.
+        - Loads and updates participant configuration files.
+        - Creates the network topology and updates participant roles.
+        - Handles additional participants if provided.
+        - Initializes and partitions the dataset based on the scenario.
+        - Starts nodes using the specified deployment method (docker, physical, or process).
+
+        Args:
+            additional_participants (list, optional): List of additional participant configurations to add.
+            schema_additional_participants (optional): Schema for additional participants (currently unused).
+
+        Raises:
+            ValueError: If no participant files found, multiple start nodes detected, no start node found,
+                        unsupported dataset or unknown deployment type.
+        """
         logging.info(f"Generating the scenario {self.scenario_name} at {self.start_date_scenario}")
 
         # Generate CA certificate
@@ -892,6 +1030,27 @@ class ScenarioManagement:
             )
 
     def create_topology(self, matrix=None):
+        """
+        Create and return a network topology manager based on the scenario's topology settings or a given adjacency matrix.
+
+        Supports multiple topology types:
+        - Random: Generates an Erdős-Rényi random graph with specified connection probability.
+        - Matrix: Uses a provided adjacency matrix to define the topology.
+        - Fully: Creates a fully connected network.
+        - Ring: Creates a ring-structured network with partial connectivity.
+        - Star: Creates a centralized star topology (only for CFL federation).
+
+        The method assigns IP and port information to nodes and returns the configured TopologyManager instance.
+
+        Args:
+            matrix (optional): Adjacency matrix to define custom topology. If provided, overrides scenario topology.
+
+        Raises:
+            ValueError: If an unknown topology type is specified in the scenario.
+
+        Returns:
+            TopologyManager: Configured topology manager with nodes assigned.
+        """
         import numpy as np
 
         if self.scenario.topology == "Random":
@@ -958,6 +1117,31 @@ class ScenarioManagement:
         return topologymanager
 
     def start_nodes_docker(self):
+        """
+        Starts participant nodes as Docker containers using Docker SDK.
+
+        This method performs the following steps:
+        - Logs the beginning of the Docker container startup process.
+        - Creates a Docker network specific to the current user and scenario.
+        - Sorts participant nodes by their index.
+        - For each participant node:
+            - Sets up environment variables and host configuration,
+              enabling GPU support if required.
+            - Prepares Docker volume bindings and static network IP assignment.
+            - Updates the node configuration, replacing IP addresses as needed,
+              and writes the configuration to a JSON file.
+            - Creates and starts the Docker container for the node.
+            - Logs any exceptions encountered during container creation or startup.
+
+        Raises:
+            docker.errors.DockerException: If there are issues communicating with the Docker daemon.
+            OSError: If there are issues accessing file system paths for volume binding.
+            Exception: For any other unexpected errors during container creation or startup.
+
+        Note:
+            - The method assumes Docker and NVIDIA runtime are properly installed and configured.
+            - IP addresses in node configurations are replaced with network base dynamically.
+        """
         logging.info("Starting nodes using Docker Compose...")
         logging.info(f"env path: {self.env_path}")
 
@@ -1043,6 +1227,28 @@ class ScenarioManagement:
             i += 1
 
     def start_nodes_process(self):
+        """
+        Starts participant nodes as independent background processes on the host machine.
+
+        This method performs the following steps:
+        - Updates each participant's configuration with paths for logs, config, certificates,
+          and scenario parameters.
+        - Writes the updated configuration for each participant to a JSON file.
+        - Generates and writes a platform-specific script to start all participant nodes:
+            - On Windows, it creates a PowerShell script that launches each node as a background
+              process, redirects output and error streams to log files, and records process IDs.
+            - On Unix-like systems, it creates a bash script that launches each node in the
+              background, redirects output, and stores PIDs in a file.
+        - Sets executable permissions for the generated script.
+
+        Raises:
+            Exception: If any error occurs during the script generation or file operations.
+
+        Notes:
+            - The generated script must be executed separately by the user to actually start the nodes.
+            - Sleep intervals are added before starting nodes depending on their 'start' flag.
+            - Logs and PIDs are stored under the configured directories for monitoring and management.
+        """
         self.processes_root_path = os.path.join(os.path.dirname(__file__), "..", "..")
         logging.info("Starting nodes as processes...")
         logging.info(f"env path: {self.env_path}")
@@ -1121,6 +1327,15 @@ class ScenarioManagement:
             raise Exception(f"Error starting nodes as processes: {e}")
 
     def start_nodes_physical(self):
+        """
+        Placeholder method for starting nodes on physical devices.
+
+        Logs informational messages indicating that deployment on physical devices
+        is not implemented or supported publicly. Users are encouraged to use Docker
+        or process-based deployment methods instead.
+
+        Currently, this method does not perform any actions.
+        """
         logging.info("Starting nodes as physical devices...")
         logging.info(f"env path: {self.env_path}")
 
@@ -1133,6 +1348,20 @@ class ScenarioManagement:
 
     @classmethod
     def remove_files_by_scenario(cls, scenario_name):
+        """
+        Remove configuration, logs, and reputation files associated with a given scenario.
+
+        This method attempts to delete the directories related to the specified scenario
+        within the NEBULA_CONFIG_DIR and NEBULA_LOGS_DIR environment paths, as well as
+        the reputation folder inside the nebula core directory.
+
+        If files or directories are not found, a warning is logged but the method continues.
+        If a PermissionError occurs while removing log files, the files are moved to a temporary
+        folder inside the NEBULA_ROOT path to avoid permission issues.
+
+        Raises:
+            Exception: Re-raises any unexpected exceptions encountered during file operations.
+        """
         try:
             shutil.rmtree(FileUtils.check_path(os.environ["NEBULA_CONFIG_DIR"], scenario_name))
         except FileNotFoundError:
@@ -1178,6 +1407,19 @@ class ScenarioManagement:
             raise
 
     def scenario_finished(self, timeout_seconds):
+        """
+        Check if all Docker containers related to the current scenario have finished.
+
+        This method monitors the Docker containers whose names contain the scenario name.
+        It waits until all such containers have exited or until the specified timeout is reached.
+        If the timeout is exceeded, all running scenario containers are stopped.
+
+        Args:
+            timeout_seconds (int): Maximum number of seconds to wait for containers to finish.
+
+        Returns:
+            bool: True if all containers finished before the timeout, False if timeout was reached and containers were stopped.
+        """
         client = docker.from_env()
         all_containers = client.containers.list(all=True)
         containers = [container for container in all_containers if self.scenario_name.lower() in container.name.lower()]
@@ -1204,6 +1446,20 @@ class ScenarioManagement:
 
     @classmethod
     def generate_statistics(cls, path):
+        """
+        Generate reduced statistical summaries from TensorBoard event files in a scenario directory.
+    
+        This method loads TensorBoard event data from the specified directory,
+        performs statistical reductions (mean, min, max, median, std, var) over scalar metrics,
+        and writes the reduced data back both as TensorBoard event files and as a CSV summary.
+    
+        Args:
+            path (str): The root directory containing a 'metrics' subdirectory with TensorBoard event files.
+    
+        Returns:
+            bool: True if statistics were generated successfully, False if no input event directories
+                  were found or if an error occurred during processing.
+        """
         try:
             # Define input directories
             input_event_dirs = sorted(glob.glob(os.path.join(path, "metrics/*")))
