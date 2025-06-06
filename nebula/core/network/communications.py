@@ -80,6 +80,7 @@ class CommunicationsManager:
         self.incoming_connections = {}
         self.outgoing_connections = {}
         self.ready_connections = set()
+        self._ready_connections_lock = Locker("ready_connections_lock", async_lock=True)
 
         self._mm = MessagesManager(addr=self.addr, config=self.config)
         self.received_messages_hashes = collections.deque(
@@ -179,11 +180,13 @@ class CommunicationsManager:
             f"🔗  check_federation_ready | Ready connections: {self.ready_connections} | Connections: {self.connections.keys()}"
         )
         async with self.connections_lock:
-            if set(self.connections.keys()) == self.ready_connections:
-                return True
+            async with self._ready_connections_lock:
+                if set(self.connections.keys()) == self.ready_connections:
+                    return True
 
     async def add_ready_connection(self, addr):
-        self.ready_connections.add(addr)
+        async with self._ready_connections_lock:
+            self.ready_connections.add(addr)
 
     async def start_communications(self, initial_neighbors):
         """
@@ -198,11 +201,16 @@ class CommunicationsManager:
         )
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"])
         await self.start()
+        neighbors = set(initial_neighbors)
+
+        if self.addr in neighbors:
+            neighbors.discard(self.addr)
+
         for i in initial_neighbors:
             addr = f"{i.split(':')[0]}:{i.split(':')[1]}"
             await self.connect(addr, direct=True)
             await asyncio.sleep(1)
-        while not await self.verify_connections(initial_neighbors):
+        while not await self.verify_connections(neighbors):
             await asyncio.sleep(1)
         current_connections = await self.get_addrs_current_connections()
         logging.info(f"Connections verified: {current_connections}")
