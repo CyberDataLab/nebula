@@ -12,7 +12,7 @@ import pandas as pd
 from nebula.core.models.mnist.mlp import MNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.addons.trustworthiness.calculation import get_elapsed_time, get_bytes_models, get_bytes_sent_recv, get_avg_loss_accuracy, get_cv, get_clever_score, get_feature_importance_cv
-from nebula.addons.trustworthiness.utils import count_all_class_samples, read_csv, check_field_filled, get_entropy, get_all_data_entropy
+from nebula.addons.trustworthiness.utils import count_all_class_samples, read_csv, check_field_filled, get_all_data_entropy
 # from nebula.core.models.syscall.mlp import SyscallModelMLP
 
 dirname = os.path.dirname(__file__)
@@ -131,7 +131,7 @@ class Factsheet:
                 logging.warning(f"{factsheet_file} is invalid")
                 logging.error(e)
 
-    def populate_factsheet_post_train(self, scenario_name, start_time, end_time, class_counter):
+    def populate_factsheet_post_train(self, scenario_name, start_time, end_time):
         """
         Populates the factsheet with values after the training.
 
@@ -153,7 +153,7 @@ class Factsheet:
                 files_dir = f"{os.environ.get('NEBULA_LOGS_DIR')}/{scenario_name}/trustworthiness"
 
                 models_files = glob.glob(os.path.join(files_dir, "*final_model*"))
-                dataloaders_files = glob.glob(os.path.join(files_dir, "*train_loader*"))
+                #dataloaders_files = glob.glob(os.path.join(files_dir, "*train_loader*"))
                 test_dataloader_file = f"{files_dir}/participant_1_test_loader.pk"
                 train_model_file = f"{files_dir}/participant_1_train_model.pk"
                 emissions_file = os.path.join(files_dir, "emissions.csv")
