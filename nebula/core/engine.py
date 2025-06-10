@@ -3,13 +3,13 @@ import logging
 import os
 import socket
 import time
-
 import docker
 
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.addons.reputation.reputation import Reputation
+from nebula.core.addonmanager import AddondManager
 from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import (
