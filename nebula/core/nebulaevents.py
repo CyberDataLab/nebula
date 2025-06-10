@@ -2,23 +2,66 @@ from abc import ABC, abstractmethod
 
 
 class AddonEvent(ABC):
+    """
+    Abstract base class for all addon-related events in the system.
+    """
+    
     @abstractmethod
     async def get_event_data(self):
+        """
+        Retrieve the data associated with the event.
+
+        Returns:
+            Any: The event-specific data payload.
+        """
         pass
 
 
 class NodeEvent(ABC):
+    """
+    Abstract base class for all node-related events in the system.
+    """
+    
     @abstractmethod
     async def get_event_data(self):
+        """
+        Retrieve the data associated with the event.
+
+        Returns:
+            Any: The event-specific data payload.
+        """
         pass
 
     @abstractmethod
     async def is_concurrent(self):
+        """
+        Indicates whether the event can be handled concurrently.
+
+        Returns:
+            bool: True if concurrent handling is allowed, False otherwise.
+        """
         pass
 
 
 class MessageEvent:
+    """
+    Event class for wrapping received messages in the system.
+
+    Attributes:
+        message_type (str): Type/category of the message.
+        source (str): Address or identifier of the message sender.
+        message (Any): The actual message payload.
+    """
+    
     def __init__(self, message_type, source, message):
+        """
+        Initializes a MessageEvent instance.
+
+        Args:
+            message_type (str): Type/category of the message.
+            source (str): Address or identifier of the message sender.
+            message (Any): The actual message payload.
+        """
         self.source = source
         self.message_type = message_type
         self.message = message
@@ -90,7 +133,6 @@ class RoundEndEvent(NodeEvent):
 class ExperimentFinishEvent(NodeEvent):
     def __init__(self):
         """Event triggered when experiment is going to finish."""
-        pass
 
     def __str__(self):
         return "Experiment finished"
@@ -172,6 +214,14 @@ class UpdateNeighborEvent(NodeEvent):
 
 class NodeBlacklistedEvent(NodeEvent):
     def __init__(self, node_addr, blacklisted: bool = False):
+        """
+        Initializes a NodeBlacklistedEvent.
+
+        Args:
+            node_addr (str): The address of the node.
+            blacklisted (bool, optional): True if the node is blacklisted,
+                                          False if it's just marked as recently disconnected.
+        """
         self._node_addr = node_addr
         self._blacklisted = blacklisted
 
@@ -179,6 +229,12 @@ class NodeBlacklistedEvent(NodeEvent):
         return f"Node addr: {self._node_addr} | Blacklisted: {self._blacklisted} | Recently disconnected: {not self._blacklisted}"
 
     async def get_event_data(self) -> tuple[str, bool]:
+        """
+        Retrieves the address of the node and its blacklist status.
+
+        Returns:
+            tuple[str, bool]: A tuple containing the node address and blacklist flag.
+        """
         return (self._node_addr, self._blacklisted)
 
     async def is_concurrent(self):
@@ -286,18 +342,52 @@ class BeaconRecievedEvent(NodeEvent):
 
 
 class GPSEvent(AddonEvent):
+    """
+    Event triggered by a GPS module providing distance data between nodes.
+
+    Attributes:
+        distances (dict): A dictionary mapping node addresses to their respective distances.
+    """
+    
     def __init__(self, distances: dict):
+        """
+        Initializes a GPSEvent.
+
+        Args:
+            distances (dict): Dictionary of distances from the current node to others.
+        """
         self.distances = distances
 
     def __str__(self):
         return "GPSEvent"
 
     async def get_event_data(self) -> dict:
+        """
+        Returns the distance data associated with this event.
+
+        Returns:
+            dict: A copy of the distances dictionary.
+        """
         return self.distances.copy()
 
 
 class ChangeLocationEvent(AddonEvent):
+    """
+    Event used to signal a change in the node's geographical location.
+
+    Attributes:
+        latitude (float): New latitude of the node.
+        longitude (float): New longitude of the node.
+    """
+    
     def __init__(self, latitude, longitude):
+        """
+        Initializes a ChangeLocationEvent.
+
+        Args:
+            latitude (float): The new latitude value.
+            longitude (float): The new longitude value.
+        """
         self.latitude = latitude
         self.longitude = longitude
 
@@ -305,4 +395,21 @@ class ChangeLocationEvent(AddonEvent):
         return "ChangeLocationEvent"
 
     async def get_event_data(self):
+        """
+        Returns the new location coordinates associated with this event.
+
+        Returns:
+            tuple: A tuple containing latitude and longitude.
+        """
         return (self.latitude, self.longitude)
+    
+class TestMetricsEvent(AddonEvent):
+    def __init__(self, loss, accuracy):
+        self._loss = loss
+        self._accuracy = accuracy
+
+    def __str__(self):
+        return "TestMetricsEvent"
+
+    async def get_event_data(self):
+        return (self._loss, self._accuracy)

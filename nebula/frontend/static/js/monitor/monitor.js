@@ -7,20 +7,20 @@ class Monitor {
         // Get scenario name from URL path
         const pathParts = window.location.pathname.split('/');
         this.scenarioName = pathParts[pathParts.indexOf('dashboard') + 1];
-        
+
         this.clearAllData();
-        
+
         this.isLoadingInitialData = false;
         this.initialDataPromise = null;
-        
+
         this.initializeMap();
         this.initializeGraph();
         this.initializeWebSocket();
         this.initializeEventListeners();
         this.initializeDownloadHandlers();
-        
+
         this.startStaleNodeCheck();
-        
+
         // Load initial data and then start periodic status check
         this.loadInitialData().then(() => {
             this.startPeriodicStatusCheck();
@@ -49,18 +49,18 @@ class Monitor {
         if (this.updateTimeout) {
             clearTimeout(this.updateTimeout);
         }
-        
+
         // Clear the table body
         const tableBody = document.querySelector('#table-nodes tbody');
         if (tableBody) {
             tableBody.innerHTML = '';
         }
-        
+
         // Clear the map markers and lines
         if (this.lineLayer) {
             this.lineLayer.clearLayers();
         }
-        
+
         this.log('All data structures cleared');
     }
 
@@ -673,7 +673,7 @@ class Monitor {
             }
 
             const nodeId = `${data.ip}:${data.port}`;
-            
+
             // Check if this node already exists
             const existingNode = this.gData.nodes.find(n => n.ipport === nodeId);
             if (existingNode) {
@@ -1262,9 +1262,9 @@ class Monitor {
                     try {
                         const currentMarker = this.droneMarkers[droneId];
                         const neighborFullIP = neighborIP.includes(':') ? neighborIP : `${neighborIP}:${currentMarker.port}`;
-                        
+
                         // Get distance from the current marker's neighbors_distance object
-                        const distance = currentMarker.neighbors_distance && 
+                        const distance = currentMarker.neighbors_distance &&
                                       currentMarker.neighbors_distance[neighborFullIP];
 
                         this.log('Distance data:', {
@@ -1503,7 +1503,7 @@ class Monitor {
 
             data.nodes.forEach(node => {
                 const nodeId = `${node.ip}:${node.port}`;
-                
+
                 // Skip if we've already processed this node in this status check
                 if (processedNodes.has(nodeId)) {
                     this.log('Skipping duplicate node in status check:', nodeId);
@@ -1543,7 +1543,7 @@ class Monitor {
                     // Preserve existing neighbor distances
                     const existingMarker = this.droneMarkers[nodeData.uid];
                     const neighborsDistance = existingMarker.neighbors_distance || {};
-                    
+
                     this.updateDronePosition(
                         nodeData.uid,
                         nodeData.ip,

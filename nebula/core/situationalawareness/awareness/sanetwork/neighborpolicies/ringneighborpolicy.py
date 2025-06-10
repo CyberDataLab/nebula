@@ -7,6 +7,34 @@ from nebula.core.utils.locker import Locker
 
 
 class RINGNeighborPolicy(NeighborPolicy):
+    """
+    Neighbor policy for ring topologies.
+
+    This policy maintains a strict limit on the number of neighbors per node, 
+    enforcing a ring-like structure. Each node connects to a fixed number of 
+    neighbors (by default 2), and excess connections are detected and marked 
+    for removal.
+
+    The policy ensures:
+      - No node connects to more than `max_neighbors`.
+      - New connections are accepted only if the node has not reached its limit
+        or the incomming connection is made by a joinning node.
+      - When a node joins, it's accepted only if not already connected.
+      - Excess neighbors (due to dynamic changes) can be identified and pruned,
+        ensuring that incomers dont get pruned way to fast.
+
+    Attributes:
+        max_neighbors (int): Maximum number of neighbors allowed (default is 2).
+        nodes_known (set[str]): Set of node IDs discovered in the network.
+        neighbors (set[str]): Set of current neighbor node IDs.
+        neighbors_lock (Locker): Lock for thread-safe access to the neighbors set.
+        nodes_known_lock (Locker): Lock for managing access to the known nodes set.
+        addr (str): This node's own address.
+        _excess_neighbors_removed (set[str]): Recently removed nodes due to excess connections.
+        _excess_neighbors_removed_lock (Locker): Lock for accessing the removal tracking set.
+        _verbose (bool): Enables verbose logging.
+    """
+    
     RECENTLY_REMOVED_BAN_TIME = 20
 
     def __init__(self):

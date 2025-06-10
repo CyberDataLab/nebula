@@ -14,6 +14,8 @@ from urllib.parse import urlencode
 import aiohttp
 import requests
 from dotenv import load_dotenv
+from aiohttp import ClientConnectorError
+from aiohttp.client_exceptions import ClientError
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -22,10 +24,10 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "
 class Settings:
     """
     Configuration settings for the Nebula application, loaded from environment variables with sensible defaults.
-    
+
     Attributes:
         controller_host (str): Hostname or IP address of the Nebula controller service.
-        controller_port (int): Port on which the Nebula controller listens (default: 5000).
+        controller_port (int): Port on which the Nebula controller listens (default: 5050).
         resources_threshold (float): Threshold for resource usage alerts (default: 0.0).
         port (int): Port for the Nebula frontend service (default: 6060).
         production (bool): Whether the application is running in production mode.
@@ -43,8 +45,9 @@ class Settings:
         templates_dir (str): Directory name containing template files (default: 'templates').
         frontend_log (str): File path for the frontend log output.
     """
+
     controller_host: str = os.environ.get("NEBULA_CONTROLLER_HOST")
-    controller_port: int = os.environ.get("NEBULA_CONTROLLER_PORT", 5000)
+    controller_port: int = os.environ.get("NEBULA_CONTROLLER_PORT", 5050)
     resources_threshold: float = 0.0
     port: int = os.environ.get("NEBULA_FRONTEND_PORT", 6060)
     production: bool = os.environ.get("NEBULA_PRODUCTION", "False") == "True"
@@ -111,7 +114,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from nebula.utils import DockerUtils, FileUtils
+from nebula.utils import FileUtils
 
 logging.info(f"🚀  Starting Nebula Frontend on port {settings.port}")
 
@@ -165,6 +168,7 @@ class ConnectionManager:
         get_historic() -> dict[str, dict]:
             Returns the full history of timestamped messages.
     """
+
     def __init__(self):
         self.historic_messages = {}
         self.active_connections: list[WebSocket] = []
@@ -227,13 +231,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int):
     WebSocket endpoint for real-time chat at /platform/ws/{client_id}.
 
     Parameters:
-        websocket (WebSocket): The client’s WebSocket connection instance.
+        websocket (WebSocket): The client's WebSocket connection instance.
         client_id (int): Unique identifier for the connecting client.
 
     Functionality:
         - On connection: registers the client via manager.connect(websocket).
         - Message loop: awaits incoming text frames, wraps each in a control message including the client_id, and broadcasts to all active clients using manager.broadcast().
-        - On WebSocketDisconnect: deregisters the client via manager.disconnect(websocket) and broadcasts a “client left” control message.
+        - On WebSocketDisconnect: deregisters the client via manager.disconnect(websocket) and broadcasts a "client left" control message.
         - Error handling: logs exceptions during broadcast or any unexpected WebSocket errors, ensuring the connection is cleaned up on failure.
     """
     await manager.connect(websocket)
@@ -285,7 +289,7 @@ def add_global_context(request: Request):
         request (Request): The incoming request object.
 
     Returns:
-        dict[str, bool]: 
+        dict[str, bool]:
             is_production: Flag indicating if the application is running in production mode.
     """
     return {
@@ -323,6 +327,7 @@ class UserData:
         stop_all_scenarios_event (asyncio.Event): Event used to signal all scenarios should be halted.
         finish_scenario_event (asyncio.Event): Event used to signal a single scenario has finished.
     """
+
     def __init__(self):
         self.nodes_registration = {}
         self.scenarios_list = []
@@ -367,10 +372,10 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     Functionality:
         - Builds a context dict with the request and its session.
         - For specific HTTP status codes (401, 403, 404, 405, 413), returns a TemplateResponse rendering the corresponding error page and status.
-        - For all other status codes, delegates to the application's default exception handler.
+        - For all other status codes, returns a JSON response with the error details.
 
     Returns:
-        Response: Either a TemplateResponse for the matched error code or the default exception handler’s response.
+        Response: Either a TemplateResponse for the matched error code or a JSON response with error details.
     """
     context = {"request": request, "session": request.session}
     if exc.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -386,6 +391,39 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     return await request.app.default_exception_handler(request, exc)
 
 
+async def retry_with_backoff(func, *args, max_retries=5, initial_delay=1):
+    """
+    Retry a function with exponential backoff.
+
+    Args:
+        func: The async function to retry
+        *args: Arguments to pass to the function
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay between retries in seconds
+
+    Returns:
+        The result of the function if successful
+
+    Raises:
+        The last exception if all retries fail
+    """
+    delay = initial_delay
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            return await func(*args)
+        except (ClientConnectorError, ClientError) as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                logging.warning(f"Connection attempt {attempt + 1} failed: {str(e)}. Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+                delay *= 2  # Exponential backoff
+            else:
+                logging.error(f"All {max_retries} connection attempts failed")
+                raise last_exception
+
+
 async def controller_get(url):
     """
     Fetch JSON data from a remote controller endpoint via asynchronous HTTP GET.
@@ -399,13 +437,17 @@ async def controller_get(url):
     Raises:
         HTTPException: If the response status is not 200, raises with the response status code and an error detail.
     """
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                raise HTTPException(status_code=response.status, detail="Error fetching data")
-            
+
+    async def _get():
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(status_code=response.status, detail="Error fetching data")
+
+    return await retry_with_backoff(_get)
+
 
 async def controller_post(url, data=None):
     """
@@ -421,13 +463,17 @@ async def controller_post(url, data=None):
     Raises:
         HTTPException: If the response status is not 200, with the status code and an error detail.
     """
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=data) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                raise HTTPException(status_code=response.status, detail="Error posting data")
-            
+
+    async def _post():
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    raise HTTPException(status_code=response.status, detail="Error posting data")
+
+    return await retry_with_backoff(_post)
+
 
 async def get_available_gpus():
     """
@@ -522,7 +568,7 @@ async def get_scenarios(user, role):
 
 async def scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username):
     """
-    Update the record of a scenario’s execution status on the controller.
+    Update the record of a scenario's execution status on the controller.
 
     Parameters:
         scenario_name (str): Unique name of the scenario.
@@ -537,7 +583,15 @@ async def scenario_update_record(scenario_name, start_time, end_time, scenario, 
         HTTPException: If the underlying HTTP POST request fails.
     """
     url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/update"
-    data = {"scenario_name": scenario_name, "start_time": start_time, "end_time": end_time, "scenario": scenario, "status": status, "role": role, "username": username}
+    data = {
+        "scenario_name": scenario_name,
+        "start_time": start_time,
+        "end_time": end_time,
+        "scenario": scenario,
+        "status": status,
+        "role": role,
+        "username": username,
+    }
     await controller_post(url, data)
 
 
@@ -559,7 +613,7 @@ async def scenario_set_status_to_finished(scenario_name, all=False):
 
 async def remove_scenario_by_name(scenario_name):
     """
-    Remove a scenario by name from the controller’s records.
+    Remove a scenario by name from the controller's records.
 
     Parameters:
         scenario_name (str): Name of the scenario to remove.
@@ -586,13 +640,11 @@ async def check_scenario_with_role(role, scenario_name):
     Raises:
         HTTPException: If the underlying HTTP GET request fails.
     """
-    url = (
-                f"http://{settings.controller_host}:{settings.controller_port}/scenarios/check/{role}/{scenario_name}"
-            )
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/check/{role}/{scenario_name}"
     check_data = await controller_get(url)
     return check_data.get("allowed", False)
-            
-            
+
+
 async def get_scenario_by_name(scenario_name):
     """
     Fetch the details of a scenario by name from the controller.
@@ -630,13 +682,13 @@ async def get_running_scenarios(get_all=False):
 async def list_nodes_by_scenario_name(scenario_name):
     """
     List all nodes associated with a given scenario.
-    
+
     Parameters:
         scenario_name (str): Name of the scenario to list nodes for.
-    
+
     Returns:
         Any: Parsed JSON response containing node details.
-    
+
     Raises:
         HTTPException: If the underlying HTTP GET request fails.
     """
@@ -644,9 +696,24 @@ async def list_nodes_by_scenario_name(scenario_name):
     return await controller_get(url)
 
 
-async def update_node_record(uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round_number, scenario_name, run_hash, malicious):
+async def update_node_record(
+    uid,
+    idx,
+    ip,
+    port,
+    role,
+    neighbors,
+    latitude,
+    longitude,
+    timestamp,
+    federation,
+    round_number,
+    scenario_name,
+    run_hash,
+    malicious,
+):
     """
-    Update the record of a node’s state on the controller.
+    Update the record of a node's state on the controller.
 
     Parameters:
         uid (str): Unique node identifier.
@@ -655,8 +722,8 @@ async def update_node_record(uid, idx, ip, port, role, neighbors, latitude, long
         port (int): Node port number.
         role (str): Node role in the scenario.
         neighbors (Any): Neighboring node references.
-        latitude (float): Node’s latitude coordinate.
-        longitude (float): Node’s longitude coordinate.
+        latitude (float): Node's latitude coordinate.
+        longitude (float): Node's longitude coordinate.
         timestamp (str): ISO-formatted timestamp of the update.
         federation (str): Federation identifier.
         round_number (int): Current round number in the scenario.
@@ -738,10 +805,10 @@ async def save_notes(scenario_name, notes):
 async def remove_note(scenario_name):
     """
     Remove notes for a specific scenario from the controller.
-    
+
     Parameters:
         scenario_name (str): Name of the scenario whose notes should be removed.
-    
+
     Raises:
         HTTPException: If the underlying HTTP POST request fails.
     """
@@ -753,10 +820,10 @@ async def remove_note(scenario_name):
 async def list_users(allinfo=True):
     """
     Retrieves the list of users by calling the controller endpoint.
-    
+
     Parameters:
     - all_info (bool): If True, retrieves detailed information for each user.
-    
+
     Returns:
     - A list of users, as provided by the controller.
     """
@@ -830,20 +897,42 @@ async def delete_user(user):
     await controller_post(url, data)
 
 
-async def verify_user(user, password):
+async def verify_user(username: str, password: str) -> bool:
     """
-    Verify a user's credentials against the controller.
+    Verify user credentials with the controller.
 
-    Parameters:
-    - user (str): The username to verify.
-    - password (str): The password to verify for the user.
+    Args:
+        username (str): The username to verify
+        password (str): The password to verify
 
     Returns:
-    - dict: The verification result from the controller, typically including authentication status.
+        dict: User data if credentials are valid, False otherwise
+
+    Raises:
+        HTTPException: If there's an error communicating with the controller
     """
-    url = f"http://{settings.controller_host}:{settings.controller_port}/user/verify"
-    data = {"user": user, "password": password}
-    return await controller_post(url, data)
+    try:
+        url = f"http://{settings.controller_host}:{settings.controller_port}/user/verify"
+        logging.info(f"Verifying user {username} with controller at {url}")
+
+        response = await controller_post(url, {"user": username, "password": password})
+        logging.info(f"Controller response for user {username}: {response}")
+
+        if not isinstance(response, dict):
+            logging.error(f"Invalid response format from controller: {response}")
+            return False
+
+        # Return the user data if verification was successful
+        if response.get("user") and response.get("role"):
+            return response
+        return False
+
+    except HTTPException as e:
+        logging.error(f"HTTP error verifying user {username}: {str(e)}")
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error verifying user {username}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error verifying credentials: {str(e)}")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -932,7 +1021,7 @@ async def nebula_admin(request: Request, session: dict = Depends(get_session)):
     """
     if session.get("role") == "admin":
         user_list = await list_users()
-        
+
         user_table = zip(
             range(1, len(user_list) + 1),
             [user["user"] for user in user_list],
@@ -1039,10 +1128,20 @@ async def nebula_login(
     Returns:
         JSONResponse: {"message": "Login successful"} with HTTP 200 status on success.
     """
-    data = await verify_user(user, password)
-    session["user"] = data.get("user")
-    session["role"] = data.get("role")
-    return JSONResponse({"message": "Login successful"}, status_code=200)
+    logging.info(f"Login attempt for user: {user}")
+    try:
+        user_data = await verify_user(user, password)
+        if not user_data:
+            logging.error(f"Login failed: Invalid credentials for user {user}")
+            return JSONResponse({"message": "Invalid credentials"}, status_code=401)
+
+        session["user"] = user_data.get("user")
+        session["role"] = user_data.get("role")
+        logging.info(f"Login successful for user: {user} with role: {user_data.get('role')}")
+        return JSONResponse({"message": "Login successful"}, status_code=200)
+    except Exception as e:
+        logging.exception(f"Login error for user {user}: {str(e)}")
+        return JSONResponse({"message": "Login failed", "error": str(e)}, status_code=401)
 
 
 @app.get("/platform/logout")
@@ -1114,14 +1213,14 @@ async def nebula_add_user(
     # Only admin users can add new users.
     if session.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    
+
     # Basic validation on the user value before calling the controller.
     user_list = await list_users()
-    
+
     if user.upper() in user_list or " " in user or "'" in user or '"' in user:
         return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
-    
-    # Call the controller's endpoint to add the user. 
+
+    # Call the controller's endpoint to add the user.
     await add_user(user, password, role)
     return RedirectResponse(url="/platform/admin", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -1149,7 +1248,7 @@ async def nebula_update_user(
     """
     if "user" not in session or session["role"] != "admin":
         return RedirectResponse(url="/platform", status_code=status.HTTP_302_FOUND)
-      
+
     await update_user(user, password, role)
     return RedirectResponse(url="/platform/admin", status_code=status.HTTP_302_FOUND)
 
@@ -1186,14 +1285,19 @@ async def get_host_resources():
         None: If the HTTP response status is not 200.
     """
     url = f"http://{settings.controller_host}:{settings.controller_port}/resources"
-    async with aiohttp.ClientSession() as session, session.get(url) as response:
-        if response.status == 200:
-            try:
-                return await response.json()
-            except Exception as e:
-                return {"error": f"Failed to parse JSON: {e}"}
-        else:
-            return None
+
+    async def _get_resources():
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    try:
+                        return await response.json()
+                    except Exception as e:
+                        return {"error": f"Failed to parse JSON: {e}"}
+                else:
+                    return None
+
+    return await retry_with_backoff(_get_resources)
 
 
 async def check_enough_resources():
@@ -1240,34 +1344,42 @@ async def wait_for_enough_ram():
 
 async def monitor_resources():
     """
-    Continuously monitor host resources and, if usage exceeds the threshold, stop the last running scenario after broadcasting a message, then wait for resources to recover.
-
-    Returns:
-        None
+    Continuously monitor host resources and, if usage exceeds the threshold, stop the last running scenario
+    after broadcasting a message, then wait for resources to recover.
     """
     while True:
-        enough_resources = await check_enough_resources()
-        if not enough_resources:
-            running_scenarios = await get_running_scenarios(get_all=True)
-            if running_scenarios:
-                last_running_scenario = running_scenarios.pop()
-                running_scenario_as_dict = dict(last_running_scenario)
-                scenario_name = running_scenario_as_dict["name"]
-                user = running_scenario_as_dict["username"]
-                # Send message of the scenario that has been stopped
-                scenario_exceed_resources = {
-                    "type": "exceed_resources",
-                    "user": user,
-                }
-                try:
-                    await manager.broadcast(json.dumps(scenario_exceed_resources))
-                except Exception:
-                    pass
-                await stop_scenario_by_name(scenario_name, user)
-                user_data = user_data_store[user]
-                user_data.scenarios_list_length -= 1
-                await wait_for_enough_ram()
-                user_data.finish_scenario_event.set()
+        try:
+            enough_resources = await check_enough_resources()
+            if not enough_resources:
+                running_scenarios = await get_running_scenarios(get_all=True)
+                if running_scenarios:
+                    last_running_scenario = running_scenarios.pop()
+                    running_scenario_as_dict = dict(last_running_scenario)
+                    scenario_name = running_scenario_as_dict["name"]
+                    user = running_scenario_as_dict["username"]
+
+                    # Notify that the scenario has been stopped due to excessive resource usage
+                    scenario_exceed_resources = {
+                        "type": "exceed_resources",
+                        "user": user,
+                    }
+                    try:
+                        await manager.broadcast(json.dumps(scenario_exceed_resources))
+                    except Exception as e:
+                        print(f"[monitor_resources] Error while broadcasting message: {e}")
+
+                    await stop_scenario_by_name(scenario_name, user)
+
+                    user_data = user_data_store[user]
+                    user_data.scenarios_list_length -= 1
+
+                    await wait_for_enough_ram()
+                    user_data.finish_scenario_event.set()
+
+        except Exception as e:
+            print(f"[monitor_resources] Error while checking resources or handling scenario: {e}")
+            await asyncio.sleep(5)
+            continue
 
         await asyncio.sleep(20)
 
@@ -1495,7 +1607,7 @@ async def nebula_update_node(scenario_name: str, request: Request):
                 "name": config["scenario_args"]["name"],
                 "status": True,
                 "neighbors_distance": config["mobility_args"]["neighbors_distance"],
-                "malicious": str(config["device_args"]["malicious"])
+                "malicious": str(config["device_args"]["malicious"]),
             }
 
             try:
@@ -1585,16 +1697,16 @@ async def nebula_stop_scenario(
 ):
     """
     Stop one or all scenarios for the current user and redirect to the dashboard.
-    
+
     Parameters:
         scenario_name (str): Name of the scenario to stop.
         stop_all (bool): If True, stop all scenarios; otherwise stop only the specified one.
         request (Request): FastAPI request object.
         session (dict): Session data extracted via dependency.
-    
+
     Returns:
         RedirectResponse: Redirects to the '/platform/dashboard' endpoint.
-    
+
     Raises:
         HTTPException: 401 Unauthorized if the user is not authenticated or lacks permission.
     """
@@ -1629,7 +1741,6 @@ async def remove_scenario(scenario_name=None, user=None):
     Returns:
         None
     """
-    from nebula.controller.scenarios import ScenarioManagement
 
     user_data = user_data_store[user]
 
@@ -1723,6 +1834,7 @@ else:
 
     # TENSORBOARD START
 
+
 @app.get("/platform/dashboard/statistics/", response_class=HTMLResponse)
 @app.get("/platform/dashboard/{scenario_name}/statistics/", response_class=HTMLResponse)
 async def nebula_dashboard_statistics(request: Request, scenario_name: str = None):
@@ -1741,6 +1853,7 @@ async def nebula_dashboard_statistics(request: Request, scenario_name: str = Non
         statistics_url += f"?smoothing=0&runFilter={scenario_name}"
 
     return templates.TemplateResponse("statistics.html", {"request": request, "statistics_url": statistics_url})
+
 
 @app.api_route("/platform/statistics/", methods=["GET", "POST"])
 @app.api_route("/platform/statistics/{path:path}", methods=["GET", "POST"])
@@ -1810,6 +1923,7 @@ async def statistics_proxy(request: Request, path: str = None, session: dict = D
     else:
         raise HTTPException(status_code=401)
 
+
 @app.get("/experiment/{path:path}")
 @app.post("/experiment/{path:path}")
 async def metrics_proxy(path: str = None, request: Request = None):
@@ -1866,7 +1980,7 @@ async def nebula_dashboard_download_logs_metrics(
         session (dict): Session data extracted via dependency.
 
     Returns:
-        StreamingResponse: A zip file containing the scenario’s logs and configuration.
+        StreamingResponse: A zip file containing the scenario's logs and configuration.
 
     Raises:
         HTTPException: 401 Unauthorized if the user is not logged in.
@@ -1989,7 +2103,7 @@ async def run_scenario(scenario_data, role, user):
     user_data = user_data_store[user]
 
     scenario_data = await assign_available_gpu(scenario_data, role)
-     
+
     scenario_name = await deploy_scenario(scenario_data, role, user)
 
     user_data.nodes_registration[scenario_name] = {
@@ -2047,15 +2161,15 @@ async def nebula_dashboard_deployment_run(
     """
     Handle incoming deployment requests to run one or more scenarios, enqueue them,
     and trigger background execution.
-    
+
     Parameters:
         request (Request): FastAPI request object containing a JSON list of scenarios to run.
         background_tasks (BackgroundTasks): Instance for scheduling tasks.
         session (dict): Session data extracted via dependency.
-    
+
     Returns:
         RedirectResponse: Redirects to '/platform/dashboard' on successful enqueue.
-    
+
     Raises:
         HTTPException: 401 Unauthorized if the user is not logged in or content type is invalid.
         HTTPException: 503 Service Unavailable if resources are insufficient.
@@ -2092,7 +2206,7 @@ async def nebula_dashboard_deployment_run(
 if __name__ == "__main__":
     # Parse args from command line
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=5000, help="Port to run the frontend on.")
+    parser.add_argument("--port", type=int, default=6060, help="Port to run the frontend on.")
     args = parser.parse_args()
     logging.info(f"Starting frontend on port {args.port}")
     import uvicorn

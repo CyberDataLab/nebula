@@ -438,7 +438,6 @@
                             <option>Krum</option>
                             <option>TrimmedMean</option>
                             <option>Median</option>
-                            <option>BlockchainReputation</option>
                         </select>
                     </div>
                 </div>
@@ -791,24 +790,20 @@
                     </div>
                 </div>
                 <!-- Situational awareness -->
-                <div class="form-group row container-shadow tiny grey" style="display: none;">
+                <div class="form-group row container-shadow tiny grey" style="display: block;">
                     <h5 class="step-number">Situtational Awareness <i class="fa fa-binoculars"></i>
-                        <input type="checkbox" id="sa-lock" onchange="lock()" style="display: none;">
-                        <label for="sa-lock" class="icon-container" style="float: right;">
-                            <i class="fa fa-lock"></i>
-                        </label>
                     </h5>
                     <h5 class="step-title">Enable/Disable SA</h5>
-                    <div class="form-check form-switch" style="margin-left: 23px;">
+                    <div class="form-check form-switch" style="margin-left: 23px; margin-bottom: 10px;">
                         <input class="form-check-input" type="checkbox" id="situationalAwarenessSwitch" style="display: inline; width: 80px; height: 30px;" checked>
                     </div>
-                    <div id="sa-settings" style="margin-top: 10px; display:block;">
+                    <div id="sa-settings" style="margin-top: 25px; display:none;">
                         <h5 class="step-title">Strict Topology</h5>
                         <div class="form-check form-switch" style="margin-left: 23px;">
-                            <input class="form-check-input" type="checkbox" id="StrictTopologySwitch" style="display: inline; width: 80px; height: 30px;">
+                            <input class="form-check-input" type="checkbox" id="strictTopologySwitch" style="display: inline; width: 80px; height: 30px;">
                         </div>
                     </div>
-                    <div id="sa-discovery-settings" style="margin-top: 10px; display:bock;">
+                    <div id="sa-discovery-settings" style="margin-top: 10px; display:none;">
                         <hr class="styled">
                         <h5 class="step-title">SA Discovery</h5>
                         <div id="SADiscovery-options" style="display: block;">
@@ -833,7 +828,7 @@
                             </div>
                         </div>
                     </div>
-                    <div id="sa-reasoner-settings" style="margin-top: 10px; display:block;">
+                    <div id="sa-reasoner-settings" style="margin-top: 10px; display:none;">
                         <hr class="styled">
                         <h5 class="step-title">SA Reasoner</h5>
                         <h5 class="step-title"><span style="font-weight:500;">Arbitration Policy</span></h5>
@@ -852,6 +847,226 @@
                                 <option>Ring</option>
                                 <option>Fully</option>
                             </select>
+                        </div>
+                        <h5 class="step-title"><span style="font-weight:500;">Enable/Disable SAR training</span></h5>
+                        <div class="form-check form-switch" style="margin-left: 23px;">
+                            <input class="form-check-input" type="checkbox" id="situationalAwarenessTraining" style="display: inline; width: 80px; height: 30px;" checked>
+                        </div>
+                        <h5 class="step-title" id="training-policy-title" style="margin-top: 25px; display: none;"><span style="font-weight:500;">Training Policy</span></h5>
+                        <div class="form-check form-check-inline" id="training-policy-container" style="display: none;">
+                            <select class="form-control" id="training-policy-select" style="width:100%">
+                                <option selected>Broad-Propagation Strategy</option>
+                                <option>Quality-Driven Selection</option>
+                                <option>Hybrid Training Strategy</option>
+                                <option>Fast Reboot Training Strategy</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <!-- Trustworthiness -->
+                <div class="form-group row container-shadow tiny grey">
+                    <h5 class="step-number">Trustworthiness <i class="fa fa-binoculars"></i>
+                    </h5>
+                    <h5 class="step-title">Enable/Disable Trustworthiness</h5>
+                    <div class="form-check form-switch" style="margin-left: 23px;">
+                        <input class="form-check-input" type="checkbox" id="TrustworthinessSwitch" style="display: inline; width: 80px; height: 30px;">
+                    </div>
+                    <div id="trustworthiness-options" style="display: none;">
+                        <div class="trust-options">
+                            <div class="pillar">
+                                <h5 class="step-title">Robustness pillar</h5>
+                                <input type="number" class="form-control" id="robustness-pillar"
+                                    placeholder="Robustness pillar" min="5" value="20"
+                                    style="display: inline; width: 67%;">
+                                <small class="form-text text-muted">%</small>
+                            </div>
+                            <div class="notion-container">
+                                <div class="notion">
+                                    <h5 class="step-title">Resilience to attacks notion</h5>
+                                    <input type="number" class="form-control" id="robustness-notion-1"
+                                        placeholder="Resilience to attacks" min="20" value="40"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title" >Algorithm robustness notion</h5>
+                                    <input type="number" class="form-control" id="robustness-notion-2"
+                                        placeholder="Algorithm robustness" min="20" value="40"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Client reliability notion</h5>
+                                    <input type="number" class="form-control" id="robustness-notion-3"
+                                        placeholder="Client reliability" min="20" value="20"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trust-options">
+                            <div class="pillar">
+                                <h5 class="step-title">Privacy pillar</h5>
+                                <input type="number" class="form-control" id="privacy-pillar"
+                                    placeholder="Privacy pillar" min="5" value="15"
+                                    style="display: inline; width: 67%">
+                                <small class="form-text text-muted">%</small>
+                            </div>
+                            <div class="notion-container">
+                                <div class="notion">
+                                    <h5 class="step-title">Technique notion</h5>
+                                    <input type="number" class="form-control" id="privacy-notion-1"
+                                        placeholder="Technique notion" min="20" value="20"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Uncertainty notion</h5>
+                                    <input type="number" class="form-control" id="privacy-notion-2"
+                                        placeholder="Uncertainty notion" min="20" value="60"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Indistinguishability notion</h5>
+                                    <input type="number" class="form-control" id="privacy-notion-3"
+                                        placeholder="Indistinguishability notion" min="20" value="20"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trust-options">
+                            <div class="pillar">
+                                <h5 class="step-title">Fairness pillar</h5>
+                                <input type="number" class="form-control" id="fairness-pillar"
+                                    placeholder="Fairness pillar" min="5" value="15"
+                                    style="display: inline; width: 67%">
+                                <small class="form-text text-muted">%</small> 
+                            </div>
+                            <div class="notion-container">
+                                <div class="notion">
+                                    <h5 class="step-title">Selection fairness notion</h5>
+                                    <input type="number" class="form-control" id="fairness-notion-1"
+                                        placeholder="Selection fairness notion" min="20" value="30"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Performance fairness  notion</h5>
+                                    <input type="number" class="form-control" id="fairness-notion-2"
+                                        placeholder="Performance fairness notion" min="20" value="35"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Class distribution notion</h5>
+                                    <input type="number" class="form-control" id="fairness-notion-3"
+                                        placeholder="Class distribution notion" min="20" value="35"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trust-options">
+                            <div class="pillar">
+                                <h5 class="step-title">Explainability pillar</h5>
+                                <input type="number" class="form-control" id="explainability-pillar"
+                                    placeholder="Explainability pillar" min="5" value="15"
+                                    style="display: inline; width: 67%">
+                                <small class="form-text text-muted">%</small>
+                            </div>
+                            <div class="notion-container">
+                                <div class="notion">
+                                    <h5 class="step-title">Interpretability notion</h5>
+                                    <input type="number" class="form-control" id="explainability-notion-1"
+                                        placeholder="Interpretability notion" min="20" value="40"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Post hoc methods notion</h5>
+                                    <input type="number" class="form-control" id="explainability-notion-2"
+                                        placeholder="Post hoc methods notion" min="20" value="60"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trust-options">
+                            <div class="pillar">
+                                <h5 class="step-title">Accountability pillar</h5>
+                                <input type="number" class="form-control" id="accountability-pillar"
+                                    placeholder="Accountability pillar" min="5" value="10"
+                                    style="display: inline; width: 67%">
+                                <small class="form-text text-muted">%</small>
+                            </div>
+                            <div class="notion-container">
+                                <div class="notion">
+                                    <h5 class="step-title">Factsheet completeness notion</h5>
+                                    <input type="number" class="form-control" id="accountability-notion-1"
+                                        placeholder="Factsheet completeness notion" min="100" value="100"
+                                        style="display: inline; width: 70%;" disabled="true">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trust-options">
+                            <div class="pillar">
+                                <h5 class="step-title">Architectural soundness pillar</h5>
+                                <input type="number" class="form-control" id="architectural-soundness-pillar"
+                                    placeholder="Architectural soundness pillar" min="5" value="10"
+                                    style="display: inline; width: 67%">
+                                <small class="form-text text-muted">%</small>
+                            </div>
+                            <div class="notion-container">
+                                <div class="notion">
+                                    <h5 class="step-title">Client management notion</h5>
+                                    <input type="number" class="form-control" id="architectural-soundness-notion-1"
+                                        placeholder="Client management notion" min="20" value="50"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Optimization notion</h5>
+                                    <input type="number" class="form-control" id="architectural-soundness-notion-2"
+                                        placeholder="Optimization notion" min="20" value="50"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trust-options">
+                            <div class="pillar">
+                                <h5 class="step-title">Sustainability pillar</h5>
+                                <input type="number" class="form-control" id="sustainability-pillar"
+                                    placeholder="Sustainability pillar" min="5" value="15"
+                                    style="display: inline; width: 67%">
+                                <small class="form-text text-muted">%</small>
+                            </div>
+                            <div class="notion-container">
+                                <div class="notion">
+                                    <h5 class="step-title">Energy source notion</h5>
+                                    <input type="number" class="form-control" id="sustainability-notion-1"
+                                        placeholder="Energy source notion" min="20" value="50"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Hardware efficiency notion</h5>
+                                    <input type="number" class="form-control" id="sustainability-notion-2"
+                                        placeholder="Hardware efficiency notion" min="20" value="25"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion">
+                                    <h5 class="step-title">Federation complexity notion</h5>
+                                    <input type="number" class="form-control" id="sustainability-notion-3"
+                                        placeholder="Federation complexity notion" min="20" value="25"
+                                        style="display: inline; width: 70%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -873,6 +1088,7 @@
         import AttackManager from '../../static/js/deployment/attack.js';
         import MobilityManager from '../../static/js/deployment/mobility.js';
         import ReputationManager from '../../static/js/deployment/reputation.js';
+        import TrustworthinessManager from '../../static/js/deployment/trustworthiness.js';
         import GraphSettings from '../../static/js/deployment/graph-settings.js';
         import Utils from '../../static/js/deployment/utils.js';
         import HelpContent from '../../static/js/deployment/help-content.js';
@@ -884,6 +1100,7 @@
         window.AttackManager = AttackManager;
         window.MobilityManager = MobilityManager;
         window.ReputationManager = ReputationManager;
+        window.TrustworthinessManager = TrustworthinessManager;
         window.GraphSettings = GraphSettings;
         window.HelpContent = HelpContent;
         window.UIControls = UIControls;

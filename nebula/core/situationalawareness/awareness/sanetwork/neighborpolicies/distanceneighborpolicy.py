@@ -7,6 +7,30 @@ from nebula.core.utils.locker import Locker
 
 
 class DistanceNeighborPolicy(NeighborPolicy):
+    """
+    Neighbor policy based on physical distance between nodes.
+
+    This policy governs decisions related to neighbor management, including:
+    - When to initiate discovery for new neighbors.
+    - Whether to accept a new incoming neighbor connection.
+    - When to discard or replace existing neighbors.
+    - Keeping track of current neighbors and known nodes with their distances.
+
+    The policy operates under the assumption that physical proximity 
+    can be beneficial for performance and robustness in the network.
+
+    Attributes:
+        max_neighbors (int | None): Maximum number of neighbors allowed for this node.
+        nodes_known (set[str]): Set of all known node IDs, including potential neighbors.
+        neighbors (set[str]): Set of currently accepted neighbor node IDs.
+        addr (str | None): The address of this node (used for self-identification).
+        neighbors_lock (Locker): Async lock for safe access to `neighbors`.
+        nodes_known_lock (Locker): Async lock for safe access to `nodes_known`.
+        nodes_distances (dict[str, tuple[float, tuple[float, float]]] | None): 
+            Mapping from node IDs to a tuple containing (distance, (latitude, longitude)).
+        nodes_distances_lock (Locker): Async lock for safe access to `nodes_distances`.
+        _verbose (bool): Whether to enable verbose logging for debugging purposes.
+    """
     # INFO: This value may change according to the needs of the federation
     MAX_DISTANCE_THRESHOLD = 200
 

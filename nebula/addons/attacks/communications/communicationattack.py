@@ -44,6 +44,28 @@ class CommunicationAttack(Attack):
         pass
 
     async def select_targets(self):
+        """
+        Selects a subset of neighboring nodes as attack targets based on the configured selectivity percentage.
+
+        This method determines which neighboring nodes should be targeted in the current round of attack.
+        If the selectivity percentage is less than 100%, it samples a subset of the currently connected direct neighbors.
+        The selection behavior can be influenced by a `selection_interval`:
+            - If `selection_interval` is set, target selection occurs only at rounds that are multiples of this interval.
+            - If no interval is defined but no targets have been selected yet, targets are selected once.
+        If the selectivity is 100%, all direct neighbors are selected as targets.
+
+        Target addresses are retrieved from the CommunicationsManager (only direct connections).
+        The number of selected targets is at least 1.
+
+        Logs are emitted at each selection event to indicate which targets were chosen.
+
+        Increments the internal `last_selection_round` counter after execution.
+
+        Notes:
+            - The `self.targets` attribute is updated in-place.
+            - The `self.last_selection_round` attribute tracks when the selection was last performed.
+
+    """
         if self.selectivity_percentage != 100:
             if self.selection_interval:
                 if self.last_selection_round % self.selection_interval == 0:
@@ -61,8 +83,6 @@ class CommunicationAttack(Attack):
             self.targets = await CommunicationsManager.get_instance().get_addrs_current_connections(only_direct=True)
 
         logging.info(f"Selected {self.selectivity_percentage}% targets from neighbors: {self.targets}")
-        self.last_selection_round += 1
-
         self.last_selection_round += 1
 
     async def _inject_malicious_behaviour(self):

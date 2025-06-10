@@ -3,6 +3,20 @@ from nebula.core.utils.locker import Locker
 
 
 class STDModelHandler(ModelHandler):
+    """
+    Handles the selection and acquisition of the most up-to-date model 
+    during the discovery phase of the federation process.
+
+    This handler choose the first model received.
+
+    Inherits from:
+        ModelHandler: Provides the base interface for model operations.
+
+    Intended Use:
+        Used during the initial, when a node discovers others and must 
+        align itself with the most recent global model state.
+    """
+    
     def __init__(self):
         self.model = None
         self.rounds = 0

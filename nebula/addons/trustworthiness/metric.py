@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+from nebula.addons.trustworthiness.graphics import Graphics
 from nebula.addons.trustworthiness.pillar import TrustPillar
 from nebula.addons.trustworthiness.utils import write_results_json
 
@@ -15,12 +16,13 @@ class TrustMetricManager:
     Manager class to help store the output directory and handle calls from the FL framework.
     """
 
-    def __init__(self):
+    def __init__(self, scenario_start_time):
         self.factsheet_file_nm = "factsheet.json"
         self.eval_metrics_file_nm = "eval_metrics.json"
         self.nebula_trust_results_nm = "nebula_trust_results.json"
+        self.scenario_start_time = scenario_start_time
 
-    def evaluate(self, scenario, weights, use_weights=False):
+    def evaluate(self, experiment_name, weights, use_weights=False):
         """
         Evaluates the trustworthiness score.
 
@@ -30,10 +32,10 @@ class TrustMetricManager:
             use_weights (bool): True to turn on the weights in the metric config file, default to False.
         """
         # Get scenario name
-        scenario_name = scenario[0]
-        factsheet_file = os.path.join(dirname, f"files/{scenario_name}/{self.factsheet_file_nm}")
-        metrics_cfg_file = os.path.join(dirname, f"configs/{self.eval_metrics_file_nm}")
-        results_file = os.path.join(dirname, f"files/{scenario_name}/{self.nebula_trust_results_nm}")
+        scenario_name = experiment_name
+        factsheet_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", self.factsheet_file_nm)
+        metrics_cfg_file = os.path.join(dirname, "configs", self.eval_metrics_file_nm)
+        results_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", self.nebula_trust_results_nm)
 
         if not os.path.exists(factsheet_file):
             logger.error(f"{factsheet_file} is missing! Please check documentation.")
@@ -43,7 +45,7 @@ class TrustMetricManager:
             logger.error(f"{metrics_cfg_file} is missing! Please check documentation.")
             return
 
-        with open(factsheet_file) as f, open(metrics_cfg_file) as m:
+        with open(factsheet_file, "r") as f, open(metrics_cfg_file, "r") as m:
             factsheet = json.load(f)
             metrics_cfg = json.load(m)
             metrics = metrics_cfg.items()
@@ -55,10 +57,13 @@ class TrustMetricManager:
             for key, value in metrics:
                 pillar = TrustPillar(key, value, input_docs, use_weights)
                 score, result = pillar.evaluate()
-                weight = weights.get(key)
+                weight = weights.get(key) / 100
                 final_score += weight * score
                 result_print.append([key, score])
                 result_json["pillars"].append(result)
             final_score = round(final_score, 2)
             result_json["trust_score"] = final_score
             write_results_json(results_file, result_json)
+            
+            graphics = Graphics(self.scenario_start_time, scenario_name)
+            graphics.graphics()

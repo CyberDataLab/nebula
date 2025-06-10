@@ -36,3 +36,9 @@ class MNISTModelMLP(NebulaModel):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         self._optimizer = optimizer
         return optimizer
+    
+    def get_learning_rate(self):
+        return self.learning_rate
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)

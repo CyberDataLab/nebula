@@ -1,31 +1,21 @@
-import glob
 import json
 import logging
 import os
-import pickle
+import glob
 import shutil
 from json import JSONDecodeError
-
+import pickle
 import numpy as np
 import pandas as pd
 
-from nebula.addons.trustworthiness.calculation import (
-    get_avg_loss_accuracy,
-    get_bytes_models,
-    get_bytes_sent_recv,
-    get_clever_score,
-    get_cv,
-    get_elapsed_time,
-    get_feature_importance_cv,
-)
-from nebula.addons.trustworthiness.utils import check_field_filled, count_class_samples, get_entropy, read_csv
-from nebula.core.models.mnist.cnn import MNISTModelCNN
+# from nebula.core.models.cifar10.cnn import CIFAR10ModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
+from nebula.core.models.mnist.cnn import MNISTModelCNN
+from nebula.addons.trustworthiness.calculation import get_elapsed_time, get_bytes_models, get_bytes_sent_recv, get_avg_loss_accuracy, get_cv, get_clever_score, get_feature_importance_cv
+from nebula.addons.trustworthiness.utils import count_all_class_samples, read_csv, check_field_filled, get_all_data_entropy
+# from nebula.core.models.syscall.mlp import SyscallModelMLP
 
 dirname = os.path.dirname(__file__)
-
-logger = logging.getLogger(__name__)
-
 
 class Factsheet:
     def __init__(self):
@@ -44,9 +34,9 @@ class Factsheet:
             scenario_name (string): The name of the scenario.
         """
 
-        factsheet_file = os.path.join(dirname, f"files/{scenario_name}/{self.factsheet_file_nm}")
+        factsheet_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", self.factsheet_file_nm)
 
-        factsheet_template = os.path.join(dirname, f"configs/{self.factsheet_template_file_nm}")
+        factsheet_template = os.path.join(dirname, "configs", self.factsheet_template_file_nm)
 
         if not os.path.exists(factsheet_file):
             shutil.copyfile(factsheet_template, factsheet_file)
@@ -58,7 +48,7 @@ class Factsheet:
                 factsheet = json.load(f)
 
                 if data is not None:
-                    logger.info("FactSheet: Populating factsheet with pre training metrics")
+                    logging.info("FactSheet: Populating factsheet with pre training metrics")
 
                     federation = data["federation"]
                     n_nodes = int(data["n_nodes"])
@@ -66,14 +56,19 @@ class Factsheet:
                     algorithm = data["model"]
                     aggregation_algorithm = data["agg_algorithm"]
                     n_rounds = int(data["rounds"])
-                    attack = data["attacks"]
-                    poisoned_node_percent = int(data["poisoned_node_percent"])
-                    poisoned_sample_percent = int(data["poisoned_sample_percent"])
-                    poisoned_noise_percent = int(data["poisoned_noise_percent"])
-                    with_reputation = data["with_reputation"]
-                    is_dynamic_topology = data["is_dynamic_topology"]
-                    is_dynamic_aggregation = data["is_dynamic_aggregation"]
-                    target_aggregation = data["target_aggregation"]
+                    attack = data["attack_params"]["attacks"]
+                    if attack != "No Attack":
+                        poisoned_node_percent = int(data["attack_params"]["poisoned_node_percent"])
+                        poisoned_sample_percent = int(data["attack_params"]["poisoned_sample_percent"])
+                        poisoned_noise_percent = int(data["attack_params"]["poisoned_noise_percent"])
+                    else:
+                        poisoned_node_percent = 0
+                        poisoned_sample_percent = 0
+                        poisoned_noise_percent = 0
+                    with_reputation = data["reputation"]["enabled"]
+                    is_dynamic_topology = False # data["is_dynamic_topology"]
+                    is_dynamic_aggregation = False # data["is_dynamic_aggregation"]
+                    target_aggregation = False # data["target_aggregation"]
 
                     if attack != "No Attack" and with_reputation == True and is_dynamic_aggregation == True:
                         background = f"For the project setup, the most important aspects are the following: The federation architecture is {federation}, involving {n_nodes} clients, the dataset used is {dataset}, the learning algorithm is {algorithm}, the aggregation algorithm is {aggregation_algorithm} and the number of rounds is {n_rounds}. In addition, the type of attack used against the clients is {attack}, where the percentage of attacked nodes is {poisoned_node_percent}, the percentage of attacked samples of each node is {poisoned_sample_percent}, and the percent of poisoned noise is {poisoned_noise_percent}. A reputation-based defence with a dynamic aggregation based on the aggregation algorithm {target_aggregation} is used, and the trustworthiness of the project is desired."
@@ -119,34 +114,33 @@ class Factsheet:
                         model = MNISTModelMLP()
                     elif dataset == "MNIST" and algorithm == "CNN":
                         model = MNISTModelCNN()
-                    else:
-                        model = MNISTModelCNN()
+                    # elif dataset == "Syscall" and algorithm == "MLP":
+                    #     model = SyscallModelMLP()
+                    # else:
+                    #     model = CIFAR10ModelCNN()
 
                     factsheet["configuration"]["learning_rate"] = model.get_learning_rate()
                     factsheet["configuration"]["trainable_param_num"] = model.count_parameters()
                     factsheet["configuration"]["local_update_steps"] = 1
 
+                    f.seek(0)
+                    f.truncate()
+                    json.dump(factsheet, f, indent=4)
+
             except JSONDecodeError as e:
-                logger.warning(f"{factsheet_file} is invalid")
-                logger.error(e)
+                logging.warning(f"{factsheet_file} is invalid")
+                logging.error(e)
 
-            f.seek(0)
-            f.truncate()
-            json.dump(factsheet, f, indent=4)
-            f.close()
-
-    def populate_factsheet_post_train(self, scenario):
+    def populate_factsheet_post_train(self, scenario_name, start_time, end_time):
         """
         Populates the factsheet with values after the training.
 
         Args:
             scenario (object): The scenario object.
         """
-        scenario_name = scenario[0]
+        factsheet_file = os.path.join(f"{os.environ.get('NEBULA_LOGS_DIR')}{scenario_name}/trustworthiness/{self.factsheet_file_nm}")
 
-        factsheet_file = os.path.join(dirname, f"files/{scenario_name}/{self.factsheet_file_nm}")
-
-        logger.info("FactSheet: Populating factsheet with post training metrics")
+        logging.info("FactSheet: Populating factsheet with post training metrics")
 
         with open(factsheet_file, "r+") as f:
             factsheet = {}
@@ -156,29 +150,25 @@ class Factsheet:
                 dataset = factsheet["data"]["provenance"]
                 model = factsheet["configuration"]["training_model"]
 
-                actual_dir = os.getcwd()
-                files_dir = f"{actual_dir}/trustworthiness/files/{scenario_name}"
-                data_dir = f"{actual_dir}/trustworthiness/data/"
+                files_dir = f"{os.environ.get('NEBULA_LOGS_DIR')}/{scenario_name}/trustworthiness"
 
                 models_files = glob.glob(os.path.join(files_dir, "*final_model*"))
-                bytes_sent_files = glob.glob(os.path.join(files_dir, "*bytes_sent*"))
-                bytes_recv_files = glob.glob(os.path.join(files_dir, "*bytes_recv*"))
-                loss_files = glob.glob(os.path.join(files_dir, "*loss*"))
-                accuracy_files = glob.glob(os.path.join(files_dir, "*accuracy*"))
-                dataloaders_files = glob.glob(os.path.join(files_dir, "*train_loader*"))
+                #dataloaders_files = glob.glob(os.path.join(files_dir, "*train_loader*"))
                 test_dataloader_file = f"{files_dir}/participant_1_test_loader.pk"
                 train_model_file = f"{files_dir}/participant_1_train_model.pk"
                 emissions_file = os.path.join(files_dir, "emissions.csv")
 
-                # Entropy
-                i = 0
-                for file in dataloaders_files:
-                    with open(file, "rb") as file:
-                        dataloader = pickle.load(file)
-                    get_entropy(i, scenario_name, dataloader)
-                    i += 1
+                # # Entropy
+                # i = 0
+                # for file in dataloaders_files:
+                #     with open(file, "rb") as file:
+                #         dataloader = pickle.load(file)
+                #     get_entropy(i, scenario_name, dataloader)
+                #     i += 1
+                
+                get_all_data_entropy(scenario_name)
 
-                with open(f"{files_dir}/entropy.json") as file:
+                with open(f"{files_dir}/entropy.json", "r") as file:
                     entropy_distribution = json.load(file)
 
                 values = np.array(list(entropy_distribution.values()))
@@ -190,16 +180,16 @@ class Factsheet:
                 factsheet["data"]["avg_entropy"] = avg_entropy
 
                 # Set performance data
-                result_avg_loss_accuracy = get_avg_loss_accuracy(loss_files, accuracy_files)
+                result_avg_loss_accuracy = get_avg_loss_accuracy(scenario_name)
                 factsheet["performance"]["test_loss_avg"] = result_avg_loss_accuracy[0]
                 factsheet["performance"]["test_acc_avg"] = result_avg_loss_accuracy[1]
                 test_acc_cv = get_cv(std=result_avg_loss_accuracy[2], mean=result_avg_loss_accuracy[1])
                 factsheet["fairness"]["test_acc_cv"] = 1 if test_acc_cv > 1 else test_acc_cv
 
-                factsheet["system"]["avg_time_minutes"] = get_elapsed_time(scenario)
+                factsheet["system"]["avg_time_minutes"] = get_elapsed_time(start_time, end_time)
                 factsheet["system"]["avg_model_size"] = get_bytes_models(models_files)
 
-                result_bytes_sent_recv = get_bytes_sent_recv(bytes_sent_files, bytes_recv_files)
+                result_bytes_sent_recv = get_bytes_sent_recv(scenario_name)
                 factsheet["system"]["total_upload_bytes"] = result_bytes_sent_recv[0]
                 factsheet["system"]["total_download_bytes"] = result_bytes_sent_recv[1]
                 factsheet["system"]["avg_upload_bytes"] = result_bytes_sent_recv[2]
@@ -207,9 +197,9 @@ class Factsheet:
 
                 factsheet["fairness"]["selection_cv"] = 1
 
-                count_class_samples(scenario_name, dataloaders_files)
-
-                with open(f"{files_dir}/count_class.json") as file:
+                count_all_class_samples(scenario_name)
+                
+                with open(f"{files_dir}/count_class.json", "r") as file:
                     class_distribution = json.load(file)
 
                 class_samples_sizes = [x for x in class_distribution.values()]
@@ -220,13 +210,15 @@ class Factsheet:
                     lightning_model = pickle.load(file)
 
                 if dataset == "MNIST" and model == "MLP":
-                    pytorch_model = MNISTTorchModelMLP()
+                    model = MNISTModelMLP()
                 elif dataset == "MNIST" and model == "CNN":
-                    pytorch_model = MNISTTorchModelCNN()
-                else:
-                    pytorch_model = CIFAR10TorchModelCNN()
-
-                pytorch_model.load_state_dict(lightning_model.state_dict())
+                    model = MNISTModelCNN()
+                # elif dataset == "Syscall" and model == "MLP":
+                #     model = SyscallModelMLP()
+                # else:
+                #     model = CIFAR10ModelCNN()
+                
+                model.load_state_dict(lightning_model.state_dict())
 
                 with open(test_dataloader_file, "rb") as file:
                     test_dataloader = pickle.load(file)
@@ -234,118 +226,56 @@ class Factsheet:
                 test_sample = next(iter(test_dataloader))
 
                 lr = factsheet["configuration"]["learning_rate"]
-                value_clever = get_clever_score(pytorch_model, test_sample, 10, lr)
+                value_clever = get_clever_score(model, test_sample, 10, lr)
 
                 factsheet["performance"]["test_clever"] = 1 if value_clever > 1 else value_clever
 
-                feature_importance = get_feature_importance_cv(pytorch_model, test_sample)
+                feature_importance = get_feature_importance_cv(model, test_sample)
 
-                factsheet["performance"]["test_feature_importance_cv"] = (
-                    1 if feature_importance > 1 else feature_importance
-                )
+                factsheet["performance"]["test_feature_importance_cv"] = 1 if feature_importance > 1 else feature_importance
 
                 # Set emissions metrics
                 emissions = None if emissions_file is None else read_csv(emissions_file)
                 if emissions is not None:
-                    logger.info("FactSheet: Populating emissions")
-                    cpu_spez_df = pd.read_csv(os.path.join(data_dir, "CPU_benchmarks_v4.csv"), header=0)
-                    emissions["CPU_model"] = (
-                        emissions["CPU_model"].astype(str).str.replace(r"\([^)]*\)", "", regex=True)
-                    )
+                    logging.info("FactSheet: Populating emissions")
+                    cpu_spez_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "benchmarks", "CPU_benchmarks_v4.csv"), header=0)
+                    emissions["CPU_model"] = emissions["CPU_model"].astype(str).str.replace(r"\([^)]*\)", "", regex=True)
                     emissions["CPU_model"] = emissions["CPU_model"].astype(str).str.replace(r" CPU", "", regex=True)
                     emissions["GPU_model"] = emissions["GPU_model"].astype(str).str.replace(r"[0-9] x ", "", regex=True)
-                    emissions = pd.merge(
-                        emissions,
-                        cpu_spez_df[["cpuName", "powerPerf"]],
-                        left_on="CPU_model",
-                        right_on="cpuName",
-                        how="left",
-                    )
-                    gpu_spez_df = pd.read_csv(os.path.join(data_dir, "GPU_benchmarks_v7.csv"), header=0)
-                    emissions = pd.merge(
-                        emissions,
-                        gpu_spez_df[["gpuName", "powerPerformance"]],
-                        left_on="GPU_model",
-                        right_on="gpuName",
-                        how="left",
-                    )
+                    emissions = pd.merge(emissions, cpu_spez_df[["cpuName", "powerPerf"]], left_on="CPU_model", right_on="cpuName", how="left")
+                    gpu_spez_df = pd.read_csv(os.path.join(os.path.dirname(__file__), "benchmarks", "GPU_benchmarks_v7.csv"), header=0)
+                    emissions = pd.merge(emissions, gpu_spez_df[["gpuName", "powerPerformance"]], left_on="GPU_model", right_on="gpuName", how="left")
 
                     emissions.drop("cpuName", axis=1, inplace=True)
                     emissions.drop("gpuName", axis=1, inplace=True)
                     emissions["powerPerf"] = emissions["powerPerf"].astype(float)
                     emissions["powerPerformance"] = emissions["powerPerformance"].astype(float)
-                    client_emissions = emissions.loc[emissions["role"] == "client"]
+                    client_emissions = emissions.loc[emissions["role"] == "trainer"]
                     client_avg_carbon_intensity = round(client_emissions["energy_grid"].mean(), 2)
-                    factsheet["sustainability"]["avg_carbon_intensity_clients"] = check_field_filled(
-                        factsheet,
-                        ["sustainability", "avg_carbon_intensity_clients"],
-                        client_avg_carbon_intensity,
-                        "",
-                    )
-                    factsheet["sustainability"]["emissions_training"] = check_field_filled(
-                        factsheet,
-                        ["sustainability", "emissions_training"],
-                        client_emissions["emissions"].sum(),
-                        "",
-                    )
-                    factsheet["participants"]["avg_dataset_size"] = check_field_filled(
-                        factsheet,
-                        ["participants", "avg_dataset_size"],
-                        client_emissions["sample_size"].mean(),
-                        "",
-                    )
-
-                    server_emissions = emissions.loc[emissions["role"] == "server"]
-                    server_avg_carbon_intensity = round(server_emissions["energy_grid"].mean(), 2)
-                    factsheet["sustainability"]["avg_carbon_intensity_server"] = check_field_filled(
-                        factsheet,
-                        ["sustainability", "avg_carbon_intensity_server"],
-                        server_avg_carbon_intensity,
-                        "",
-                    )
-                    factsheet["sustainability"]["emissions_aggregation"] = check_field_filled(
-                        factsheet,
-                        ["sustainability", "emissions_aggregation"],
-                        server_emissions["emissions"].sum(),
-                        "",
-                    )
-                    GPU_powerperf = (server_emissions.loc[server_emissions["GPU_used"] == True])["powerPerformance"]
-                    CPU_powerperf = (server_emissions.loc[server_emissions["CPU_used"] == True])["powerPerf"]
-                    server_power_performance = round(pd.concat([GPU_powerperf, CPU_powerperf]).mean(), 2)
-                    factsheet["sustainability"]["avg_power_performance_server"] = check_field_filled(
-                        factsheet,
-                        ["sustainability", "avg_power_performance_server"],
-                        server_power_performance,
-                        "",
-                    )
-
+                    factsheet["sustainability"]["avg_carbon_intensity_clients"] = check_field_filled(factsheet, ["sustainability", "avg_carbon_intensity_clients"], client_avg_carbon_intensity, "")
+                    factsheet["sustainability"]["emissions_training"] = check_field_filled(factsheet, ["sustainability", "emissions_training"], client_emissions["emissions"].sum(), "")
+                    factsheet["participants"]["avg_dataset_size"] = check_field_filled(factsheet, ["participants", "avg_dataset_size"], client_emissions["sample_size"].mean(), "")
                     GPU_powerperf = (client_emissions.loc[client_emissions["GPU_used"] == True])["powerPerformance"]
                     CPU_powerperf = (client_emissions.loc[client_emissions["CPU_used"] == True])["powerPerf"]
                     clients_power_performance = round(pd.concat([GPU_powerperf, CPU_powerperf]).mean(), 2)
-                    factsheet["sustainability"]["avg_power_performance_clients"] = clients_power_performance
+                    factsheet["sustainability"]["avg_power_performance_clients"] = check_field_filled(factsheet, ["sustainability", "avg_power_performance_clients"], clients_power_performance, "")
 
-                    factsheet["sustainability"]["emissions_communication_uplink"] = check_field_filled(
-                        factsheet,
-                        ["sustainability", "emissions_communication_uplink"],
-                        factsheet["system"]["total_upload_bytes"]
-                        * 2.24e-10
-                        * factsheet["sustainability"]["avg_carbon_intensity_clients"],
-                        "",
-                    )
-                    factsheet["sustainability"]["emissions_communication_downlink"] = check_field_filled(
-                        factsheet,
-                        ["sustainability", "emissions_communication_downlink"],
-                        factsheet["system"]["total_download_bytes"]
-                        * 2.24e-10
-                        * factsheet["sustainability"]["avg_carbon_intensity_server"],
-                        "",
-                    )
+                    server_emissions = emissions.loc[emissions["role"] == "server"]
+                    server_avg_carbon_intensity = round(server_emissions["energy_grid"].mean(), 2)
+                    factsheet["sustainability"]["avg_carbon_intensity_server"] = check_field_filled(factsheet, ["sustainability", "avg_carbon_intensity_server"], server_avg_carbon_intensity, "")
+                    factsheet["sustainability"]["emissions_aggregation"] = check_field_filled(factsheet, ["sustainability", "emissions_aggregation"], server_emissions["emissions"].sum(), "")
+                    GPU_powerperf = (server_emissions.loc[server_emissions["GPU_used"] == True])["powerPerformance"]
+                    CPU_powerperf = (server_emissions.loc[server_emissions["CPU_used"] == True])["powerPerf"]
+                    server_power_performance = round(pd.concat([GPU_powerperf, CPU_powerperf]).mean(), 2)
+                    factsheet["sustainability"]["avg_power_performance_server"] = check_field_filled(factsheet, ["sustainability", "avg_power_performance_server"], server_power_performance, "")
+
+                    factsheet["sustainability"]["emissions_communication_uplink"] = check_field_filled(factsheet, ["sustainability", "emissions_communication_uplink"], factsheet["system"]["total_upload_bytes"] * 2.24e-10 * factsheet["sustainability"]["avg_carbon_intensity_clients"], "")
+                    factsheet["sustainability"]["emissions_communication_downlink"] = check_field_filled(factsheet, ["sustainability", "emissions_communication_downlink"], factsheet["system"]["total_download_bytes"] * 2.24e-10 * factsheet["sustainability"]["avg_carbon_intensity_server"], "")
+
+                f.seek(0)
+                f.truncate()
+                json.dump(factsheet, f, indent=4)
 
             except JSONDecodeError as e:
-                logger.warning(f"{factsheet_file} is invalid")
-                logger.error(e)
-
-            f.seek(0)
-            f.truncate()
-            json.dump(factsheet, f, indent=4)
-            f.close()
+                logging.info(f"{factsheet_file} is invalid")
+                logging.error(e)

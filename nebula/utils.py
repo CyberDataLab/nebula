@@ -12,6 +12,20 @@ class FileUtils:
 
     @classmethod
     def check_path(cls, base_path, relative_path):
+        """
+        Joins and normalizes a base path with a relative path, then validates
+        that the resulting full path is inside the base path directory.
+
+        Args:
+            base_path (str): The base directory path.
+            relative_path (str): The relative path to join with the base path.
+
+        Returns:
+            str: The normalized full path.
+
+        Raises:
+            Exception: If the resulting path is outside the base directory.
+        """
         full_path = os.path.normpath(os.path.join(base_path, relative_path))
         base_path = os.path.normpath(base_path)
 
@@ -27,6 +41,15 @@ class SocketUtils:
 
     @classmethod
     def is_port_open(cls, port):
+        """
+        Checks if a TCP port is available (not currently bound) on localhost.
+
+        Args:
+            port (int): The port number to check.
+
+        Returns:
+            bool: True if the port is free (available), False if it is in use.
+        """
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.bind(("127.0.0.1", port))
@@ -37,6 +60,16 @@ class SocketUtils:
 
     @classmethod
     def find_free_port(cls, start_port=49152, end_port=65535):
+        """
+        Finds and returns the first available TCP port within the specified range.
+
+        Args:
+            start_port (int, optional): Starting port number to check. Defaults to 49152.
+            end_port (int, optional): Ending port number to check. Defaults to 65535.
+
+        Returns:
+            int or None: The first free port found, or None if no free port is found.
+        """
         for port in range(start_port, end_port + 1):
             if cls.is_port_open(port):
                 return port
@@ -45,11 +78,26 @@ class SocketUtils:
 
 class DockerUtils:
     """
-    Utility class for Docker operations.
+    Utility class for Docker operations such as creating networks,
+    checking containers, and removing networks or containers by name prefix.
     """
 
     @classmethod
     def create_docker_network(cls, network_name, subnet=None, prefix=24):
+        """
+        Creates a Docker bridge network with a given name and optional subnet.
+        If subnet is None or already in use, it finds an available subnet in
+        the 192.168.X.0/24 range starting from 192.168.50.0/24.
+
+        Args:
+            network_name (str): Name of the Docker network to create.
+            subnet (str, optional): Subnet in CIDR notation (e.g. "192.168.50.0/24").
+            prefix (int, optional): Network prefix length, default is 24.
+
+        Returns:
+            str or None: The base subnet (e.g. "192.168.50") of the created or existing
+                         network, or None if an error occurred.
+        """
         try:
             # Connect to Docker
             client = docker.from_env()
@@ -106,7 +154,45 @@ class DockerUtils:
             client.close()  # Ensure the Docker client is closed
 
     @classmethod
+    def check_docker_by_prefix(cls, prefix):
+        """
+        Checks if there are any Docker containers whose names start with the given prefix.
+
+        Args:
+            prefix (str): Prefix string to match container names.
+
+        Returns:
+            bool: True if any container matches the prefix, False otherwise.
+        """
+        try:
+            # Connect to Docker client
+            client = docker.from_env()
+
+            containers = client.containers.list(all=True)  # `all=True` to include stopped containers
+
+            # Iterate through containers and remove those with the matching prefix
+            for container in containers:
+                if container.name.startswith(prefix):
+                    return True
+                
+            return False
+
+        except docker.errors.APIError:
+            logging.exception("Error interacting with Docker")
+        except Exception:
+            logging.exception("Unexpected error")
+
+    @classmethod
     def remove_docker_network(cls, network_name):
+        """
+        Removes a Docker network by name.
+
+        Args:
+            network_name (str): Name of the Docker network to remove.
+
+        Returns:
+            None
+        """
         try:
             # Connect to Docker
             client = docker.from_env()
@@ -127,6 +213,15 @@ class DockerUtils:
 
     @classmethod
     def remove_docker_networks_by_prefix(cls, prefix):
+        """
+        Removes all Docker networks whose names start with the given prefix.
+
+        Args:
+            prefix (str): Prefix string to match network names.
+
+        Returns:
+            None
+        """
         try:
             # Connect to Docker
             client = docker.from_env()
@@ -149,6 +244,16 @@ class DockerUtils:
 
     @classmethod
     def remove_containers_by_prefix(cls, prefix):
+        """
+        Removes all Docker containers whose names start with the given prefix.
+        Containers are forcibly removed even if they are running.
+
+        Args:
+            prefix (str): Prefix string to match container names.
+
+        Returns:
+            None
+        """
         try:
             # Connect to Docker client
             client = docker.from_env()

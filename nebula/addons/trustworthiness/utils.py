@@ -10,13 +10,44 @@ from hashids import Hashids
 from scipy.stats import entropy
 
 from nebula.addons.trustworthiness import calculation
+from collections import Counter
 
 hashids = Hashids()
 logger = logging.getLogger(__name__)
 dirname = os.path.dirname(__file__)
 
 
-def count_class_samples(scenario_name, dataloaders_files):
+def save_class_count_per_participant(experiment_name, class_counter: Counter, idx):
+    class_count = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(idx)}_class_count.json")
+    result = {hashids.encode(int(class_id)): count for class_id, count in class_counter.items()}
+    with open(class_count, "w") as f:
+        json.dump(result, f)
+
+def count_all_class_samples(experiment_name):
+    participant_id = 0
+    global_class_count = {}
+
+    while True:
+        data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
+
+        if not os.path.exists(data_class_count_file):
+            break
+
+        with open(data_class_count_file, "r") as f:
+            class_count = json.load(f)
+
+        for class_hash, count in class_count.items():
+            global_class_count[class_hash] = global_class_count.get(class_hash, 0) + count
+
+        participant_id += 1
+
+    # Guardar conteo total en class_count.json
+    output_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'),experiment_name, "trustworthiness", "count_class.json")
+
+    with open(output_file, "w") as f:
+        json.dump(global_class_count, f, indent=2)
+
+def count_class_samples(scenario_name, dataloaders_files, class_counter: Counter = None):
     """
     Counts the number of samples by class.
 
@@ -28,26 +59,62 @@ def count_class_samples(scenario_name, dataloaders_files):
 
     result = {}
     dataloaders = []
+    
+    if class_counter:
+        result = {hashids.encode(int(class_id)): count for class_id, count in class_counter.items()}
+    else:
+        for file in dataloaders_files:
+            with open(file, "rb") as f:
+                dataloader = pickle.load(f)
+                dataloaders.append(dataloader)
 
-    for file in dataloaders_files:
-        with open(file, "rb") as f:
-            dataloader = pickle.load(f)
-            dataloaders.append(dataloader)
+        for dataloader in dataloaders:
+            for batch, labels in dataloader:
+                for b, label in zip(batch, labels):
+                    l = hashids.encode(label.item())
+                    if l in result:
+                        result[l] += 1
+                    else:
+                        result[l] = 1
 
-    for dataloader in dataloaders:
-        for batch, labels in dataloader:
-            for b, label in zip(batch, labels, strict=False):
-                l = hashids.encode(label.item())
-                if l in result:
-                    result[l] += 1
-                else:
-                    result[l] = 1
-
-    name_file = f"{dirname}/files/{scenario_name}/count_class.json"
+    try:
+        name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "count_class.json")
+    except:
+        name_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "count_class.json")
+        
     with open(name_file, "w") as f:
         json.dump(result, f)
 
 
+def get_all_data_entropy(experiment_name):
+    participant_id = 0
+    data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
+    entropy_per_participant = {}
+    
+    while True:
+        data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
+
+        if not os.path.exists(data_class_count_file):
+            break
+
+        with open(data_class_count_file, "r") as f:
+            class_count = json.load(f)
+
+        total = sum(class_count.values())
+        if total == 0:
+            entropy_value = 0.0
+        else:
+            probabilities = [count / total for count in class_count.values()]
+            entropy_value = entropy(probabilities, base=2)
+
+        entropy_per_participant[str(participant_id)] = round(entropy_value, 6)
+        participant_id += 1
+        
+    name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'),experiment_name, "trustworthiness", "entropy.json")
+
+    with open(name_file, "w") as f:
+        json.dump(entropy_per_participant, f, indent=2)
+       
 def get_entropy(client_id, scenario_name, dataloader):
     """
     Get the entropy of each client in the scenario.
@@ -61,15 +128,17 @@ def get_entropy(client_id, scenario_name, dataloader):
     result = {}
     client_entropy = {}
 
-    name_file = f"{dirname}/files/{scenario_name}/entropy.json"
+    name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "entropy.json")
+        
     if os.path.exists(name_file):
-        with open(name_file) as f:
+        logging.info(f"entropy fiel already exists.. loading.")
+        with open(name_file, "r") as f:
             client_entropy = json.load(f)
 
     client_id_hash = hashids.encode(client_id)
 
     for batch, labels in dataloader:
-        for b, label in zip(batch, labels, strict=False):
+        for b, label in zip(batch, labels):
             l = hashids.encode(label.item())
             if l in result:
                 result[l] += 1
@@ -200,55 +269,25 @@ def write_results_json(out_file, dict):
         json.dump(dict, f, indent=4)
 
 
-def save_results_csv(
-    scenario_name: str,
-    id: int,
-    bytes_sent: int,
-    bytes_recv: int,
-    accuracy: float,
-    loss: float,
-    finish: bool,
-):
-    outdir = f"{dirname}/files/{scenario_name}"
-    filename = "data_results.csv"
-    data_results_file = os.path.join(outdir, filename)
+def save_results_csv(scenario_name: str, id: int, bytes_sent: int, bytes_recv: int, accuracy: float, loss: float):
+    try:
+        data_results_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "data_results.csv")
+    except:
+        data_results_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "data_results.csv")
+        
     if exists(data_results_file):
         df = pd.read_csv(data_results_file)
     else:
-        # Crear un DataFrame con columnas especificadas
-        df = pd.DataFrame(columns=["id", "bytes_sent", "bytes_recv", "accuracy", "loss", "finish"])
-
+        df = pd.DataFrame(columns=["id", "bytes_sent", "bytes_recv", "accuracy", "loss"])
+        
     try:
-        if id not in df["id"].values:
-            # Si no existe, agregar una nueva entrada con el ID del nodo
-            df = pd.concat(
-                [
-                    df,
-                    pd.DataFrame({
-                        "id": id,
-                        "bytes_sent": None,
-                        "bytes_recv": None,
-                        "accuracy": None,
-                        "loss": None,
-                        "finish": False,
-                    }),
-                ],
-                ignore_index=True,
-            )
+        # Add new entry to DataFrame
+        new_data = pd.DataFrame({'id': [id], 'bytes_sent': [bytes_sent],
+                                    'bytes_recv': [bytes_recv], 'accuracy': [accuracy],
+                                    'loss': [loss]})
+        df = pd.concat([df, new_data], ignore_index=True)
 
-            df.to_csv(data_results_file, encoding="utf-8", index=False)
-        else:
-            if bytes_sent is not None:
-                df.loc[df["id"] == id, "bytes_sent"] = bytes_sent
-            if bytes_recv is not None:
-                df.loc[df["id"] == id, "bytes_recv"] = bytes_recv
-            if accuracy is not None:
-                df.loc[df["id"] == id, "accuracy"] = accuracy
-            if loss is not None:
-                df.loc[df["id"] == id, "loss"] = loss
-            if finish:
-                df.loc[df["id"] == id, "finish"] = True
-            df.to_csv(data_results_file, encoding="utf-8", index=False)
+        df.to_csv(data_results_file, encoding='utf-8', index=False)
 
     except Exception as e:
         logger.warning(e)

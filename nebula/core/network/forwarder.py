@@ -7,7 +7,29 @@ from nebula.core.utils.locker import Locker
 
 
 class Forwarder:
+    """
+    Component responsible for forwarding incoming messages to appropriate peer nodes.
+
+    The Forwarder handles:
+      - Relaying messages received from one node to others in the federation.
+      - Applying any forwarding policies (e.g., proxy mode, rate limiting).
+      - Ensuring duplicate messages are not resent.
+      - Integrating with the CommunicationsManager to obtain current connections.
+
+    This class is designed to run asynchronously, leveraging the existing connection pool
+    and message routing logic to propagate messages reliably across the network.
+    """
+    
     def __init__(self, config):
+        """
+        Initialize the Forwarder module.
+
+        Args:
+            config (dict): The global configuration, including forwarder parameters:
+                - forwarder_interval: Time between forwarding cycles.
+                - number_forwarded_messages: Max messages to forward per cycle.
+                - forward_messages_interval: Delay between individual message sends.
+        """
         print_msg_box(msg="Starting forwarder module...", indent=2, title="Forwarder module")
         self.config = config
         self._cm = None
@@ -20,6 +42,12 @@ class Forwarder:
 
     @property
     def cm(self):
+        """
+        Lazy-load and return the CommunicationsManager instance for sending messages.
+
+        Returns:
+            CommunicationsManager: The singleton communications manager.
+        """
         if not self._cm:
             from nebula.core.network.communications import CommunicationsManager
 
@@ -29,9 +57,18 @@ class Forwarder:
             return self._cm
 
     async def start(self):
+        """
+        Start the forwarder by scheduling the forwarding loop as a background task.
+        """
         asyncio.create_task(self.run_forwarder())
 
     async def run_forwarder(self):
+        """
+        Periodically process and dispatch pending messages.
+
+        Runs indefinitely (unless in CFL mode), acquiring a lock to safely
+        dequeue up to `number_forwarded_messages` and send them with appropriate timing.
+        """
         if self.config.participant["scenario_args"]["federation"] == "CFL":
             logging.info("🔁  Federation is CFL. Forwarder is disabled...")
             return
@@ -45,6 +82,12 @@ class Forwarder:
             await asyncio.sleep(sleep_time)
 
     async def process_pending_messages(self, messages_left):
+        """
+        Send up to `messages_left` messages from the pending queue to their target neighbors.
+
+        Args:
+            messages_left (int): The maximum number of messages to forward in this batch.
+        """
         while messages_left > 0 and not self.pending_messages.empty():
             msg, neighbors = await self.pending_messages.get()
             for neighbor in neighbors[:messages_left]:
@@ -63,6 +106,15 @@ class Forwarder:
                 await self.pending_messages.put((msg, neighbors[messages_left:]))
 
     async def forward(self, msg, addr_from):
+        """
+        Enqueue a received message for forwarding to all other direct neighbors.
+
+        Excludes the original sender and acquires a lock to safely add to the queue.
+
+        Args:
+            msg (bytes): The serialized message to forward.
+            addr_from (str): The address of the node that originally sent the message.
+        """
         if self.config.participant["scenario_args"]["federation"] == "CFL":
             logging.info("🔁  Federation is CFL. Forwarder is disabled...")
             return

@@ -19,6 +19,7 @@ class DataModule(LightningDataModule):
         test_set_indices,
         local_test_set,
         local_test_set_indices,
+        samples_per_label,
         batch_size=32,
         num_workers=0,
         val_percent=0.1,
@@ -35,6 +36,7 @@ class DataModule(LightningDataModule):
         self.num_workers = num_workers
         self.val_percent = val_percent
         self.seed = seed
+        self._samples_per_label = samples_per_label
 
         self.model_weight = None
 
@@ -44,6 +46,9 @@ class DataModule(LightningDataModule):
         self.data_val = None
         self.global_te_subset = None
         self.local_te_subset = None
+        
+    def get_samples_per_label(self):
+        return self._samples_per_label
 
     def setup(self, stage=None):
         if stage in (None, "fit"):

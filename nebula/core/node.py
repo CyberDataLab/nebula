@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import logging
+from collections import Counter
 
 from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10PartitionHandler
@@ -23,7 +24,6 @@ from nebula.core.datasets.emnist.emnist import EMNISTPartitionHandler
 from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTPartitionHandler
 from nebula.core.datasets.mnist.mnist import MNISTPartitionHandler
 from nebula.core.datasets.nebuladataset import NebulaPartition
-from nebula.core.engine import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
 from nebula.core.models.cifar10.cnn import CIFAR10ModelCNN
 from nebula.core.models.cifar10.cnnV2 import CIFAR10ModelCNN_V2
 from nebula.core.models.cifar10.cnnV3 import CIFAR10ModelCNN_V3
@@ -38,6 +38,7 @@ from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
 from nebula.core.role import Role
+from nebula.core.noderole import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
 from nebula.core.training.lightning import Lightning
 from nebula.core.training.siamese import Siamese
 
@@ -149,6 +150,7 @@ async def main(config):
     dataset = NebulaPartition(handler=handler, config=config)
     dataset.load_partition()
     dataset.log_partition()
+    samples_per_label = Counter(dataset.get_train_labels())
 
     datamodule = DataModule(
         train_set=dataset.train_set,
@@ -159,6 +161,7 @@ async def main(config):
         local_test_set_indices=dataset.local_test_indices,
         num_workers=num_workers,
         batch_size=batch_size,
+        samples_per_label = samples_per_label
     )
 
     trainer = None
@@ -175,13 +178,13 @@ async def main(config):
     if config.participant["device_args"]["malicious"]:
         node_cls = MaliciousNode
     else:
-        if config.participant["device_args"]["role"] == Role.AGGREGATOR:
+        if config.participant["device_args"]["role"] == Role.AGGREGATOR.value:
             node_cls = AggregatorNode
-        elif config.participant["device_args"]["role"] == Role.TRAINER:
+        elif config.participant["device_args"]["role"] == Role.TRAINER.value:
             node_cls = TrainerNode
-        elif config.participant["device_args"]["role"] == Role.SERVER:
+        elif config.participant["device_args"]["role"] == Role.SERVER.value:
             node_cls = ServerNode
-        elif config.participant["device_args"]["role"] == Role.IDLE:
+        elif config.participant["device_args"]["role"] == Role.IDLE.value:
             node_cls = IdleNode
         else:
             raise ValueError(f"Role {config.participant['device_args']['role']} not supported")
@@ -223,8 +226,6 @@ async def main(config):
     await node.deploy_components()
     await node.deploy_federation()
 
-    # If it is an additional node, it should wait until additional_node_round to connect to the network
-    # In order to do that, it should request the current round to the controller
     if additional_node_status:
         time = config.participant["mobility_args"]["additional_node"]["time_start"]
         logging.info(f"Waiting time to start finding federation: {time}")

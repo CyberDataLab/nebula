@@ -13,7 +13,7 @@ class EventManager:
     _lock = Locker("event_manager")
 
     def __new__(cls, *args, **kwargs):
-        """Implementación del patrón Singleton."""
+        """Singleton implementation"""
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
@@ -21,7 +21,7 @@ class EventManager:
         return cls._instance
 
     def _initialize(self, verbose=False):
-        """Inicializa la instancia única (solo se ejecuta una vez)."""
+        """Single initialization"""
         if hasattr(self, "_initialized"):
             return
         self._subscribers: dict[tuple[str, str], list] = {}
@@ -37,7 +37,7 @@ class EventManager:
 
     @staticmethod
     def get_instance(verbose=False):
-        """Método estático para obtener la instancia única."""
+        """Static method to obtain EventManager instance"""
         if EventManager._instance is None:
             EventManager(verbose=verbose)
         return EventManager._instance
@@ -143,7 +143,7 @@ class EventManager:
             logging.info(f"Publishing NodeEvent: {nodeevent}")
         async with self._node_events_lock:
             event_type = type(nodeevent)
-            callbacks = self._node_events_subs.get(event_type, [])  # Extraer la lista de callbacks
+            callbacks = self._node_events_subs.get(event_type, [])
 
         if not callbacks:
             if self._verbose:

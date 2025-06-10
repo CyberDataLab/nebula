@@ -92,10 +92,12 @@
     "aggregation_push": "slow"
   },
   "defense_args": {
-    "with_reputation": false,
-    "reputation_metrics": {},
-    "initial_reputation": 0.6,
-    "weighting_factor": "dynamic"
+    "reputation": {
+      "enabled": false,
+      "metrics": {},
+      "initial_reputation": 0.6,
+      "weighting_factor": "dynamic"
+    }
   },
   "adversarial_args": {
     "attack_params" : {}

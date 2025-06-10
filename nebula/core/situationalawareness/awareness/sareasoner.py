@@ -109,6 +109,7 @@ class SAReasoner(ISAReasoner):
 
     @property
     def cm(self):
+        """Communicaiton Manager"""
         return self._communciation_manager
 
     @property
@@ -127,12 +128,24 @@ class SAReasoner(ISAReasoner):
         return self._sa_discovery
 
     async def init(self, sa_discovery):
+        """
+        Initialize the SAReasoner by loading components and subscribing to relevant events.
+
+        Args:
+            sa_discovery (ISADiscovery): The discovery component to coordinate with.
+        """
         self._sa_discovery: ISADiscovery = sa_discovery
         await self._loading_sa_components()
         await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._process_round_end_event)
         await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._process_aggregation_event)
 
     def is_additional_participant(self):
+        """
+        Determine if this node is configured as an additional (mobile) participant.
+
+        Returns:
+            bool: True if the node is marked as an additional participant, False otherwise.
+        """
         return self._config["mobility_args"]["additional_node"]["status"]
 
     """                                                     ###############################
@@ -149,12 +162,44 @@ class SAReasoner(ISAReasoner):
     """
 
     async def get_nodes_known(self, neighbors_too=False, neighbors_only=False):
+        """
+        Retrieve the set of nodes known to the situational awareness reasoner.
+
+        This may include additional metadata depending on the flags.
+
+        Args:
+            neighbors_too (bool, optional): If True, include neighboring nodes in the result. Defaults to False.
+            neighbors_only (bool, optional): If True, return only neighbors. Defaults to False.
+
+        Returns:
+            set: Identifiers of known nodes based on the provided filters.
+        """
         return await self.san.get_nodes_known(neighbors_too, neighbors_only)
 
     async def accept_connection(self, source, joining=False):
+        """
+        Decide whether to accept a connection request from a source node.
+
+        Delegates to the underlying reasoner logic to determine acceptance.
+
+        Args:
+            source (str): The identifier or address of the requesting node.
+            joining (bool, optional): If True, this connection is part of a join operation. Defaults to False.
+
+        Returns:
+            bool: True if the connection should be accepted, False otherwise.
+        """
         return await self.san.accept_connection(source, joining)
 
     async def get_actions(self):
+        """
+        Retrieve the list of situational awareness actions available to execute.
+
+        Delegates to the underlying reasoner component.
+
+        Returns:
+            list: Action identifiers that the reasoner can perform.
+        """
         return await self.san.get_actions()
 
     """                                                     ###############################
@@ -163,6 +208,17 @@ class SAReasoner(ISAReasoner):
     """
 
     async def _process_round_end_event(self, ree: RoundEndEvent):
+        """
+        Handle the end of a federated learning round by gathering situational awareness actions
+        and executing arbitration commands.
+
+        1. Trigger each SA component to propose actions asynchronously.
+        2. Run arbitration to select valid SACommand instances.
+        3. Execute parallelizable commands concurrently and sequential commands one by one.
+
+        Args:
+            ree (RoundEndEvent): The event signaling the end of the current training round.
+        """
         logging.info("🔄 Arbitration | Round End Event...")
         for sa_comp in self._sa_components.values():
             asyncio.create_task(sa_comp.sa_component_actions())
@@ -184,6 +240,16 @@ class SAReasoner(ISAReasoner):
                 await cmd.execute()
 
     async def _process_aggregation_event(self, age: AggregationEvent):
+        """
+        Handle an aggregation event by selecting and executing an SACommand to adjust aggregation behavior.
+
+        1. Run arbitration to retrieve suggestions specific to aggregation.
+        2. If any commands are returned, pick the first one.
+        3. Execute the chosen command and apply its resulting updates to the aggregation event.
+
+        Args:
+            age (AggregationEvent): The event containing updates ready for federation aggregation.
+        """
         logging.info("🔄 Arbitration | Aggregation Event...")
         aggregation_command = await self._arbitatrion_suggestions(AggregationEvent)
         if len(aggregation_command):
@@ -315,13 +381,18 @@ class SAReasoner(ISAReasoner):
                 await sacomp.init()
 
     def _load_minimal_requirement_config(self):
-        self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["addr"] = self._addr
-        self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["sar"] = self
-        self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["strict_topology"] = self._config[
-            "situational_awareness"
-        ]["strict_topology"]
+        #self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["addr"] = self._addr
+        #self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["sar"] = self
+        self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["strict_topology"] = self._config["situational_awareness"]["strict_topology"]
+        
+        # SA Reasoner instance for all SA Reasoner Components
+        sar_components: dict = self._config["situational_awareness"]["sa_reasoner"]["sar_components"]
+        for sar_comp in sar_components.keys():
+            self._config["situational_awareness"]["sa_reasoner"][sar_comp]["sar"] = self
+            self._config["situational_awareness"]["sa_reasoner"][sar_comp]["addr"] = self._addr
 
     async def _set_minimal_requirements(self):
+        """Set minimal requirements to setup the SA Reasoner"""
         if self._sa_components:
             self._situational_awareness_network = self._sa_components["sanetwork"]
         else:

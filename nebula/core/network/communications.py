@@ -25,6 +25,20 @@ _COMPRESSED_MESSAGES = ["model", "offer_model"]
 
 
 class CommunicationsManager:
+    """
+    Singleton class responsible for managing all communications in the Nebula system.
+
+    This class handles:
+    - Sending and receiving protobuf messages between nodes.
+    - Forwarding messages when acting as a proxy.
+    - Managing known neighbors and communication topology.
+    - Handling and dispatching incoming messages to the appropriate handlers.
+    - Preventing message duplication via message hash tracking.
+
+    It acts as a central coordinator for message-based interactions and is 
+    designed to work asynchronously to support non-blocking network operations.
+    """
+    
     _instance = None
     _lock = Locker("communications_manager_lock", async_lock=False)
 
@@ -66,6 +80,7 @@ class CommunicationsManager:
         self.incoming_connections = {}
         self.outgoing_connections = {}
         self.ready_connections = set()
+        self._ready_connections_lock = Locker("ready_connections_lock", async_lock=True)
 
         self._mm = MessagesManager(addr=self.addr, config=self.config)
         self.received_messages_hashes = collections.deque(
@@ -98,38 +113,65 @@ class CommunicationsManager:
 
     @property
     def engine(self):
+        """
+        Returns the main engine responsible for coordinating local training and aggregation.
+        """
         return self._engine
 
     @property
     def connections(self):
+        """
+        Returns the current list of active connections to neighboring nodes.
+        """
         return self._connections
 
     @property
     def mm(self):
+        """
+        Returns the MessagesManager instance, used to create and process protocol messages.
+        """
         return self._mm
 
     @property
     def discoverer(self):
+        """
+        Returns the component responsible for discovering new nodes in the network.
+        """
         return self._discoverer
 
     @property
     def health(self):
+        """
+        Returns the HealthMonitor component that checks and maintains node health status.
+        """    
         return self._health
 
     @property
     def forwarder(self):
+        """
+        Returns the message forwarder, responsible for forwarding messages to other nodes.
+        """
         return self._forwarder
 
     @property
     def propagator(self):
+        """
+        Returns the component responsible for propagating messages throughout the network.
+        """ 
         return self._propagator
 
     @property
     def ecs(self):
+        """
+        Returns the ExternalConnectionService for handling external network interactions.
+        """
         return self._external_connection_service
 
     @property
     def bl(self):
+        """
+        Returns the blacklist manager, used to track and filter banned or disconnected nodes.
+        """
         return self._blacklist
 
     async def check_federation_ready(self):
@@ -138,24 +180,37 @@ class CommunicationsManager:
             f"🔗  check_federation_ready | Ready connections: {self.ready_connections} | Connections: {self.connections.keys()}"
         )
         async with self.connections_lock:
-            if set(self.connections.keys()) == self.ready_connections:
-                return True
+            async with self._ready_connections_lock:
+                if set(self.connections.keys()) == self.ready_connections:
+                    return True
 
     async def add_ready_connection(self, addr):
-        self.ready_connections.add(addr)
+        async with self._ready_connections_lock:
+            self.ready_connections.add(addr)
 
     async def start_communications(self, initial_neighbors):
+        """
+        Starts the communication services and connects to initial neighbors.
+
+        Args:
+            initial_neighbors (list): A list of neighbor addresses to connect to after startup.
+        """
         logging.info(f"Neighbors: {self.config.participant['network_args']['neighbors']}")
         logging.info(
             f"💤  Cold start time: {self.config.participant['misc_args']['grace_time_connection']} seconds before connecting to the network"
         )
         await asyncio.sleep(self.config.participant["misc_args"]["grace_time_connection"])
         await self.start()
+        neighbors = set(initial_neighbors)
+
+        if self.addr in neighbors:
+            neighbors.discard(self.addr)
+
         for i in initial_neighbors:
             addr = f"{i.split(':')[0]}:{i.split(':')[1]}"
             await self.connect(addr, direct=True)
             await asyncio.sleep(1)
-        while not await self.verify_connections(initial_neighbors):
+        while not await self.verify_connections(neighbors):
             await asyncio.sleep(1)
         current_connections = await self.get_addrs_current_connections()
         logging.info(f"Connections verified: {current_connections}")
@@ -167,17 +222,44 @@ class CommunicationsManager:
     """
 
     async def handle_incoming_message(self, data, addr_from):
+        """
+        Handles an incoming message if the sender is not blacklisted.
+
+        Args:
+            data (bytes): The raw message data.
+            addr_from (str): The address of the sender.
+        """
         if not await self.bl.node_in_blacklist(addr_from):
             await self.mm.process_message(data, addr_from)
 
     async def forward_message(self, data, addr_from):
+        """
+        Forwards a message to other nodes.
+
+        Args:
+            data (bytes): The message to be forwarded.
+            addr_from (str): The address of the sender.
+        """
         logging.info("Forwarding message... ")
         await self.forwarder.forward(data, addr_from=addr_from)
 
     async def handle_message(self, message_event):
+        """
+        Publishes a message event to the EventManager.
+
+        Args:
+            message_event (MessageEvent): The message event to publish.
+        """
         asyncio.create_task(EventManager.get_instance().publish(message_event))
 
     async def handle_model_message(self, source, message):
+        """
+        Handles a model-related message and routes it as either initialization or update.
+
+        Args:
+            source (str): The sender's address.
+            message (BaseMessage): The model message containing the round and payload.
+        """
         logging.info(f"🤖  handle_model_message | Received model from {source} with round {message.round}")
         if message.round == -1:
             model_init_event = MessageEvent(("model", "initialization"), source, message)
@@ -187,9 +269,27 @@ class CommunicationsManager:
             asyncio.create_task(EventManager.get_instance().publish(model_updt_event))
 
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):
+        """
+        Creates a new protocol message using the MessagesManager.
+
+        Args:
+            message_type (str): The type of message (e.g., 'model', 'discover').
+            action (str, optional): An optional action to associate with the message.
+            *args: Positional arguments for the message.
+            **kwargs: Keyword arguments for the message.
+
+        Returns:
+            BaseMessage: The constructed message object.
+        """
         return self.mm.create_message(message_type, action, *args, **kwargs)
 
     def get_messages_events(self):
+        """
+        Returns the mapping of message types to their respective events.
+
+        Returns:
+            dict: A dictionary of message event associations.
+        """
         return self.mm.get_messages_events()
 
     """                                                     ##############################
@@ -198,18 +298,50 @@ class CommunicationsManager:
     """
 
     async def add_to_recently_disconnected(self, addr):
+        """
+        Adds the given address to the list of recently disconnected nodes.
+
+        This is typically used for temporary disconnection tracking before reattempting communication.
+
+        Args:
+            addr (str): The address of the node to mark as recently disconnected.
+        """
         await self.bl.add_recently_disconnected(addr)
 
     async def add_to_blacklist(self, addr):
+        """
+        Adds the given address to the blacklist, preventing any future connection attempts.
+
+        Args:
+            addr (str): The address of the node to blacklist.
+        """
         await self.bl.add_to_blacklist(addr)
 
     async def get_blacklist(self):
+        """
+        Retrieves the current set of blacklisted node addresses.
+
+        Returns:
+            set: A set of addresses currently in the blacklist.
+        """
         return await self.bl.get_blacklist()
 
     async def apply_restrictions(self, nodes: set) -> set | None:
+        """
+        Filters a set of node addresses by removing any that are restricted (e.g., blacklisted).
+
+        Args:
+            nodes (set): A set of node addresses to filter.
+
+        Returns:
+            set or None: A filtered set of addresses, or None if all were restricted.
+        """
         return await self.bl.apply_restrictions(nodes)
 
     async def clear_restrictions(self):
+        """
+        Clears all temporary and permanent restrictions, including the blacklist and recently disconnected nodes.
+        """
         await self.bl.clear_restrictions()
 
     """                                                     ###############################
@@ -218,33 +350,76 @@ class CommunicationsManager:
     """
 
     async def start_external_connection_service(self, run_service=True):
+        """
+        Initializes and optionally starts the external connection service (ECS).
+
+        Args:
+            run_service (bool): Whether to start the ECS immediately after initialization. Defaults to True.
+        """
         if self.ecs == None:
             self._external_connection_service = factory_connection_service(self, self.addr)
         if run_service:
             await self.ecs.start()
 
     async def stop_external_connection_service(self):
+        """
+        Stops the external connection service if it is running.
+        """
         await self.ecs.stop()
 
     async def init_external_connection_service(self):
+        """
+        Initializes and starts the external connection service.
+        """
         await self.start_external_connection_service()
 
     async def is_external_connection_service_running(self):
+        """
+        Checks if the external connection service is currently running.
+
+        Returns:
+            bool: True if the ECS is running, False otherwise.
+        """
         return self.ecs.is_running()
 
     async def start_beacon(self):
+        """
+        Starts the beacon emission process to announce the node's presence on the network.
+        """
         await self.ecs.start_beacon()
 
     async def stop_beacon(self):
+        """
+        Stops the beacon emission process.
+        """
         await self.ecs.stop_beacon()
 
     async def modify_beacon_frequency(self, frequency):
+        """
+        Modifies the frequency of the beacon emission.
+
+        Args:
+            frequency (float): The new frequency (in seconds) between beacon emissions.
+        """
         await self.ecs.modify_beacon_frequency(frequency)
 
-    async def stablish_connection_to_federation(self, msg_type="discover_join", addrs_known=None):
+    async def stablish_connection_to_federation(self, msg_type="discover_join", addrs_known=None) -> tuple[int, set]:
         """
-        Using ExternalConnectionService to get addrs on local network, after that
-        stablishment of TCP connection and send the message broadcasted
+        Uses the ExternalConnectionService to discover and establish connections with other nodes in the federation.
+
+        This method performs the following steps:
+        1. Discovers nodes on the network (if `addrs_known` is not provided).
+        2. Establishes TCP connections with discovered nodes.
+        3. Sends a federation discovery message to them.
+
+        Args:
+            msg_type (str): The type of discovery message to send (e.g., 'discover_join' or 'discover_nodes').
+            addrs_known (list, optional): A list of known addresses to use instead of performing discovery.
+
+        Returns:
+            tuple: A tuple containing:
+                - discovers_sent (int): Number of discovery messages sent.
+                - connections_made (set): Set of addresses to which connections were successfully initiated.
         """
         addrs = []
         if addrs_known == None:
@@ -292,22 +467,56 @@ class CommunicationsManager:
     """
 
     def get_connections_lock(self):
+        """
+        Returns the asynchronous lock object used to synchronize access to the connections dictionary.
+
+        Returns:
+            asyncio.Lock: The lock protecting the connections data structure.
+        """
         return self.connections_lock
 
     def get_config(self):
+        """
+        Returns the configuration object associated with this communications manager.
+
+        Returns:
+            Config: The configuration instance containing settings and parameters.
+        """
         return self.config
 
     def get_addr(self):
+        """
+        Returns the network address (host:port) of this node.
+
+        Returns:
+            str: The node's own address.
+        """
         return self.addr
 
     def get_round(self):
+        """
+        Retrieves the current training round number from the engine.
+
+        Returns:
+            int: The current round number in the federated learning process.
+        """
         return self.engine.get_round()
 
     async def start(self):
+        """
+        Starts the communications manager by deploying the network engine to accept incoming connections.
+
+        This initializes the server and begins listening on the configured host and port.
+        """
         logging.info("🌐  Starting Communications Manager...")
         await self.deploy_network_engine()
 
     async def deploy_network_engine(self):
+        """
+        Deploys and starts the network engine server that listens for incoming connections.
+
+        Creates an asyncio server and schedules it to serve connections indefinitely.
+        """
         logging.info("🌐  Deploying Network engine...")
         self.network_engine = await asyncio.start_server(self.handle_connection_wrapper, self.host, self.port)
         self.network_task = asyncio.create_task(self.network_engine.serve_forever(), name="Network Engine")
@@ -316,11 +525,29 @@ class CommunicationsManager:
     async def handle_connection_wrapper(self, reader, writer):
         asyncio.create_task(self.handle_connection(reader, writer))
 
-    def create_message(self, message_type: str, action: str = "", *args, **kwargs):
-        return self.mm.create_message(message_type, action, *args, **kwargs)
-
     async def handle_connection(self, reader, writer, priority="medium"):
+        """
+        Wrapper coroutine to handle a new incoming connection.
+
+        Schedules the actual connection handling coroutine as an asyncio task.
+        
+        Args:
+            reader (asyncio.StreamReader): Stream reader for the connection.
+            writer (asyncio.StreamWriter): Stream writer for the connection.
+        """
         async def process_connection(reader, writer, priority="medium"):
+            """
+            Handles the lifecycle of a new incoming connection, including validation, authorization,
+            and adding the connection to the manager.
+
+            Performs checks such as blacklist verification, self-connection rejection, maximum connection limits,
+            duplicate connection detection, and manages pending connections.
+
+            Args:
+                reader (asyncio.StreamReader): Stream reader for the connection.
+                writer (asyncio.StreamWriter): Stream writer for the connection.
+                priority (str, optional): Priority level for processing the connection. Defaults to "medium".
+            """
             try:
                 addr = writer.get_extra_info("peername")
 
@@ -441,6 +668,15 @@ class CommunicationsManager:
         await process_connection(reader, writer, priority)
 
     async def terminate_failed_reconnection(self, conn: Connection):
+        """
+        Handles the termination of a failed reconnection attempt.
+
+        Marks the node as recently disconnected and closes the connection unilaterally
+        (i.e., without requiring a mutual disconnection handshake).
+
+        Args:
+            conn (Connection): The connection object representing the failed reconnection.
+        """
         connected_with = conn.addr
         await self.bl.add_recently_disconnected(connected_with)
         await self.disconnect(connected_with, mutual_disconnection=False)
@@ -466,6 +702,12 @@ class CommunicationsManager:
                 await self.connect(connection["addr"])
 
     async def clear_unused_undirect_connections(self):
+        """
+        Cleans up inactive undirected connections.
+
+        Iterates over the current connections, identifies those marked as inactive,
+        and asynchronously disconnects them without requiring mutual disconnection.
+        """
         async with self.connections_lock:
             inactive_connections = [conn for conn in self.connections.values() if await conn.is_inactive()]
         for conn in inactive_connections:
@@ -473,6 +715,15 @@ class CommunicationsManager:
             asyncio.create_task(self.disconnect(conn.addr, mutual_disconnection=False))
 
     async def verify_any_connections(self, neighbors):
+        """
+        Checks if at least one of the given neighbors is currently connected.
+
+        Args:
+            neighbors (iterable): A list or set of neighbor addresses to check.
+
+        Returns:
+            bool: True if at least one neighbor is connected, False otherwise.
+        """
         # Return True if any neighbors are connected
         async with self.connections_lock:
             if any(neighbor in self.connections for neighbor in neighbors):
@@ -480,6 +731,15 @@ class CommunicationsManager:
             return False
 
     async def verify_connections(self, neighbors):
+        """
+        Checks if all given neighbors are currently connected.
+
+        Args:
+            neighbors (iterable): A list or set of neighbor addresses to check.
+
+        Returns:
+            bool: True if all neighbors are connected, False otherwise.
+        """
         # Return True if all neighbors are connected
         async with self.connections_lock:
             return bool(all(neighbor in self.connections for neighbor in neighbors))
@@ -488,11 +748,28 @@ class CommunicationsManager:
         await self.stop_network_engine.wait()
 
     async def deploy_additional_services(self):
+        """
+        Starts additional network-related services required for the communications manager.
+
+        This includes asynchronously starting the forwarder service and synchronously starting the propagator service,
+        enabling message forwarding and propagation functionalities within the network.
+        """
         logging.info("🌐  Deploying additional services...")
         await self._forwarder.start()
         self._propagator.start()
 
     async def include_received_message_hash(self, hash_message):
+        """
+        Adds a received message hash to the tracking list if it hasn't been seen before.
+
+        This prevents processing the same message multiple times in the network.
+
+        Args:
+            hash_message (str): The hash of the received message.
+
+        Returns:
+            bool: True if the hash was added (i.e., the message is new), False if it was already received.
+        """
         try:
             await self.receive_messages_lock.acquire_async()
             if hash_message in self.received_messages_hashes:
@@ -509,6 +786,15 @@ class CommunicationsManager:
             await self.receive_messages_lock.release_async()
 
     async def send_message_to_neighbors(self, message, neighbors=None, interval=0):
+        """
+        Sends a message to all or specific neighbors.
+
+        Args:
+            message (Any): The message to send.
+            neighbors (set, optional): A set of neighbor addresses to send the message to. 
+                If None, the message is sent to all direct neighbors.
+            interval (float, optional): Delay in seconds between sending the message to each neighbor.
+        """
         if neighbors is None:
             current_connections = await self.get_all_addrs_current_connections(only_direct=True)
             neighbors = set(current_connections)
@@ -522,6 +808,14 @@ class CommunicationsManager:
                 await asyncio.sleep(interval)
 
     async def send_message(self, dest_addr, message, message_type=""):
+        """
+        Sends a message to a specific destination address, with optional compression for large messages.
+
+        Args:
+            dest_addr (str): The destination address of the message.
+            message (Any): The message to send.
+            message_type (str, optional): Type of message. If in _COMPRESSED_MESSAGES, it will be sent compressed.
+        """
         is_compressed = message_type in _COMPRESSED_MESSAGES
         if not is_compressed:
             try:
@@ -544,6 +838,20 @@ class CommunicationsManager:
                     await self.disconnect(dest_addr, mutual_disconnection=False)
 
     async def establish_connection(self, addr, direct=True, reconnect=False, priority="medium"):
+        """
+        Establishes a TCP connection to a remote node, handling blacklist checks, pending connection tracking,
+        and bidirectional handshake logic. Optionally upgrades an existing connection to direct, enforces
+        reconnection retries, and assigns a connection priority.
+
+        Args:
+            addr (str): The target node address in "host:port" format.
+            direct (bool, optional): Whether this connection should be marked as direct. Defaults to True.
+            reconnect (bool, optional): If True, enable reconnection tracking for this node. Defaults to False.
+            priority (str, optional): Priority level for this connection ("low", "medium", "high"). Defaults to "medium".
+
+        Returns:
+            bool: True if the connection was successfully established or upgraded, False otherwise.
+        """
         logging.info(f"🔗  [outgoing] Establishing connection with {addr} (direct: {direct})")
 
         async def process_establish_connection(addr, direct, reconnect, priority):
@@ -696,6 +1004,18 @@ class CommunicationsManager:
         asyncio.create_task(process_establish_connection(addr, direct, reconnect, priority))
 
     async def connect(self, addr, direct=True, priority="medium"):
+        """
+        Public method to initiate or upgrade a connection to a neighbor. Checks for existing connections,
+        avoids duplicates, and delegates the actual establishment logic to `establish_connection`.
+
+        Args:
+            addr (str): The neighbor address in "host:port" format.
+            direct (bool, optional): Whether the new connection should be direct. Defaults to True.
+            priority (str, optional): Priority level for establishing the connection. Defaults to "medium".
+
+        Returns:
+            bool: True if the connection action (new or upgrade) succeeded, False otherwise.
+        """
         async with self.connections_lock:
             duplicated = addr in self.connections
         if duplicated:
@@ -735,6 +1055,17 @@ class CommunicationsManager:
             await asyncio.sleep(1)
 
     async def disconnect(self, dest_addr, mutual_disconnection=True, forced=False):
+        """
+        Disconnects from a specified destination address and performs cleanup tasks.
+
+        Optionally sends a mutual disconnection message to the peer, adds the address to the blacklist
+        if the disconnection is forced, and updates the list of current neighbors accordingly.
+
+        Args:
+            dest_addr (str): The address of the node to disconnect from.
+            mutual_disconnection (bool, optional): Whether to notify the peer about the disconnection. Defaults to True.
+            forced (bool, optional): If True, the destination address will be blacklisted. Defaults to False.
+        """
         removed = False
         is_neighbor = dest_addr in await self.get_addrs_current_connections(only_direct=True, myself=True)
 
@@ -775,6 +1106,16 @@ class CommunicationsManager:
                 await self.engine.update_neighbors(dest_addr, current_connections, remove=removed)
 
     async def get_all_addrs_current_connections(self, only_direct=False, only_undirected=False):
+        """
+        Retrieve the addresses of current connections with filtering options.
+
+        Args:
+            only_direct (bool, optional): If True, return only directly connected addresses. Defaults to False.
+            only_undirected (bool, optional): If True, return only undirected (non-direct) connections. Defaults to False.
+
+        Returns:
+            set: A set of connection addresses based on the filtering criteria.
+        """
         try:
             await self.get_connections_lock().acquire_async()
             if only_direct:
@@ -787,6 +1128,17 @@ class CommunicationsManager:
             await self.get_connections_lock().release_async()
 
     async def get_addrs_current_connections(self, only_direct=False, only_undirected=False, myself=False):
+        """
+        Get the addresses of current connections, optionally including self and filtering by connection type.
+
+        Args:
+            only_direct (bool, optional): If True, include only directly connected addresses. Defaults to False.
+            only_undirected (bool, optional): If True, include only undirected connections. Defaults to False.
+            myself (bool, optional): If True, include this node's own address in the result. Defaults to False.
+
+        Returns:
+            set: A set of connection addresses according to the specified filters.
+        """
         current_connections = await self.get_all_addrs_current_connections(
             only_direct=only_direct, only_undirected=only_undirected
         )

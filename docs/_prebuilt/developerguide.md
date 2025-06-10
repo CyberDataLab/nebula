@@ -184,7 +184,6 @@ To view the documentation of functions in more detail, you must go to the **NEBU
     /nebula/
       addons/
         attacks/
-        blockchain/
         trustworthiness/
         waf/
       core/
@@ -211,7 +210,6 @@ The backend is organized within the `/nebula/` directory. Key files and folders 
 The `addons/` directory contains extended functionalities that can be integrated into the core system.
 
 - **`attacks/`** → Simulates attacks, primarily for security purposes, including adversarial attacks in machine learning.
-- **`blockchain/`** → Integrates blockchain technology, potentially for decentralized storage or security enhancements.
 - **`trustworthiness/`** → Evaluates the trustworthiness and reliability of participants, focusing on security and ethical considerations.
 - **`waf/`** → Implements a Web Application Firewall (WAF) to filter and monitor HTTP traffic for potential threats.
 
@@ -549,7 +547,6 @@ You must add the new aggregator in the **deployment.html** file and ensure that 
                 <option>Krum</option>
                 <option>TrimmedMean</option>
                 <option>Median</option>
-                <option>BlockchainReputation</option>
                 <!--Add this-->
                 <option>new_aggregation</option>
             </select>

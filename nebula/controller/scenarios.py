@@ -13,8 +13,8 @@ from datetime import datetime
 import docker
 import tensorboard_reducer as tbr
 
-from nebula.addons.blockchain.blockchain_deployer import BlockchainDeployer
 from nebula.addons.topologymanager import TopologyManager
+from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
 from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
 from nebula.core.datasets.emnist.emnist import EMNISTDataset
@@ -22,7 +22,6 @@ from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
 from nebula.core.datasets.mnist.mnist import MNISTDataset
 from nebula.core.utils.certificate import generate_ca_certificate, generate_certificate
 from nebula.utils import DockerUtils, FileUtils
-from nebula.config.config import Config
 
 
 # Definition of a scenario
@@ -31,7 +30,6 @@ class Scenario:
     Class to define a scenario for the NEBULA platform.
     It contains all the parameters needed to create a scenario and run it on the platform.
     """
-
     def __init__(
         self,
         scenario_title,
@@ -58,14 +56,7 @@ class Scenario:
         network_gateway,
         epochs,
         attack_params,
-        with_reputation,
-        reputation_metrics,
-        initial_reputation,
-        weighting_factor,
-        weight_model_arrival_latency,
-        weight_model_similarity,
-        weight_num_messages,
-        weight_fraction_params_changed,
+        reputation,
         random_geo,
         latitude,
         longitude,
@@ -78,6 +69,31 @@ class Scenario:
         mobile_participants_percent,
         additional_participants,
         schema_additional_participants,
+        with_trustworthiness,
+        robustness_pillar,
+        resilience_to_attacks,
+        algorithm_robustness,
+        client_reliability,
+        privacy_pillar,
+        technique,
+        uncertainty,
+        indistinguishability,
+        fairness_pillar,
+        selection_fairness,
+        performance_fairness,
+        class_distribution,
+        explainability_pillar,
+        interpretability,
+        post_hoc_methods,
+        accountability_pillar,
+        factsheet_completeness,
+        architectural_soundness_pillar,
+        client_management,
+        optimization,
+        sustainability_pillar,
+        energy_source,
+        hardware_efficiency,
+        federation_complexity,
         random_topology_probability,
         with_sa,
         strict_topology,
@@ -85,47 +101,43 @@ class Scenario:
         sad_model_handler,
         sar_arbitration_policy,
         sar_neighbor_policy,
+        sar_training,
+        sar_training_policy,
     ):
         """
-        Initialize the scenario.
+        Initialize a Scenario instance.
 
         Args:
-            title (str): Title of the scenario.
-            description (str): Description of the scenario.
-            deployment (str): Type of deployment (e.g., 'docker', 'process').
+            scenario_title (str): Title of the scenario.
+            scenario_description (str): Description of the scenario.
+            deployment (str): Type of deployment.
             federation (str): Type of federation.
-            topology (str): Network topology.
+            topology (str): Type of topology.
             nodes (dict): Dictionary of nodes.
-            nodes_graph (dict): Graph of nodes.
+            nodes_graph (dict): Dictionary of nodes for graph representation.
             n_nodes (int): Number of nodes.
-            matrix (list): Matrix of connections.
-            dataset (str): Dataset used.
-            iid (bool): Indicator if data is independent and identically distributed.
-            partition_selection (str): Method of partition selection.
+            matrix (list): Adjacency matrix.
+            dataset (str): Name of the dataset.
+            iid (bool): Whether the data is IID.
+            partition_selection (str): Type of partition selection.
             partition_parameter (float): Parameter for partition selection.
-            model (str): Model used.
+            model (str): Name of the model.
             agg_algorithm (str): Aggregation algorithm.
             rounds (int): Number of rounds.
-            logginglevel (str): Logging level.
-            report_status_data_queue (bool): Indicator to report information about the nodes of the scenario
-            accelerator (str): Accelerator used.
-            gpu_id (list) : Id list of the used gpu
+            logginglevel (bool): Whether to log.
+            report_status_data_queue (bool): Whether to report status data.
+            accelerator (str): Type of accelerator.
+            gpu_id (str): ID of the GPU.
             network_subnet (str): Network subnet.
             network_gateway (str): Network gateway.
             epochs (int): Number of epochs.
             attack_params (dict): Dictionary containing attack parameters.
-            with_reputation (bool): Indicator if reputation is used.
-            reputation_metrics (list): List of reputation metrics.
-            initial_reputation (float): Initial reputation.
-            weighting_factor (str): dymanic or static weighting factor.
-            weight_model_arrival_latency (float): Weight of model arrival latency.
-            weight_model_similarity (float): Weight of model similarity.
-            weight_num_messages (float): Weight of number of messages.
-            weight_fraction_params_changed (float): Weight of fraction of parameters changed.
+            reputation (dict): Dictionary containing reputation configuration.
             random_geo (bool): Indicator if random geo is used.
             latitude (float): Latitude for mobility.
             longitude (float): Longitude for mobility.
-            mobility (bool): Indicator if mobility is used.
+            mobility (bool): Whether mobility is enabled.
+            network_simulation (bool): Whether network simulation is enabled.
             mobility_type (str): Type of mobility.
             radius_federation (float): Radius of federation.
             scheme_mobility (str): Scheme of mobility.
@@ -134,12 +146,14 @@ class Scenario:
             additional_participants (list): List of additional participants.
             schema_additional_participants (str): Schema for additional participants.
             random_topology_probability (float): Probability for random topology.
-            with_sa (bool) : Indicator if Situational Awareness is used.
-            strict_topology (bool) :
-            sad_candidate_selector (str) :
-            sad_model_handler (str) :
-            sar_arbitration_policy (str) :
-            sar_neighbor_policy (str) :
+            with_sa (bool): Whether situational awareness is enabled.
+            strict_topology (bool): Whether strict topology is enabled.
+            sad_candidate_selector (str): Candidate selector for SAD.
+            sad_model_handler (str): Model handler for SAD.
+            sar_arbitration_policy (str): Arbitration policy for SAR.
+            sar_neighbor_policy (str): Neighbor policy for SAR.
+            sar_training (bool): Wheter SAR training is enabled.
+            sar_training_policy (str): Training policy for SAR.
         """
         self.scenario_title = scenario_title
         self.scenario_description = scenario_description
@@ -165,14 +179,7 @@ class Scenario:
         self.network_gateway = network_gateway
         self.epochs = epochs
         self.attack_params = attack_params
-        self.with_reputation = with_reputation
-        self.reputation_metrics = reputation_metrics
-        self.initial_reputation = initial_reputation
-        self.weighting_factor = weighting_factor
-        self.weight_model_arrival_latency = weight_model_arrival_latency
-        self.weight_model_similarity = weight_model_similarity
-        self.weight_num_messages = weight_num_messages
-        self.weight_fraction_params_changed = weight_fraction_params_changed
+        self.reputation = reputation
         self.random_geo = random_geo
         self.latitude = latitude
         self.longitude = longitude
@@ -184,6 +191,31 @@ class Scenario:
         self.round_frequency = round_frequency
         self.mobile_participants_percent = mobile_participants_percent
         self.additional_participants = additional_participants
+        self.with_trustworthiness = with_trustworthiness
+        self.robustness_pillar = robustness_pillar,
+        self.resilience_to_attacks = resilience_to_attacks,
+        self.algorithm_robustness = algorithm_robustness,
+        self.client_reliability = client_reliability,
+        self.privacy_pillar = privacy_pillar,
+        self.technique = technique,
+        self.uncertainty = uncertainty,
+        self.indistinguishability = indistinguishability,
+        self.fairness_pillar = fairness_pillar,
+        self.selection_fairness = selection_fairness,
+        self.performance_fairness = performance_fairness,
+        self.class_distribution = class_distribution,
+        self.explainability_pillar = explainability_pillar,
+        self.interpretability = interpretability,
+        self.post_hoc_methods = post_hoc_methods,
+        self.accountability_pillar = accountability_pillar,
+        self.factsheet_completeness = factsheet_completeness,
+        self.architectural_soundness_pillar = architectural_soundness_pillar,
+        self.client_management = client_management,
+        self.optimization = optimization,
+        self.sustainability_pillar = sustainability_pillar,
+        self.energy_source = energy_source,
+        self.hardware_efficiency = hardware_efficiency,
+        self.federation_complexity = federation_complexity,
         self.schema_additional_participants = schema_additional_participants
         self.random_topology_probability = random_topology_probability
         self.with_sa = with_sa
@@ -192,6 +224,8 @@ class Scenario:
         self.sad_model_handler = sad_model_handler
         self.sar_arbitration_policy = sar_arbitration_policy
         self.sar_neighbor_policy = sar_neighbor_policy
+        self.sar_training = sar_training
+        self.sar_training_policy = sar_training_policy
 
     def attack_node_assign(
         self,
@@ -202,35 +236,95 @@ class Scenario:
         poisoned_noise_percent,
         attack_params,
     ):
-        """Identify which nodes will be attacked"""
+        """
+        Assign and configure attack parameters to nodes within a federated learning network.
+
+        This method:
+            - Validates input attack parameters and percentages.
+            - Determines which nodes will be marked as malicious based on the specified
+              poisoned node percentage and attack type.
+            - Assigns attack roles and parameters to selected nodes.
+            - Supports multiple attack types such as Label Flipping, Sample Poisoning,
+              Model Poisoning, GLL Neuron Inversion, Swapping Weights, Delayer, and Flooding.
+            - Ensures proper validation and setting of attack-specific parameters, including
+              targeting, noise types, delays, intervals, and attack rounds.
+            - Updates nodes' malicious status, reputation, and attack parameters accordingly.
+
+        Args:
+            nodes (dict): Dictionary of nodes with their current attributes.
+            federation (str): Type of federated learning framework (e.g., "DFL").
+            poisoned_node_percent (float): Percentage of nodes to be poisoned (0-100).
+            poisoned_sample_percent (float): Percentage of samples to be poisoned (0-100).
+            poisoned_noise_percent (float): Percentage of noise to apply in poisoning (0-100).
+            attack_params (dict): Dictionary containing attack type and associated parameters.
+
+        Returns:
+            dict: Updated nodes dictionary with assigned malicious roles and attack parameters.
+
+        Raises:
+            ValueError: If any input parameter is invalid or attack type is unrecognized.
+        """
+        import logging
         import math
         import random
-        import logging
 
         # Validate input parameters
         def validate_percentage(value, name):
+            """
+            Validate that a given value is a float percentage between 0 and 100.
+
+            Args:
+                value: The value to validate, expected to be convertible to float.
+                name (str): Name of the parameter, used for error messages.
+
+            Returns:
+                float: The validated percentage value.
+
+            Raises:
+                ValueError: If the value is not a float or not within the range [0, 100].
+            """
             try:
                 value = float(value)
                 if not 0 <= value <= 100:
                     raise ValueError(f"{name} must be between 0 and 100")
                 return value
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid {name}: {str(e)}")
+                raise ValueError(f"Invalid {name}: {e!s}")
 
         def validate_positive_int(value, name):
+            """
+            Validate that a given value is a positive integer (including zero).
+
+            Args:
+                value: The value to validate, expected to be convertible to int.
+                name (str): Name of the parameter, used for error messages.
+
+            Returns:
+                int: The validated positive integer value.
+
+            Raises:
+                ValueError: If the value is not an integer or is negative.
+            """
             try:
                 value = int(value)
                 if value < 0:
                     raise ValueError(f"{name} must be positive")
                 return value
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid {name}: {str(e)}")
+                raise ValueError(f"Invalid {name}: {e!s}")
 
         # Validate attack type
         valid_attacks = {
-            "No Attack", "Label Flipping", "Sample Poisoning", "Model Poisoning",
-            "GLL Neuron Inversion", "Swapping Weights", "Delayer", "Flooding"
+            "No Attack",
+            "Label Flipping",
+            "Sample Poisoning",
+            "Model Poisoning",
+            "GLL Neuron Inversion",
+            "Swapping Weights",
+            "Delayer",
+            "Flooding",
         }
+
 
         # Get attack type from attack_params
         if attack_params and "attacks" in attack_params:
@@ -289,11 +383,11 @@ class Scenario:
         for node in nodes:
             node_att = "No Attack"
             malicious = False
-            with_reputation = self.with_reputation
+            node_reputation = self.reputation.copy() if self.reputation else None
 
             if node in attacked_nodes or nodes[node]["malicious"]:
                 malicious = True
-                with_reputation = False
+                node_reputation = None
                 node_att = attack
                 logging.info(f"Node {node} marked as malicious with attack {attack}")
 
@@ -340,9 +434,7 @@ class Scenario:
 
                 elif attack == "Delayer":
                     node_attack_params["poisoned_node_percent"] = poisoned_node_percent
-                    node_attack_params["delay"] = validate_positive_int(
-                        attack_params.get("delay", 10), "delay"
-                    )
+                    node_attack_params["delay"] = validate_positive_int(attack_params.get("delay", 10), "delay")
                     node_attack_params["target_percentage"] = validate_percentage(
                         attack_params.get("targetPercentage", 100), "target_percentage"
                     )
@@ -383,14 +475,30 @@ class Scenario:
                 nodes[node]["attack_params"] = {"attacks": "No Attack"}
 
             nodes[node]["malicious"] = malicious
-            nodes[node]["with_reputation"] = with_reputation
+            nodes[node]["reputation"] = node_reputation
 
-            logging.info(f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attack_params']['attacks']}")
+            logging.info(
+                f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attack_params']['attacks']}"
+            )
 
         return nodes
 
     def mobility_assign(self, nodes, mobile_participants_percent):
-        """Assign mobility to nodes"""
+        """
+        Assign mobility status to a subset of nodes based on a specified percentage.
+
+        This method:
+            - Calculates the number of mobile nodes by applying the given percentage.
+            - Randomly selects nodes to be marked as mobile.
+            - Updates each node's "mobility" attribute to True or False accordingly.
+
+        Args:
+            nodes (dict): Dictionary of nodes with their current attributes.
+            mobile_participants_percent (float): Percentage of nodes to be assigned mobility (0-100).
+
+        Returns:
+            dict: Updated nodes dictionary with mobility status assigned.
+        """
         import random
 
         # Number of mobile nodes, round down
@@ -411,6 +519,19 @@ class Scenario:
 
     @classmethod
     def from_dict(cls, data):
+        """
+        Create an instance of the class from a dictionary of attributes.
+
+        This class method:
+            - Copies the input dictionary to prevent modification of the original data.
+            - Instantiates the class using the dictionary unpacked as keyword arguments.
+
+        Args:
+            data (dict): Dictionary containing attributes to initialize the class instance.
+
+        Returns:
+            cls: An instance of the class initialized with the provided data.
+        """
         # Create a copy of the data to avoid modifying the original
         scenario_data = data.copy()
 
@@ -422,6 +543,22 @@ class Scenario:
 
 # Class to manage the current scenario
 class ScenarioManagement:
+    """
+    Initialize the scenario management.
+
+    Args:
+        scenario (dict): Dictionary containing the scenario configuration.
+        user (str, optional): User identifier. Defaults to None.
+
+    Functionality:
+    - Loads the scenario from a dictionary.
+    - Sets up names and paths for configuration and log storage.
+    - Creates necessary directories with proper permissions.
+    - Saves the scenario configuration and management settings as JSON files.
+    - Assigns malicious and mobile nodes according to scenario parameters.
+    - Configures each node individually with parameters for networking, device,
+      attacks, defense, mobility, reporting, trustworthiness, and situational awareness.
+    """
     def __init__(self, scenario, user=None):
         # Current scenario
         self.scenario = Scenario.from_dict(scenario)
@@ -429,7 +566,7 @@ class ScenarioManagement:
         self.user = user
         # Scenario management settings
         self.start_date_scenario = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        self.scenario_name = f"nebula_{self.scenario.federation}_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
+        self.scenario_name = f"nebula_{self.scenario.federation}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
         self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), self.scenario_name)
@@ -446,7 +583,6 @@ class ScenarioManagement:
 
         self.topologymanager = None
         self.env_path = None
-        self.use_blockchain = self.scenario.agg_algorithm == "BlockchainReputation"
 
         # Create Scenario management dirs
         os.makedirs(self.config_dir, exist_ok=True)
@@ -473,7 +609,6 @@ class ScenarioManagement:
             "log_dir": self.log_dir,
             "cert_dir": self.cert_dir,
             "env": None,
-            "use_blockchain": self.use_blockchain,
         }
 
         settings_file = os.path.join(self.config_dir, "settings.json")
@@ -585,41 +720,69 @@ class ScenarioManagement:
                     "sa_reasoner": {
                         "arbitration_policy": self.scenario.sar_arbitration_policy,
                         "verbose": True,
-                        "sar_components": {"sa_network": True},
+                        "sar_components": {"sa_network": True, "sa_training": self.scenario.sar_training},
                         "sa_network": {"neighbor_policy": self.scenario.sar_neighbor_policy, "verbose": True},
+                        "sa_training": {"training_policy": self.scenario.sar_training_policy, "verbose": True},
                     },
+                }
+            participant_config["trustworthiness"] = self.scenario.with_trustworthiness
+            if self.scenario.with_trustworthiness:            
+                participant_config["trust_args"] = {
+                    "robustness_pillar": self.scenario.robustness_pillar,
+                    "resilience_to_attacks": self.scenario.resilience_to_attacks,
+                    "algorithm_robustness": self.scenario.algorithm_robustness,
+                    "client_reliability": self.scenario.client_reliability,
+                    "privacy_pillar": self.scenario.privacy_pillar,
+                    "technique": self.scenario.technique,
+                    "uncertainty": self.scenario.uncertainty,
+                    "indistinguishability": self.scenario.indistinguishability,
+                    "fairness_pillar": self.scenario.fairness_pillar,
+                    "selection_fairness": self.scenario.selection_fairness,
+                    "performance_fairness": self.scenario.performance_fairness,
+                    "class_distribution": self.scenario.class_distribution,
+                    "explainability_pillar": self.scenario.explainability_pillar,
+                    "interpretability": self.scenario.interpretability,
+                    "post_hoc_methods": self.scenario.post_hoc_methods,
+                    "accountability_pillar":self.scenario.accountability_pillar,
+                    "factsheet_completeness": self.scenario.factsheet_completeness,
+                    "architectural_soundness_pillar":self.scenario.architectural_soundness_pillar,
+                    "client_management": self.scenario.client_management,
+                    "optimization": self.scenario.optimization,
+                    "sustainability_pillar": self.scenario.sustainability_pillar,
+                    "energy_source": self.scenario.energy_source,
+                    "hardware_efficiency": self.scenario.hardware_efficiency,
+                    "federation_complexity": self.scenario.federation_complexity,
+                    "scenario": scenario
                 }
 
             with open(participant_file, "w") as f:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
 
     @staticmethod
-    def stop_blockchain():
-        if sys.platform == "win32":
-            try:
-                # Comando adaptado para PowerShell en Windows
-                command = "docker ps -a --filter 'label=com.docker.compose.project=blockchain' --format '{{.ID}}' | ForEach-Object { docker rm --force --volumes $_ } | Out-Null"
-                os.system(f'powershell.exe -Command "{command}"')
-            except Exception as e:
-                logging.exception(f"Error while killing docker containers: {e}")
-        else:
-            try:
-                process = subprocess.Popen(
-                    "docker ps -a --filter 'label=com.docker.compose.project=blockchain' --format '{{.ID}}' | xargs -n 1 docker rm --force --volumes  >/dev/null 2>&1",
-                    shell=True,
-                )
-                process.wait()
-            except subprocess.CalledProcessError:
-                logging.exception("Docker Compose failed to stop blockchain or blockchain already exited.")
-
-    @staticmethod
     def stop_participants(scenario_name=None):
+        """
+        Stop running participant nodes by removing the scenario command files.
+
+        This method deletes the 'current_scenario_commands.sh' (or '.ps1' on Windows)
+        file associated with a scenario. Removing this file signals the nodes to stop
+        by terminating their processes.
+
+        Args:
+            scenario_name (str, optional): The name of the scenario to stop. If None,
+                all scenarios' command files will be removed.
+
+        Notes:
+            - If the environment variable NEBULA_CONFIG_DIR is not set, a default
+              configuration directory path is used.
+            - Supports both Linux/macOS ('.sh') and Windows ('.ps1') script files.
+            - Any errors during file removal are logged with the traceback.
+        """
         # When stopping the nodes, we need to remove the current_scenario_commands.sh file -> it will cause the nodes to stop using PIDs
         try:
             nebula_config_dir = os.environ.get("NEBULA_CONFIG_DIR")
             if not nebula_config_dir:
                 current_dir = os.path.dirname(__file__)
-                nebula_base_dir = os.path.abspath(os.path.join(current_dir, ".."))
+                nebula_base_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
                 nebula_config_dir = os.path.join(nebula_base_dir, "app", "config")
                 logging.info(f"NEBULA_CONFIG_DIR not found. Using default path: {nebula_config_dir}")
 
@@ -650,11 +813,36 @@ class ScenarioManagement:
 
     @staticmethod
     def stop_nodes():
+        """
+        Stop all running NEBULA nodes.
+    
+        This method logs the shutdown action and calls the stop_participants
+        method to remove all scenario command files, which signals nodes to stop.
+        """
         logging.info("Closing NEBULA nodes... Please wait")
         ScenarioManagement.stop_participants()
-        ScenarioManagement.stop_blockchain()
 
     def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
+        """
+        Load participant configurations, generate certificates, setup topology, split datasets, 
+        and start nodes according to the scenario deployment type.
+
+        This method:
+        - Generates CA and node certificates.
+        - Loads and updates participant configuration files.
+        - Creates the network topology and updates participant roles.
+        - Handles additional participants if provided.
+        - Initializes and partitions the dataset based on the scenario.
+        - Starts nodes using the specified deployment method (docker, physical, or process).
+
+        Args:
+            additional_participants (list, optional): List of additional participant configurations to add.
+            schema_additional_participants (optional): Schema for additional participants (currently unused).
+
+        Raises:
+            ValueError: If no participant files found, multiple start nodes detected, no start node found,
+                        unsupported dataset or unknown deployment type.
+        """
         logging.info(f"Generating the scenario {self.scenario_name} at {self.start_date_scenario}")
 
         # Generate CA certificate
@@ -849,8 +1037,6 @@ class ScenarioManagement:
         logging.info(f"Splitting {dataset_name} dataset... Done")
 
         if self.scenario.deployment in ["docker", "process", "physical"]:
-            if self.use_blockchain:
-                self.start_blockchain()
             if self.scenario.deployment == "docker":
                 self.start_nodes_docker()
             elif self.scenario.deployment == "physical":
@@ -865,6 +1051,27 @@ class ScenarioManagement:
             )
 
     def create_topology(self, matrix=None):
+        """
+        Create and return a network topology manager based on the scenario's topology settings or a given adjacency matrix.
+
+        Supports multiple topology types:
+        - Random: Generates an Erdős-Rényi random graph with specified connection probability.
+        - Matrix: Uses a provided adjacency matrix to define the topology.
+        - Fully: Creates a fully connected network.
+        - Ring: Creates a ring-structured network with partial connectivity.
+        - Star: Creates a centralized star topology (only for CFL federation).
+
+        The method assigns IP and port information to nodes and returns the configured TopologyManager instance.
+
+        Args:
+            matrix (optional): Adjacency matrix to define custom topology. If provided, overrides scenario topology.
+
+        Raises:
+            ValueError: If an unknown topology type is specified in the scenario.
+
+        Returns:
+            TopologyManager: Configured topology manager with nodes assigned.
+        """
         import numpy as np
 
         if self.scenario.topology == "Random":
@@ -930,31 +1137,32 @@ class ScenarioManagement:
         topologymanager.add_nodes(nodes_ip_port)
         return topologymanager
 
-    def start_blockchain(self):
-        BlockchainDeployer(
-            config_dir=f"{self.config_dir}/blockchain",
-            input_dir="/nebula/nebula/addons/blockchain",
-        )
-        try:
-            logging.info("Blockchain is being deployed")
-            subprocess.check_call([
-                "docker",
-                "compose",
-                "-f",
-                f"{self.config_dir}/blockchain/blockchain-docker-compose.yml",
-                "up",
-                "--remove-orphans",
-                "--force-recreate",
-                "-d",
-                "--build",
-            ])
-        except subprocess.CalledProcessError:
-            logging.exception(
-                "Docker Compose failed to start Blockchain, please check if Docker Compose is installed (https://docs.docker.com/compose/install/) and Docker Engine is running."
-            )
-            raise
-
     def start_nodes_docker(self):
+        """
+        Starts participant nodes as Docker containers using Docker SDK.
+
+        This method performs the following steps:
+        - Logs the beginning of the Docker container startup process.
+        - Creates a Docker network specific to the current user and scenario.
+        - Sorts participant nodes by their index.
+        - For each participant node:
+            - Sets up environment variables and host configuration,
+              enabling GPU support if required.
+            - Prepares Docker volume bindings and static network IP assignment.
+            - Updates the node configuration, replacing IP addresses as needed,
+              and writes the configuration to a JSON file.
+            - Creates and starts the Docker container for the node.
+            - Logs any exceptions encountered during container creation or startup.
+
+        Raises:
+            docker.errors.DockerException: If there are issues communicating with the Docker daemon.
+            OSError: If there are issues accessing file system paths for volume binding.
+            Exception: For any other unexpected errors during container creation or startup.
+
+        Note:
+            - The method assumes Docker and NVIDIA runtime are properly installed and configured.
+            - IP addresses in node configurations are replaced with network base dynamically.
+        """
         logging.info("Starting nodes using Docker Compose...")
         logging.info(f"env path: {self.env_path}")
 
@@ -973,7 +1181,7 @@ class ScenarioManagement:
             name = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{self.user}-participant{node['device_args']['idx']}"
 
             if node["device_args"]["accelerator"] == "gpu":
-                environment = {"NVIDIA_DISABLE_REQUIRE": True}
+                environment = {"NVIDIA_DISABLE_REQUIRE": True, "NEBULA_LOGS_DIR": "/nebula/app/logs/", "NEBULA_CONFIG_DIR": "/nebula/app/config/"}
                 host_config = client.api.create_host_config(
                     binds=[f"{self.root_path}:/nebula", "/var/run/docker.sock:/var/run/docker.sock"],
                     privileged=True,
@@ -981,7 +1189,7 @@ class ScenarioManagement:
                     extra_hosts={"host.docker.internal": "host-gateway"},
                 )
             else:
-                environment = ""
+                environment = {"NEBULA_LOGS_DIR": "/nebula/app/logs/", "NEBULA_CONFIG_DIR": "/nebula/app/config/"}
                 host_config = client.api.create_host_config(
                     binds=[f"{self.root_path}:/nebula", "/var/run/docker.sock:/var/run/docker.sock"],
                     privileged=True,
@@ -998,21 +1206,12 @@ class ScenarioManagement:
                 f"{start_command} && ifconfig && echo '{base}.1 host.docker.internal' >> /etc/hosts && python /nebula/nebula/core/node.py /nebula/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json",
             ]
 
-            if self.use_blockchain:
-                networking_config = client.api.create_networking_config({
-                    f"{network_name}": client.api.create_endpoint_config(
-                        ipv4_address=f"{base}.{i}",
-                    ),
-                    f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
-                    "chainnet": client.api.create_endpoint_config(),
-                })
-            else:
-                networking_config = client.api.create_networking_config({
-                    f"{network_name}": client.api.create_endpoint_config(
-                        ipv4_address=f"{base}.{i}",
-                    ),
-                    f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
-                })
+            networking_config = client.api.create_networking_config({
+                f"{network_name}": client.api.create_endpoint_config(
+                    ipv4_address=f"{base}.{i}",
+                ),
+                f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
+            })
 
             node["tracking_args"]["log_dir"] = "/nebula/app/logs"
             node["tracking_args"]["config_dir"] = f"/nebula/app/config/{self.scenario_name}"
@@ -1049,29 +1248,41 @@ class ScenarioManagement:
             i += 1
 
     def start_nodes_process(self):
-        self.processes_root_path = os.path.join(os.path.dirname(__file__),"..", "..")
+        """
+        Starts participant nodes as independent background processes on the host machine.
+
+        This method performs the following steps:
+        - Updates each participant's configuration with paths for logs, config, certificates,
+          and scenario parameters.
+        - Writes the updated configuration for each participant to a JSON file.
+        - Generates and writes a platform-specific script to start all participant nodes:
+            - On Windows, it creates a PowerShell script that launches each node as a background
+              process, redirects output and error streams to log files, and records process IDs.
+            - On Unix-like systems, it creates a bash script that launches each node in the
+              background, redirects output, and stores PIDs in a file.
+        - Sets executable permissions for the generated script.
+
+        Raises:
+            Exception: If any error occurs during the script generation or file operations.
+
+        Notes:
+            - The generated script must be executed separately by the user to actually start the nodes.
+            - Sleep intervals are added before starting nodes depending on their 'start' flag.
+            - Logs and PIDs are stored under the configured directories for monitoring and management.
+        """
+        self.processes_root_path = os.path.join(os.path.dirname(__file__), "..", "..")
         logging.info("Starting nodes as processes...")
         logging.info(f"env path: {self.env_path}")
 
         # Include additional config to the participants
         for idx, node in enumerate(self.config.participants):
-            node["tracking_args"]["log_dir"] = os.path.join(self.processes_root_path, "app", "logs")
-            node["tracking_args"]["config_dir"] = os.path.join(self.processes_root_path, "app", "config", self.scenario_name)
+            node["tracking_args"]["log_dir"] = os.path.join(self.root_path, "app", "logs")
+            node["tracking_args"]["config_dir"] = os.path.join(self.root_path, "app", "config", self.scenario_name)
             node["scenario_args"]["controller"] = self.controller
             node["scenario_args"]["deployment"] = self.scenario.deployment
-            node["security_args"]["certfile"] = os.path.join(
-                self.processes_root_path,
-                "app",
-                "certs",
-                f"participant_{node['device_args']['idx']}_cert.pem",
-            )
-            node["security_args"]["keyfile"] = os.path.join(
-                self.processes_root_path,
-                "app",
-                "certs",
-                f"participant_{node['device_args']['idx']}_key.pem",
-            )
-            node["security_args"]["cafile"] = os.path.join(self.processes_root_path, "app", "certs", "ca_cert.pem")
+            node["security_args"]["certfile"] = os.path.join(self.root_path, "app", "certs", f"participant_{node['device_args']['idx']}_cert.pem")
+            node["security_args"]["keyfile"] = os.path.join(self.root_path, "app", "certs", f"participant_{node['device_args']['idx']}_key.pem")
+            node["security_args"]["cafile"] = os.path.join(self.root_path, "app", "certs", "ca_cert.pem")
 
             # Write the config file in config directory
             with open(f"{self.config_dir}/participant_{node['device_args']['idx']}.json", "w") as f:
@@ -1097,19 +1308,19 @@ class ScenarioManagement:
                         commands += "Start-Sleep -Seconds 2\n"
 
                     commands += f'Write-Host "Running node {node["device_args"]["idx"]}..."\n'
-                    commands += f'$OUT_FILE = "{self.processes_root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.out"\n'
-                    commands += f'$ERROR_FILE = "{self.processes_root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.err"\n'
+                    commands += f'$OUT_FILE = "{self.root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.out"\n'
+                    commands += f'$ERROR_FILE = "{self.root_path}\\app\\logs\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.err"\n'
 
                     # Use Start-Process for executing Python in background and capture PID
-                    commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.processes_root_path}\\nebula\\core\\node.py {self.processes_root_path}\\app\\config\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
+                    commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\core\\node.py {self.root_path}\\app\\config\\{self.scenario_name}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
                 Add-Content -Path $PID_FILE -Value $process.Id
                 """
 
                 commands += 'Write-Host "All nodes started. PIDs stored in $PID_FILE"\n'
 
-                with open(f"/nebula/app/config/{self.scenario_name}/current_scenario_commands.ps1", "w") as f:
+                with open(f"{self.config_dir}/current_scenario_commands.ps1", "w") as f:
                     f.write(commands)
-                os.chmod(f"/nebula/app/config/{self.scenario_name}/current_scenario_commands.ps1", 0o755)
+                os.chmod(f"{self.config_dir}/current_scenario_commands.ps1", 0o755)
             else:
                 commands = '#!/bin/bash\n\nPID_FILE="$(dirname "$0")/current_scenario_pids.txt"\n\n> $PID_FILE\n\n'
                 sorted_participants = sorted(
@@ -1123,30 +1334,55 @@ class ScenarioManagement:
                     else:
                         commands += "sleep 2\n"
                     commands += f'echo "Running node {node["device_args"]["idx"]}..."\n'
-                    commands += f"OUT_FILE={self.processes_root_path}/app/logs/{self.scenario_name}/participant_{node['device_args']['idx']}.out\n"
-                    commands += f"python {self.processes_root_path}/nebula/core/node.py {self.processes_root_path}/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json > $OUT_FILE 2>&1 &\n"
+                    commands += f"OUT_FILE={self.root_path}/app/logs/{self.scenario_name}/participant_{node['device_args']['idx']}.out\n"
+                    commands += f"python {self.root_path}/nebula/core/node.py {self.root_path}/app/config/{self.scenario_name}/participant_{node['device_args']['idx']}.json &\n"
                     commands += "echo $! >> $PID_FILE\n\n"
 
                 commands += 'echo "All nodes started. PIDs stored in $PID_FILE"\n'
 
-                with open(f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", "w") as f:
+                with open(f"{self.config_dir}/current_scenario_commands.sh", "w") as f:
                     f.write(commands)
-                os.chmod(f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", 0o755)
+                os.chmod(f"{self.config_dir}/current_scenario_commands.sh", 0o755)
 
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
 
     def start_nodes_physical(self):
+        """
+        Placeholder method for starting nodes on physical devices.
+
+        Logs informational messages indicating that deployment on physical devices
+        is not implemented or supported publicly. Users are encouraged to use Docker
+        or process-based deployment methods instead.
+
+        Currently, this method does not perform any actions.
+        """
         logging.info("Starting nodes as physical devices...")
         logging.info(f"env path: {self.env_path}")
 
         for idx, node in enumerate(self.config.participants):
             pass
 
-        logging.info("Physical devices deployment is not implemented publicly. Please use docker or process deployment.")
+        logging.info(
+            "Physical devices deployment is not implemented publicly. Please use docker or process deployment."
+        )
 
     @classmethod
     def remove_files_by_scenario(cls, scenario_name):
+        """
+        Remove configuration, logs, and reputation files associated with a given scenario.
+
+        This method attempts to delete the directories related to the specified scenario
+        within the NEBULA_CONFIG_DIR and NEBULA_LOGS_DIR environment paths, as well as
+        the reputation folder inside the nebula core directory.
+
+        If files or directories are not found, a warning is logged but the method continues.
+        If a PermissionError occurs while removing log files, the files are moved to a temporary
+        folder inside the NEBULA_ROOT path to avoid permission issues.
+
+        Raises:
+            Exception: Re-raises any unexpected exceptions encountered during file operations.
+        """
         try:
             shutil.rmtree(FileUtils.check_path(os.environ["NEBULA_CONFIG_DIR"], scenario_name))
         except FileNotFoundError:
@@ -1182,13 +1418,9 @@ class ScenarioManagement:
             nebula_reputation = os.path.join(
                 os.environ["NEBULA_LOGS_DIR"], "..", "..", "nebula", "core", "reputation", scenario_name
             )
-            logging.info(f"Removing reputation folder {nebula_reputation}")
-            logging.info(f"nebula_reputation: {nebula_reputation}")
             if os.path.exists(nebula_reputation):
                 shutil.rmtree(nebula_reputation)
-                # logging.info(f"Reputation folder {nebula_reputation} removed successfully")
-            else:
-                logging.info(f"Reputation folder {nebula_reputation} not found")
+                logging.info(f"Reputation folder {nebula_reputation} removed successfully")
         except FileNotFoundError:
             logging.warning("Files not found in reputation folder, nothing to remove")
         except Exception:
@@ -1196,6 +1428,19 @@ class ScenarioManagement:
             raise
 
     def scenario_finished(self, timeout_seconds):
+        """
+        Check if all Docker containers related to the current scenario have finished.
+
+        This method monitors the Docker containers whose names contain the scenario name.
+        It waits until all such containers have exited or until the specified timeout is reached.
+        If the timeout is exceeded, all running scenario containers are stopped.
+
+        Args:
+            timeout_seconds (int): Maximum number of seconds to wait for containers to finish.
+
+        Returns:
+            bool: True if all containers finished before the timeout, False if timeout was reached and containers were stopped.
+        """
         client = docker.from_env()
         all_containers = client.containers.list(all=True)
         containers = [container for container in all_containers if self.scenario_name.lower() in container.name.lower()]
@@ -1222,6 +1467,20 @@ class ScenarioManagement:
 
     @classmethod
     def generate_statistics(cls, path):
+        """
+        Generate reduced statistical summaries from TensorBoard event files in a scenario directory.
+    
+        This method loads TensorBoard event data from the specified directory,
+        performs statistical reductions (mean, min, max, median, std, var) over scalar metrics,
+        and writes the reduced data back both as TensorBoard event files and as a CSV summary.
+    
+        Args:
+            path (str): The root directory containing a 'metrics' subdirectory with TensorBoard event files.
+    
+        Returns:
+            bool: True if statistics were generated successfully, False if no input event directories
+                  were found or if an error occurred during processing.
+        """
         try:
             # Define input directories
             input_event_dirs = sorted(glob.glob(os.path.join(path, "metrics/*")))
