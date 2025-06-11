@@ -151,7 +151,7 @@ class MessagesManager:
 
             # Message-specific forwarding and processing
             elif message_type in special_processing_messages:
-                if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest()):
+                if await self.cm.include_received_message_hash(hashlib.md5(data).hexdigest(), addr_from):
                     # Forward the message if required
                     if self._should_forward_message(message_type, message_wrapper):
                         await self.cm.forward_message(data, addr_from)

@@ -58,7 +58,8 @@ class FloodingAttack(CommunicationAttack):
         def decorator(func):
             @wraps(func)
             async def wrapper(*args, **kwargs):
-                if len(args) == 4 and args[3] == "model":
+                flooding_factor = 30
+                if len(args) > 1:
                     dest_addr = args[1]
                     if dest_addr in self.targets:
                         logging.info(f"[FloodingAttack] Flooding message to {dest_addr} by {flooding_factor} times")
@@ -67,11 +68,13 @@ class FloodingAttack(CommunicationAttack):
                                 logging.info(
                                     f"[FloodingAttack] Sending duplicate {i + 1}/{flooding_factor} to {dest_addr}"
                                 )
-                            _, *new_args = args  # Exclude self argument
+                            _, dest_addr, serialized_model, *rest = args  # Exclude self argument
+                            new_args = [dest_addr, serialized_model]
                             await func(*new_args, **kwargs)
-                _, *new_args = args 
+                _, dest_addr, serialized_model, *rest = args  # Exclude self argument
+                new_args = [dest_addr, serialized_model]
                 return await func(*new_args)
-            
+
             return wrapper
 
         return decorator

@@ -12,7 +12,7 @@ import torch
 
 from nebula.addons.functions import print_msg_box
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateReceivedEvent
+from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateReceivedEvent, DuplicatedMessageEvent
 from nebula.core.utils.helper import (
     cosine_metric,
     euclidean_metric,
@@ -39,13 +39,9 @@ class Metrics:
         self.fraction_of_params_changed = {
             "fraction_changed": fraction_changed,
             "threshold": threshold,
-            "round": num_round,
+            "current_round": num_round,
         }
-
         self.model_arrival_latency = {"latency": latency, "round": num_round, "round_received": current_round}
-
-        self.model_arrival_latency = {"latency": latency, "round": num_round, "round_received": current_round}
-
         self.messages = []
         self.similarity = []
 
@@ -57,11 +53,6 @@ class Reputation:
     The class handles collection of metrics, calculation of static and dynamic reputation,
     updating history, and communication of reputation scores to neighbors.
     """
-
-    def __init__(self, engine: "Engine", config: "Config"):
-        """
-        Initialize the Reputation system.
-        """
 
     def __init__(self, engine: "Engine", config: "Config"):
         self._engine = engine
@@ -86,41 +77,44 @@ class Reputation:
         self.model_arrival_latency_history = {}
         self._addr = engine.addr
         self._log_dir = engine.log_dir
-        self.connection_metrics = []
+        self.connection_metrics = {}
 
         neighbors: str = self._config.participant["network_args"]["neighbors"]
         for nei in neighbors.split():
             self.connection_metrics[f"{nei}"] = Metrics()
 
-        self._with_reputation = self._config.participant["defense_args"]["with_reputation"]
-        self._reputation_metrics = self._config.participant["defense_args"]["reputation_metrics"]
-        if isinstance(self._reputation_metrics, list):
+        self._with_reputation = self._config.participant["defense_args"]["reputation"]["with_reputation"]
+        self._metrics = self._config.participant["defense_args"]["reputation"]["reputation_metrics"]
+        self._enabled = self._with_reputation and self._metrics
+        if isinstance(self._metrics, list):
             expected_metrics = [
                 "model_similarity",
                 "num_messages",
                 "model_arrival_latency",
                 "fraction_parameters_changed",
             ]
-            self._reputation_metrics = {key: key in self._reputation_metrics for key in expected_metrics}
-        self._initial_reputation = float(self._config.participant["defense_args"]["initial_reputation"])
-        self._weighting_factor = self._config.participant["defense_args"]["weighting_factor"]
-        self._weight_model_arrival_latency = float(
-            self._config.participant["defense_args"]["weight_model_arrival_latency"]
-        )
-        self._weight_model_similarity = float(self._config.participant["defense_args"]["weight_model_similarity"])
-        self._weight_num_messages = float(self._config.participant["defense_args"]["weight_num_messages"])
-        self._weight_fraction_params_changed = float(
-            self._config.participant["defense_args"]["weight_fraction_params_changed"]
-        )
+            self._metrics = {key: key in self._metrics for key in expected_metrics}
+        self._initial_reputation = float(self._config.participant["defense_args"]["reputation"]["initial_reputation"])
+        self._weighting_factor = self._config.participant["defense_args"]["reputation"]["weighting_factor"]
+        if str(self._weighting_factor).lower() != "dynamic":
+            self._weight_model_arrival_latency = float(
+                self._config.participant["defense_args"]["reputation"]["weight_model_arrival_latency"]
+            )
+            self._weight_model_similarity = float(self._config.participant["defense_args"]["reputation"]["weight_model_similarity"])
+            self._weight_num_messages = float(self._config.participant["defense_args"]["reputation"]["weight_num_messages"])
+            self._weight_fraction_params_changed = float(
+                self._config.participant["defense_args"]["reputation"]["weight_fraction_params_changed"]
+            )
 
         msg = f"Reputation system: {self._with_reputation}"
-        msg += f"\nReputation metrics: {self._reputation_metrics}"
+        msg += f"\nReputation metrics: {self._metrics}"
         msg += f"\nInitial reputation: {self._initial_reputation}"
         msg += f"\nWeighting factor: {self._weighting_factor}"
-        msg += f"\nWeight model arrival latency: {self._weight_model_arrival_latency}"
-        msg += f"\nWeight model similarity: {self._weight_model_similarity}"
-        msg += f"\nWeight number of messages: {self._weight_num_messages}"
-        msg += f"\nWeight fraction of parameters changed: {self._weight_fraction_params_changed}"
+        if str(self._weighting_factor).lower() != "dynamic":
+            msg += f"\nWeight model arrival latency: {self._weight_model_arrival_latency}"
+            msg += f"\nWeight model similarity: {self._weight_model_similarity}"
+            msg += f"\nWeight number of messages: {self._weight_num_messages}"
+            msg += f"\nWeight fraction of parameters changed: {self._weight_fraction_params_changed}"
         print_msg_box(msg=msg, indent=2, title="Defense information")
 
     @property
@@ -187,24 +181,24 @@ class Reputation:
         if self._enabled:
             await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self.on_round_start)
             await EventManager.get_instance().subscribe_node_event(AggregationEvent, self.calculate_reputation)
-            if self._metrics.get("model_similarity", {}).get("enabled", False):
+            if self._metrics.get("model_similarity", False):
                 await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.recollect_similarity)
-            if self._metrics.get("fraction_parameters_changed", {}).get("enabled", False):
+            if self._metrics.get("fraction_parameters_changed", False):
                 await EventManager.get_instance().subscribe_node_event(
                     UpdateReceivedEvent, self.recollect_fraction_of_parameters_changed
                 )
-            if self._reputation_metrics.get("model_arrival_latency", False):
+            if self._metrics.get("model_arrival_latency", False):
                 await EventManager.get_instance().subscribe_node_event(
                     UpdateReceivedEvent, self.recollect_model_arrival_latency
                 )
-            if self._reputation_metrics.get("num_messages", False):
+            if self._metrics.get("num_messages", False):
                 await EventManager.get_instance().subscribe(("model", "update"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("model", "initialization"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(("control", "alive"), self.recollect_number_message)
                 await EventManager.get_instance().subscribe(
                     ("federation", "federation_models_included"), self.recollect_number_message
                 )
-                # await EventManager.get_instance().subscribe(("reputation", "share"), self.recollect_number_message)
+                await EventManager.get_instance().subscribe_node_event(DuplicatedMessageEvent, self.recollect_duplicated_number_message)
 
     def init_reputation(
         self, addr, federation_nodes=None, round_num=None, last_feedback_round=None, init_reputation=None
@@ -1056,29 +1050,33 @@ class Reputation:
                 neighbor_counts[key] = neighbor_counts.get(key, 0) + 1
 
             counts_all_neighbors = list(neighbor_counts.values())
-
             percentile_reference = np.percentile(counts_all_neighbors, 25) if counts_all_neighbors else 0
+            logging.info(f"count_all_neighbors: {counts_all_neighbors}, percentile_reference: {percentile_reference}")
             std_dev = np.std(counts_all_neighbors) if counts_all_neighbors else 0
             mean_messages_all_neighbors = np.mean(counts_all_neighbors) if counts_all_neighbors else 0
-            aument_mean = mean_messages_all_neighbors * 2 if current_round <= 3 else mean_messages_all_neighbors * 1.1
-            # aument_mean =  mean_messages_all_neighbors * 1.8 if current_round <= 1 else mean_messages_all_neighbors * 1.1
+            aument_mean =  mean_messages_all_neighbors * 2 if current_round <= 1 else mean_messages_all_neighbors * 1.1
 
-            relative_increase = (
-                (messages_count - percentile_reference) / percentile_reference if percentile_reference > 0 else 0
-            )
+            if percentile_reference > 0:
+                raw_relative_increase = (messages_count - percentile_reference) / percentile_reference
+                relative_increase = np.log1p(raw_relative_increase)
+            else:
+                relative_increase = 0.0
             dynamic_margin = (std_dev + 1) / (np.log1p(percentile_reference) + 1)
 
             normalized_messages = 1.0
             was_penalized = False
+
             if relative_increase > dynamic_margin:
                 penalty_ratio = np.log1p(relative_increase - dynamic_margin) / (np.log1p(dynamic_margin + 1e-6) + 1e-6)
                 normalized_messages *= np.exp(-(penalty_ratio**2))
+                was_penalized = True
 
             extra_penalty = 0.0
             if mean_messages_all_neighbors > 0 and messages_count > aument_mean:
                 extra_penalty = (messages_count - mean_messages_all_neighbors) / (mean_messages_all_neighbors + 1e-6)
                 amplification = 1 + (aument_mean / (mean_messages_all_neighbors + 1e-6))
                 normalized_messages *= np.exp(-((extra_penalty * amplification) ** 2))
+                was_penalized = True
 
             if was_penalized and current_round > 1:
                 prev_score = (
@@ -1088,8 +1086,6 @@ class Reputation:
                 )
                 if prev_score is not None and prev_score < 0.9:
                     normalized_messages *= 0.9
-
-            normalized_messages = max(0.001, normalized_messages)
 
             if (addr, nei) not in self.number_message_history:
                 self.number_message_history[(addr, nei)] = {}
@@ -1150,8 +1146,8 @@ class Reputation:
 
                 if past_values:
                     avg_past = sum(past_values) / len(past_values)
-                    # avg_number_message = messages_number_message_normalized * 0.9 + avg_past * 0.1
-                    avg_number_message = messages_number_message_normalized * 0.1 + avg_past * 0.9
+                    avg_number_message = messages_number_message_normalized * 0.9 + avg_past * 0.1
+                    # avg_number_message = messages_number_message_normalized * 0.1 + avg_past * 0.9
                 else:
                     avg_number_message = messages_number_message_normalized
             elif messages_number_message_normalized == 0 and current_round >= 1:
@@ -1772,6 +1768,19 @@ class Reputation:
                         self.rejected_nodes.add(nei)
 
     async def recollect_number_message(self, source, message):
+        if source != self._addr:
+            current_time = time.time()
+            if current_time:
+                self.save_data(
+                    "number_message",
+                    source,
+                    self._addr,
+                    time=current_time,
+                    current_round=self._engine.get_round(),
+                )
+
+    async def recollect_duplicated_number_message(self, dme: DuplicatedMessageEvent):
+        (source) = await dme.get_event_data()
         if source != self._addr:
             current_time = time.time()
             if current_time:
