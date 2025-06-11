@@ -48,7 +48,7 @@ RUN uv python install 3.11.7
 
 RUN uv python pin 3.11.7
 
-RUN uv sync --group controller --group core
+RUN uv sync --group controller
 
 ENV PATH="/.venv/bin:$PATH"
 

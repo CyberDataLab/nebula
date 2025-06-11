@@ -230,3 +230,8 @@ button[title]:hover::after {
         transform: rotate(360deg);
     }
 }
+
+#predefined-topology-nodes:disabled{
+    background:#e9ecef;
+    cursor:not-allowed;
+}

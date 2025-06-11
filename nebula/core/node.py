@@ -78,7 +78,6 @@ async def main(config):
     idx = config.participant["device_args"]["idx"]
 
     additional_node_status = config.participant["mobility_args"]["additional_node"]["status"]
-    additional_node_round = config.participant["mobility_args"]["additional_node"]["round_start"]
 
     # Adjust the total number of nodes and the index of the current node for CFL, as it doesn't require a specific partition for the server (not used for training)
     if config.participant["scenario_args"]["federation"] == "CFL":

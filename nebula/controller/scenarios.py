@@ -1,3 +1,4 @@
+import asyncio
 import glob
 import hashlib
 import json
@@ -9,12 +10,15 @@ import subprocess
 import sys
 import time
 from datetime import datetime
+from urllib.parse import quote
 
+from aiohttp import FormData
 import docker
 import tensorboard_reducer as tbr
 
 from nebula.addons.topologymanager import TopologyManager
 from nebula.config.config import Config
+from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
 from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
 from nebula.core.datasets.emnist.emnist import EMNISTDataset
@@ -103,6 +107,7 @@ class Scenario:
         sar_neighbor_policy,
         sar_training,
         sar_training_policy,
+        physical_ips=None,
     ):
         """
         Initialize a Scenario instance.
@@ -154,6 +159,7 @@ class Scenario:
             sar_neighbor_policy (str): Neighbor policy for SAR.
             sar_training (bool): Wheter SAR training is enabled.
             sar_training_policy (str): Training policy for SAR.
+            physical_ips (list, optional): List of physical IPs for nodes. Defaults to None.
         """
         self.scenario_title = scenario_title
         self.scenario_description = scenario_description
@@ -226,6 +232,7 @@ class Scenario:
         self.sar_neighbor_policy = sar_neighbor_policy
         self.sar_training = sar_training
         self.sar_training_policy = sar_training_policy
+        self.physical_ips = physical_ips
 
     def attack_node_assign(
         self,
@@ -401,27 +408,27 @@ class Scenario:
                     node_attack_params["targeted"] = attack_params.get("targeted", False)
                     if node_attack_params["targeted"]:
                         node_attack_params["target_label"] = validate_positive_int(
-                            attack_params.get("targetLabel", 4), "target_label"
+                            attack_params.get("target_label", 4), "target_label"
                         )
                         node_attack_params["target_changed_label"] = validate_positive_int(
-                            attack_params.get("targetChangedLabel", 7), "target_changed_label"
+                            attack_params.get("target_changed_label", 7), "target_changed_label"
                         )
 
                 elif attack == "Sample Poisoning":
                     node_attack_params["poisoned_node_percent"] = poisoned_node_percent
                     node_attack_params["poisoned_sample_percent"] = poisoned_sample_percent
                     node_attack_params["poisoned_noise_percent"] = poisoned_noise_percent
-                    node_attack_params["noise_type"] = attack_params.get("noiseType", "Gaussian")
+                    node_attack_params["noise_type"] = attack_params.get("noise_type", "Gaussian")
                     node_attack_params["targeted"] = attack_params.get("targeted", False)
                     if node_attack_params["targeted"]:
                         node_attack_params["target_label"] = validate_positive_int(
-                            attack_params.get("targetLabel", 4), "target_label"
+                            attack_params.get("target_label", 4), "target_label"
                         )
 
                 elif attack == "Model Poisoning":
                     node_attack_params["poisoned_node_percent"] = poisoned_node_percent
                     node_attack_params["poisoned_noise_percent"] = poisoned_noise_percent
-                    node_attack_params["noise_type"] = attack_params.get("noiseType", "Gaussian")
+                    node_attack_params["noise_type"] = attack_params.get("noise_type", "Gaussian")
 
                 elif attack == "GLL Neuron Inversion":
                     node_attack_params["poisoned_node_percent"] = poisoned_node_percent
@@ -429,40 +436,40 @@ class Scenario:
                 elif attack == "Swapping Weights":
                     node_attack_params["poisoned_node_percent"] = poisoned_node_percent
                     node_attack_params["layer_idx"] = validate_positive_int(
-                        attack_params.get("layerIdx", 0), "layer_idx"
+                        attack_params.get("layer_idx", 0), "layer_idx"
                     )
 
                 elif attack == "Delayer":
                     node_attack_params["poisoned_node_percent"] = poisoned_node_percent
                     node_attack_params["delay"] = validate_positive_int(attack_params.get("delay", 10), "delay")
                     node_attack_params["target_percentage"] = validate_percentage(
-                        attack_params.get("targetPercentage", 100), "target_percentage"
+                        attack_params.get("target_percentage", 100), "target_percentage"
                     )
                     node_attack_params["selection_interval"] = validate_positive_int(
-                        attack_params.get("selectionInterval", 1), "selection_interval"
+                        attack_params.get("selection_interval", 1), "selection_interval"
                     )
 
                 elif attack == "Flooding":
                     node_attack_params["poisoned_node_percent"] = poisoned_node_percent
                     node_attack_params["flooding_factor"] = validate_positive_int(
-                        attack_params.get("floodingFactor", 100), "flooding_factor"
+                        attack_params.get("flooding_factor", 100), "flooding_factor"
                     )
                     node_attack_params["target_percentage"] = validate_percentage(
-                        attack_params.get("targetPercentage", 100), "target_percentage"
+                        attack_params.get("target_percentage", 100), "target_percentage"
                     )
                     node_attack_params["selection_interval"] = validate_positive_int(
-                        attack_params.get("selectionInterval", 1), "selection_interval"
+                        attack_params.get("selection_interval", 1), "selection_interval"
                     )
 
                 # Add common attack parameters
                 node_attack_params["round_start_attack"] = validate_positive_int(
-                    attack_params.get("roundStartAttack", 1), "round_start_attack"
+                    attack_params.get("round_start_attack", 1), "round_start_attack"
                 )
                 node_attack_params["round_stop_attack"] = validate_positive_int(
-                    attack_params.get("roundStopAttack", 10), "round_stop_attack"
+                    attack_params.get("round_stop_attack", 10), "round_stop_attack"
                 )
                 node_attack_params["attack_interval"] = validate_positive_int(
-                    attack_params.get("attackInterval", 1), "attack_interval"
+                    attack_params.get("attack_interval", 1), "attack_interval"
                 )
 
                 # Validate round parameters
@@ -575,9 +582,18 @@ class ScenarioManagement:
         self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
         self.config = Config(entity="scenarioManagement")
 
+        # If physical set the neighbours correctly
+        if self.scenario.deployment == "physical" and self.scenario.physical_ips:
+            for idx, ip in enumerate(self.scenario.physical_ips):
+                node_key = str(idx)
+                if node_key in self.scenario.nodes:
+                    self.scenario.nodes[node_key]["ip"] = ip
+ 
         # Assign the controller endpoint
         if self.scenario.deployment == "docker":
             self.controller = f"{os.environ.get('NEBULA_CONTROLLER_HOST')}:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
+        elif self.scenario.deployment == "physical":
+            self.controller = "100.120.46.10:49152"
         else:
             self.controller = f"127.0.0.1:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
 
@@ -654,7 +670,10 @@ class ScenarioManagement:
                 participant_config = json.load(f)
 
             participant_config["network_args"]["ip"] = node_config["ip"]
-            participant_config["network_args"]["port"] = int(node_config["port"])
+            if self.scenario.deployment == "physical":
+                participant_config["network_args"]["port"] = 8000
+            else:
+                participant_config["network_args"]["port"] = int(node_config["port"])
             participant_config["network_args"]["simulation"] = self.scenario.network_simulation
             participant_config["device_args"]["idx"] = node_config["id"]
             participant_config["device_args"]["start"] = node_config["start"]
@@ -820,7 +839,7 @@ class ScenarioManagement:
         logging.info("Closing NEBULA nodes... Please wait")
         ScenarioManagement.stop_participants()
 
-    def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
+    async def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
         """
         Load participant configurations, generate certificates, setup topology, split datasets, 
         and start nodes according to the scenario deployment type.
@@ -961,7 +980,7 @@ class ScenarioManagement:
                     ).encode()
                 ).hexdigest()
                 participant_config["mobility_args"]["additional_node"]["status"] = True
-                participant_config["mobility_args"]["additional_node"]["round_start"] = additional_participant["round"]
+                participant_config["mobility_args"]["additional_node"]["time_start"] = additional_participant["time_start"]
 
                 # used for late creation nodes
                 participant_config["mobility_args"]["late_creation"] = True
@@ -973,6 +992,9 @@ class ScenarioManagement:
 
         if additional_participants_files:
             self.config.add_participants_config(additional_participants_files)
+
+        if additional_participants:
+            self.n_nodes += len(additional_participants)
 
         # Splitting dataset
         dataset_name = self.scenario.dataset
@@ -1345,7 +1367,46 @@ class ScenarioManagement:
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
 
-    def start_nodes_physical(self):
+    async def _upload_and_start(self, node_cfg: dict) -> None:
+        ip   = node_cfg["network_args"]["ip"]
+        port = node_cfg["network_args"]["port"]
+        host = f"{ip}:{port}"
+        idx  = node_cfg["device_args"]["idx"]
+ 
+        cfg_dir          = self.config_dir
+        config_path      = f"{cfg_dir}/participant_{idx}.json"
+        global_test_path = f"{cfg_dir}/global_test.h5"
+        train_set_path   = f"{cfg_dir}/participant_{idx}_train.h5"
+ 
+        # ---------- multipart/form-data ------------------------
+        form = FormData()
+        form.add_field("config",      open(config_path, "rb"),
+                       filename=os.path.basename(config_path),
+                       content_type="application/json")
+        form.add_field("global_test", open(global_test_path, "rb"),
+                       filename=os.path.basename(global_test_path),
+                       content_type="application/octet-stream")
+        form.add_field("train_set",   open(train_set_path, "rb"),
+                       filename=os.path.basename(train_set_path),
+                       content_type="application/octet-stream")
+ 
+        # ---------- /physical/setup/ (PUT) ---------------------
+        setup_ep = f"/physical/setup/{quote(host, safe='')}"
+        st, data = await remote_post_form(
+            self.controller, setup_ep, form, method="PUT"
+        )
+        if st != 201:
+            raise RuntimeError(f"[{host}] setup failed {st}: {data}")
+ 
+        # ---------- /physical/run/ (GET) ------------------------
+        run_ep = f"/physical/run/{quote(host, safe='')}"
+        st, data = await remote_get(self.controller, run_ep)
+        if st != 200:
+            raise RuntimeError(f"[{host}] run failed {st}: {data}")
+ 
+        logging.info("Node %s running: %s", host, data)
+
+    async def start_nodes_physical(self):
         """
         Placeholder method for starting nodes on physical devices.
 
@@ -1360,6 +1421,8 @@ class ScenarioManagement:
 
         for idx, node in enumerate(self.config.participants):
             pass
+
+        asyncio.create_task(self._upload_and_start(node))
 
         logging.info(
             "Physical devices deployment is not implemented publicly. Please use docker or process deployment."
@@ -1462,66 +1525,3 @@ class ScenarioManagement:
                 return False
 
             time.sleep(5)
-
-    @classmethod
-    def generate_statistics(cls, path):
-        """
-        Generate reduced statistical summaries from TensorBoard event files in a scenario directory.
-    
-        This method loads TensorBoard event data from the specified directory,
-        performs statistical reductions (mean, min, max, median, std, var) over scalar metrics,
-        and writes the reduced data back both as TensorBoard event files and as a CSV summary.
-    
-        Args:
-            path (str): The root directory containing a 'metrics' subdirectory with TensorBoard event files.
-    
-        Returns:
-            bool: True if statistics were generated successfully, False if no input event directories
-                  were found or if an error occurred during processing.
-        """
-        try:
-            # Define input directories
-            input_event_dirs = sorted(glob.glob(os.path.join(path, "metrics/*")))
-            if not input_event_dirs:
-                return False
-            # Generate statistics
-            logging.info(f"Generating statistics for scenario {path}")
-            # Where to write reduced TB events
-            tb_events_output_dir = os.path.join(path, "metrics", "reduced-data")
-            csv_out_path = os.path.join(path, "metrics", "reduced-data-as.csv")
-            # Whether to abort or overwrite when csv_out_path already exists
-            overwrite = False
-            reduce_ops = ("mean", "min", "max", "median", "std", "var")
-
-            # Handle duplicate steps
-            handle_dup_steps = "keep-first"
-            # Strict steps
-            strict_steps = False
-
-            events_dict = tbr.load_tb_events(
-                input_event_dirs, handle_dup_steps=handle_dup_steps, strict_steps=strict_steps
-            )
-
-            # Number of recorded tags. e.g. would be 3 if you recorded loss, MAE and R^2
-            n_scalars = len(events_dict)
-            n_steps, n_events = list(events_dict.values())[0].shape
-
-            logging.info(f"Loaded {n_events} TensorBoard runs with {n_scalars} scalars and {n_steps} steps each")
-            logging.info(f"Events dict keys: {events_dict.keys()}")
-
-            reduced_events = tbr.reduce_events(events_dict, reduce_ops)
-
-            for op in reduce_ops:
-                logging.info(f"Writing '{op}' reduction to '{tb_events_output_dir}-{op}'")
-
-            tbr.write_tb_events(reduced_events, tb_events_output_dir, overwrite)
-
-            logging.info(f"Writing results to '{csv_out_path}'")
-
-            tbr.write_data_file(reduced_events, csv_out_path, overwrite)
-
-            logging.info("Reduction complete")
-
-        except Exception as e:
-            logging.exception(f"Error generating statistics: {e}")
-            return False

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import random
 import socket
 import time
 import docker
@@ -298,6 +299,32 @@ class Engine:
         else:
             logging.error(f"❗️  Connection {source} not found in connections...")
 
+    async def _control_leadership_transfer_callback(self, source, message):
+        logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer message from {source}")
+        if self.role == Role.AGGREGATOR:
+            neighbors = await self.cm.get_addrs_current_connections(myself=True)
+            if len(neighbors) > 1:
+                random_neighbor = random.choice(neighbors)
+                message = self.cm.create_message("control", "leadership_transfer")
+                await self.cm.send_message(random_neighbor, message)
+                logging.info(
+                    f"🔧  handle_control_message | Trigger | Leadership transfer message sent to {random_neighbor}"
+                )
+                message = self.cm.create_message("control", "leadership_transfer_ack")
+                await self.cm.send_message(source, message)
+                logging.info(f"🔧  handle_control_message | Trigger | Leadership transfer ack message sent to {source}")
+            else:
+                logging.info(f"🔧  handle_control_message | Trigger | Only one neighbor found, I am the leader")
+        else:
+            self.role = Role.AGGREGATOR
+            logging.info(f"🔧  handle_control_message | Trigger | I am now the leader")
+            message = self.cm.create_message("control", "leadership_transfer_ack")
+            await self.cm.send_message(source, message)
+            logging.info(f"🔧  handle_control_message | Trigger | Leadership transfer ack message sent to {source}")
+
+    async def _control_leadership_transfer_ack_callback(self, source, message):
+        logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer ack message from {source}")
+
     async def _connection_connect_callback(self, source, message):
         logging.info(f"🔗  handle_connection_message | Trigger | Received connection message from {source}")
         current_connections = await self.cm.get_addrs_current_connections(myself=True)
@@ -422,7 +449,7 @@ class Engine:
         Args:
             removed_neighbor_addr (str): Address of the neighbor that was removed (or affected).
             neighbors (set): The updated set of current federation neighbors.
-            remove (bool): Flag indicating whether the specified neighbor was removed (True) 
+            remove (bool): Flag indicating whether the specified neighbor was removed (True)
                         or added (False).
 
         Publishes:
@@ -627,7 +654,7 @@ class Engine:
         - Initiates the federated learning cycle.
         3. If a round already exists and the lock is still held, it is released to avoid deadlock.
 
-        This method ensures that the learning process is initialized safely and only once, 
+        This method ensures that the learning process is initialized safely and only once,
         synchronizing startup across nodes and managing dependencies on federation readiness.
         """
         await self.learning_cycle_lock.acquire_async()
@@ -701,7 +728,10 @@ class Engine:
         )
 
     def learning_cycle_finished(self):
-        return not (self.round < self.total_rounds)
+        if not self.round or not self.total_rounds:
+            return False
+        else:
+            return (self.round < self.total_rounds)
 
     async def _learning_cycle(self):
         """
@@ -769,12 +799,12 @@ class Engine:
 
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
-        
+
         await self.trainer.test()
-        
+
         efe = ExperimentFinishEvent()
         await EventManager.get_instance().publish_node_event(efe)
-        
+
         print_msg_box(
             msg=f"FL process has been completed successfully (max. {self.total_rounds} rounds reached)",
             indent=2,

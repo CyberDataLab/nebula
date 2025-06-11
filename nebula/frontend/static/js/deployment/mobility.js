@@ -207,9 +207,15 @@ const MobilityManager = {
 
         const additionalParticipantsCount = parseInt(document.getElementById("additionalParticipants").value);
         for (let i = 0; i < additionalParticipantsCount; i++) {
-            config.additionalParticipants.push({
-                round: parseInt(document.getElementById(`roundsAdditionalParticipant${i}`).value)
-            });
+            if(document.getElementById("connectionDelaySwitch").checked) {
+                config.additionalParticipants.push({
+                    time_start: parseInt(document.getElementById("connectionDelay").value)
+                });
+            } else {
+                config.additionalParticipants.push({
+                    time_start: parseInt(document.getElementById(`roundsAdditionalParticipant${i}`).value)
+                });
+            }
         }
 
         return config;

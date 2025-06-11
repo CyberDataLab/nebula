@@ -2,6 +2,8 @@ import argparse
 import asyncio
 import datetime
 import importlib
+import ipaddress
+import json
 import logging
 import os
 import re
@@ -10,10 +12,11 @@ from typing import Annotated
 import aiohttp
 import psutil
 import uvicorn
-from fastapi import Body, FastAPI, HTTPException, Path, Request, status
+from fastapi import Body, FastAPI, Request, status, HTTPException, Path, File, UploadFile
 from fastapi.concurrency import asynccontextmanager
 
 from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
+from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.utils import DockerUtils
 
 
@@ -259,6 +262,31 @@ async def get_available_gpu():
             pass
 
 
+def validate_physical_fields(data: dict):
+    if data.get("deployment") != "physical":
+        return                                   
+ 
+    ips = data.get("physical_ips")
+    if not ips:
+        raise HTTPException(
+            status_code=400,
+            detail="physical deployment requires 'physical_ips'"
+        )
+ 
+    if len(ips) != data.get("n_nodes"):
+        raise HTTPException(
+            status_code=400,
+            detail="'physical_ips' must have the same length as 'n_nodes'"
+        )
+ 
+    try:
+        for ip in ips:
+            ipaddress.ip_address(ip)            
+            print(ip)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/scenarios/run")
 async def run_scenario(
     scenario_data: dict = Body(..., embed=True), role: str = Body(..., embed=True), user: str = Body(..., embed=True)
@@ -279,6 +307,8 @@ async def run_scenario(
 
     from nebula.controller.scenarios import ScenarioManagement
 
+    validate_physical_fields(scenario_data)
+
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario_data, user)
 
@@ -297,11 +327,11 @@ async def run_scenario(
         if scenarioManagement.scenario.mobility:
             additional_participants = scenario_data["additional_participants"]
             schema_additional_participants = scenario_data["schema_additional_participants"]
-            scenarioManagement.load_configurations_and_start_nodes(
+            await scenarioManagement.load_configurations_and_start_nodes(
                 additional_participants, schema_additional_participants
             )
         else:
-            scenarioManagement.load_configurations_and_start_nodes()
+            await scenarioManagement.load_configurations_and_start_nodes()
     except subprocess.CalledProcessError as e:
         logging.exception(f"Error docker-compose up: {e}")
         return
@@ -350,10 +380,6 @@ async def stop_scenario(
     except Exception as e:
         logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-    # Generate statistics for the scenario
-    # path = FileUtils.check_path(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
-    # ScenarioManagement.generate_statistics(path)
 
 
 @app.post("/scenarios/remove")
@@ -805,6 +831,188 @@ async def get_user_by_scenario_name(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return user
+
+
+@app.get("/discover-vpn")
+async def discover_vpn():
+    """
+    Calls the Tailscale CLI to fetch the current status in JSON format,
+    extracts all IPv4 addresses (by filtering out any address containing “:”),
+    and returns them as a JSON object {"ips": [...]}.
+    """
+    try:
+        # 1) Launch the `tailscale status --json` subprocess
+        proc = await asyncio.create_subprocess_exec(
+            "tailscale", "status", "--json",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+ 
+        # 2) Wait for it to finish and capture stdout/stderr
+        out, err = await proc.communicate()
+        if proc.returncode != 0:
+            # If the CLI returned an error, raise to be caught below
+            raise RuntimeError(err.decode())
+ 
+        # 3) Parse the JSON output
+        data = json.loads(out.decode())
+ 
+        # 4) Collect only the IPv4 addresses from each peer
+        ips = []
+        for peer in data.get("Peer", {}).values():
+            for ip in peer.get("TailscaleIPs", []):
+                if ":" not in ip:  
+                    # Skip IPv6 entries (they contain colons)
+                    ips.append(ip)
+ 
+        # 5) Return the list of IPv4s
+        return {"ips": ips}
+ 
+    except Exception as e:
+        # 6) Log any failure and respond with HTTP 500
+        logging.error(f"Error discovering VPN devices: {e}")
+        raise HTTPException(status_code=500, detail="No devices discovered")
+
+
+@app.get("/physical/run/{ip}", tags=["physical"])
+async def physical_run(ip: str):
+    status, data = await remote_get(ip, "/run/")
+ 
+    if status == 200:
+        return data
+    if status is None:
+        raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
+    raise HTTPException(status_code=status, detail=data)
+ 
+ 
+@app.get("/physical/stop/{ip}", tags=["physical"])
+async def physical_stop(ip: str):
+    status, data = await remote_get(ip, "/stop/")
+    if status == 200:
+        return data
+    if status is None:
+        raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
+    raise HTTPException(status_code=status, detail=data)
+ 
+ 
+@app.put("/physical/setup/{ip}", tags=["physical"],
+         status_code=status.HTTP_201_CREATED)
+async def physical_setup(
+    ip: str,
+    config:      UploadFile = File(..., description="*.json* configuration file"),
+    global_test: UploadFile = File(..., description="Global Dataset*.h5*"),
+    train_set:   UploadFile = File(..., description="Training dataset*.h5*"),
+):
+ 
+    form = aiohttp.FormData()
+    await config.seek(0)
+    form.add_field("config", config.file,
+                   filename=config.filename, content_type="application/json")
+    await global_test.seek(0)
+    form.add_field("global_test", global_test.file,
+                   filename=global_test.filename, content_type="application/octet-stream")
+    await train_set.seek(0)
+    form.add_field("train_set", train_set.file,
+                   filename=train_set.filename, content_type="application/octet-stream")
+ 
+    status_code, data = await remote_post_form(
+        ip, "/setup/", form, method="PUT"
+    )
+ 
+    if status_code == 201:
+        return data
+    if status_code is None:
+        raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
+    raise HTTPException(status_code=status_code, detail=data)
+ 
+# ──────────────────────────────────────────────────────────────
+# Physical · single-node state
+# ──────────────────────────────────────────────────────────────
+@app.get("/physical/state/{ip}", tags=["physical"])
+async def get_physical_node_state(ip: str):
+    """
+    Query a single Raspberry Pi (or other node) for its training state.
+ 
+    Parameters
+    ----------
+    ip : str
+        IP address or hostname of the node.
+ 
+    Returns
+    -------
+    dict
+        • running (bool) – True if a training process is active.  
+        • error   (str)  – Optional error message when the node is unreachable
+                            or returns a non-200 HTTP status.
+    """
+    # Short global timeout so a dead node doesn't block the whole request
+    timeout = aiohttp.ClientTimeout(total=3)            # seconds
+ 
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(f"http://{ip}/state/") as resp:
+                if resp.status == 200:
+                    # Forward the node's own JSON, expected to be {"running": bool}
+                    return await resp.json()
+                # Node responded but with an HTTP error code
+                return {"running": False,
+                        "error": f"HTTP {resp.status}"}
+    except Exception as exc:
+        # Network errors, timeouts, DNS failures, …
+        return {"running": False, "error": str(exc)}
+ 
+ 
+# ──────────────────────────────────────────────────────────────
+# Physical · aggregate state for an entire scenario
+# ──────────────────────────────────────────────────────────────
+@app.get("/physical/scenario-state/{scenario_name}", tags=["physical"])
+async def get_physical_scenario_state(scenario_name: str):
+    """
+    Check the training state of *every* physical node assigned to a scenario.
+ 
+    Parameters
+    ----------
+    scenario_name : str
+        Scenario identifier.
+ 
+    Returns
+    -------
+    dict
+        {
+          "running":       bool,            # True  ⇢ at least one node is training
+          "nodes_state":   { ip: {...} },   # result from each /state/ call
+          "all_available": bool             # True  ⇢ every node responded and
+                                            #          none is training
+        }
+    """
+    # 1) Retrieve scenario metadata and node list from the DB
+    scenario = await get_scenario_by_name(scenario_name)
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+ 
+    nodes = await list_nodes_by_scenario_name(scenario_name)
+    if not nodes:
+        raise HTTPException(status_code=404, detail="No nodes found for scenario")
+ 
+    # 2) Probe all nodes concurrently
+    ips   = [n["ip"] for n in nodes]
+    tasks = [get_physical_node_state(ip) for ip in ips]
+    states = await asyncio.gather(*tasks)               # parallel HTTP calls
+ 
+    # 3) Aggregate results
+    nodes_state  = dict(zip(ips, states))
+    any_running  = any(s.get("running") for s in states)
+    # 'all_available' is true only if *every* node answered with running=False
+    # *and* without an error field.
+    all_available = all(
+        (not s.get("running")) and (not s.get("error")) for s in states
+    )
+ 
+    return {
+        "running": any_running,
+        "nodes_state": nodes_state,
+        "all_available": all_available,
+    }
 
 
 @app.post("/user/add")

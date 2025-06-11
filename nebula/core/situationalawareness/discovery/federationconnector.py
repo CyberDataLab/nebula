@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
 OFFER_TIMEOUT = 7
-PENDING_CONFIRMATION_TTL = 30
+PENDING_CONFIRMATION_TTL = 60
 
 
 class FederationConnector(ISADiscovery):
@@ -160,7 +160,7 @@ class FederationConnector(ISADiscovery):
                         self.pending_confirmation_from_nodes.add(addr)
                         added = True
         if added:
-            await self._clear_pending_confirmations(node=addr)
+            asyncio.create_task(self._clear_pending_confirmations(node=addr))
 
     async def _remove_pending_confirmation_from(self, addr):
         """
@@ -182,6 +182,7 @@ class FederationConnector(ISADiscovery):
         await asyncio.sleep(PENDING_CONFIRMATION_TTL)
         async with self.pending_confirmation_from_nodes_lock:
             if node in self.pending_confirmation_from_nodes:
+                logging.info(f"Discard pending confirmation from: {node} cause of time to live expired...")
                 self.pending_confirmation_from_nodes.discard(node)
 
     async def _waiting_confirmation_from(self, addr):
@@ -196,6 +197,8 @@ class FederationConnector(ISADiscovery):
         """
         async with self.pending_confirmation_from_nodes_lock:
             found = addr in self.pending_confirmation_from_nodes
+            logging.info(f"pending confirmations:{self.pending_confirmation_from_nodes}")
+        logging.info(f"Waiting confirmation from source: {addr}, status: {found}")
         return found
 
     async def _confirmation_received(self, addr, confirmation=True, joining=False):

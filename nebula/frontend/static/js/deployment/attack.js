@@ -93,8 +93,10 @@ const AttackManager = (function() {
                 targetChangedLabel: {title: document.getElementById("target_changed_label-title"), container: document.getElementById("target_changed_label-container")}
             };
             
-            if (this.checked && (attackType === ATTACK_TYPES.LABEL_FLIPPING || attackType === ATTACK_TYPES.SAMPLE_POISONING)) {
+            if (this.checked && attackType === ATTACK_TYPES.LABEL_FLIPPING) {
                 showElements(elements, ['targetLabel', 'targetChangedLabel']);
+            } else if (this.checked && attackType === ATTACK_TYPES.SAMPLE_POISONING) {
+                showElements(elements, ['targetLabel']);
             } else {
                 elements.targetLabel.title.style.display = "none";
                 elements.targetLabel.container.style.display = "none";

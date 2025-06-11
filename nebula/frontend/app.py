@@ -503,6 +503,70 @@ async def get_least_memory_gpu():
     return await controller_get(url)
 
 
+# ─────────────────────────────────────────────
+# VPN helpers
+# ─────────────────────────────────────────────
+@app.get("/platform/api/discover-vpn", response_class=JSONResponse)
+async def frontend_discover_vpn(session: dict = Depends(get_session)):
+    """
+    Proxy endpoint that forwards a VPN-device discovery request from the frontend
+    to the internal controller, then returns the JSON result back to the client.
+    Requires the user to be logged in.
+    """
+ 
+    # 1) Enforce authentication
+    if "user" not in session:
+        # If there’s no user in session, return HTTP 401 Unauthorized
+        raise HTTPException(status_code=401, detail="Login required")
+ 
+    # 2) Build the controller URL (using host/port from settings)
+    url = f"http://{settings.controller_host}:{settings.controller_port}/discover-vpn"
+ 
+    try:
+        # 3) Call the controller’s /discover-vpn endpoint
+        data = await controller_get(url)
+ 
+        # 4) Return whatever JSON the controller gave us
+        return JSONResponse(content=data)
+ 
+    except HTTPException as e:
+        # 5) If the controller itself raised an HTTPException, propagate it as-is
+        raise e
+ 
+    except Exception as e:
+        # 6) For any other error, log it and return a generic 500 response
+        logging.exception(f"Error proxying discover-vpn: {e}")
+        raise HTTPException(status_code=500, detail="Error discovering VPN devices")
+ 
+@app.get("/platform/api/physical/state/{ip}", response_class=JSONResponse)
+async def proxy_physical_state(ip: str):
+    """
+    Forward the request to the controller so the frontend
+    can query a node state without exposing controller host/port
+    to the browser.
+    """
+    url = f"http://{settings.controller_host}:{settings.controller_port}/physical/state/{ip}"
+    return await controller_get(url)
+ 
+ 
+async def physical_nodes_available(ips: list[str]) -> bool:
+    """
+    Return True only if *every* ip answered with {"running": false}.
+    Any error or timeout counts as *not available*.
+    """
+    tasks  = [controller_get(
+                  f"http://{settings.controller_host}:{settings.controller_port}/physical/state/{ip}"
+              ) for ip in ips]
+    states = await asyncio.gather(*tasks, return_exceptions=True)
+ 
+    for st in states:
+        if not isinstance(st, dict):
+            return False               
+        if st.get("running") is True:  
+            return False
+    return True
+
+
 async def deploy_scenario(scenario_data, role, user):
     """
     Deploy a new scenario on the controller with the given parameters.
@@ -2088,30 +2152,45 @@ async def assign_available_gpu(scenario_data, role):
     return scenario_data
 
 
-async def run_scenario(scenario_data, role, user):
+async def run_scenario(scenario_data: dict, role: str, user: str) -> None:
     """
-    Deploy a single scenario: assign resources, register it, and start its participants.
+    Deploy a single scenario (physical / docker / process).
 
-    Parameters:
-        scenario_data (dict): The scenario configuration data.
-        role (str): The role of the user initiating the scenario.
-        user (str): Username associated with the scenario.
-
-    Returns:
-        None
+    • If it's physical → wait for all Raspberry nodes to be free.
+    • Then reserve GPU/CPU based on availability and role.
+    • Call the controller to launch the scenario.
+    • Record the necessary info to track node completion.
     """
     user_data = user_data_store[user]
 
+    # PHYSICAL  ➜ wait until all nodes are idle
+    is_physical = scenario_data.get("deployment") == "physical"
+    phys_ips    = scenario_data.get("physical_ips", [])
+
+    if is_physical:
+        wait_start = asyncio.get_event_loop().time()
+        while not await physical_nodes_available(phys_ips):
+            elapsed = int(asyncio.get_event_loop().time() - wait_start)
+            mins, secs = divmod(elapsed, 60)
+            logging.info(
+                f"[{scenario_data.get('scenario_title', 'Unnamed')}] "
+                f"Raspberry nodes busy – waited {mins:02d}:{secs:02d}; retrying in 10 s…"
+            )
+            await asyncio.sleep(10)
+
+    # Reserve CPU/GPU based on availability and role
     scenario_data = await assign_available_gpu(scenario_data, role)
 
+    # Launch on the controller
     scenario_name = await deploy_scenario(scenario_data, role, user)
 
+    # Register for synchronization
     user_data.nodes_registration[scenario_name] = {
-        "n_nodes": scenario_data["n_nodes"],
-        "nodes": set(),
+        "n_nodes":   scenario_data["n_nodes"],
+        "nodes":     set(),
+        "condition": asyncio.Condition(),
     }
 
-    user_data.nodes_registration[scenario_name]["condition"] = asyncio.Condition()
 
 
 # Deploy the list of scenarios

@@ -90,14 +90,14 @@ const DeploymentManager = (function() {
     }
 
     function validateScenario() {
-        const physicalDevicesRadio = document.getElementById('physical-devices-radio');
-        if (physicalDevicesRadio && physicalDevicesRadio.checked) {
-            if (!window.lastPhysicalDevicesAlert || Date.now() - window.lastPhysicalDevicesAlert > 1000) {
-                Utils.showAlert('danger', 'Physical devices deployment is not supported in this version');
-                window.lastPhysicalDevicesAlert = Date.now();
-            }
-            return false;
-        }
+        // const physicalDevicesRadio = document.getElementById('physical-devices-radio');
+        // if (physicalDevicesRadio && physicalDevicesRadio.checked) {
+        //     if (!window.lastPhysicalDevicesAlert || Date.now() - window.lastPhysicalDevicesAlert > 1000) {
+        //         Utils.showAlert('danger', 'Physical devices deployment is not supported in this version');
+        //         window.lastPhysicalDevicesAlert = Date.now();
+        //     }
+        //     return false;
+        // }
 
         // Validate topology
         if (!TopologyManager.getData().nodes.length) {

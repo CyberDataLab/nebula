@@ -12,7 +12,7 @@ class MessagesManager:
     Manages creation, processing, and whenever is neccesary to do forwarding of Nebula protobuf messages.
     Handles different message types defined in the protocol and coordinates with the CommunicationsManager.
     """
-    
+
     def __init__(self, addr, config):
         """
         Initialize MessagesManager with the node address and configuration.

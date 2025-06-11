@@ -197,6 +197,27 @@
     </div>
 </div>
 
+<!-- VPN Discover Modal -->
+<div class="modal fade" id="vpnModal" tabindex="-1" aria-labelledby="vpnModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+    <div class="modal-content">
+        <div class="modal-header">
+        <h5 class="modal-title" id="vpnModalLabel">Discovered VPN Devices</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+        <form id="vpn-form">
+            <!-- Checkboxes here -->
+        </form>
+        </div>
+        <div class="modal-footer">
+        <button type="button" id="vpn-cancel-btn" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="vpn-accept-btn" class="btn btn-dark btn-sm">Accept</button>
+        </div>
+    </div>
+    </div>
+</div>
+
 <div id="spinner"></div>
 
 
@@ -221,28 +242,26 @@
                     <h5 class="step-number">Deployment <i class="fa fa-cloud-upload"></i></h5>
                     <h5 class="step-title">Deployment type</h5>
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="deploymentRadioOptions" id="process-radio"
-                            value="process">
-                        <label class="form-check-label" for="process-radio">Processes</label>
-                        <small id="processHelp" class="form-text text-muted"></small>
+                      <input class="form-check-input" type="radio" name="deploymentRadioOptions" id="process-radio" value="process">
+                      <label class="form-check-label" for="process-radio">Processes</label>
+                      <small id="processHelp" class="form-text text-muted">
                         <i id="processHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
-                        </small>
+                      </small>
                     </div>
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="deploymentRadioOptions" id="docker-radio"
-                            value="docker" checked>
-                        <label class="form-check-label" for="docker-radio">Virtual devices</label>
-                        <small id="dockerHelp" class="form-text text-muted"></small>
+                      <input class="form-check-input" type="radio" name="deploymentRadioOptions" id="docker-radio" value="docker" checked>
+                      <label class="form-check-label" for="docker-radio">Virtual devices</label>
+                      <small id="dockerHelp" class="form-text text-muted">
                         <i id="dockerHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
-                        </small>
+                      </small>
                     </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="deploymentRadioOptions"
-                            id="physical-devices-radio" value="physical">
-                        <label class="form-check-label" for="physical-devices-radio">Physical devices</label>
-                        <small id="physicalDevicesHelp" class="form-text text-muted">
-                            <i id="physicalDevicesHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
-                        </small>
+                    <div class="form-check form-check-inline d-flex align-items-center">
+                      <input class="form-check-input me-2 mb-1 align-middle" type="radio" name="deploymentRadioOptions" id="physical-devices-radio" value="physical">
+                      <label class="form-check-label me-2 mb-0 align-middle" for="physical-devices-radio">Physical devices</label>
+                      <button type="button" id="discoverDevicesBtn" class="btn btn-dark btn-sm" disabled data-bs-toggle="tooltip" data-bs-placement="right" title="Scan your network and discover physical devices">Discover</button>
+                      <small id="physicalDevicesHelp" class="form-text text-muted ms-2 mb-0">
+                        <i id="physicalDevicesHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                      </small>
                     </div>
                 </div>
                 <div class="form-group row container-shadow tiny grey">
@@ -769,11 +788,11 @@
                                 placeholder="Number of additional participants" min="0" value="0"
                                 style="display: inline; width: 80%">
                         </div>
-                        <h5 class="step-title" id="connectionDelaytitle" style="display: none;">Same connection delay</h5>
+                        <h5 class="step-title" id="connectionDelaytitle" style="display: none;">Connection delay (seconds)</h5>
                         <div class="form-check form-switch" id="connectionDelayDiv" style="display: none; margin-left: 23px; margin-bottom: 20px;">
                             <input class="form-check-input" type="checkbox" id="connectionDelaySwitch" checked style="display: inline; width: 80px; height: 30px; margin-right: 20px;">
                             <input type="number" class="form-control" id="connectionDelay"
-                                placeholder="Connection delay" min="1" value="1"
+                                placeholder="Connection delay" min="60" value="60"
                                 style="display: inline; width: 10%">
                             <small id="connectionDelayHelp" class="form-text text-muted">
                                 <i id="connectionDelayHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>

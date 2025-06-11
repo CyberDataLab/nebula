@@ -272,10 +272,7 @@ class NebulaEventHandler(PatternMatchingEventHandler):
         try:
             print(f"Running script: {script}")
             if script.endswith(".sh"):
-                result = subprocess.run(["bash", script], capture_output=True, text=True)
-                print(f"Script output:\n{result.stdout}")
-                if result.stderr:
-                    logging.error(f"Script error:\n{result.stderr}")
+                result = subprocess.Popen(["bash", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             elif script.endswith(".ps1"):
                 subprocess.Popen(
                     ["powershell", "-ExecutionPolicy", "Bypass", "-File", script],

@@ -20,7 +20,7 @@
 
 **NEBULA** (previously known as Fedstellar[^1]) is a cutting-edge platform designed to facilitate the training of federated models within both centralized and decentralized architectures. It streamlines the development, deployment, and management of federated applications across physical and virtualized devices.
 
-**NEBULA** is developed by **[Enrique Tomás Martínez Beltrán](https://enriquetomasmb.com)** in collaboration with the [University of Murcia](https://www.um.es/en), [armasuisse](https://www.armasuisse.ch/en), and the [University of Zurich](https://www.uzh.ch/).
+**NEBULA** is developed by **[Enrique Tomás Martínez Beltrán](https://enriquetomasmb.com)**, **[Alberto Huertas Celdrán](#)**, **[Alejandro Avilés Serrano](#)**, and **[Fernando Torres Vega](#)** in collaboration with the [University of Murcia](https://www.um.es/en), [armasuisse](https://www.armasuisse.ch/en), and the [University of Zurich](https://www.uzh.ch/).
 
 <p align="center">
 	<a href="https://um.es">

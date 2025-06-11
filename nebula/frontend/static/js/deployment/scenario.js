@@ -2,6 +2,7 @@
 const ScenarioManager = (function() {
     let scenariosList = [];
     let actual_scenario = 0;
+    let physical_ips     = [];
 
     // Initialize scenarios from session storage
     function initializeScenarios() {
@@ -124,7 +125,8 @@ const ScenarioManager = (function() {
             additional_participants: window.MobilityManager.getMobilityConfig().additionalParticipants || [],
             schema_additional_participants: document.getElementById("schemaAdditionalParticipantsSelect").value || "random",
             accelerator: "cpu",
-            gpu_id: []
+            gpu_id: [],
+            physical_ips: physical_ips
         };
     }
 
@@ -165,6 +167,12 @@ const ScenarioManager = (function() {
             window.TopologyManager.setData(topologyData);
         } else {
             window.TopologyManager.generatePredefinedTopology();
+        }
+
+        /*  if "physical" assign the IPs again*/
+        if (scenario.physical_ips) {
+            setPhysicalIPs(scenario.physical_ips);
+            window.TopologyManager.setPhysicalIPs(scenario.physical_ips);
         }
 
         // Load dataset settings
@@ -337,6 +345,26 @@ const ScenarioManager = (function() {
         document.getElementById("iidSelect").dispatchEvent(new Event('change'));
     }
 
+    function setPhysicalIPs(ipList = []) {
+        physical_ips = [...ipList];
+    }
+ 
+    function setActualScenario(index) {
+        actual_scenario = index;
+        if (scenariosList[index]) {
+            // Clear the current graph
+            window.TopologyManager.clearGraph();
+            
+            // Load new scenario data
+            loadScenarioData(scenariosList[index]);
+            
+            // If physical deployment, set physical IPs
+            if (scenariosList[index].deployment === 'physical' && scenariosList[index].physical_ips) {
+                window.TopologyManager.setPhysicalIPs(scenariosList[index].physical_ips);
+            }
+        }
+    }
+
     return {
         saveScenario,
         deleteScenario,
@@ -348,19 +376,15 @@ const ScenarioManager = (function() {
         initializeScenarios,
         getScenariosList: () => scenariosList,
         getActualScenario: () => actual_scenario,
-        setActualScenario: (index) => {
-            actual_scenario = index;
-            if (scenariosList[index]) {
-                loadScenarioData(scenariosList[index]);
-            }
-        },
+        setActualScenario,
         setScenariosList: (list) => {
             scenariosList = list;
             if (list.length > 0) {
                 actual_scenario = 0;
                 loadScenarioData(list[0]);
             }
-        }
+        },
+        setPhysicalIPs
     };
 })();
 

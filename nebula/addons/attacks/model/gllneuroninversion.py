@@ -39,20 +39,31 @@ class GLLNeuronInversionAttack(ModelAttack):
 
     def model_attack(self, received_weights):
         """
-        Performs the neuron inversion attack by modifying the weights of a specific
-        layer with random noise.
+        Applies a neuron inversion attack by injecting high-magnitude random noise into a target layer.
 
-        This attack replaces the weights of a chosen layer with random values,
-        which may disrupt the functionality of the model.
+        This attack targets a specific layer (typically the penultimate fully connected layer)
+        and overwrites all its weights with large random values. The intent is to cause extreme
+        activations or exploding gradients, which can degrade model performance or destabilize training.
 
         Args:
-            received_weights (dict): The aggregated model weights to be modified.
+            received_weights (dict): Dictionary of model weights with parameter names as keys.
 
         Returns:
-            dict: The modified model weights after applying the neuron inversion attack.
+            dict: Modified model weights after injecting noise into the selected layer.
         """
-        logging.info("[GLLNeuronInversionAttack] Performing neuron inversion attack")
-        lkeys = list(received_weights.keys())
-        logging.info(f"Layer inverted: {lkeys[-2]}")
-        received_weights[lkeys[-2]].data = torch.rand(received_weights[lkeys[-2]].shape) * 10000
+        logging.info("[NeuronInversionAttack] Injecting random noise into neuron layer")
+
+        # Get list of layer names
+        layer_keys = list(received_weights.keys())
+        target_key = layer_keys[-2]  # Target penultimate weight matrix
+        target_weights = received_weights[target_key]
+
+        # Use configurable scale or default to a high perturbation
+        # noise_scale = getattr(self, 'noise_scale', 1e4)
+        noise_scale = 10000
+        logging.info(f"Target layer: {target_key}, Noise scale: {noise_scale}")
+
+        # Inject random noise of the same shape and type
+        received_weights[target_key] = torch.empty_like(target_weights).uniform_(0, noise_scale)
+
         return received_weights

@@ -7,6 +7,7 @@ class ConnectionAction(Enum):
     """
     Enum for connection-related actions exchanged between nodes in the federation.
     """
+
     CONNECT = nebula_pb2.ConnectionMessage.Action.CONNECT
     DISCONNECT = nebula_pb2.ConnectionMessage.Action.DISCONNECT
     LATE_CONNECT = nebula_pb2.ConnectionMessage.Action.LATE_CONNECT
@@ -17,6 +18,7 @@ class FederationAction(Enum):
     """
     Enum for actions related to federation lifecycle and state management.
     """
+
     FEDERATION_START = nebula_pb2.FederationMessage.Action.FEDERATION_START
     REPUTATION = nebula_pb2.FederationMessage.Action.REPUTATION
     FEDERATION_MODELS_INCLUDED = nebula_pb2.FederationMessage.Action.FEDERATION_MODELS_INCLUDED
@@ -27,6 +29,7 @@ class DiscoveryAction(Enum):
     """
     Enum for node discovery and registration events.
     """
+
     DISCOVER = nebula_pb2.DiscoveryMessage.Action.DISCOVER
     REGISTER = nebula_pb2.DiscoveryMessage.Action.REGISTER
     DEREGISTER = nebula_pb2.DiscoveryMessage.Action.DEREGISTER
@@ -36,17 +39,21 @@ class ControlAction(Enum):
     """
     Enum for control signals used to report system status and health.
     """
+
     ALIVE = nebula_pb2.ControlMessage.Action.ALIVE
     OVERHEAD = nebula_pb2.ControlMessage.Action.OVERHEAD
     MOBILITY = nebula_pb2.ControlMessage.Action.MOBILITY
     RECOVERY = nebula_pb2.ControlMessage.Action.RECOVERY
     WEAK_LINK = nebula_pb2.ControlMessage.Action.WEAK_LINK
+    LEADERSHIP_TRANSFER = nebula_pb2.ControlMessage.Action.LEADERSHIP_TRANSFER
+    LEADERSHIP_TRANSFER_ACK = nebula_pb2.ControlMessage.Action.LEADERSHIP_TRANSFER_ACK
 
 
 class DiscoverAction(Enum):
     """
     Enum for extended discovery behaviors in multi-federation scenarios.
     """
+
     DISCOVER_JOIN = nebula_pb2.DiscoverMessage.Action.DISCOVER_JOIN
     DISCOVER_NODES = nebula_pb2.DiscoverMessage.Action.DISCOVER_NODES
 
@@ -55,6 +62,7 @@ class OfferAction(Enum):
     """
     Enum for offer-related messages, such as model or metric sharing.
     """
+
     OFFER_MODEL = nebula_pb2.OfferMessage.Action.OFFER_MODEL
     OFFER_METRIC = nebula_pb2.OfferMessage.Action.OFFER_METRIC
 
@@ -63,6 +71,7 @@ class LinkAction(Enum):
     """
     Enum for explicit link manipulation between nodes.
     """
+
     CONNECT_TO = nebula_pb2.LinkMessage.Action.CONNECT_TO
     DISCONNECT_FROM = nebula_pb2.LinkMessage.Action.DISCONNECT_FROM
 
@@ -71,7 +80,9 @@ class ReputationAction(Enum):
     """
     Enum for reputation exchange messages in the federation.
     """
+
     SHARE = nebula_pb2.ReputationMessage.Action.SHARE
+
 
 # Mapping between message type strings and their corresponding Enum classes
 ACTION_CLASSES = {

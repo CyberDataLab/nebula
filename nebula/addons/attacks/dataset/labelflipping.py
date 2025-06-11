@@ -1,45 +1,160 @@
 """
-This module provides a function for label flipping in datasets, allowing for the simulation of label noise
-as a form of data poisoning. The main function modifies the labels of specific samples in a dataset based
-on a specified percentage and target conditions.
+This module provides classes for label flipping attacks in datasets, allowing for the simulation of label noise
+as a form of data poisoning. It implements both targeted and non-targeted label flipping attacks.
 
-Function:
-- labelFlipping: Flips the labels of a specified portion of a dataset to random values or to a specific target label.
+Classes:
+- LabelFlippingAttack: Main attack class that implements the DatasetAttack interface
+- LabelFlippingStrategy: Abstract base class for label flipping strategies
+- TargetedLabelFlippingStrategy: Implementation for targeted label flipping
+- NonTargetedLabelFlippingStrategy: Implementation for non-targeted label flipping
 """
 
 import copy
 import logging
 import random
+from abc import ABC, abstractmethod
+from typing import Dict, TYPE_CHECKING
 
 import numpy as np
 
 from nebula.addons.attacks.dataset.datasetattack import DatasetAttack
 
+if TYPE_CHECKING:
+    from torch.utils.data import Dataset
+
+
+class LabelFlippingStrategy(ABC):
+    """Abstract base class for label flipping strategies."""
+
+    @abstractmethod
+    def flip_labels(
+        self,
+        dataset,
+        indices: list[int],
+        poisoned_percent: float,
+    ) -> "Dataset":
+        """
+        Abstract method to flip labels in the dataset.
+
+        Args:
+            dataset: The dataset to modify
+            indices: List of indices to consider for flipping
+            poisoned_percent: Percentage of labels to change (0-100)
+
+        Returns:
+            Modified dataset with flipped labels
+        """
+        pass
+
+
+class TargetedLabelFlippingStrategy(LabelFlippingStrategy):
+    """Implementation of targeted label flipping strategy."""
+
+    def __init__(self, target_label: int, target_changed_label: int):
+        """
+        Initialize targeted label flipping strategy.
+
+        Args:
+            target_label: The label to change
+            target_changed_label: The label to change to
+        """
+        self.target_label = target_label
+        self.target_changed_label = target_changed_label
+
+    def flip_labels(
+        self,
+        dataset,
+        indices: list[int],
+        poisoned_percent: float,
+    ) -> "Dataset":
+        """
+        Flips labels from target_label to target_changed_label.
+
+        Args:
+            dataset: The dataset to modify
+            indices: List of indices to consider for flipping
+            poisoned_percent: Percentage of labels to change (0-100)
+
+        Returns:
+            Modified dataset with flipped labels
+        """
+        new_dataset = copy.deepcopy(dataset)
+        if not isinstance(new_dataset.targets, np.ndarray):
+            new_dataset.targets = np.array(new_dataset.targets)
+        else:
+            new_dataset.targets = new_dataset.targets.copy()
+
+        for i in indices:
+            if int(new_dataset.targets[i]) == self.target_label:
+                new_dataset.targets[i] = self.target_changed_label
+
+        if self.target_label in new_dataset.targets:
+            logging.info(f"[{self.__class__.__name__}] Target label {self.target_label} still present after flipping.")
+        else:
+            logging.info(
+                f"[{self.__class__.__name__}] Target label {self.target_label} successfully flipped to {self.target_changed_label}."
+            )
+
+        return new_dataset
+
+
+class NonTargetedLabelFlippingStrategy(LabelFlippingStrategy):
+    """Implementation of non-targeted label flipping strategy."""
+
+    def flip_labels(
+        self,
+        dataset,
+        indices: list[int],
+        poisoned_percent: float,
+    ) -> "Dataset":
+        """
+        Flips labels randomly to different classes.
+
+        Args:
+            dataset: The dataset to modify
+            indices: List of indices to consider for flipping
+            poisoned_percent: Percentage of labels to change (0-100)
+
+        Returns:
+            Modified dataset with flipped labels
+        """
+        new_dataset = copy.deepcopy(dataset)
+        if not isinstance(new_dataset.targets, np.ndarray):
+            new_dataset.targets = np.array(new_dataset.targets)
+        else:
+            new_dataset.targets = new_dataset.targets.copy()
+
+        num_indices = len(indices)
+        num_flipped = int(poisoned_percent * num_indices / 100.0)
+
+        if num_indices == 0 or num_flipped > num_indices:
+            return new_dataset
+
+        flipped_indices = random.sample(indices, num_flipped)
+        class_list = list(set(new_dataset.targets.tolist()))
+
+        for i in flipped_indices:
+            current_label = new_dataset.targets[i]
+            new_label = random.choice(class_list)
+            while new_label == current_label:
+                new_label = random.choice(class_list)
+            new_dataset.targets[i] = new_label
+
+        return new_dataset
+
 
 class LabelFlippingAttack(DatasetAttack):
     """
-    Implements an attack that flips the labels of a portion of the training dataset.
-
-    This attack alters the labels of certain data points in the training set to
-    mislead the training process.
-
-    Args:
-        engine (object): The training engine object.
-        attack_params (dict): Parameters for the attack, including:
-            - poisoned_sample_percent (float): The percentage of data points to be poisoned (0-100).
-            - targeted (bool): Whether the attack is targeted at a specific label.
-            - target_label/targetLabel (int): The target label for the attack (used if targeted is True).
-            - target_changed_label/targetChangedLabel (int): The label to change to when targeted is True.
+    Implements a label flipping attack that can be either targeted or non-targeted.
     """
 
-    def __init__(self, engine, attack_params):
+    def __init__(self, engine, attack_params: Dict):
         """
-        Initializes the LabelFlippingAttack with the engine and attack parameters.
+        Initialize the label flipping attack.
 
         Args:
-            engine: The engine managing the attack context.
-            attack_params (dict): Parameters for the attack, including the percentage of
-                                  poisoned data, targeting options, and label specifications.
+            engine: The engine managing the attack context
+            attack_params: Dictionary containing attack parameters
         """
         try:
             round_start = int(attack_params["round_start_attack"])
@@ -53,99 +168,26 @@ class LabelFlippingAttack(DatasetAttack):
         super().__init__(engine, round_start, round_stop, attack_interval)
         self.datamodule = engine._trainer.datamodule
         self.poisoned_percent = float(attack_params["poisoned_sample_percent"])
-        self.targeted = attack_params["targeted"]
-        
-        # Handle both camelCase and snake_case parameter names
-        self.target_label = int(attack_params.get("target_label") or attack_params.get("targetLabel", 4))
-        self.target_changed_label = int(attack_params.get("target_changed_label") or attack_params.get("targetChangedLabel", 7))
 
-    def labelFlipping(
-        self,
-        dataset,
-        indices,
-        poisoned_percent=0,
-        targeted=False,
-        target_label=4,
-        target_changed_label=7,
-    ):
-        """
-        Flips the labels of a specified portion of a dataset to random values or to a specific target label.
-
-        This function modifies the labels of selected samples in the dataset based on the specified
-        poisoning percentage. Labels can be flipped either randomly or targeted to change from a specific
-        label to another specified label.
-
-        Args:
-            dataset (Dataset): The dataset containing training data, expected to be a PyTorch dataset
-                               with a `.targets` attribute.
-            indices (list of int): The list of indices in the dataset to consider for label flipping.
-            poisoned_percent (float, optional): The percentage of labels to change (0-100). Default is 0.
-            targeted (bool, optional): If True, flips only labels matching `target_label` to `target_changed_label`.
-                                       Default is False.
-            target_label (int, optional): The label to change when `targeted` is True. Default is 4.
-            target_changed_label (int, optional): The label to which `target_label` will be changed. Default is 7.
-
-        Returns:
-            Dataset: A deep copy of the original dataset with modified labels in `.targets`.
-
-        Raises:
-            ValueError: If `poisoned_percent` is not between 0 and 100.
-
-        Notes:
-            - When not in targeted mode, labels are flipped for a random selection of indices based on the specified
-              `poisoned_percent`. The new label is chosen randomly from the existing classes.
-            - In targeted mode, labels that match `target_label` are directly changed to `target_changed_label`.
-        """
-        new_dataset = copy.deepcopy(dataset)
-        if not isinstance(new_dataset.targets, np.ndarray):
-            new_dataset.targets = np.array(new_dataset.targets)
+        # Create the appropriate strategy based on whether the attack is targeted
+        if attack_params.get("targeted", False):
+            target_label = int(attack_params.get("target_label") or attack_params.get("targetLabel", 4))
+            target_changed_label = int(
+                attack_params.get("target_changed_label") or attack_params.get("targetChangedLabel", 7)
+            )
+            self.strategy = TargetedLabelFlippingStrategy(target_label, target_changed_label)
         else:
-            new_dataset.targets = new_dataset.targets.copy()
-
-        # logging.info(f"[{self.__class__.__name__}] First 20 labels before flipping: {new_dataset.targets[:20]}")
-        # logging.info(f"[{self.__class__.__name__}] First 20 indices before flipping: {indices[:20]}")
-
-        if not targeted:
-            num_indices = len(indices)
-            num_flipped = int(poisoned_percent * num_indices / 100.0)  # Convert percentage to count
-            if num_indices == 0 or num_flipped > num_indices:
-                return
-            flipped_indices = random.sample(indices, num_flipped)
-            class_list = list(set(new_dataset.targets.tolist()))
-            for i in flipped_indices:
-                current_label = new_dataset.targets[i]
-                new_label = random.choice(class_list)
-                while new_label == current_label:
-                    new_label = random.choice(class_list)
-                new_dataset.targets[i] = new_label
-        else:
-            for i in indices:
-                if int(new_dataset.targets[i]) == target_label:
-                    new_dataset.targets[i] = target_changed_label
-
-            if target_label in new_dataset.targets:
-                logging.info(f"[{self.__class__.__name__}] Target label {target_label} still present after flipping.")
-            else:
-                logging.info(
-                    f"[{self.__class__.__name__}] Target label {target_label} successfully flipped to {target_changed_label}."
-                )
-
-        # logging.info(f"[{self.__class__.__name__}] First 20 labels after flipping: {new_dataset.targets[:20]}")
-
-        return new_dataset
+            self.strategy = NonTargetedLabelFlippingStrategy()
 
     def get_malicious_dataset(self):
         """
         Creates a malicious dataset by flipping the labels of selected data points.
 
         Returns:
-            Dataset: The modified dataset with flipped labels.
+            Dataset: The modified dataset with flipped labels
         """
-        return self.labelFlipping(
+        return self.strategy.flip_labels(
             self.datamodule.train_set,
             self.datamodule.train_set_indices,
             self.poisoned_percent,
-            self.targeted,
-            self.target_label,
-            self.target_changed_label,
         )

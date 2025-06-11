@@ -7,11 +7,23 @@ const UIControls = (function() {
         setupReputationControls();
         setupActionButtons();
         setupDeploymentButtons();
+        setupDiscoverToggle();
+        /* === control Physical + Predefined => block input === */
+        document.querySelectorAll('input[name="deploymentRadioOptions"]')
+        .forEach(r => r.addEventListener('change', togglePredefinedNodesInput));
+ 
+        ['custom-topology-btn', 'predefined-topology-btn']
+        .forEach(id => document.getElementById(id)
+                .addEventListener('change', togglePredefinedNodesInput));
+ 
+        togglePredefinedNodesInput();
+        setupVpnDiscover();
         setupParticipantDisplay();
         setupParticipantModal();
         setupConfigButtons();
         // Initialize help icons
         window.HelpContent.initializePopovers();
+        setupDeploymentRadios();
     }
 
     function setupModeButton() {
@@ -631,13 +643,109 @@ const UIControls = (function() {
         }
     }
 
+    /**
+    * Enable/disable the Discover button if "Physical devices" option is selected
+    */
+    function setupDiscoverToggle() {
+        const radios      = document.querySelectorAll('input[name="deploymentRadioOptions"]');
+        const discoverBtn = document.getElementById('discoverDevicesBtn');
+        if (!discoverBtn || !radios.length) return;
+ 
+        const toggle = () => {
+            const sel = document.querySelector('input[name="deploymentRadioOptions"]:checked');
+            discoverBtn.disabled = sel.value !== 'physical';
+        };
+ 
+        radios.forEach(r => r.addEventListener('change', toggle));
+        toggle();
+    }
+ 
+    function setupVpnDiscover() {
+        const discoverBtn = document.getElementById('discoverDevicesBtn');
+        if (!discoverBtn) return;
+      
+        discoverBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/platform/api/discover-vpn');
+                if (!res.ok) throw new Error(res.statusText);
+          
+                const { ips } = await res.json();
+          
+                const form = document.getElementById('vpn-form');
+                form.innerHTML = '';
+                
+                const currentScenario = window.ScenarioManager.getScenariosList()[window.ScenarioManager.getActualScenario()];
+                const selectedIPs = currentScenario?.physical_ips || [];
+ 
+                ips.forEach(ip => {
+                    const wrapper = document.createElement('div');
+                    wrapper.classList.add('form-check');
+                    wrapper.innerHTML = `
+                        <input class="form-check-input" type="checkbox" value="${ip}" id="vpn-${ip}"
+                               ${selectedIPs.includes(ip) ? 'checked' : ''}>
+                        <label class="form-check-label" for="vpn-${ip}">${ip}</label>
+                    `;
+                    form.appendChild(wrapper);
+                });
+          
+                const modal = new bootstrap.Modal(document.getElementById('vpnModal'));
+                modal.show();
+ 
+                document.getElementById('vpn-accept-btn').onclick = () => {
+                    const selected = Array.from(form.querySelectorAll('input:checked'))
+                                        .map(i => i.value);
+                
+                    window.ScenarioManager.setPhysicalIPs(selected);
+                    
+                    window.TopologyManager.setPhysicalIPs(selected);
+                    
+                    modal.hide();
+                };
+            } catch (err) {
+                console.error('Error discovering VPN:', err);
+                alert('Cannot discover VPNs.');
+            }
+        });
+    }
+ 
+    function togglePredefinedNodesInput() {
+    const deployment   = document.querySelector('input[name="deploymentRadioOptions"]:checked')?.value;
+    const isPredefined = document.getElementById('predefined-topology-btn').checked;
+    const nodesInput   = document.getElementById('predefined-topology-nodes');
+    
+    if (!nodesInput) return;
+    
+    const disable = deployment === 'physical' && isPredefined;
+    nodesInput.disabled = disable;
+    nodesInput.classList.toggle('disabled', disable);
+    }
+ 
+    function setupDeploymentRadios() {
+        const radios = document.querySelectorAll('input[name="deploymentRadioOptions"]');
+        radios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'physical') {
+                    // Si cambiamos a modo físico, actualizar la topología con las IPs actuales
+                    const currentScenario = window.ScenarioManager.getScenariosList()[window.ScenarioManager.getActualScenario()];
+                    if (currentScenario?.physical_ips) {
+                        window.TopologyManager.setPhysicalIPs(currentScenario.physical_ips);
+                    }
+                } else {
+                    // Si cambiamos a otro modo, generar topología normal
+                    window.TopologyManager.generatePredefinedTopology();
+                }
+            });
+        });
+    }
+
     return {
         initializeUIControls,
         resetModeBtn,
         updateButtonVisibility,
         updateParticipantDisplay,
         setupParticipantModal,
-        handleDeployment
+        handleDeployment,
+        setupVpnDiscover
     };
 })();
 

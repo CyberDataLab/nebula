@@ -47,6 +47,8 @@ message ControlMessage {
     MOBILITY = 2;
     RECOVERY = 3;
     WEAK_LINK = 4;
+    LEADERSHIP_TRANSFER = 5;
+    LEADERSHIP_TRANSFER_ACK = 6;
   }
   Action action = 1;
   string log = 2;

@@ -58,7 +58,7 @@ class Connection:
     """
     
     DEFAULT_FEDERATED_ROUND = -1
-    INACTIVITY_TIMER = 30
+    INACTIVITY_TIMER = 120
     INACTIVITY_DAEMON_SLEEP_TIME = 20
 
     def __init__(

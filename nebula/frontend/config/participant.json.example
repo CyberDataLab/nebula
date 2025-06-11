@@ -68,7 +68,7 @@
     "neighbors_distance": {},
     "additional_node": {
       "status": false,
-      "round_start": 0,
+      "time_start": 0,
       "scheme": "random"
     }
   },
