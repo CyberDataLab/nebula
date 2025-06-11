@@ -155,7 +155,7 @@ class Engine:
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
 
-        if self.config.participant["defense_args"]["reputation"]["enabled"]:
+        if self.config.participant["defense_args"]["reputation"]["with_reputation"]:
             self._reputation = Reputation(engine=self, config=self.config)
 
     @property
@@ -321,21 +321,21 @@ class Engine:
 
     async def _reputation_share_callback(self, source, message):
         try:
-            logging.info(
-                f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}"
-            )
+            logging.info(f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
 
             current_node = self.addr
             nei = message.node_id
 
-            # Manage reputation
-            if current_node != nei:
-                key = (current_node, nei, message.round)
+            if hasattr(self, '_reputation') and self._reputation is not None:
+                if current_node != nei:
+                    key = (current_node, nei, message.round)
 
-                if key not in self._reputation.reputation_with_all_feedback:
-                    self._reputation.reputation_with_all_feedback[key] = []
+                    if key not in self._reputation.reputation_with_all_feedback:
+                        self._reputation.reputation_with_all_feedback[key] = []
 
-                self._reputation.reputation_with_all_feedback[key].append(message.score)
+                    self._reputation.reputation_with_all_feedback[key].append(message.score)
+            else:
+                logging.error("Reputation object (_reputation) is not available.")
 
         except Exception as e:
             logging.exception(f"Error handling reputation message: {e}")
@@ -566,7 +566,7 @@ class Engine:
         await self.aggregator.init()
         if "situational_awareness" in self.config.participant:
             await self.sa.init()
-        if self.config.participant["defense_args"]["reputation"]["enabled"]:
+        if self.config.participant["defense_args"]["reputation"]["with_reputation"]:
             await self._reputation.setup()
         await self._reporter.start()
         await self._addon_manager.deploy_additional_services()

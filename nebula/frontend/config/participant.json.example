@@ -93,9 +93,9 @@
   },
   "defense_args": {
     "reputation": {
-      "enabled": false,
-      "metrics": {},
-      "initial_reputation": 0.6,
+      "with_reputation": false,
+      "reputation_metrics": [],
+      "initial_reputation": 0.2,
       "weighting_factor": "dynamic"
     }
   },

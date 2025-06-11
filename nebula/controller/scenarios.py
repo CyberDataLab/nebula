@@ -537,7 +537,7 @@ class Scenario:
 
         # Create the scenario object
         scenario = cls(**scenario_data)
-
+    
         return scenario
 
 
@@ -677,28 +677,26 @@ class ScenarioManagement:
                 participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
             else:
                 participant_config["adversarial_args"]["attack_params"] = {"attacks": "No Attack"}
-            participant_config["defense_args"]["with_reputation"] = node_config["with_reputation"]
-            if isinstance(self.scenario.reputation_metrics, list):
-                metrics_list = self.scenario.reputation_metrics
-                metrics_dict = {
-                    "model_similarity": "model_similarity" in metrics_list,
-                    "num_messages": "num_messages" in metrics_list,
-                    "model_arrival_latency": "model_arrival_latency" in metrics_list,
-                    "fraction_parameters_changed": "fraction_parameters_changed" in metrics_list,
-                }
-                participant_config["defense_args"]["reputation_metrics"] = metrics_dict
-            else:
-                participant_config["defense_args"]["reputation_metrics"] = self.scenario.reputation_metrics
-            participant_config["defense_args"]["initial_reputation"] = self.scenario.initial_reputation
-            participant_config["defense_args"]["weighting_factor"] = self.scenario.weighting_factor
-            participant_config["defense_args"]["weight_model_arrival_latency"] = (
-                self.scenario.weight_model_arrival_latency
-            )
-            participant_config["defense_args"]["weight_model_similarity"] = self.scenario.weight_model_similarity
-            participant_config["defense_args"]["weight_num_messages"] = self.scenario.weight_num_messages
-            participant_config["defense_args"]["weight_fraction_params_changed"] = (
-                self.scenario.weight_fraction_params_changed
-            )
+                # Defense parameters
+                participant_config["defense_args"]["reputation"]["with_reputation"] = self.scenario.reputation.get("with_reputation", False)
+                participant_config["defense_args"]["reputation"]["initial_reputation"] = self.scenario.reputation.get("initial_reputation", 0.2)
+                metrics_list = self.scenario.reputation.get("reputation_metrics", [])
+                if isinstance(metrics_list, list):
+                    metrics_dict = {
+                        "model_similarity": "model_similarity" in metrics_list,
+                        "num_messages": "num_messages" in metrics_list,
+                        "model_arrival_latency": "model_arrival_latency" in metrics_list,
+                        "fraction_parameters_changed": "fraction_parameters_changed" in metrics_list,
+                    }
+                    participant_config["defense_args"]["reputation"]["reputation_metrics"] = metrics_dict
+                else:
+                    participant_config["defense_args"]["reputation"]["reputation_metrics"] = metrics_list
+                participant_config["defense_args"]["reputation"]["weighting_factor"] = self.scenario.reputation.get("weighting_factor", "dynamic")
+                participant_config["defense_args"]["reputation"]["weight_model_arrival_latency"] = self.scenario.reputation.get("weight_model_arrival_latency", 1.0)
+                participant_config["defense_args"]["reputation"]["weight_model_similarity"] = self.scenario.reputation.get("weight_model_similarity", 1.0)
+                participant_config["defense_args"]["reputation"]["weight_num_messages"] = self.scenario.reputation.get("weight_num_messages", 1.0)
+                participant_config["defense_args"]["reputation"]["weight_fraction_params_changed"] = self.scenario.reputation.get("weight_fraction_params_changed", 1.0)
+            # Mobility and network simulation parameters
             participant_config["mobility_args"]["random_geo"] = self.scenario.random_geo
             participant_config["mobility_args"]["latitude"] = self.scenario.latitude
             participant_config["mobility_args"]["longitude"] = self.scenario.longitude
