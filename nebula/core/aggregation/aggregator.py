@@ -48,7 +48,7 @@ class Aggregator(ABC):
             return None
 
     async def init(self):
-        await self.us.init(self.config)
+        await self.us.init(self.engine.rb.get_role_name())
 
     async def update_federation_nodes(self, federation_nodes: set):
         """

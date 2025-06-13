@@ -211,7 +211,8 @@ async def main(config: Config):
             value = value[key]
         value[keys[-1]] = randomize_value(value[keys[-1]], VARIABILITY)
 
-    logging.info(f"Starting node {idx} with model {model_name}, trainer {trainer.__name__}, and as {config.participant["device_args"]["role"]}")
+    role = config.participant["device_args"]["role"]
+    logging.info(f"Starting node {idx} with model {model_name}, trainer {trainer.__name__}, and as {role}")
 
     node = Engine(
         model=model,

@@ -88,7 +88,7 @@ class CFLUpdateHandler(UpdateHandler):
         Initializes the handler with the participant configuration,
         and subscribes to relevant node events.
         """
-        self._role = config.participant["device_args"]["role"]
+        self._role = config
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self.notify_federation_update)
         await EventManager.get_instance().subscribe_node_event(UpdateReceivedEvent, self.storage_update)
 

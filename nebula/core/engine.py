@@ -91,7 +91,7 @@ class Engine:
         self.port = config.participant["network_args"]["port"]
         self.addr = config.participant["network_args"]["addr"]
         role = config.participant["device_args"]["role"]
-        self._role_behavior: RoleBehavior = factory_role_behavior(role, config)
+        self._role_behavior: RoleBehavior = factory_role_behavior(role, self, config)
         self._role_behavior_performance_lock = Locker("role_behavior_performance_lock", async_lock=True)
         self.name = config.participant["device_args"]["name"]
         self.client = docker.from_env()
@@ -99,7 +99,7 @@ class Engine:
         print_banner()
 
         print_msg_box(
-            msg=f"Name {self.name}\nRole: {self.role.value}",
+            msg=f"Name {self.name}\nRole: {self._role_behavior.get_role_name()}",
             indent=2,
             title="Node information",
         )

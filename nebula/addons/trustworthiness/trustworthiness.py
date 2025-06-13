@@ -2,8 +2,7 @@ import logging
 from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import ExperimentFinishEvent, RoundEndEvent, TestMetricsEvent
 from nebula.core.eventmanager import EventManager
-from nebula.core.role import Role
-from nebula.core.noderole import ServerRoleBehavior
+from nebula.core.noderole import Role, ServerRoleBehavior
 from abc import ABC, abstractmethod
 from nebula.config.config import Config
 from nebula.core.engine import Engine
