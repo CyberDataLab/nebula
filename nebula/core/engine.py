@@ -6,8 +6,7 @@ import socket
 import time
 import docker
 
-from nebula.core.role import Role, factory_node_role
-from nebula.addons.attacks.attacks import create_attack
+from nebula.core.noderole import factory_role_behavior, change_role_behavior, Role, RoleBehavior
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.addons.reputation.reputation import Reputation
@@ -91,8 +90,9 @@ class Engine:
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
         self.addr = config.participant["network_args"]["addr"]
-        self.role = config.participant["device_args"]["role"]
-        self.role: Role = factory_node_role(self.role)
+        role = config.participant["device_args"]["role"]
+        self._role_behavior: RoleBehavior = factory_role_behavior(role, config)
+        self._role_behavior_performance_lock = Locker("role_behavior_performance_lock", async_lock=True)
         self.name = config.participant["device_args"]["name"]
         self.client = docker.from_env()
 
@@ -178,6 +178,11 @@ class Engine:
     def trainer(self):
         """Trainer"""
         return self._trainer
+    
+    @property
+    def rb(self):
+        """Role Behavior"""
+        return self._role_behavior
 
     @property
     def sa(self):
@@ -301,7 +306,7 @@ class Engine:
 
     async def _control_leadership_transfer_callback(self, source, message):
         logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer message from {source}")
-        if self.role == Role.AGGREGATOR:
+        if self.rb.get_role() == Role.AGGREGATOR:
             neighbors = await self.cm.get_addrs_current_connections(myself=True)
             if len(neighbors) > 1:
                 random_neighbor = random.choice(neighbors)
@@ -316,7 +321,9 @@ class Engine:
             else:
                 logging.info(f"🔧  handle_control_message | Trigger | Only one neighbor found, I am the leader")
         else:
-            self.role = Role.AGGREGATOR
+            async with self._role_behavior_performance_lock:
+                self.rb = change_role_behavior(self.rb, Role.AGGREGATOR, self, self.config)
+                
             logging.info(f"🔧  handle_control_message | Trigger | I am now the leader")
             message = self.cm.create_message("control", "leadership_transfer_ack")
             await self.cm.send_message(source, message)
@@ -753,9 +760,10 @@ class Engine:
             direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
             undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
             logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
-            logging.info(f"[Role {self.role.value}] Starting learning cycle...")
+            logging.info(f"[Role {self.rb.get_role_name()}] Starting learning cycle...")
             await self.aggregator.update_federation_nodes(expected_nodes)
-            await self._extended_learning_cycle()
+            async with self._role_behavior_performance_lock:
+                await self.rb.extended_learning_cycle()
 
             current_time = time.time()
             ree = RoundEndEvent(self.round, current_time)

@@ -37,8 +37,7 @@ from nebula.core.models.fashionmnist.cnn import FashionMNISTModelCNN
 from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
-from nebula.core.role import Role
-from nebula.core.noderole import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
+from nebula.core.engine import Engine
 from nebula.core.training.lightning import Lightning
 from nebula.core.training.siamese import Siamese
 
@@ -47,7 +46,7 @@ from nebula.core.training.siamese import Siamese
 # os.environ["TORCHDYNAMO_VERBOSE"] = "1"
 
 
-async def main(config):
+async def main(config: Config):
     """
     Main function to start the NEBULA node.
 
@@ -174,19 +173,19 @@ async def main(config):
     else:
         raise ValueError(f"Trainer {trainer_str} not supported")
 
-    if config.participant["device_args"]["malicious"]:
-        node_cls = MaliciousNode
-    else:
-        if config.participant["device_args"]["role"] == Role.AGGREGATOR.value:
-            node_cls = AggregatorNode
-        elif config.participant["device_args"]["role"] == Role.TRAINER.value:
-            node_cls = TrainerNode
-        elif config.participant["device_args"]["role"] == Role.SERVER.value:
-            node_cls = ServerNode
-        elif config.participant["device_args"]["role"] == Role.IDLE.value:
-            node_cls = IdleNode
-        else:
-            raise ValueError(f"Role {config.participant['device_args']['role']} not supported")
+    # if config.participant["device_args"]["malicious"]:
+    #     node_cls = MaliciousNode
+    # else:
+    #     if config.participant["device_args"]["role"] == Role.AGGREGATOR.value:
+    #         node_cls = AggregatorNode
+    #     elif config.participant["device_args"]["role"] == Role.TRAINER.value:
+    #         node_cls = TrainerNode
+    #     elif config.participant["device_args"]["role"] == Role.SERVER.value:
+    #         node_cls = ServerNode
+    #     elif config.participant["device_args"]["role"] == Role.IDLE.value:
+    #         node_cls = IdleNode
+    #     else:
+    #         raise ValueError(f"Role {config.participant['device_args']['role']} not supported")
 
     VARIABILITY = 0.5
 
@@ -212,9 +211,9 @@ async def main(config):
             value = value[key]
         value[keys[-1]] = randomize_value(value[keys[-1]], VARIABILITY)
 
-    logging.info(f"Starting node {idx} with model {model_name}, trainer {trainer.__name__}, and as {node_cls.__name__}")
+    logging.info(f"Starting node {idx} with model {model_name}, trainer {trainer.__name__}, and as {config.participant["device_args"]["role"]}")
 
-    node = node_cls(
+    node = Engine(
         model=model,
         datamodule=datamodule,
         config=config,

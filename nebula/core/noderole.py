@@ -5,8 +5,236 @@ from nebula.core.engine import Engine
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import UpdateReceivedEvent
 from nebula.core.training.lightning import Lightning
-
 from enum import Enum
+from abc import ABC, abstractmethod
+
+#TODO see trust changes cause of roleBehavior architecture
+#TODO ensure attacks works properly
+
+"""                                                         ##############################
+                                                            #        ROLE BEHAVIORS      #
+                                                            ##############################
+"""
+
+class Role(Enum):
+    """
+    This class defines the participant roles of the platform.
+    """
+    TRAINER = "trainer"
+    AGGREGATOR = "aggregator"
+    PROXY = "proxy"
+    IDLE = "idle"
+    SERVER = "server"
+    MALICIOUS = "malicious"
+    
+def factory_node_role(role: str) -> Role:
+    if role == "trainer":
+        return Role.TRAINER
+    elif role == "aggregator":
+        return Role.AGGREGATOR
+    elif role == "proxy":
+        return Role.PROXY
+    elif role == "idle":
+        return Role.IDLE
+    elif role == "server":
+        return Role.SERVER
+    elif role == "malicious":
+        return Role.MALICIOUS
+    else:
+        return ""
+
+class RoleBehavior(ABC):
+    #TODO update round expected nodes per behavior
+    @abstractmethod
+    def get_role(self):
+        raise NotImplementedError
+    
+    @abstractmethod
+    def get_role_name(self):
+        raise NotImplementedError
+    
+    @abstractmethod
+    async def extended_learning_cycle(self):
+        raise NotImplementedError
+    
+class MaliciousRoleBehavior(RoleBehavior):
+    # TODO
+    # Add fake role behavior parameter on node config 
+    # to know what fake role use
+    def __init__(self, engine: Engine, config: Config):
+        self._engine = engine
+        self._config = config
+        self.attack = create_attack(self._engine)
+        self.aggregator_bening = self._engine._aggregator
+        benign_role = self._config.participant["adversarial_args"]["attack_params"]["fake_behavior"]
+        self._fake_role_behavior = factory_role_behavior(benign_role, self._engine, self._config)
+        self._role = factory_node_role("malicious")
+    
+    def get_role(self):
+        return self._role
+        
+    def get_role_name(self):
+        return f"{self._role.value} as {self._fake_role_behavior.get_role_name()}"
+    
+    async def extended_learning_cycle(self):     
+        try:
+            await self.attack.attack()
+        except Exception:
+            attack_name = self._config.participant["adversarial_args"]["attack_params"]["attacks"]
+            logging.exception(f"Attack {attack_name} failed")
+            
+        await self._fake_role_behavior.extended_learning_cycle()
+        
+class AggregatorRoleBehavior(RoleBehavior):
+    def __init__(self, engine: Engine, config: Config):
+        self._engine = engine
+        self._config = config
+        self._role = factory_node_role("aggregator")
+        
+    def get_role(self):
+        return self._role    
+        
+    def get_role_name(self):
+        return self._role.value
+    
+    async def extended_learning_cycle(self):
+        # Define the functionality of the aggregator node
+        await self._engine.trainer.test()
+        await self._engine.trainning_in_progress_lock.acquire_async()
+        await self._engine.trainer.train()
+        await self._engine.trainning_in_progress_lock.release_async()
+
+        self_update_event = UpdateReceivedEvent(
+            self._engine.trainer.get_model_parameters(), self._engine.trainer.get_model_weight(), self._engine.addr, self._engine.round
+        )
+        await EventManager.get_instance().publish_node_event(self_update_event)
+
+        await self._engine.cm.propagator.propagate("stable")
+        await self._engine._waiting_model_updates()
+        
+class ServerRoleBehavior(RoleBehavior):
+    from datetime import datetime
+    
+    def __init__(self, engine: Engine, config: Config):
+        self._engine = engine
+        self._config = config
+        self._start_time = ServerRoleBehavior.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        self._role = factory_node_role("server")
+        
+    def get_role(self):
+        return self._role    
+        
+    def get_role_name(self):
+        return self._role.value
+        
+    async def extended_learning_cycle(self):
+        # Define the functionality of the server node
+        await self._engine.trainer.test()
+
+        self_update_event = UpdateReceivedEvent(
+            self._engine.trainer.get_model_parameters(), self._engine.trainer.BYPASS_MODEL_WEIGHT, self._engine.addr, self._engine.round
+        )
+        await EventManager.get_instance().publish_node_event(self_update_event)
+
+        await self._engine._waiting_model_updates()
+        await self._engine.cm.propagator.propagate("stable")  
+        
+class TrainerRoleBehavior(RoleBehavior):
+    def __init__(self, engine: Engine, config: Config):
+        self._engine = engine
+        self._config = config
+        self._role = factory_node_role("trainer")
+        
+    def get_role(self):
+        return self._role    
+        
+    def get_role_name(self):
+        return self._role.value
+        
+    async def extended_learning_cycle(self):
+        # Define the functionality of the trainer node
+        logging.info("Waiting global update | Assign _waiting_global_update = True")
+
+        await self._engine.trainer.test()
+        await self._engine.trainer.train()
+
+        self_update_event = UpdateReceivedEvent(
+            self._engine.trainer.get_model_parameters(), self._engine.trainer.get_model_weight(), self._engine.addr, self._engine.round, local=True
+        )
+        await EventManager.get_instance().publish_node_event(self_update_event)
+
+        await self._engine.cm.propagator.propagate("stable")
+        await self._engine._waiting_model_updates()
+        
+class IdleRoleBehavior(RoleBehavior):
+    def __init__(self, engine: Engine, config: Config):
+        self._engine = engine
+        self._config = config
+        self._role = factory_node_role("idle")
+        
+    def get_role(self):
+        return self._role    
+        
+    def get_role_name(self):
+        return self._role.value
+        
+    async def extended_learning_cycle(self):
+        # Define the functionality of the idle node
+        logging.info("Waiting global update | Assign _waiting_global_update = True")
+        await self._engine._waiting_model_updates()                
+
+class ProxyRoleBehavior(RoleBehavior):
+    def __init__(self, engine: Engine, config: Config):
+        self._engine = engine
+        self._config = config
+        self._role = factory_node_role("proxy")
+        
+    def get_role(self):
+        return self._role    
+        
+    def get_role_name(self):
+        return self._role.value
+        
+    async def extended_learning_cycle(self):
+        # Define the functionality of the idle node
+        logging.info("Waiting global update | Assign _waiting_global_update = True")
+        await self._engine._waiting_model_updates() 
+
+"""                                                         ##############################
+                                                            #    UTILS ROLE BEHAVIORS    #
+                                                            ##############################
+"""
+          
+class roleBehaviorException(Exception):
+    pass
+
+def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBehavior | None: 
+     
+    role_behaviors = {
+        "malicious": MaliciousRoleBehavior,
+        "trainer": TrainerRoleBehavior,
+        "aggregator": AggregatorRoleBehavior,
+        "server": ServerRoleBehavior,
+        "proxy": ProxyRoleBehavior,
+        "idle": IdleRoleBehavior,
+    }
+    
+    node_role = role_behaviors.get(role, None)
+
+    if node_role:
+        return node_role(engine, config)
+    else:
+        raise roleBehaviorException(f"Node Role Behavior {role} not found")
+    
+def change_role_behavior(old_role: RoleBehavior, new_role: Role, *parameters) -> RoleBehavior:
+    engine, config = parameters
+    if not isinstance(old_role, MaliciousRoleBehavior):
+        return factory_role_behavior(new_role, engine, config)
+    else:
+        fake_behavior = factory_role_behavior(new_role.value, engine, config)
+        old_role._fake_role_behavior = fake_behavior
+        return old_role            
+            
 
 class MaliciousNode(Engine):
     """
@@ -296,3 +524,5 @@ class IdleNode(Engine):
         # Define the functionality of the idle node
         logging.info("Waiting global update | Assign _waiting_global_update = True")
         await self._waiting_model_updates()
+        
+        

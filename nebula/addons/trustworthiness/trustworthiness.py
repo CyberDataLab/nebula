@@ -3,6 +3,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.core.nebulaevents import ExperimentFinishEvent, RoundEndEvent, TestMetricsEvent
 from nebula.core.eventmanager import EventManager
 from nebula.core.role import Role
+from nebula.core.noderole import ServerRoleBehavior
 from abc import ABC, abstractmethod
 from nebula.config.config import Config
 from nebula.core.engine import Engine
@@ -119,12 +120,13 @@ class TrustWorkloadTrainer(TrustWorkload):
     
 class TrustWorkloadServer(TrustWorkload):
     
-    def __init__(self, engine, idx, trust_files_route):
+    def __init__(self, engine: Engine, idx, trust_files_route):
         self._workload = 'aggregation'
         self._sample_size = 0
         self._current_loss = None
         self._current_accuracy = None
-        self._start_time = engine._start_time
+        server_start_time: ServerRoleBehavior = engine.rb
+        self._start_time = server_start_time._start_time
         self._engine: Engine = engine
         self._end_time = None
         self._experiment_name = ""
@@ -216,7 +218,7 @@ class Trustworthiness():
     def __init__(self, engine: Engine, config: Config):
         config.reset_logging_configuration()
         print_msg_box(
-            msg=f"Name Trustworthiness Module\nRole: {engine.role.value}",
+            msg=f"Name Trustworthiness Module\nRole: {engine.rb.get_role_name()}",
             indent=2,
         )
         self._engine = engine
@@ -225,7 +227,7 @@ class Trustworthiness():
         self._experiment_name = self._config.participant["scenario_args"]["name"]
         self._trust_dir_files = f"/nebula/app/logs/{self._experiment_name}/trustworthiness"
         self._emissions_file = 'emissions.csv'
-        self._role: Role = engine.role
+        self._role: Role = engine.rb.get_role()
         self._idx = self._config.participant["device_args"]["idx"]
         self._trust_workload: TrustWorkload = self._factory_trust_workload(self._role, self._engine, self._idx, self._trust_dir_files)       
         
