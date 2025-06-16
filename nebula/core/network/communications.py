@@ -35,10 +35,10 @@ class CommunicationsManager:
     - Handling and dispatching incoming messages to the appropriate handlers.
     - Preventing message duplication via message hash tracking.
 
-    It acts as a central coordinator for message-based interactions and is 
+    It acts as a central coordinator for message-based interactions and is
     designed to work asynchronously to support non-blocking network operations.
     """
-    
+
     _instance = None
     _lock = Locker("communications_manager_lock", async_lock=False)
 
@@ -143,7 +143,7 @@ class CommunicationsManager:
     def health(self):
         """
         Returns the HealthMonitor component that checks and maintains node health status.
-        """    
+        """
         return self._health
 
     @property
@@ -157,7 +157,7 @@ class CommunicationsManager:
     def propagator(self):
         """
         Returns the component responsible for propagating messages throughout the network.
-        """ 
+        """
         return self._propagator
 
     @property
@@ -529,11 +529,12 @@ class CommunicationsManager:
         Wrapper coroutine to handle a new incoming connection.
 
         Schedules the actual connection handling coroutine as an asyncio task.
-        
+
         Args:
             reader (asyncio.StreamReader): Stream reader for the connection.
             writer (asyncio.StreamWriter): Stream writer for the connection.
         """
+
         async def process_connection(reader, writer, priority="medium"):
             """
             Handles the lifecycle of a new incoming connection, including validation, authorization,
@@ -790,7 +791,7 @@ class CommunicationsManager:
 
         Args:
             message (Any): The message to send.
-            neighbors (set, optional): A set of neighbor addresses to send the message to. 
+            neighbors (set, optional): A set of neighbor addresses to send the message to.
                 If None, the message is sent to all direct neighbors.
             interval (float, optional): Delay in seconds between sending the message to each neighbor.
         """
@@ -1057,52 +1058,74 @@ class CommunicationsManager:
         """
         Disconnects from a specified destination address and performs cleanup tasks.
 
-        Optionally sends a mutual disconnection message to the peer, adds the address to the blacklist
-        if the disconnection is forced, and updates the list of current neighbors accordingly.
-
         Args:
             dest_addr (str): The address of the node to disconnect from.
             mutual_disconnection (bool, optional): Whether to notify the peer about the disconnection. Defaults to True.
             forced (bool, optional): If True, the destination address will be blacklisted. Defaults to False.
         """
-        removed = False
+        logging.info(f"Trying to disconnect {dest_addr}")
+
+        # Check if this is a direct neighbor before proceeding
         is_neighbor = dest_addr in await self.get_addrs_current_connections(only_direct=True, myself=True)
 
+        # Add to blacklist if forced disconnection
         if forced:
             await self.add_to_blacklist(dest_addr)
 
-        logging.info(f"Trying to disconnect {dest_addr}")
+        # Get the connection under lock to prevent race conditions
         async with self.connections_lock:
             if dest_addr not in self.connections:
                 logging.info(f"Connection {dest_addr} not found")
                 return
-        try:
-            if mutual_disconnection:
-                await self.connections[dest_addr].send(data=self.create_message("connection", "disconnect"))
-                await asyncio.sleep(1)
-                async with self.connections_lock:
-                    conn = self.connections.pop(dest_addr)
-                await conn.stop()
-        except Exception as e:
-            logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
-        if dest_addr in self.connections:
-            logging.info(f"Removing {dest_addr} from connections")
-            try:
-                removed = True
-                async with self.connections_lock:
-                    conn = self.connections.pop(dest_addr)
-                await conn.stop()
-            except Exception as e:
-                logging.exception(f"❗️  Error while removing connection {dest_addr}: {e!s}")
-        current_connections = await self.get_all_addrs_current_connections(only_direct=True)
-        current_connections = set(current_connections)
-        logging.info(f"Current connections: {current_connections}")
-        self.config.update_neighbors_from_config(current_connections, dest_addr)
+            conn = self.connections[dest_addr]
 
-        if removed:
-            current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
+        try:
+            # Attempt mutual disconnection if requested
+            if mutual_disconnection:
+                try:
+                    await conn.send(data=self.create_message("connection", "disconnect"))
+                    async with self.connections_lock:
+                        if dest_addr in self.connections:
+                            self.connections.pop(dest_addr)
+                    await conn.stop()
+                except Exception as e:
+                    logging.warning(f"Failed to send disconnect message to {dest_addr}: {e!s}")
+                    # Ensure connection is removed even if message sending fails
+                    async with self.connections_lock:
+                        if dest_addr in self.connections:
+                            self.connections.pop(dest_addr)
+                    await conn.stop()
+            else:
+                # For non-mutual disconnection, just stop and remove
+                async with self.connections_lock:
+                    if dest_addr in self.connections:
+                        self.connections.pop(dest_addr)
+                await conn.stop()
+
+            # Update configuration and neighbors
+            current_connections = await self.get_all_addrs_current_connections(only_direct=True)
+            current_connections = set(current_connections)
+            logging.info(f"Current connections after disconnection: {current_connections}")
+
+            # Update configuration
+            self.config.update_neighbors_from_config(current_connections, dest_addr)
+
+            # Update engine if this was a direct neighbor
             if is_neighbor:
-                await self.engine.update_neighbors(dest_addr, current_connections, remove=removed)
+                current_connections = await self.get_addrs_current_connections(only_direct=True, myself=True)
+                await self.engine.update_neighbors(dest_addr, current_connections, remove=True)
+
+        except Exception as e:
+            logging.exception(f"Error during disconnection of {dest_addr}: {e!s}")
+            # Ensure connection is removed even if there's an error
+            async with self.connections_lock:
+                if dest_addr in self.connections:
+                    self.connections.pop(dest_addr)
+            try:
+                await conn.stop()
+            except Exception as stop_error:
+                logging.warning(f"Error stopping connection during cleanup: {stop_error!s}")
+            raise
 
     async def get_all_addrs_current_connections(self, only_direct=False, only_undirected=False):
         """
