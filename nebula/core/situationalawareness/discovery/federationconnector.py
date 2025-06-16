@@ -480,12 +480,12 @@ class FederationConnector(ISADiscovery):
 
             ct_actions, df_actions = await self._get_actions()
             if len(ct_actions):
-                logging.info(f"{ct_actions}")
+                # logging.info(f"{ct_actions}")
                 cnt_msg = self.cm.create_message("link", "connect_to", addrs=ct_actions)
                 await self.cm.send_message(source, cnt_msg)
 
             if len(df_actions):
-                logging.info(f"{df_actions}")
+                # logging.info(f"{df_actions}")
                 for addr in df_actions.split():
                     await self.cm.disconnect(addr, mutual_disconnection=False)
 

@@ -714,6 +714,7 @@ class Engine:
         )
 
     def learning_cycle_finished(self):
+        return (self.round < self.total_rounds)
         if not self.round or not self.total_rounds:
             return False
         else:
