@@ -24,6 +24,9 @@ from nebula.core.utils.certificate import generate_ca_certificate, generate_cert
 from nebula.utils import DockerUtils, FileUtils
 from nebula.config.config import Config
 
+# MOD-INI
+from .scenario_management.factory import get_deployment
+# MOD-FIN
 
 # Definition of a scenario
 class Scenario:
@@ -89,6 +92,7 @@ class Scenario:
         sad_model_handler,
         sar_arbitration_policy,
         sar_neighbor_policy,
+        physical_ips=None,
     ):
         """
         Initialize the scenario.
@@ -207,6 +211,7 @@ class Scenario:
         self.sad_model_handler = sad_model_handler
         self.sar_arbitration_policy = sar_arbitration_policy
         self.sar_neighbor_policy = sar_neighbor_policy
+        self.physical_ips = physical_ips
 
     def attack_node_assign(
         self,
@@ -447,15 +452,28 @@ class ScenarioManagement:
         self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
         self.config = Config(entity="scenarioManagement")
 
+        # If physical set the neighbours correctly
+        if self.scenario.deployment == "physical" and self.scenario.physical_ips:
+            for idx, ip in enumerate(self.scenario.physical_ips):
+                node_key = str(idx)
+                if node_key in self.scenario.nodes:
+                    self.scenario.nodes[node_key]["ip"] = ip
+
         # Assign the controller endpoint
         if self.scenario.deployment == "docker":
             self.controller = f"{os.environ.get('NEBULA_CONTROLLER_HOST')}:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
+        elif self.scenario.deployment == "physical":
+            self.controller = "100.120.46.10:49152"
         else:
             self.controller = f"127.0.0.1:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
 
         self.topologymanager = None
         self.env_path = None
         self.use_blockchain = self.scenario.agg_algorithm == "BlockchainReputation"
+
+        # MOD-INI
+        self.deployment = get_deployment(self)   # factory → DockerDeployment / ProcessDeployment
+        # MOD-FIN
 
         # Create Scenario management dirs
         os.makedirs(self.config_dir, exist_ok=True)
@@ -524,7 +542,10 @@ class ScenarioManagement:
                 participant_config = json.load(f)
 
             participant_config["network_args"]["ip"] = node_config["ip"]
-            participant_config["network_args"]["port"] = int(node_config["port"])
+            if self.scenario.deployment == "physical":
+                participant_config["network_args"]["port"] = 8000
+            else:
+                participant_config["network_args"]["port"] = int(node_config["port"])
             participant_config["network_args"]["simulation"] = self.scenario.network_simulation
             participant_config["device_args"]["idx"] = node_config["id"]
             participant_config["device_args"]["start"] = node_config["start"]
@@ -640,11 +661,11 @@ class ScenarioManagement:
         except Exception as e:
             logging.exception(f"Error while removing current_scenario_commands.sh file: {e}")
 
-    @staticmethod
-    def stop_nodes():
+    # MOD-INI
+    def stop_nodes(self):
         logging.info("Closing NEBULA nodes... Please wait")
-        ScenarioManagement.stop_participants()
-        ScenarioManagement.stop_blockchain()
+        self.deployment.stop_nodes()
+    # MOD-FIN
 
     def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
         logging.info(f"Generating the scenario {self.scenario_name} at {self.start_date_scenario}")
@@ -680,6 +701,8 @@ class ScenarioManagement:
             participant_config["network_args"]["neighbors"] = self.topologymanager.get_neighbors_string(i)
             participant_config["scenario_args"]["name"] = self.scenario_name
             participant_config["scenario_args"]["start_time"] = self.start_date_scenario
+            participant_config["scenario_args"]["deployment"] = self.scenario.deployment
+            participant_config["scenario_args"]["controller"] = self.controller
             participant_config["device_args"]["idx"] = i
             participant_config["device_args"]["uid"] = hashlib.sha1(
                 (
@@ -839,21 +862,22 @@ class ScenarioManagement:
         dataset.initialize_dataset()
         logging.info(f"Splitting {dataset_name} dataset... Done")
 
-        if self.scenario.deployment in ["docker", "process", "physical"]:
+        # MOD-INI
+        if self.scenario.deployment in ("docker", "process", "physical"):
             if self.use_blockchain:
-                self.start_blockchain()
-            if self.scenario.deployment == "docker":
-                self.start_nodes_docker()
+                self.deployment.start_blockchain()
+            if self.scenario.deployment in ("docker", "process"):
+                self.deployment.start_nodes()
             elif self.scenario.deployment == "physical":
-                self.start_nodes_physical()
-            elif self.scenario.deployment == "process":
-                self.start_nodes_process()
+                self.deployment.start_nodes()
             else:
                 raise ValueError(f"Unknown deployment type: {self.scenario.deployment}")
         else:
             logging.info(
-                f"Virtualization mode is disabled for scenario '{self.scenario_name}' with {self.n_nodes} nodes. Waiting for nodes to start manually..."
+                f"Virtualization mode is disabled for scenario '{self.scenario_name}' "
+                f"with {self.n_nodes} nodes. Waiting for nodes to start manually..."
             )
+        # MOD-FIN
 
     def create_topology(self, matrix=None):
         import numpy as np
@@ -921,7 +945,9 @@ class ScenarioManagement:
         topologymanager.add_nodes(nodes_ip_port)
         return topologymanager
 
-    def start_blockchain(self):
+    # MOD-INI
+    def _start_blockchain_impl(self):
+        # MOD-FIN
         BlockchainDeployer(
             config_dir=f"{self.config_dir}/blockchain",
             input_dir="/nebula/nebula/addons/blockchain",
@@ -945,7 +971,9 @@ class ScenarioManagement:
             )
             raise
 
-    def start_nodes_docker(self):
+    # MOD-INI
+    def _start_nodes_docker_impl(self):
+        # MOD-FIN
         logging.info("Starting nodes using Docker Compose...")
         logging.info(f"env path: {self.env_path}")
 
@@ -1039,7 +1067,9 @@ class ScenarioManagement:
                 logging.exception(f"Starting participant {name} error: {e}")
             i += 1
 
-    def start_nodes_process(self):
+    # MOD-INI
+    def _start_nodes_process_impl(self):
+        # MOD-FIN
         self.processes_root_path = os.path.join(os.path.dirname(__file__),"..", "..")
         logging.info("Starting nodes as processes...")
         logging.info(f"env path: {self.env_path}")
@@ -1129,12 +1159,7 @@ class ScenarioManagement:
         
     def start_nodes_physical(self):
         logging.info("Starting nodes as physical devices...")
-        logging.info(f"env path: {self.env_path}")
-
-        for idx, node in enumerate(self.config.participants):
-            pass
-
-        logging.info("Physical devices deployment is not implemented publicly. Please use docker or process deployment.")
+        self.deployment.start_nodes()
 
     @classmethod
     def remove_files_by_scenario(cls, scenario_name):
