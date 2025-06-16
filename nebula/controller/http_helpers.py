@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Union
 
 import aiohttp
 from aiohttp import FormData
 
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
 
+
 async def _request_json(
     method: str,
     host: str,
     endpoint: str,
     *,
-    data: Optional[Union[FormData, bytes]] = None,
+    data: FormData | bytes | None = None,
 ) -> tuple[int | None, object]:
     url = f"http://{host}{endpoint}"
     try:
@@ -25,7 +25,7 @@ async def _request_json(
                     payload = await resp.text()
                 return resp.status, payload
     except Exception as exc:
-        logging.error("[%s] %s%s – %s", method.upper(), host, endpoint, exc)
+        logging.exception("[%s] %s%s – %s", method.upper(), host, endpoint, exc)
         return None, str(exc)
 
 

@@ -15,6 +15,7 @@ import tensorboard_reducer as tbr
 
 from nebula.addons.blockchain.blockchain_deployer import BlockchainDeployer
 from nebula.addons.topologymanager import TopologyManager
+from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
 from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
 from nebula.core.datasets.emnist.emnist import EMNISTDataset
@@ -22,11 +23,12 @@ from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
 from nebula.core.datasets.mnist.mnist import MNISTDataset
 from nebula.core.utils.certificate import generate_ca_certificate, generate_certificate
 from nebula.utils import DockerUtils, FileUtils
-from nebula.config.config import Config
 
 # MOD-INI
 from .scenario_management.factory import get_deployment
+
 # MOD-FIN
+
 
 # Definition of a scenario
 class Scenario:
@@ -224,9 +226,9 @@ class Scenario:
         attack_params,
     ):
         """Identify which nodes will be attacked"""
+        import logging
         import math
         import random
-        import logging
 
         # Validate input parameters
         def validate_percentage(value, name):
@@ -236,7 +238,7 @@ class Scenario:
                     raise ValueError(f"{name} must be between 0 and 100")
                 return value
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid {name}: {str(e)}")
+                raise ValueError(f"Invalid {name}: {e!s}")
 
         def validate_positive_int(value, name):
             try:
@@ -245,14 +247,20 @@ class Scenario:
                     raise ValueError(f"{name} must be positive")
                 return value
             except (TypeError, ValueError) as e:
-                raise ValueError(f"Invalid {name}: {str(e)}")
+                raise ValueError(f"Invalid {name}: {e!s}")
 
         # Validate attack type
         valid_attacks = {
-            "No Attack", "Label Flipping", "Sample Poisoning", "Model Poisoning",
-            "GLL Neuron Inversion", "Swapping Weights", "Delayer", "Flooding"
+            "No Attack",
+            "Label Flipping",
+            "Sample Poisoning",
+            "Model Poisoning",
+            "GLL Neuron Inversion",
+            "Swapping Weights",
+            "Delayer",
+            "Flooding",
         }
-        
+
         # Handle attack parameter which can be either a string or a list
         if isinstance(attack, list):
             if not attack:  # Empty list
@@ -305,16 +313,16 @@ class Scenario:
             node_att = "No Attack"
             malicious = False
             with_reputation = self.with_reputation
-            
+
             if node in attacked_nodes or nodes[node]["malicious"]:
                 malicious = True
                 with_reputation = False
                 node_att = attack
                 logging.info(f"Node {node} marked as malicious with attack {attack}")
-                
+
                 # Initialize attack parameters with defaults
                 attack_params = attack_params.copy() if attack_params else {}
-                
+
                 # Set attack-specific parameters
                 if attack == "Label Flipping":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
@@ -327,40 +335,36 @@ class Scenario:
                         attack_params["targetChangedLabel"] = validate_positive_int(
                             attack_params.get("targetChangedLabel", 7), "targetChangedLabel"
                         )
-                
+
                 elif attack == "Sample Poisoning":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
                     attack_params["poisonedSamplePercent"] = poisoned_sample_percent
                     attack_params["poisonedNoisePercent"] = poisoned_noise_percent
                     attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
                     attack_params["targeted"] = attack_params.get("targeted", False)
-                
+
                 elif attack == "Model Poisoning":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
                     attack_params["poisonedNoisePercent"] = poisoned_noise_percent
                     attack_params["noiseType"] = attack_params.get("noiseType", "Salt")
-                
+
                 elif attack == "GLL Neuron Inversion":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
-                
+
                 elif attack == "Swapping Weights":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["layerIdx"] = validate_positive_int(
-                        attack_params.get("layerIdx", 0), "layerIdx"
-                    )
-                
+                    attack_params["layerIdx"] = validate_positive_int(attack_params.get("layerIdx", 0), "layerIdx")
+
                 elif attack == "Delayer":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
-                    attack_params["delay"] = validate_positive_int(
-                        attack_params.get("delay", 10), "delay"
-                    )
+                    attack_params["delay"] = validate_positive_int(attack_params.get("delay", 10), "delay")
                     attack_params["targetPercentage"] = validate_percentage(
                         attack_params.get("targetPercentage", 100), "targetPercentage"
                     )
                     attack_params["selectionInterval"] = validate_positive_int(
                         attack_params.get("selectionInterval", 1), "selectionInterval"
                     )
-                
+
                 elif attack == "Flooding":
                     attack_params["poisonedNodePercent"] = poisoned_node_percent
                     attack_params["floodingFactor"] = validate_positive_int(
@@ -372,14 +376,10 @@ class Scenario:
                     attack_params["selectionInterval"] = validate_positive_int(
                         attack_params.get("selectionInterval", 1), "selectionInterval"
                     )
-                
+
                 # Add common attack parameters
-                attack_params["startRound"] = validate_positive_int(
-                    attack_params.get("startRound", 1), "startRound"
-                )
-                attack_params["stopRound"] = validate_positive_int(
-                    attack_params.get("stopRound", 10), "stopRound"
-                )
+                attack_params["startRound"] = validate_positive_int(attack_params.get("startRound", 1), "startRound")
+                attack_params["stopRound"] = validate_positive_int(attack_params.get("stopRound", 10), "stopRound")
                 attack_params["attackInterval"] = validate_positive_int(
                     attack_params.get("attackInterval", 1), "attackInterval"
                 )
@@ -395,17 +395,13 @@ class Scenario:
 
             # Ensure the attack type is properly set in the node configuration
             if malicious and attack != "No Attack":
-                nodes[node]["adversarial_args"] = {
-                    "attacks": attack,
-                    "attack_params": attack_params
-                }
+                nodes[node]["adversarial_args"] = {"attacks": attack, "attack_params": attack_params}
             else:
-                nodes[node]["adversarial_args"] = {
-                    "attacks": "No Attack",
-                    "attack_params": {}
-                }
+                nodes[node]["adversarial_args"] = {"attacks": "No Attack", "attack_params": {}}
 
-            logging.info(f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attacks']}")
+            logging.info(
+                f"Node {node} final configuration - malicious: {nodes[node]['malicious']}, attack: {nodes[node]['attacks']}"
+            )
 
         return nodes
 
@@ -472,7 +468,7 @@ class ScenarioManagement:
         self.use_blockchain = self.scenario.agg_algorithm == "BlockchainReputation"
 
         # MOD-INI
-        self.deployment = get_deployment(self)   # factory → DockerDeployment / ProcessDeployment
+        self.deployment = get_deployment(self)  # factory → DockerDeployment / ProcessDeployment
         # MOD-FIN
 
         # Create Scenario management dirs
@@ -665,6 +661,7 @@ class ScenarioManagement:
     def stop_nodes(self):
         logging.info("Closing NEBULA nodes... Please wait")
         self.deployment.stop_nodes()
+
     # MOD-FIN
 
     def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
@@ -866,9 +863,7 @@ class ScenarioManagement:
         if self.scenario.deployment in ("docker", "process", "physical"):
             if self.use_blockchain:
                 self.deployment.start_blockchain()
-            if self.scenario.deployment in ("docker", "process"):
-                self.deployment.start_nodes()
-            elif self.scenario.deployment == "physical":
+            if self.scenario.deployment in ("docker", "process") or self.scenario.deployment == "physical":
                 self.deployment.start_nodes()
             else:
                 raise ValueError(f"Unknown deployment type: {self.scenario.deployment}")
@@ -1070,14 +1065,16 @@ class ScenarioManagement:
     # MOD-INI
     def _start_nodes_process_impl(self):
         # MOD-FIN
-        self.processes_root_path = os.path.join(os.path.dirname(__file__),"..", "..")
+        self.processes_root_path = os.path.join(os.path.dirname(__file__), "..", "..")
         logging.info("Starting nodes as processes...")
         logging.info(f"env path: {self.env_path}")
 
         # Include additional config to the participants
         for idx, node in enumerate(self.config.participants):
             node["tracking_args"]["log_dir"] = os.path.join(self.processes_root_path, "app", "logs")
-            node["tracking_args"]["config_dir"] = os.path.join(self.processes_root_path, "app", "config", self.scenario_name)
+            node["tracking_args"]["config_dir"] = os.path.join(
+                self.processes_root_path, "app", "config", self.scenario_name
+            )
             node["scenario_args"]["controller"] = self.controller
             node["scenario_args"]["deployment"] = self.scenario.deployment
             node["security_args"]["certfile"] = os.path.join(
@@ -1150,13 +1147,17 @@ class ScenarioManagement:
 
                 commands += 'echo "All nodes started. PIDs stored in $PID_FILE"\n'
 
-                with open(f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", "w") as f:
+                with open(
+                    f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", "w"
+                ) as f:
                     f.write(commands)
-                os.chmod(f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", 0o755)
+                os.chmod(
+                    f"{self.processes_root_path}/app/config/{self.scenario_name}/current_scenario_commands.sh", 0o755
+                )
 
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
-        
+
     def start_nodes_physical(self):
         logging.info("Starting nodes as physical devices...")
         self.deployment.start_nodes()

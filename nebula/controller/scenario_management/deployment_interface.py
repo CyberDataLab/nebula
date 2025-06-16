@@ -9,11 +9,11 @@ and override the abstract methods.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..scenarios import ScenarioManagement
+
 
 class DeploymentInterface(ABC):
     """
@@ -23,7 +23,7 @@ class DeploymentInterface(ABC):
     of ScenarioManagement they are "plugged into".
     """
 
-    def __init__(self, scenario_mgmt: "ScenarioManagement"):
+    def __init__(self, scenario_mgmt: ScenarioManagement):
         # store a reference to access data and helpers
         self.sm = scenario_mgmt
 
@@ -36,8 +36,8 @@ class DeploymentInterface(ABC):
         """
         Launches the Blockchain infrastructure (if applicable).
 
-        • DockerDeployment: creates and starts the blockchain containers.  
-        • ProcessDeployment: usually calls the same private helper.  
+        • DockerDeployment: creates and starts the blockchain containers.
+        • ProcessDeployment: usually calls the same private helper.
         """
         pass
 

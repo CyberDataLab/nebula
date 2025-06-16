@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import importlib
+import ipaddress
 import json
 import logging
 import os
@@ -10,16 +11,15 @@ import subprocess
 import sys
 import threading
 import time
-import ipaddress
 from typing import Annotated
-from aiohttp import FormData
 
 import aiohttp
 import docker
 import psutil
 import uvicorn
+from aiohttp import FormData
 from dotenv import load_dotenv
-from fastapi import Body, FastAPI, Request, status, HTTPException, Path, File, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Path, Request, UploadFile, status
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
@@ -27,9 +27,9 @@ from nebula.addons.env import check_environment
 from nebula.config.config import Config
 from nebula.config.mender import Mender
 from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
-from nebula.controller.scenarios import Scenario, ScenarioManagement
-from nebula.utils import DockerUtils, FileUtils, SocketUtils
 from nebula.controller.http_helpers import remote_get, remote_post_form
+from nebula.controller.scenarios import Scenario, ScenarioManagement
+from nebula.utils import DockerUtils, SocketUtils
 
 
 # Setup controller logger
@@ -77,10 +77,12 @@ class TermEscapeCodeFormatter(logging.Formatter):
         record.msg = re.sub(escape_re, "", str(record.msg))
         return super().format(record)
 
+
 os.environ["NEBULA_CONTROLLER_NAME"] = os.environ["USER"]
 
 # Initialize FastAPI app outside the Controller class
 app = FastAPI()
+
 
 # Define endpoints outside the Controller class
 @app.get("/")
@@ -222,44 +224,38 @@ async def get_available_gpu():
         except Exception:  # noqa: S110
             pass
 
+
 def validate_physical_fields(data: dict):
     if data.get("deployment") != "physical":
         return
 
     ips = data.get("physical_ips")
     if not ips:
-        raise HTTPException(
-            status_code=400,
-            detail="physical deployment requires 'physical_ips'"
-        )
+        raise HTTPException(status_code=400, detail="physical deployment requires 'physical_ips'")
 
     if len(ips) != data.get("n_nodes"):
-        raise HTTPException(
-            status_code=400,
-            detail="'physical_ips' must have the same length as 'n_nodes'"
-        )
+        raise HTTPException(status_code=400, detail="'physical_ips' must have the same length as 'n_nodes'")
 
     try:
         for ip in ips:
-            ipaddress.ip_address(ip)             # ValueError if not IPv4/IPv6
+            ipaddress.ip_address(ip)  # ValueError if not IPv4/IPv6
             print(ip)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @app.post("/scenarios/run")
 async def run_scenario(
-    scenario_data: dict = Body(..., embed=True),
-    role: str = Body(..., embed=True),
-    user: str = Body(..., embed=True)
+    scenario_data: dict = Body(..., embed=True), role: str = Body(..., embed=True), user: str = Body(..., embed=True)
 ):
     """
     Launches a new scenario based on the provided configuration.
-    
+
     Args:
         scenario_data (dict): The complete configuration of the scenario to be executed.
         role (str): The role of the user initiating the scenario.
         user (str): The username of the user initiating the scenario.
-    
+
     Returns:
         str: The name of the scenario that was started.
     """
@@ -280,7 +276,7 @@ async def run_scenario(
         scenario=scenario_data,
         status="running",
         role=role,
-        username=user
+        username=user,
     )
 
     # Run the actual scenario
@@ -296,7 +292,7 @@ async def run_scenario(
     except subprocess.CalledProcessError as e:
         logging.exception(f"Error docker-compose up: {e}")
         return
-    
+
     return scenarioManagement.scenario_name
 
 
@@ -304,7 +300,7 @@ async def run_scenario(
 async def stop_scenario(
     scenario_name: str = Body(..., embed=True),
     username: str = Body(..., embed=True),
-    all: bool = Body(False, embed=True)
+    all: bool = Body(False, embed=True),
 ):
     from nebula.controller.scenarios import ScenarioManagement
 
@@ -320,12 +316,13 @@ async def stop_scenario(
         else:
             scenario_set_status_to_finished(scenario_name)
     except Exception as e:
-        logging.error(f"Error setting scenario {scenario_name} to finished: {e}")
+        logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
     # Generate statistics for the scenario
     # path = FileUtils.check_path(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
     # ScenarioManagement.generate_statistics(path)
+
 
 @app.post("/scenarios/remove")
 async def remove_scenario(
@@ -346,7 +343,7 @@ async def remove_scenario(
         remove_scenario_by_name(scenario_name)
         ScenarioManagement.remove_files_by_scenario(scenario_name)
     except Exception as e:
-        logging.error(f"Error removing scenario {scenario_name}: {e}")
+        logging.exception(f"Error removing scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"message": f"Scenario {scenario_name} removed successfully"}
@@ -354,24 +351,8 @@ async def remove_scenario(
 
 @app.get("/scenarios/{user}/{role}")
 async def get_scenarios(
-    user: Annotated[
-        str, 
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid username"
-        )
-    ],
-    role: Annotated[
-        str, 
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid role"
-        )
-    ]
+    user: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid username")],
+    role: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid role")],
 ):
     """
     Retrieves all scenarios associated with a given user and role.
@@ -392,7 +373,7 @@ async def get_scenarios(
         else:
             scenario_running = get_running_scenario(username=user)
     except Exception as e:
-        logging.error(f"Error obtaining scenarios: {e}")
+        logging.exception(f"Error obtaining scenarios: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"scenarios": scenarios, "scenario_running": scenario_running}
@@ -406,7 +387,7 @@ async def update_scenario(
     scenario: dict = Body(..., embed=True),
     status: str = Body(..., embed=True),
     role: str = Body(..., embed=True),
-    username: str = Body(..., embed=True)
+    username: str = Body(..., embed=True),
 ):
     """
     Updates the status and metadata of a scenario.
@@ -429,7 +410,7 @@ async def update_scenario(
         scenario = Scenario.from_dict(scenario)
         scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username)
     except Exception as e:
-        logging.error(f"Error updating scenario {scenario_name}: {e}")
+        logging.exception(f"Error updating scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"message": f"Scenario {scenario_name} updated successfully"}
@@ -437,8 +418,7 @@ async def update_scenario(
 
 @app.post("/scenarios/set_status_to_finished")
 async def set_scenario_status_to_finished(
-    scenario_name: str = Body(..., embed=True),
-    all: bool = Body(False, embed=True)
+    scenario_name: str = Body(..., embed=True), all: bool = Body(False, embed=True)
 ):
     """
     Sets the status of a scenario (or all scenarios) to 'finished'.
@@ -450,7 +430,7 @@ async def set_scenario_status_to_finished(
     Returns:
         dict: A message confirming the operation.
     """
-    from nebula.controller.database import scenario_set_status_to_finished, scenario_set_all_status_to_finished
+    from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
 
     try:
         if all:
@@ -458,7 +438,7 @@ async def set_scenario_status_to_finished(
         else:
             scenario_set_status_to_finished(scenario_name)
     except Exception as e:
-        logging.error(f"Error setting scenario {scenario_name} to finished: {e}")
+        logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"message": f"Scenario {scenario_name} status set to finished successfully"}
@@ -480,38 +460,24 @@ async def get_running_scenario(get_all: bool = False):
     try:
         return get_running_scenario(get_all=get_all)
     except Exception as e:
-        logging.error(f"Error obtaining running scenario: {e}")
+        logging.exception(f"Error obtaining running scenario: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/scenarios/check/{role}/{scenario_name}")
 async def check_scenario(
-    role: Annotated[
-        str, 
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid role"
-        )
-    ],
+    role: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid role")],
     scenario_name: Annotated[
-        str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        )
-    ]
-    ):
+        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+    ],
+):
     """
     Checks if a scenario is allowed for a specific role.
-    
+
     Args:
         role (str): Role to validate.
         scenario_name (str): Name of the scenario.
-    
+
     Returns:
         dict: Whether the scenario is allowed for the role.
     """
@@ -521,21 +487,15 @@ async def check_scenario(
         allowed = check_scenario_with_role(role, scenario_name)
         return {"allowed": allowed}
     except Exception as e:
-        logging.error(f"Error checking scenario with role: {e}")
+        logging.exception(f"Error checking scenario with role: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/scenarios/{scenario_name}")
 async def get_scenario_by_name(
     scenario_name: Annotated[
-        str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        )
-    ]
+        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+    ],
 ):
     """
     Fetches a scenario by its name.
@@ -551,23 +511,17 @@ async def get_scenario_by_name(
     try:
         scenario = get_scenario_by_name(scenario_name)
     except Exception as e:
-        logging.error(f"Error obtaining scenario {scenario_name}: {e}")
+        logging.exception(f"Error obtaining scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
     return scenario
 
 
 @app.get("/nodes/{scenario_name}")
 async def list_nodes_by_scenario_name(
     scenario_name: Annotated[
-        str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        )
-    ]
+        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+    ],
 ):
     """
     Lists all nodes associated with a specific scenario.
@@ -583,7 +537,7 @@ async def list_nodes_by_scenario_name(
     try:
         nodes = list_nodes_by_scenario_name(scenario_name)
     except Exception as e:
-        logging.error(f"Error obtaining nodes: {e}")
+        logging.exception(f"Error obtaining nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return nodes
@@ -593,14 +547,9 @@ async def list_nodes_by_scenario_name(
 async def update_nodes(
     scenario_name: Annotated[
         str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        ),
+        Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name"),
     ],
-    request: Request
+    request: Request,
 ):
     """
     Updates the configuration of a node in the database and notifies the frontend.
@@ -613,6 +562,7 @@ async def update_nodes(
         dict: Confirmation or response from the frontend.
     """
     from nebula.controller.database import update_node_record
+
     try:
         config = await request.json()
         timestamp = datetime.datetime.now()
@@ -634,14 +584,14 @@ async def update_nodes(
             str(config["device_args"]["malicious"]),
         )
     except Exception as e:
-        logging.error(f"Error updating nodes: {e}")
+        logging.exception(f"Error updating nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
     port = os.environ["NEBULA_FRONTEND_PORT"]
     url = f"http://localhost:{port}/platform/dashboard/{scenario_name}/node/update"
-    
+
     config["timestamp"] = str(timestamp)
-    
+
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=config) as response:
             if response.status == 200:
@@ -656,14 +606,9 @@ async def update_nodes(
 async def node_done(
     scenario_name: Annotated[
         str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        ),
+        Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name"),
     ],
-    request: Request
+    request: Request,
 ):
     """
     Endpoint to forward node status to the frontend.
@@ -679,9 +624,9 @@ async def node_done(
     """
     port = os.environ["NEBULA_FRONTEND_PORT"]
     url = f"http://localhost:{port}/platform/dashboard/{scenario_name}/node/done"
-    
+
     data = await request.json()
-    
+
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=data) as response:
             if response.status == 200:
@@ -689,13 +634,11 @@ async def node_done(
             else:
                 raise HTTPException(status_code=response.status, detail="Error posting data")
 
-    return {"message": "Nodes done"}   
+    return {"message": "Nodes done"}
 
 
 @app.post("/nodes/remove")
-async def remove_nodes_by_scenario_name(
-    scenario_name: str = Body(..., embed=True)
-):
+async def remove_nodes_by_scenario_name(scenario_name: str = Body(..., embed=True)):
     """
     Endpoint to remove all nodes associated with a scenario.
 
@@ -709,7 +652,7 @@ async def remove_nodes_by_scenario_name(
     try:
         remove_nodes_by_scenario_name(scenario_name)
     except Exception as e:
-        logging.error(f"Error removing nodes: {e}")
+        logging.exception(f"Error removing nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
     return {"message": f"Nodes for scenario {scenario_name} removed successfully"}
@@ -718,14 +661,8 @@ async def remove_nodes_by_scenario_name(
 @app.get("/notes/{scenario_name}")
 async def get_notes_by_scenario_name(
     scenario_name: Annotated[
-        str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        )
-    ]
+        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+    ],
 ):
     """
     Endpoint to retrieve notes associated with a scenario.
@@ -740,17 +677,14 @@ async def get_notes_by_scenario_name(
     try:
         notes = get_notes(scenario_name)
     except Exception as e:
-        logging.error(f"Error obtaining notes {notes}: {e}")
+        logging.exception(f"Error obtaining notes {notes}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
     return notes
 
 
 @app.post("/notes/update")
-async def update_notes_by_scenario_name(
-    scenario_name: str = Body(..., embed=True),
-    notes: str = Body(..., embed=True)
-):
+async def update_notes_by_scenario_name(scenario_name: str = Body(..., embed=True), notes: str = Body(..., embed=True)):
     """
     Endpoint to update notes for a given scenario.
 
@@ -765,16 +699,14 @@ async def update_notes_by_scenario_name(
     try:
         save_notes(scenario_name, notes)
     except Exception as e:
-        logging.error(f"Error updating notes: {e}")
+        logging.exception(f"Error updating notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
     return {"message": f"Notes for scenario {scenario_name} updated successfully"}
 
 
 @app.post("/notes/remove")
-async def remove_notes_by_scenario_name(
-    scenario_name: str = Body(..., embed=True)
-):
+async def remove_notes_by_scenario_name(scenario_name: str = Body(..., embed=True)):
     """
     Endpoint to remove notes associated with a scenario.
 
@@ -788,9 +720,9 @@ async def remove_notes_by_scenario_name(
     try:
         remove_note(scenario_name)
     except Exception as e:
-        logging.error(f"Error removing notes: {e}")
+        logging.exception(f"Error removing notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
     return {"message": f"Notes for scenario {scenario_name} removed successfully"}
 
 
@@ -813,23 +745,14 @@ async def list_users_controller(all_info: bool = False):
             user_list = [dict(user) for user in user_list]
         return {"users": user_list}
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving users: {e}"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {e}")
+
 
 @app.get("/user/{scenario_name}")
 async def get_user_by_scenario_name(
     scenario_name: Annotated[
-        str,
-        Path(
-            regex="^[a-zA-Z0-9_-]+$",
-            min_length=1,
-            max_length=50,
-            description="Valid scenario name"
-        )
-    ]
+        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+    ],
 ):
     """
     Endpoint to retrieve the user assigned to a scenario.
@@ -844,10 +767,11 @@ async def get_user_by_scenario_name(
     try:
         user = get_user_by_scenario_name(scenario_name)
     except Exception as e:
-        logging.error(f"Error obtaining user {user}: {e}")
+        logging.exception(f"Error obtaining user {user}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
     return user
+
 
 @app.get("/discover-vpn")
 async def discover_vpn():
@@ -859,7 +783,9 @@ async def discover_vpn():
     try:
         # 1) Launch the `tailscale status --json` subprocess
         proc = await asyncio.create_subprocess_exec(
-            "tailscale", "status", "--json",
+            "tailscale",
+            "status",
+            "--json",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -877,7 +803,7 @@ async def discover_vpn():
         ips = []
         for peer in data.get("Peer", {}).values():
             for ip in peer.get("TailscaleIPs", []):
-                if ":" not in ip:  
+                if ":" not in ip:
                     # Skip IPv6 entries (they contain colons)
                     ips.append(ip)
 
@@ -886,10 +812,10 @@ async def discover_vpn():
 
     except Exception as e:
         # 6) Log any failure and respond with HTTP 500
-        logging.error(f"Error discovering VPN devices: {e}")
+        logging.exception(f"Error discovering VPN devices: {e}")
         raise HTTPException(status_code=500, detail="No devices discovered")
 
-  
+
 # ──────────────────────────────────────────────────────────────
 #  End-points para nodos físicos
 # ──────────────────────────────────────────────────────────────
@@ -916,13 +842,12 @@ async def physical_stop(ip: str):
     raise HTTPException(status_code=status, detail=data)
 
 
-@app.put("/physical/setup/{ip}", tags=["physical"],
-         status_code=status.HTTP_201_CREATED)
+@app.put("/physical/setup/{ip}", tags=["physical"], status_code=status.HTTP_201_CREATED)
 async def physical_setup(
     ip: str,
-    config:      UploadFile = File(..., description="*.json* de configuración"),
+    config: UploadFile = File(..., description="*.json* de configuración"),
     global_test: UploadFile = File(..., description="Dataset global *.h5*"),
-    train_set:   UploadFile = File(..., description="Dataset entrenamiento *.h5*"),
+    train_set: UploadFile = File(..., description="Dataset entrenamiento *.h5*"),
 ):
     """
     Hace proxy de los tres ficheros al /setup/ de la Raspberry <ip>.
@@ -933,19 +858,16 @@ async def physical_setup(
     # 1)  Multipart-form a reenviar
     form = FormData()
     await config.seek(0)
-    form.add_field("config", config.file,
-                   filename=config.filename, content_type="application/json")
+    form.add_field("config", config.file, filename=config.filename, content_type="application/json")
     await global_test.seek(0)
-    form.add_field("global_test", global_test.file,
-                   filename=global_test.filename, content_type="application/octet-stream")
+    form.add_field(
+        "global_test", global_test.file, filename=global_test.filename, content_type="application/octet-stream"
+    )
     await train_set.seek(0)
-    form.add_field("train_set", train_set.file,
-                   filename=train_set.filename, content_type="application/octet-stream")
+    form.add_field("train_set", train_set.file, filename=train_set.filename, content_type="application/octet-stream")
 
     # 2)  PUT directo a la Pi
-    status_code, data = await remote_post_form(
-        ip, "/setup/", form, method="PUT"
-    )
+    status_code, data = await remote_post_form(ip, "/setup/", form, method="PUT")
 
     # 3)  Propagamos la respuesta
     if status_code == 201:
@@ -953,6 +875,7 @@ async def physical_setup(
     if status_code is None:
         raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
     raise HTTPException(status_code=status_code, detail=data)
+
 
 # ──────────────────────────────────────────────────────────────
 # Physical · single-node state
@@ -970,12 +893,12 @@ async def get_physical_node_state(ip: str):
     Returns
     -------
     dict
-        • running (bool) – True if a training process is active.  
+        • running (bool) – True if a training process is active.
         • error   (str)  – Optional error message when the node is unreachable
                             or returns a non-200 HTTP status.
     """
     # Short global timeout so a dead node doesn't block the whole request
-    timeout = aiohttp.ClientTimeout(total=3)            # seconds
+    timeout = aiohttp.ClientTimeout(total=3)  # seconds
 
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -984,8 +907,7 @@ async def get_physical_node_state(ip: str):
                     # Forward the node's own JSON, expected to be {"running": bool}
                     return await resp.json()
                 # Node responded but with an HTTP error code
-                return {"running": False,
-                        "error": f"HTTP {resp.status}"}
+                return {"running": False, "error": f"HTTP {resp.status}"}
     except Exception as exc:
         # Network errors, timeouts, DNS failures, …
         return {"running": False, "error": str(exc)}
@@ -1024,18 +946,16 @@ async def get_physical_scenario_state(scenario_name: str):
         raise HTTPException(status_code=404, detail="No nodes found for scenario")
 
     # 2) Probe all nodes concurrently
-    ips   = [n["ip"] for n in nodes]
+    ips = [n["ip"] for n in nodes]
     tasks = [get_physical_node_state(ip) for ip in ips]
-    states = await asyncio.gather(*tasks)               # parallel HTTP calls
+    states = await asyncio.gather(*tasks)  # parallel HTTP calls
 
     # 3) Aggregate results
-    nodes_state  = dict(zip(ips, states))
-    any_running  = any(s.get("running") for s in states)
+    nodes_state = dict(zip(ips, states, strict=False))
+    any_running = any(s.get("running") for s in states)
     # 'all_available' is true only if *every* node answered with running=False
     # *and* without an error field.
-    all_available = all(
-        (not s.get("running")) and (not s.get("error")) for s in states
-    )
+    all_available = all((not s.get("running")) and (not s.get("error")) for s in states)
 
     return {
         "running": any_running,
@@ -1043,12 +963,9 @@ async def get_physical_scenario_state(scenario_name: str):
         "all_available": all_available,
     }
 
+
 @app.post("/user/add")
-async def add_user_controller(
-    user: str = Body(...),
-    password: str = Body(...),
-    role: str = Body(...)
-):
+async def add_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
     """
     Endpoint to add a new user to the database.
 
@@ -1065,23 +982,18 @@ async def add_user_controller(
         add_user(user, password, role)
         return {"detail": "User added successfully"}
     except Exception as e:
-        logging.error(f"Error adding user: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error adding user: {e}"
-        )
-    
+        logging.exception(f"Error adding user: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error adding user: {e}")
+
 
 @app.post("/user/delete")
-async def remove_user_controller(
-    user: str = Body(..., embed=True)
-):
+async def remove_user_controller(user: str = Body(..., embed=True)):
     """
     Controller endpoint that inserts a new user into the database.
-    
+
     Parameters:
     - user: The username for the new user.
-    
+
     Returns a success message if the user is deleted, or an HTTP error if an exception occurs.
     """
     from nebula.controller.database import delete_user_from_db
@@ -1090,27 +1002,20 @@ async def remove_user_controller(
         delete_user_from_db(user)
         return {"detail": "User deleted successfully"}
     except Exception as e:
-        logging.error(f"Error deleting user: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting user: {e}"
-        )
-    
+        logging.exception(f"Error deleting user: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting user: {e}")
+
 
 @app.post("/user/update")
-async def add_user_controller(
-    user: str = Body(...),
-    password: str = Body(...),
-    role: str = Body(...)
-):
+async def add_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
     """
     Controller endpoint that modifies a user of the database.
-    
+
     Parameters:
     - user: The username of the user.
     - password: The user's password.
     - role: The role of the user.
-    
+
     Returns a success message if the user is updated, or an HTTP error if an exception occurs.
     """
     from nebula.controller.database import update_user
@@ -1119,18 +1024,12 @@ async def add_user_controller(
         update_user(user, password, role)
         return {"detail": "User updated successfully"}
     except Exception as e:
-        logging.error(f"Error updating user: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating user: {e}"
-        )
-    
+        logging.exception(f"Error updating user: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating user: {e}")
+
 
 @app.post("/user/verify")
-async def add_user_controller(
-    user: str = Body(...),
-    password: str = Body(...)
-):
+async def add_user_controller(user: str = Body(...), password: str = Body(...)):
     """
     Endpoint to verify user credentials.
 
@@ -1140,7 +1039,7 @@ async def add_user_controller(
 
     Returns the user role on success or raises an error on failure.
     """
-    from nebula.controller.database import list_users, verify, get_user_info
+    from nebula.controller.database import get_user_info, list_users, verify
 
     try:
         user_submitted = user.upper()
@@ -1150,11 +1049,8 @@ async def add_user_controller(
         else:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     except Exception as e:
-        logging.error(f"Error verifying user: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error verifying user: {e}"
-        )
+        logging.exception(f"Error verifying user: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error verifying user: {e}")
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -1842,7 +1738,7 @@ class Controller:
     def stop():
         """
         Gracefully shuts down the entire NEBULA system by performing the following steps:
-        
+
         - Logs the shutdown initiation.
         - Removes all Docker containers with names starting with '<user>_'.
         - Stops blockchain services and participant nodes via ScenarioManagement.

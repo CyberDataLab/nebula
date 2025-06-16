@@ -5,7 +5,6 @@ process_deployment.py – deployment strategy using **local processes**.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from .deployment_interface import DeploymentInterface
 
@@ -33,7 +32,7 @@ class ProcessDeployment(DeploymentInterface):
 
     def stop_nodes(self) -> None:
         """
-        • Removes auxiliary scripts.  
+        • Removes auxiliary scripts.
         • Stops the blockchain if applicable.
         """
         logging.info("Stopping process-based nodes for scenario %s …", self.sm.scenario_name)

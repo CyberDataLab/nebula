@@ -9,16 +9,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .docker_deployment import DockerDeployment
-from .process_deployment import ProcessDeployment
 from .deployment_interface import DeploymentInterface
+from .docker_deployment import DockerDeployment
 from .physical_deployment import PhysicalDeployment
+from .process_deployment import ProcessDeployment
 
 if TYPE_CHECKING:
     from ..scenarios import ScenarioManagement
 
 
-def get_deployment(sm: "ScenarioManagement") -> DeploymentInterface:
+def get_deployment(sm: ScenarioManagement) -> DeploymentInterface:
     """
     Decides and instantiates the appropriate deployment class.
 
@@ -45,6 +45,5 @@ def get_deployment(sm: "ScenarioManagement") -> DeploymentInterface:
         return PhysicalDeployment(sm)
 
     raise ValueError(
-        f"Deployment '{sm.scenario.deployment}' not supported yet. "
-        "Add it in controller/scenario_management/factory.py"
+        f"Deployment '{sm.scenario.deployment}' not supported yet. Add it in controller/scenario_management/factory.py"
     )

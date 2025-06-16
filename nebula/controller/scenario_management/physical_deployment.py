@@ -10,8 +10,9 @@ from urllib.parse import quote
 
 from aiohttp import FormData
 
-from .deployment_interface import DeploymentInterface
 from nebula.controller.http_helpers import remote_get, remote_post_form
+
+from .deployment_interface import DeploymentInterface
 
 
 class PhysicalDeployment(DeploymentInterface):
@@ -35,33 +36,37 @@ class PhysicalDeployment(DeploymentInterface):
 
     # ---------------------------------------------------------- #
     async def _upload_and_start(self, node_cfg: dict) -> None:
-        ip   = node_cfg["network_args"]["ip"]
+        ip = node_cfg["network_args"]["ip"]
         port = node_cfg["network_args"]["port"]
         host = f"{ip}:{port}"
-        idx  = node_cfg["device_args"]["idx"]
+        idx = node_cfg["device_args"]["idx"]
 
-        cfg_dir          = self.sm.config_dir
-        config_path      = f"{cfg_dir}/participant_{idx}.json"
+        cfg_dir = self.sm.config_dir
+        config_path = f"{cfg_dir}/participant_{idx}.json"
         global_test_path = f"{cfg_dir}/global_test.h5"
-        train_set_path   = f"{cfg_dir}/participant_{idx}_train.h5"
+        train_set_path = f"{cfg_dir}/participant_{idx}_train.h5"
 
         # ---------- multipart/form-data ------------------------
         form = FormData()
-        form.add_field("config",      open(config_path, "rb"),
-                       filename=os.path.basename(config_path),
-                       content_type="application/json")
-        form.add_field("global_test", open(global_test_path, "rb"),
-                       filename=os.path.basename(global_test_path),
-                       content_type="application/octet-stream")
-        form.add_field("train_set",   open(train_set_path, "rb"),
-                       filename=os.path.basename(train_set_path),
-                       content_type="application/octet-stream")
+        form.add_field(
+            "config", open(config_path, "rb"), filename=os.path.basename(config_path), content_type="application/json"
+        )
+        form.add_field(
+            "global_test",
+            open(global_test_path, "rb"),
+            filename=os.path.basename(global_test_path),
+            content_type="application/octet-stream",
+        )
+        form.add_field(
+            "train_set",
+            open(train_set_path, "rb"),
+            filename=os.path.basename(train_set_path),
+            content_type="application/octet-stream",
+        )
 
         # ---------- /physical/setup/ (PUT) ---------------------
         setup_ep = f"/physical/setup/{quote(host, safe='')}"
-        st, data = await remote_post_form(
-            self.controller_host, setup_ep, form, method="PUT"
-        )
+        st, data = await remote_post_form(self.controller_host, setup_ep, form, method="PUT")
         if st != 201:
             raise RuntimeError(f"[{host}] setup failed – {st}: {data}")
 
@@ -75,16 +80,14 @@ class PhysicalDeployment(DeploymentInterface):
 
     # ---------------------------------------------------------- #
     async def _deploy_all(self) -> None:
-        await asyncio.gather(
-            *(self._upload_and_start(n) for n in self.sm.config.participants)
-        )
+        await asyncio.gather(*(self._upload_and_start(n) for n in self.sm.config.participants))
 
     def start_nodes(self) -> None:
         logging.info("Deploying nodes on physical devices...")
         try:
             loop = asyncio.get_running_loop()
             asyncio.run_coroutine_threadsafe(self._deploy_all(), loop)
-        except RuntimeError:      
+        except RuntimeError:
             asyncio.run(self._deploy_all())
         logging.info("All physical nodes deployed.")
 
@@ -98,10 +101,7 @@ class PhysicalDeployment(DeploymentInterface):
             logging.info("[%s] successfully stopped (%s)", host, data)
 
     async def _stop_all(self) -> None:
-        hosts = [
-            f"{n['network_args']['ip']}:{n['network_args']['port']}"
-            for n in self.sm.config.participants
-        ]
+        hosts = [f"{n['network_args']['ip']}:{n['network_args']['port']}" for n in self.sm.config.participants]
         await asyncio.gather(*(self._stop_node(h) for h in hosts))
 
     def stop_nodes(self) -> None:
