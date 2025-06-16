@@ -531,12 +531,24 @@ const TopologyManager = (function() {
     }
 
     function updateIPsAndPorts() {
+        const isPhysical = document.getElementById("physical-devices-radio").checked;
+    
+        // If it's a physical deployment, keep the existing IPs
+        if (isPhysical) {
+            gData.nodes.forEach((node, idx) => {
+                // Ensure at least a port is assigned
+                if (!node.port) node.port = (45001 + idx).toString();
+            });
+            return;
+        }
+    
+        // Docker or Process → generate synthetic IPs
         const isProcess = document.getElementById("process-radio").checked;
         const baseIP = "192.168.50";
-
-        gData.nodes.forEach((node, index) => {
-            node.ip = isProcess ? "127.0.0.1" : `${baseIP}.${index + 2}`;
-            node.port = (45001 + index).toString();
+    
+        gData.nodes.forEach((node, idx) => {
+            node.ip   = isProcess ? "127.0.0.1" : `${baseIP}.${idx + 2}`;
+            node.port = (45001 + idx).toString();
         });
     }
 
@@ -556,6 +568,28 @@ const TopologyManager = (function() {
         }
 
         return matrix;
+    }
+
+    function setPhysicalIPs(ipList = []) {
+        if (!ipList.length) return;
+    
+        // 1. Update the input so the user can see the number of nodes
+        const nodesInput = document.getElementById('predefined-topology-nodes');
+        if (nodesInput) {
+            nodesInput.value = ipList.length;
+            nodesInput.disabled = true;
+            nodesInput.classList.add('disabled');
+        }
+    
+        // 2. Regenerate the topology (respects the selected type)
+        generatePredefinedTopology(); // creates N nodes and the links
+    
+        // 3. Assign each IP
+        gData.nodes.forEach((n, idx) => {
+            n.ip = ipList[idx] || n.ip; // in case there are more nodes than IPs
+        });
+    
+        updateGraph(); // redraws the graph
     }
 
     function handleBackgroundClick() {
@@ -648,7 +682,21 @@ const TopologyManager = (function() {
         },
         getMatrix,
         generatePredefinedTopology,
-        updateGraph
+        updateGraph,
+        setPhysicalIPs,
+        clearGraph: () => {
+            // Clean topology data
+            gData = {
+                nodes: [],
+                links: []
+            };
+            // Update
+            if (Graph) {
+                Graph.graphData(gData);
+            }
+            // Clean selected nodes
+            selectedNodes.clear();
+        }
     };
 })();
 

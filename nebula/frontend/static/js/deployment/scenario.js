@@ -2,6 +2,7 @@
 const ScenarioManager = (function() {
     let scenariosList = [];
     let actual_scenario = 0;
+    let physicalIPs     = [];
 
     // Initialize scenarios from session storage
     function initializeScenarios() {
@@ -136,7 +137,8 @@ const ScenarioManager = (function() {
             additional_participants: window.MobilityManager.getMobilityConfig().additionalParticipants || [],
             schema_additional_participants: document.getElementById("schemaAdditionalParticipantsSelect").value || "random",
             accelerator: "cpu",
-            gpu_id: []
+            gpu_id: [],
+            physical_ips: physicalIPs
         };
     }
 
@@ -177,6 +179,12 @@ const ScenarioManager = (function() {
             window.TopologyManager.setData(topologyData);
         } else {
             window.TopologyManager.generatePredefinedTopology();
+        }
+
+        /*  If scenario is "physical" reasign IPs*/
+        if (scenario.physical_ips) {
+            setPhysicalIPs(scenario.physical_ips);
+            window.TopologyManager.setPhysicalIPs(scenario.physical_ips);
         }
 
         // Load dataset settings
@@ -351,6 +359,26 @@ const ScenarioManager = (function() {
         document.getElementById("iidSelect").dispatchEvent(new Event('change'));
     }
 
+    function setPhysicalIPs(ipList = []) {
+        physicalIPs = [...ipList];
+    }
+
+    function setActualScenario(index) {
+        actual_scenario = index;
+        if (scenariosList[index]) {
+            // Clear the current topology state before loading the new one
+            window.TopologyManager.clearGraph();
+    
+            // Load the data of the new scenario
+            loadScenarioData(scenariosList[index]);
+    
+            // If it's a physical scenario, restore its specific IPs
+            if (scenariosList[index].deployment === 'physical' && scenariosList[index].physical_ips) {
+                window.TopologyManager.setPhysicalIPs(scenariosList[index].physical_ips);
+            }
+        }
+    }
+
     return {
         saveScenario,
         deleteScenario,
@@ -361,19 +389,15 @@ const ScenarioManager = (function() {
         initializeScenarios,
         getScenariosList: () => scenariosList,
         getActualScenario: () => actual_scenario,
-        setActualScenario: (index) => {
-            actual_scenario = index;
-            if (scenariosList[index]) {
-                loadScenarioData(scenariosList[index]);
-            }
-        },
+        setActualScenario,
         setScenariosList: (list) => {
             scenariosList = list;
             if (list.length > 0) {
                 actual_scenario = 0;
                 loadScenarioData(list[0]);
             }
-        }
+        },
+        setPhysicalIPs
     };
 })();
 
