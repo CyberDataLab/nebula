@@ -1071,29 +1071,33 @@ class CommunicationsManager:
         if forced:
             await self.add_to_blacklist(dest_addr)
 
-        logging.info(f"Trying to disconnect {dest_addr}")
+        logging.info(f"Trying to disconnect {dest_addr} | Mutual disconnection: {mutual_disconnection} | Forced disconnection: {forced}")
+        connection_to_remove: Connection = None
         async with self.connections_lock:
-            if dest_addr not in self.connections:
+            connection_to_remove = self.connections.get(dest_addr)
+            if not connection_to_remove:
                 logging.info(f"Connection {dest_addr} not found")
                 return
         try:
             if mutual_disconnection:
-                await self.connections[dest_addr].send(data=self.create_message("connection", "disconnect"))
-                await asyncio.sleep(1)
-                async with self.connections_lock:
-                    conn = self.connections.pop(dest_addr)
-                await conn.stop()
+                await connection_to_remove.send(data=self.create_message("connection", "disconnect"))
         except Exception as e:
-            logging.exception(f"❗️  Error while disconnecting {dest_addr}: {e!s}")
+            logging.exception(f"❗️  Error while sending disconnection to {dest_addr}: {e!s}")
+            
         if dest_addr in self.connections:
             logging.info(f"Removing {dest_addr} from connections")
             try:
+                await connection_to_remove.stop()
+            except Exception as e:
+                logging.exception(f"❗️ Error while stopping connection {dest_addr}: {e!s}")
+            
+            try:
                 removed = True
                 async with self.connections_lock:
-                    conn = self.connections.pop(dest_addr)
-                await conn.stop()
+                    self.connections.pop(dest_addr)
             except Exception as e:
                 logging.exception(f"❗️  Error while removing connection {dest_addr}: {e!s}")
+                
         current_connections = await self.get_all_addrs_current_connections(only_direct=True)
         current_connections = set(current_connections)
         logging.info(f"Current connections: {current_connections}")

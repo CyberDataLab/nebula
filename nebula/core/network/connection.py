@@ -285,7 +285,7 @@ class Connection:
             delay (int): Delay in seconds between reconnection attempts. Defaults to 5.
         """
         if self.forced_disconnection or not self.direct:
-            logging.info("Not going to reconnect because this connection is not direct")
+            logging.info(f"Not going to reconnect because: (forced: {self.forced_disconnection}, direct: {self.direct})")
             return
 
         self.incompleted_reconnections += 1
@@ -486,10 +486,11 @@ class Connection:
             logging.exception(f"Connection closed while reading: {e}")
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
-        except BrokenPipeError:
+        except BrokenPipeError as e:
             logging.exception(f"Error handling incoming message: {e}")
         finally:
             if self.direct or self._prio == ConnectionPriority.HIGH:
+                logging.info("ERROR: handling incoming message. Trying to reconnect..")
                 await self.reconnect()
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:

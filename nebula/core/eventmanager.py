@@ -32,7 +32,7 @@ class EventManager:
         self._node_events_lock = Locker("node_events_lock", async_lock=True)
         self._global_message_subscribers: list[Callable] = []
         self._global_message_subscribers_lock = Locker("global_message_subscribers_lock", async_lock=True)
-        self._verbose = verbose
+        self._verbose = False
         self._initialized = True
 
     @staticmethod

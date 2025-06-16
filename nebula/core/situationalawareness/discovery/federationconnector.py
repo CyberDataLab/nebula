@@ -197,8 +197,8 @@ class FederationConnector(ISADiscovery):
         """
         async with self.pending_confirmation_from_nodes_lock:
             found = addr in self.pending_confirmation_from_nodes
-            logging.info(f"pending confirmations:{self.pending_confirmation_from_nodes}")
-        logging.info(f"Waiting confirmation from source: {addr}, status: {found}")
+        #     logging.info(f"pending confirmations:{self.pending_confirmation_from_nodes}")
+        # logging.info(f"Waiting confirmation from source: {addr}, status: {found}")
         return found
 
     async def _confirmation_received(self, addr, confirmation=True, joining=False):
@@ -487,7 +487,7 @@ class FederationConnector(ISADiscovery):
             if len(df_actions):
                 logging.info(f"{df_actions}")
                 for addr in df_actions.split():
-                    await self.cm.disconnect(addr, mutual_disconnection=True)
+                    await self.cm.disconnect(addr, mutual_disconnection=False)
 
             await self._register_late_neighbor(source, joinning_federation=True)
 
@@ -519,7 +519,7 @@ class FederationConnector(ISADiscovery):
 
             if len(df_actions):
                 for addr in df_actions.split():
-                    await self.cm.disconnect(addr, mutual_disconnection=True)
+                    await self.cm.disconnect(addr, mutual_disconnection=False)
                 # df_msg = self.cm.create_message("link", "disconnect_from", addrs=df_actions)
                 # await self.cm.send_message(source, df_msg)
 
@@ -611,10 +611,10 @@ class FederationConnector(ISADiscovery):
         logging.info(f"🔗  handle_link_message | Trigger | Received connect_to message from {source}")
         addrs = message.addrs
         for addr in addrs.split():
-            await self._meet_node(addr)
+            asyncio.create_task(self._meet_node(addr))
 
     async def _link_disconnect_from_callback(self, source, message):
         logging.info(f"🔗  handle_link_message | Trigger | Received disconnect_from message from {source}")
         addrs = message.addrs
         for addr in addrs.split():
-            await asyncio.create_task(self.cm.disconnect(addr, mutual_disconnection=False))
+            asyncio.create_task(self.cm.disconnect(addr, mutual_disconnection=False))
