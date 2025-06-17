@@ -253,6 +253,17 @@ class Engine:
 
     async def model_update_callback(self, source, message):
         logging.info(f"🤖  handle_model_message | Received model update from {source} with round {message.round}")
+        
+        # Ignore model updates if the learning cycle has finished
+        if self.learning_cycle_finished():
+            logging.info(f"🤖  Ignoring model update from {source} because learning cycle has finished")
+            return
+        
+        # Ignore updates from different rounds
+        if message.round != self.round:
+            logging.info(f"🤖  Ignoring model update from {source} because it's from round {message.round} but we're in round {self.round}")
+            return
+        
         if not self.get_federation_ready_lock().locked() and len(await self.get_federation_nodes()) == 0:
             logging.info("🤖  handle_model_message | There are no defined federation nodes")
             return
@@ -348,6 +359,12 @@ class Engine:
 
     async def _federation_federation_models_included_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received aggregation finished message from {source}")
+        
+        # Ignore aggregation finished messages if the learning cycle has finished
+        if not self.learning_cycle_finished():
+            logging.info(f"📝  Ignoring aggregation finished message from {source} because learning cycle has finished")
+            return
+            
         try:
             await self.cm.get_connections_lock().acquire_async()
             if self.round is not None and source in self.cm.connections:
@@ -448,6 +465,11 @@ class Engine:
         Sends:
             federation_models_included: A message containing the round number of the aggregation.
         """
+        # Don't broadcast if the learning cycle has finished
+        if not self.learning_cycle_finished():
+            logging.info(f"🔄  Not broadcasting MODELS_INCLUDED because learning cycle has finished")
+            return
+            
         logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
         message = self.cm.create_message(
             "federation", "federation_models_included", [str(arg) for arg in [self.get_round()]]
@@ -710,7 +732,7 @@ class Engine:
         if not self.round or not self.total_rounds:
             return False
         else:
-            return self.round < self.total_rounds
+            return self.round >= self.total_rounds
 
     async def _learning_cycle(self):
         """
