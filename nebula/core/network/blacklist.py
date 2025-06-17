@@ -80,7 +80,9 @@ class BlackList:
             asyncio.create_task(self._start_blacklist_cleaner())
         await self._blacklisted_nodes_lock.release_async()
         nbe = NodeBlacklistedEvent(addr, blacklisted=True)
-        asyncio.create_task(EventManager.get_instance().publish_node_event(nbe))
+        event_manager = EventManager.get_instance()
+        if event_manager is not None:
+            asyncio.create_task(event_manager.publish_node_event(nbe))
 
     async def get_blacklist(self) -> set:
         """
@@ -94,7 +96,7 @@ class BlackList:
         if self._blacklisted_nodes:
             bl = set(self._blacklisted_nodes.keys())
         await self._blacklisted_nodes_lock.release_async()
-        return bl
+        return bl or set()
 
     async def clear_blacklist(self):
         """
@@ -192,21 +194,23 @@ class BlackList:
             addr (str): Address of the disconnected node.
         """
         logging.info(f"Recently disconnected from: {addr}")
-        self._recently_disconnected_lock.acquire_async()
+        await self._recently_disconnected_lock.acquire_async()
         self._recently_disconnected.add(addr)
-        self._recently_disconnected_lock.release_async()
+        await self._recently_disconnected_lock.release_async()
         asyncio.create_task(self._remove_recently_disc(addr))
         nbe = NodeBlacklistedEvent(addr)
-        asyncio.create_task(EventManager.get_instance().publish_node_event(nbe))
+        event_manager = EventManager.get_instance()
+        if event_manager is not None:
+            asyncio.create_task(event_manager.publish_node_event(nbe))
 
     async def clear_recently_disconected(self):
         """
         Clears the list of recently disconnected nodes.
         """
-        self._recently_disconnected_lock.acquire_async()
+        await self._recently_disconnected_lock.acquire_async()
         logging.info("🧹 Removing nodes from Recently Disconencted list")
         self._recently_disconnected.clear()
-        self._recently_disconnected_lock.release_async()
+        await self._recently_disconnected_lock.release_async()
 
     async def get_recently_disconnected(self):
         """
@@ -216,9 +220,9 @@ class BlackList:
             set: Addresses of recently disconnected nodes.
         """
         rd = None
-        self._recently_disconnected_lock.acquire_async()
+        await self._recently_disconnected_lock.acquire_async()
         rd = self._recently_disconnected.copy()
-        self._recently_disconnected_lock.release_async()
+        await self._recently_disconnected_lock.release_async()
         return rd
 
     async def _remove_recently_disc(self, addr):
@@ -229,10 +233,10 @@ class BlackList:
             addr (str): Address to remove after expiration.
         """
         await asyncio.sleep(RECENTLY_DISCONNECTED_EXPIRE_TIME)
-        self._recently_disconnected_lock.acquire_async()
+        await self._recently_disconnected_lock.acquire_async()
         self._recently_disconnected.discard(addr)
         logging.info(f"Recently disconnection timeout expired for souce: {addr}")
-        self._recently_disconnected_lock.release_async()
+        await self._recently_disconnected_lock.release_async()
 
     async def verify_not_recently_disc(self, nodes: set) -> set | None:
         """
@@ -247,10 +251,10 @@ class BlackList:
         if not nodes:
             return None
         nodes_not_listed = nodes
-        self._recently_disconnected_lock.acquire_async()
+        await self._recently_disconnected_lock.acquire_async()
         rec_disc = self._recently_disconnected
         # logging.info(f"recently disconencted nodes: {rec_disc}")
         if rec_disc:
             nodes_not_listed = nodes.difference(rec_disc)
-        self._recently_disconnected_lock.release_async()
+        await self._recently_disconnected_lock.release_async()
         return nodes_not_listed
