@@ -769,14 +769,6 @@ class Engine:
                 title="Round information",
             )
 
-            # Removing random neighbor (if I am the starter)
-            if self.config.participant["device_args"]["start"]:
-                random_neighbor = random.choice(list(direct_connections))
-                try:
-                    await self.cm.disconnect(random_neighbor, mutual_disconnection=True)
-                except Exception as e:
-                    logging.error(f"Error disconnecting from {random_neighbor}: {e}")
-
             # await self.aggregator.reset()
             self.trainer.on_round_end()
             self.round += 1
