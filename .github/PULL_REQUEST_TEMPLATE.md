@@ -1,0 +1,3 @@
+- [ ] I have read and agree to the **[Contributor License Agreement](../CLA.md)**.
+- [ ] Every commit is signed off with `Signed-off-by`.
+- [ ] I have read and agree to the **[Contributing Guidelines](../CONTRIBUTING.md)**.

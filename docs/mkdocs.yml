@@ -6,7 +6,7 @@ site_description: "NEBULA: A Platform for Decentralized Federated Learning"
 site_author: Enrique Tomás Martínez Beltrán, Alberto Huertas Celdrán, Alejandro Avilés Serrano, Fernando Torres Vega
 edit_uri: edit/main/docs/
 repo_name: CyberDataLab/nebula
-copyright: Created by <a href="https://enriquetomasmb.com">Enrique Tomás Martínez Beltrán</a>, Alberto Huertas Celdrán, Alejandro Avilés Serrano, and Fernando Torres Vega.
+copyright: Created by <a href="https://enriquetomasmb.com">Enrique Tomás Martínez Beltrán</a>, Alberto Huertas Celdrán, Alejandro Avilés Serrano, and Fernando Torres Vega - Source code (AGPL-3.0)
 
 nav:
   - Home: index.md
@@ -16,6 +16,7 @@ nav:
   - API Reference: api/
   - Contributing: contributing.md
   - Changelog: changelog.md
+  - Commercial FAQ: commercial-faq.md
 plugins:
   - search
   - mkdocstrings:

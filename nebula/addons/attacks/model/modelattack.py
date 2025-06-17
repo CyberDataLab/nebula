@@ -34,6 +34,7 @@ class ModelAttack(Attack):
         self.round_start_attack = round_start_attack
         self.round_stop_attack = round_stop_attack
         self.attack_interval = attack_interval
+        self._behaviour_injected = False
 
     def aggregator_decorator(self):
         """
@@ -89,8 +90,10 @@ class ModelAttack(Attack):
         This method wraps the original aggregation method with the malicious
         decorator to inject the attack behavior into the aggregation process.
         """
-        decorated_aggregation = self.aggregator_decorator()(self.aggregator.run_aggregation)
-        self.aggregator.run_aggregation = types.MethodType(decorated_aggregation, self.aggregator)
+        if not self._behaviour_injected:
+            self._behaviour_injected = True
+            decorated_aggregation = self.aggregator_decorator()(self.aggregator.run_aggregation)
+            self.aggregator.run_aggregation = types.MethodType(decorated_aggregation, self.aggregator)
 
     async def _restore_original_behaviour(self):
         """

@@ -14,6 +14,7 @@
 
 ## 🌌 About NEBULA
 
+[![License](https://img.shields.io/badge/License-AGPLv3-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://docs.nebula-dfl.com)
 ![Github Last Commit](https://img.shields.io/github/last-commit/CyberDataLab/nebula)
 [![GitHub issues](https://img.shields.io/github/issues/CyberDataLab/nebula)](https://github.com/CyberDataLab/nebula/issues)
@@ -141,7 +142,12 @@ If you use NEBULA (or Fedstellar) in a scientific publication, we would apprecia
 
 ## 📝 License
 
-Distributed under the GNU GPLv3 License. See `LICENSE` for more information.
+Distributed under the GNU AGPLv3 License. See `LICENSE` for more information.
+
+* **Community Edition** — released under the **GNU Affero GPL v3.0**.
+* **Enterprise Edition** — proprietary license & premium support available.
+
+Contact **enriquetomas@um.es** and **alberto.huertas@um.es** for commercial terms.
 
 ## 🙏 Acknowledgements
 

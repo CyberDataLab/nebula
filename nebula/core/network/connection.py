@@ -179,7 +179,7 @@ class Connection:
                 if time_since_last > self.INACTIVITY_TIMER:
                     if not self._inactivity:
                         self._inactivity = True
-                        logging.warning(f"[{self}] Connection marked as inactive.")
+                        logging.info(f"[{self}] Connection marked as inactive.")
                 else:
                     if self._inactivity:
                         self._inactivity = False
@@ -285,6 +285,7 @@ class Connection:
             delay (int): Delay in seconds between reconnection attempts. Defaults to 5.
         """
         if self.forced_disconnection or not self.direct:
+            logging.info("Not going to reconnect because this connection is not direct")
             return
 
         self.incompleted_reconnections += 1

@@ -25,7 +25,7 @@
         const copyright = document.getElementById("copyright");
         var date = new Date();
         var year = date.getFullYear();
-        copyright.innerHTML = `<p>© ${year} NEBULA. All rights reserved.<br><a href="https://docs.nebula-dfl.com/" target="_blank"><i class="fa fa-book"></i> Documentation</a> | <a href="https://github.com/CyberDataLab/nebula" target="_blank"><i class="fa fa-code"></i>  Source code</a></p>`;
+        copyright.innerHTML = `<p>© ${year} NEBULA. All rights reserved.<br><a href="https://docs.nebula-dfl.com/" target="_blank"><i class="fa fa-book"></i> Documentation</a> | <a href="https://github.com/CyberDataLab/nebula" target="_blank"><i class="fa fa-code"></i>  Source code</a> (AGPL-3.0)</p>`;
     });
 
     on('click', '.mobile-nav-toggle', function(e) {
