@@ -288,6 +288,11 @@ class Connection:
             logging.info("Not going to reconnect because this connection is not direct")
             return
 
+        # Check if learning cycle has finished to prevent unnecessary reconnection attempts
+        if self.cm.learning_finished():
+            logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
+            return
+
         self.incompleted_reconnections += 1
         if self.incompleted_reconnections == MAX_INCOMPLETED_RECONNECTIONS:
             logging.info(f"Reconnection with {self.addr} failed...")
@@ -361,8 +366,10 @@ class Connection:
             await self._send_chunks(message_id, data_to_send)
         except Exception as e:
             logging.exception(f"Error sending data: {e}")
-            if self.direct:
+            if self.direct and not self.cm.learning_finished():
                 await self.reconnect()
+            elif self.cm.learning_finished():
+                logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
 
     def _prepare_data(self, data: Any, pb: bool, encoding_type: str) -> tuple[bytes, bytes]:
         """
@@ -486,11 +493,14 @@ class Connection:
             logging.exception(f"Connection closed while reading: {e}")
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
-        except BrokenPipeError:
-            logging.exception(f"Error handling incoming message: {e}")
+        except BrokenPipeError as e:
+            logging.exception(f"Broken pipe error handling incoming message: {e}")
         finally:
-            if self.direct or self._prio == ConnectionPriority.HIGH:
+            # Only attempt reconnection if the learning cycle hasn't finished and the connection is direct or high priority
+            if (self.direct or self._prio == ConnectionPriority.HIGH) and not self.cm.learning_finished():
                 await self.reconnect()
+            elif self.cm.learning_finished():
+                logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:
         """

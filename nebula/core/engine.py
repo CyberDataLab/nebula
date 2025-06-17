@@ -687,7 +687,7 @@ class Engine:
         - Logs an error indicating aggregation failure.
 
         This method is called after local training and before proceeding to the next round,
-        ensuring the model is synchronized with the federation’s latest aggregated state.
+        ensuring the model is synchronized with the federation's latest aggregated state.
         """
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         params = await self.aggregator.get_aggregation()
@@ -710,7 +710,7 @@ class Engine:
         if not self.round or not self.total_rounds:
             return False
         else:
-            return (self.round < self.total_rounds)
+            return self.round < self.total_rounds
 
     async def _learning_cycle(self):
         """
@@ -768,6 +768,15 @@ class Engine:
                 indent=2,
                 title="Round information",
             )
+
+            # Removing random neighbor (if I am the starter)
+            if self.config.participant["device_args"]["start"]:
+                random_neighbor = random.choice(list(direct_connections))
+                try:
+                    await self.cm.disconnect(random_neighbor, mutual_disconnection=True)
+                except Exception as e:
+                    logging.error(f"Error disconnecting from {random_neighbor}: {e}")
+
             # await self.aggregator.reset()
             self.trainer.on_round_end()
             self.round += 1
