@@ -110,7 +110,7 @@ class Aggregator(ABC):
             Exception: For any other unexpected errors during the aggregation process.
         """
         # Check if learning cycle has finished to prevent blocking
-        if not self.engine.learning_cycle_finished():
+        if self.engine.learning_cycle_finished():
             logging.info("🔄  get_aggregation | Learning cycle has finished, skipping aggregation")
             return None
             
