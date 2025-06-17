@@ -332,12 +332,14 @@ class TopologyManager:
         Returns:
             str: A space-separated string of neighbors' coordinates in the format "latitude:longitude".
         """
-        # logging.info(f"Topology: {self.topology}")
-        # logging.info(f"Nodes: {self.nodes}")
+        logging.info(f"Getting neighbors for node {node_idx}")
+        logging.info(f"Topology shape: {self.topology.shape}")
+
         neighbors_data = []
-        for i, node in enumerate(self.topology[node_idx]):
-            if node == 1:
+        for i in range(self.n_nodes):
+            if self.topology[node_idx][i] == 1:
                 neighbors_data.append(self.nodes[i])
+                logging.info(f"Found neighbor at index {i}: {self.nodes[i]}")
 
         neighbors_data_strings = [f"{i[0]}:{i[1]}" for i in neighbors_data]
         neighbors_data_string = " ".join(neighbors_data_strings)

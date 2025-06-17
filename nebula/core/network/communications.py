@@ -206,8 +206,7 @@ class CommunicationsManager:
         if self.addr in neighbors:
             neighbors.discard(self.addr)
 
-        for i in initial_neighbors:
-            addr = f"{i.split(':')[0]}:{i.split(':')[1]}"
+        for addr in neighbors:
             await self.connect(addr, direct=True)
             await asyncio.sleep(1)
         while not await self.verify_connections(neighbors):

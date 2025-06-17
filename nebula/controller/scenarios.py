@@ -34,6 +34,7 @@ class Scenario:
     Class to define a scenario for the NEBULA platform.
     It contains all the parameters needed to create a scenario and run it on the platform.
     """
+
     def __init__(
         self,
         scenario_title,
@@ -566,6 +567,7 @@ class ScenarioManagement:
     - Configures each node individually with parameters for networking, device,
       attacks, defense, mobility, reporting, trustworthiness, and situational awareness.
     """
+
     def __init__(self, scenario, user=None):
         # Current scenario
         self.scenario = Scenario.from_dict(scenario)
@@ -588,7 +590,7 @@ class ScenarioManagement:
                 node_key = str(idx)
                 if node_key in self.scenario.nodes:
                     self.scenario.nodes[node_key]["ip"] = ip
- 
+
         # Assign the controller endpoint
         if self.scenario.deployment == "docker":
             self.controller = f"{os.environ.get('NEBULA_CONTROLLER_HOST')}:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
@@ -743,7 +745,7 @@ class ScenarioManagement:
                     },
                 }
             participant_config["trustworthiness"] = self.scenario.with_trustworthiness
-            if self.scenario.with_trustworthiness:            
+            if self.scenario.with_trustworthiness:
                 participant_config["trust_args"] = {
                     "robustness_pillar": self.scenario.robustness_pillar,
                     "resilience_to_attacks": self.scenario.resilience_to_attacks,
@@ -760,16 +762,16 @@ class ScenarioManagement:
                     "explainability_pillar": self.scenario.explainability_pillar,
                     "interpretability": self.scenario.interpretability,
                     "post_hoc_methods": self.scenario.post_hoc_methods,
-                    "accountability_pillar":self.scenario.accountability_pillar,
+                    "accountability_pillar": self.scenario.accountability_pillar,
                     "factsheet_completeness": self.scenario.factsheet_completeness,
-                    "architectural_soundness_pillar":self.scenario.architectural_soundness_pillar,
+                    "architectural_soundness_pillar": self.scenario.architectural_soundness_pillar,
                     "client_management": self.scenario.client_management,
                     "optimization": self.scenario.optimization,
                     "sustainability_pillar": self.scenario.sustainability_pillar,
                     "energy_source": self.scenario.energy_source,
                     "hardware_efficiency": self.scenario.hardware_efficiency,
                     "federation_complexity": self.scenario.federation_complexity,
-                    "scenario": scenario
+                    "scenario": scenario,
                 }
 
             with open(participant_file, "w") as f:
@@ -832,16 +834,18 @@ class ScenarioManagement:
     def stop_nodes():
         """
         Stop all running NEBULA nodes.
-    
+
         This method logs the shutdown action and calls the stop_participants
         method to remove all scenario command files, which signals nodes to stop.
         """
         logging.info("Closing NEBULA nodes... Please wait")
         ScenarioManagement.stop_participants()
 
-    async def load_configurations_and_start_nodes(self, additional_participants=None, schema_additional_participants=None):
+    async def load_configurations_and_start_nodes(
+        self, additional_participants=None, schema_additional_participants=None
+    ):
         """
-        Load participant configurations, generate certificates, setup topology, split datasets, 
+        Load participant configurations, generate certificates, setup topology, split datasets,
         and start nodes according to the scenario deployment type.
 
         This method:
@@ -885,6 +889,10 @@ class ScenarioManagement:
         # ap = len(additional_participants) if additional_participants else 0
         additional_nodes = len(additional_participants) if additional_participants else 0
         logging.info(f"######## nodes: {self.n_nodes} + additionals: {additional_nodes} ######")
+
+        # Sort participant files by index to ensure correct order
+        participant_files.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
+
         for i in range(self.n_nodes):
             with open(f"{self.config_dir}/participant_" + str(i) + ".json") as f:
                 participant_config = json.load(f)
@@ -970,8 +978,6 @@ class ScenarioManagement:
                     + "."
                     + str(int(participant_config["network_args"]["ip"].rsplit(".", 1)[1]) + i + 1)
                 )
-                ip = str(participant_config["network_args"]["ip"])
-                logging.info(f"El valor almacenado en json es: {ip}")
                 participant_config["device_args"]["uid"] = hashlib.sha1(
                     (
                         str(participant_config["network_args"]["ip"])
@@ -980,7 +986,9 @@ class ScenarioManagement:
                     ).encode()
                 ).hexdigest()
                 participant_config["mobility_args"]["additional_node"]["status"] = True
-                participant_config["mobility_args"]["additional_node"]["time_start"] = additional_participant["time_start"]
+                participant_config["mobility_args"]["additional_node"]["time_start"] = additional_participant[
+                    "time_start"
+                ]
 
                 # used for late creation nodes
                 participant_config["mobility_args"]["late_creation"] = True
@@ -1146,7 +1154,7 @@ class ScenarioManagement:
 
         # Assign nodes to topology
         nodes_ip_port = []
-        self.config.participants.sort(key=lambda x: x["device_args"]["idx"])
+        self.config.participants.sort(key=lambda x: int(x["device_args"]["idx"]))
         for i, node in enumerate(self.config.participants):
             nodes_ip_port.append((
                 node["network_args"]["ip"],
@@ -1201,7 +1209,11 @@ class ScenarioManagement:
             name = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{self.user}-participant{node['device_args']['idx']}"
 
             if node["device_args"]["accelerator"] == "gpu":
-                environment = {"NVIDIA_DISABLE_REQUIRE": True, "NEBULA_LOGS_DIR": "/nebula/app/logs/", "NEBULA_CONFIG_DIR": "/nebula/app/config/"}
+                environment = {
+                    "NVIDIA_DISABLE_REQUIRE": True,
+                    "NEBULA_LOGS_DIR": "/nebula/app/logs/",
+                    "NEBULA_CONFIG_DIR": "/nebula/app/config/",
+                }
                 host_config = client.api.create_host_config(
                     binds=[f"{self.root_path}:/nebula", "/var/run/docker.sock:/var/run/docker.sock"],
                     privileged=True,
@@ -1300,8 +1312,12 @@ class ScenarioManagement:
             node["tracking_args"]["config_dir"] = os.path.join(self.root_path, "app", "config", self.scenario_name)
             node["scenario_args"]["controller"] = self.controller
             node["scenario_args"]["deployment"] = self.scenario.deployment
-            node["security_args"]["certfile"] = os.path.join(self.root_path, "app", "certs", f"participant_{node['device_args']['idx']}_cert.pem")
-            node["security_args"]["keyfile"] = os.path.join(self.root_path, "app", "certs", f"participant_{node['device_args']['idx']}_key.pem")
+            node["security_args"]["certfile"] = os.path.join(
+                self.root_path, "app", "certs", f"participant_{node['device_args']['idx']}_cert.pem"
+            )
+            node["security_args"]["keyfile"] = os.path.join(
+                self.root_path, "app", "certs", f"participant_{node['device_args']['idx']}_key.pem"
+            )
             node["security_args"]["cafile"] = os.path.join(self.root_path, "app", "certs", "ca_cert.pem")
 
             # Write the config file in config directory
@@ -1368,42 +1384,46 @@ class ScenarioManagement:
             raise Exception(f"Error starting nodes as processes: {e}")
 
     async def _upload_and_start(self, node_cfg: dict) -> None:
-        ip   = node_cfg["network_args"]["ip"]
+        ip = node_cfg["network_args"]["ip"]
         port = node_cfg["network_args"]["port"]
         host = f"{ip}:{port}"
-        idx  = node_cfg["device_args"]["idx"]
- 
-        cfg_dir          = self.config_dir
-        config_path      = f"{cfg_dir}/participant_{idx}.json"
+        idx = node_cfg["device_args"]["idx"]
+
+        cfg_dir = self.config_dir
+        config_path = f"{cfg_dir}/participant_{idx}.json"
         global_test_path = f"{cfg_dir}/global_test.h5"
-        train_set_path   = f"{cfg_dir}/participant_{idx}_train.h5"
- 
+        train_set_path = f"{cfg_dir}/participant_{idx}_train.h5"
+
         # ---------- multipart/form-data ------------------------
         form = FormData()
-        form.add_field("config",      open(config_path, "rb"),
-                       filename=os.path.basename(config_path),
-                       content_type="application/json")
-        form.add_field("global_test", open(global_test_path, "rb"),
-                       filename=os.path.basename(global_test_path),
-                       content_type="application/octet-stream")
-        form.add_field("train_set",   open(train_set_path, "rb"),
-                       filename=os.path.basename(train_set_path),
-                       content_type="application/octet-stream")
- 
+        form.add_field(
+            "config", open(config_path, "rb"), filename=os.path.basename(config_path), content_type="application/json"
+        )
+        form.add_field(
+            "global_test",
+            open(global_test_path, "rb"),
+            filename=os.path.basename(global_test_path),
+            content_type="application/octet-stream",
+        )
+        form.add_field(
+            "train_set",
+            open(train_set_path, "rb"),
+            filename=os.path.basename(train_set_path),
+            content_type="application/octet-stream",
+        )
+
         # ---------- /physical/setup/ (PUT) ---------------------
         setup_ep = f"/physical/setup/{quote(host, safe='')}"
-        st, data = await remote_post_form(
-            self.controller, setup_ep, form, method="PUT"
-        )
+        st, data = await remote_post_form(self.controller, setup_ep, form, method="PUT")
         if st != 201:
             raise RuntimeError(f"[{host}] setup failed {st}: {data}")
- 
+
         # ---------- /physical/run/ (GET) ------------------------
         run_ep = f"/physical/run/{quote(host, safe='')}"
         st, data = await remote_get(self.controller, run_ep)
         if st != 200:
             raise RuntimeError(f"[{host}] run failed {st}: {data}")
- 
+
         logging.info("Node %s running: %s", host, data)
 
     async def start_nodes_physical(self):
