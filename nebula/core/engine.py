@@ -809,22 +809,56 @@ class Engine:
         )
         # Report
         if self.config.participant["scenario_args"]["controller"] != "nebula-test":
-            result = await self.reporter.report_scenario_finished()
-            if result:
-                logging.info("📝  Scenario finished reported succesfully")
-            else:
-                logging.error("📝  Error reporting scenario finished")
+            try:
+                result = await self.reporter.report_scenario_finished()
+                if result:
+                    logging.info("📝  Scenario finished reported successfully")
+                else:
+                    logging.error("📝  Error reporting scenario finished")
+            except Exception as e:
+                logging.error(f"📝  Error during scenario finish report: {e}")
 
-        await asyncio.sleep(5)
+        # Get all tasks except the current one
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+        logging.info("Starting graceful shutdown process...")
+
+        model_tasks = [t for t in tasks if any(name in t.get_name().lower() for name in ["model", "aggregation"])]
+        if model_tasks:
+            logging.info("Waiting for model and aggregation tasks to complete...")
+            try:
+                await asyncio.wait_for(asyncio.gather(*model_tasks, return_exceptions=True), timeout=15)
+            except asyncio.TimeoutError:
+                logging.warning("Model tasks did not complete in time")
+
+        other_tasks = [t for t in tasks if t not in model_tasks]
+        if other_tasks:
+            logging.info("Waiting for remaining tasks to complete...")
+            try:
+                await asyncio.wait_for(asyncio.gather(*other_tasks, return_exceptions=True), timeout=15)
+            except asyncio.TimeoutError:
+                logging.warning("Some tasks did not complete in time, forcing cancellation...")
+                for task in other_tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*other_tasks, return_exceptions=True)
+
+        # Remove all pending tasks
+        asyncio.all_tasks().clear()
+
+        # Shutdown all logging handlers
+        self.config.shutdown_logging()
+
+        # From here, logging is disabled
+        print("Shutdown complete. Terminating NEBULA CORE...")
 
         # Kill itself
         if self.config.participant["scenario_args"]["deployment"] == "docker":
             try:
                 docker_id = socket.gethostname()
-                logging.info(f"📦  Killing docker container with ID {docker_id}")
                 self.client.containers.get(docker_id).kill()
             except Exception as e:
-                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
+                print(f"Error stopping Docker container with ID {docker_id}: {e}")
 
     async def _extended_learning_cycle(self):
         """
