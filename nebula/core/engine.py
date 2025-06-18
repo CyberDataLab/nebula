@@ -212,8 +212,10 @@ class Engine:
     def set_initialization_status(self, status):
         self.initialized = status
 
-    def get_round(self):
-        return self.round
+    async def get_round(self):
+        async with self.round_lock:
+            current_round = self.round
+        return current_round
 
     def get_federation_ready_lock(self):
         return self.federation_ready_lock
@@ -713,12 +715,12 @@ class Engine:
             title="Round information",
         )
 
-    def learning_cycle_finished(self):
-        return (self.round < self.total_rounds)
-        if not self.round or not self.total_rounds:
+    async def learning_cycle_finished(self):
+        current_round = await self.get_round()
+        if not current_round or not self.total_rounds:
             return False
         else:
-            return (self.round < self.total_rounds)
+            return current_round >= self.total_rounds
 
     async def _learning_cycle(self):
         """
@@ -789,37 +791,77 @@ class Engine:
         self.trainer.on_learning_cycle_end()
 
         await self.trainer.test()
-
+        
+        # Shutdown protocol
+        await self._shutdown_protocol()
+            
+    async def _shutdown_protocol(self):
+        logging.info("Starting graceful shutdown process...")
+        
+        # 1.- Publish Experiment Finish Event to the last update on modules
+        logging.info("Publishing Experiment Finish Event...")
         efe = ExperimentFinishEvent()
         await EventManager.get_instance().publish_node_event(efe)
 
+        # 2.- Log finish message
         print_msg_box(
             msg=f"FL process has been completed successfully (max. {self.total_rounds} rounds reached)",
             indent=2,
             title="End of the experiment",
         )
-        # Report
-        if self.config.participant["scenario_args"]["controller"] != "nebula-test":
+        
+        # 3.- Report finish experiment to the controller
+        logging.info("Reporting Experiment Finish to the controller...")
+        try:
             result = await self.reporter.report_scenario_finished()
             if result:
-                logging.info("📝  Scenario finished reported succesfully")
+                logging.info("📝  Scenario finished reported successfully")
             else:
                 logging.error("📝  Error reporting scenario finished")
+        except Exception as e:
+            logging.error(f"📝  Error during scenario finish report: {e}")
 
-        await asyncio.sleep(5)
+        # 4.- Clear pending tasks
+        logging.info("Cleaning pending tasks on the system...")
+        # Get all tasks except the current one
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+        model_tasks = [t for t in tasks if any(name in t.get_name().lower() for name in ["model", "aggregation"])]
+        if model_tasks:
+            logging.info("Waiting for model and aggregation tasks to complete...")
+            try:
+                await asyncio.wait_for(asyncio.gather(*model_tasks, return_exceptions=True), timeout=15)
+            except asyncio.TimeoutError:
+                logging.warning("Model tasks did not complete in time")
+
+        other_tasks = [t for t in tasks if t not in model_tasks]
+        if other_tasks:
+            logging.info("Waiting for remaining tasks to complete...")
+            try:
+                await asyncio.wait_for(asyncio.gather(*other_tasks, return_exceptions=True), timeout=15)
+            except asyncio.TimeoutError:
+                logging.warning("Some tasks did not complete in time, forcing cancellation...")
+                for task in other_tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*other_tasks, return_exceptions=True)
+
+        # Remove all pending tasks
+        asyncio.all_tasks().clear()
+
+        # 5.- Shutdown logging
+        # Shutdown all logging handlers
+        self.config.shutdown_logging()
+        
+        # From here, logging is disabled
+        print("Shutdown complete. Terminating NEBULA CORE...")
 
         # Kill itself
         if self.config.participant["scenario_args"]["deployment"] == "docker":
             try:
                 docker_id = socket.gethostname()
                 logging.info(f"📦  Killing docker container with ID {docker_id}")
-                self.client.containers.get(docker_id).kill()
+                #self.client.containers.get(docker_id).kill()
             except Exception as e:
                 logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
 
-    async def _extended_learning_cycle(self):
-        """
-        This method is called in each round of the learning cycle. It is used to extend the learning cycle with additional
-        functionalities. The method is called in the _learning_cycle method.
-        """
-        pass

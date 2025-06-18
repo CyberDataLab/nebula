@@ -241,7 +241,7 @@ if __name__ == "__main__":
     if sys.platform == "win32" or config.participant["scenario_args"]["deployment"] == "docker":
         import asyncio
 
-        asyncio.run(main(config), debug=True)
+        asyncio.run(main(config), debug=False)
     else:
         try:
             import uvloop

@@ -73,20 +73,20 @@ class Mobility:
     def cm(self):
         return CommunicationsManager.get_instance()
 
-    @property
-    def round(self):
-        """
-        Gets the current round number from the Communications Manager.
+    # @property
+    # def round(self):
+    #     """
+    #     Gets the current round number from the Communications Manager.
 
-        This property retrieves the current round number that is being managed by the
-        CommunicationsManager instance associated with this module. It provides an
-        interface to access the ongoing round of the communication process without
-        directly exposing the underlying method in the CommunicationsManager.
+    #     This property retrieves the current round number that is being managed by the
+    #     CommunicationsManager instance associated with this module. It provides an
+    #     interface to access the ongoing round of the communication process without
+    #     directly exposing the underlying method in the CommunicationsManager.
 
-        Returns:
-            int: The current round number managed by the CommunicationsManager.
-        """
-        return self.cm.get_round()
+    #     Returns:
+    #         int: The current round number managed by the CommunicationsManager.
+    #     """
+    #     return self.cm.get_round()
 
     async def start(self):
         """

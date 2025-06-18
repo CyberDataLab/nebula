@@ -287,6 +287,10 @@ class Connection:
         if self.forced_disconnection or not self.direct:
             logging.info(f"Not going to reconnect because: (forced: {self.forced_disconnection}, direct: {self.direct})")
             return
+        
+        if await self.cm.learning_finished():
+            logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
+            return
 
         self.incompleted_reconnections += 1
         if self.incompleted_reconnections == MAX_INCOMPLETED_RECONNECTIONS:
@@ -489,7 +493,7 @@ class Connection:
         except BrokenPipeError as e:
             logging.exception(f"Error handling incoming message: {e}")
         finally:
-            if self.direct or self._prio == ConnectionPriority.HIGH:
+            if self.direct or self._prio == ConnectionPriority.HIGH and not await self.cm.learning_finished():
                 logging.info("ERROR: handling incoming message. Trying to reconnect..")
                 await self.reconnect()
 
@@ -518,7 +522,7 @@ class Connection:
             try:
                 while remaining > 0:
                     chunk = await self.reader.read(min(remaining, self.BUFFER_SIZE))
-                    if not chunk and not self.cm.learning_finished():
+                    if not chunk and not await self.cm.learning_finished():
                         raise ConnectionError("Connection closed while reading")
                     data += chunk
                     remaining -= len(chunk)

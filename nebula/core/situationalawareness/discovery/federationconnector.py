@@ -533,7 +533,7 @@ class FederationConnector(ISADiscovery):
             await self.engine.trainning_in_progress_lock.acquire_async()
             model, rounds, round = (
                 await self.cm.propagator.get_model_information(source, "stable")
-                if self.engine.get_round() > 0
+                if await self.engine.get_round() > 0
                 else await self.cm.propagator.get_model_information(source, "initialization")
             )
             await self.engine.trainning_in_progress_lock.release_async()

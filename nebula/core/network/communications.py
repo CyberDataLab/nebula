@@ -492,14 +492,14 @@ class CommunicationsManager:
         """
         return self.addr
 
-    def get_round(self):
+    async def get_round(self):
         """
         Retrieves the current training round number from the engine.
 
         Returns:
             int: The current round number in the federated learning process.
         """
-        return self.engine.get_round()
+        return await self.engine.get_round()
 
     async def start(self):
         """
@@ -1153,8 +1153,8 @@ class CommunicationsManager:
     def get_ready_connections(self):
         return {addr for addr, conn in self.connections.items() if conn.get_ready()}
 
-    def learning_finished(self):
-        return self.engine.learning_cycle_finished()
+    async def learning_finished(self):
+        return await self.engine.learning_cycle_finished()
 
     def __str__(self):
         return f"Connections: {[str(conn) for conn in self.connections.values()]}"
