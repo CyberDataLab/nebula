@@ -813,6 +813,7 @@ class Engine:
                 result = await self.reporter.report_scenario_finished()
                 if result:
                     logging.info("📝  Scenario finished reported successfully")
+                    self.reporter.shutdown()
                 else:
                     logging.error("📝  Error reporting scenario finished")
             except Exception as e:
@@ -820,9 +821,34 @@ class Engine:
 
         # Get all tasks except the current one
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        # Cut connections
+        await self.cm.stop()
 
         logging.info("Starting graceful shutdown process...")
+        
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
 
+        current_task = asyncio.current_task()
+        all_tasks = asyncio.all_tasks()
+
+        # Log basic task info
+        logging.info("Task Summary:")
+
+        # Log task names if available
+        if current_task:
+            logging.info(f"  • Current task: {current_task}")
+
+        for task in all_tasks:
+            logging.info(f"  • Task: {task}")
+            logging.info(f"  • Task name: {task.get_name()}")
+            logging.info(f"  • Task state: {task.get_state()}")
+            logging.info(f"  • Task coroutine: {task.get_coro()}")
+            logging.info(f"  • Task done: {task.done()}")
+            logging.info(f"  • Task cancelled: {task.cancelled()}")
+            logging.info(f"  • Task exception: {task.exception()}")
+            logging.info(f"  • Task result: {task.result()}")
+            
+            
         model_tasks = [t for t in tasks if any(name in t.get_name().lower() for name in ["model", "aggregation"])]
         if model_tasks:
             logging.info("Waiting for model and aggregation tasks to complete...")

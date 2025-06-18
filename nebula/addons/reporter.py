@@ -67,6 +67,7 @@ class Reporter:
         self.acc_bytes_recv = 0
         self.acc_packets_sent = 0
         self.acc_packets_recv = 0
+        self.scenario_finished = asyncio.Event()
 
     @property
     def cm(self):
@@ -132,7 +133,7 @@ class Reporter:
         Notes:
             - The reporting frequency is determined by the 'report_frequency' setting in the config file.
         """
-        while True:
+        while not self.scenario_finished.is_set():
             if self.config.participant["reporter_args"]["report_status_data_queue"]:
                 if self.config.participant["scenario_args"]["controller"] != "nebula-test":
                     await self.__report_status_to_controller()
@@ -193,6 +194,9 @@ class Reporter:
         except aiohttp.ClientError:
             logging.exception(f"Error connecting to the controller at {url}")
         return False
+    
+    def shutdown(self):
+        self.scenario_finished.set()
 
     async def __report_data_queue(self):
         """

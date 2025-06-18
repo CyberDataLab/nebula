@@ -691,6 +691,10 @@ class CommunicationsManager:
                 self.network_engine.close()
                 await self.network_engine.wait_closed()
                 self.network_task.cancel()
+        if self.forwarder:
+            self.forwarder.shutdown()
+        if self.ecs:
+            await self.ecs.stop()
 
     async def run_reconnections(self):
         for connection in self.connections_reconnect:

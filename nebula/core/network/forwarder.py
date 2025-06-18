@@ -39,6 +39,7 @@ class Forwarder:
         self.interval = self.config.participant["forwarder_args"]["forwarder_interval"]
         self.number_forwarded_messages = self.config.participant["forwarder_args"]["number_forwarded_messages"]
         self.messages_interval = self.config.participant["forwarder_args"]["forward_messages_interval"]
+        self.scenario_finished = asyncio.Event()
 
     @property
     def cm(self):
@@ -72,7 +73,7 @@ class Forwarder:
         if self.config.participant["scenario_args"]["federation"] == "CFL":
             logging.info("🔁  Federation is CFL. Forwarder is disabled...")
             return
-        while True:
+        while not self.scenario_finished.is_set():
             # logging.debug(f"🔁  Pending messages: {self.pending_messages.qsize()}")
             start_time = time.time()
             await self.pending_messages_lock.acquire_async()
@@ -80,6 +81,9 @@ class Forwarder:
             await self.pending_messages_lock.release_async()
             sleep_time = max(0, self.interval - (time.time() - start_time))
             await asyncio.sleep(sleep_time)
+            
+    def shutdown(self):
+        self.scenario_finished.set()
 
     async def process_pending_messages(self, messages_left):
         """
