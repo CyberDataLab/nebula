@@ -123,9 +123,6 @@ class Connection:
     def __repr__(self):
         return self.__str__()
 
-    async def __del__(self):
-        await self.stop()
-
     @property
     def cm(self):
         """Communication Manager"""

@@ -1688,8 +1688,8 @@ async def nebula_update_node(scenario_name: str, request: Request):
 @app.post("/platform/dashboard/{scenario_name}/node/done")
 async def node_stopped(scenario_name: str, request: Request):
     """
-    Handle notification that a node has finished its task; mark the node as finished,
-    stop the scenario if all nodes are done, and signal scenario completion.
+    Handle notification that a node has finished its task; mark the node as finished
+    and signal scenario completion when all nodes are done.
 
     Parameters:
         scenario_name (str): Name of the scenario.
@@ -1708,14 +1708,13 @@ async def node_stopped(scenario_name: str, request: Request):
         data = await request.json()
         user_data.nodes_finished.append(data["idx"])
         nodes_list = await list_nodes_by_scenario_name(scenario_name)
-        finished = True
-        # Check if all the nodes of the scenario have finished the experiment
-        for node in nodes_list:
-            if str(node["idx"]) not in map(str, user_data.nodes_finished):
-                finished = False
 
-        if finished:
-            await stop_scenario_by_name(scenario_name, user)
+        # Check if all nodes have finished by comparing sets of node IDs
+        finished_node_ids = set(map(str, user_data.nodes_finished))
+        all_node_ids = {str(node["idx"]) for node in nodes_list}
+        all_nodes_finished = finished_node_ids >= all_node_ids
+
+        if all_nodes_finished:
             user_data.nodes_finished.clear()
             user_data.finish_scenario_event.set()
             return JSONResponse(
