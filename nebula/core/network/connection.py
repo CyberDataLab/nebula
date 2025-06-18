@@ -97,6 +97,7 @@ class Connection:
         self._inactivity = False
         self._last_activity = time.time()
         self._activity_lock = Locker(name="activity_lock", async_lock=True)
+        self._activity_task = None
 
         self.EOT_CHAR = b"\x00\x00\x00\x04"
         self.COMPRESSION_CHAR = b"\x00\x00\x00\x01"
@@ -236,7 +237,7 @@ class Connection:
         """
         self.read_task = asyncio.create_task(self.handle_incoming_message(), name=f"Connection {self.addr} reader")
         self.process_task = asyncio.create_task(self.process_message_queue(), name=f"Connection {self.addr} processor")
-        asyncio.create_task(self._monitor_inactivity())
+        self._activity_task = asyncio.create_task(self._monitor_inactivity())
 
     async def stop(self):
         """
@@ -250,7 +251,7 @@ class Connection:
         """
         logging.info(f"❗️  Connection [stopped]: {self.addr} (id: {self.id})")
         self.forced_disconnection = True
-        tasks = [self.read_task, self.process_task]
+        tasks = [self.read_task, self.process_task, self._activity_task]
         for task in tasks:
             if task is not None:
                 task.cancel()
@@ -288,9 +289,9 @@ class Connection:
             logging.info(f"Not going to reconnect because: (forced: {self.forced_disconnection}, direct: {self.direct})")
             return
         
-        if await self.cm.learning_finished():
-            logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
-            return
+        # if await self.cm.learning_finished():
+        #     logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
+        #     return
 
         self.incompleted_reconnections += 1
         if self.incompleted_reconnections == MAX_INCOMPLETED_RECONNECTIONS:
@@ -493,7 +494,7 @@ class Connection:
         except BrokenPipeError as e:
             logging.exception(f"Error handling incoming message: {e}")
         finally:
-            if self.direct or self._prio == ConnectionPriority.HIGH and not await self.cm.learning_finished():
+            if self.direct or self._prio == ConnectionPriority.HIGH: #and not await self.cm.learning_finished():
                 logging.info("ERROR: handling incoming message. Trying to reconnect..")
                 await self.reconnect()
 
@@ -522,7 +523,7 @@ class Connection:
             try:
                 while remaining > 0:
                     chunk = await self.reader.read(min(remaining, self.BUFFER_SIZE))
-                    if not chunk and not await self.cm.learning_finished():
+                    if not chunk:# and not await self.cm.learning_finished():
                         raise ConnectionError("Connection closed while reading")
                     data += chunk
                     remaining -= len(chunk)

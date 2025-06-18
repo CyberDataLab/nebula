@@ -834,42 +834,67 @@ class Engine:
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         task_waiting_time = 15
 
-        model_tasks = [t for t in tasks if any(name in t.get_name().lower() for name in ["model", "aggregation"])]
-        if model_tasks:
-            logging.info("Waiting for model and aggregation tasks to complete...")
-            try:
-                await asyncio.wait_for(asyncio.gather(*model_tasks, return_exceptions=True), timeout=task_waiting_time)
-            except asyncio.TimeoutError:
-                logging.warning("Model tasks did not complete in time")
+        for t in tasks:
+            logging.info(t)
+            
+        await asyncio.sleep(5)
+        await self.cm.stop()
+        
+        self.cm.stop_network_engine.set()
 
-        other_tasks = [t for t in tasks if t not in model_tasks]
-        if other_tasks:
-            logging.info("Waiting for remaining tasks to complete...")
-            try:
-                await asyncio.wait_for(asyncio.gather(*other_tasks, return_exceptions=True), timeout=task_waiting_time)
-            except asyncio.TimeoutError:
-                logging.warning("Some tasks did not complete in time, forcing cancellation...")
-                for task in other_tasks:
-                    if not task.done():
-                        task.cancel()
-                await asyncio.gather(*other_tasks, return_exceptions=True)
+        # model_tasks = [t for t in tasks if any(name in t.get_name().lower() for name in ["model", "aggregation"])]
+        # if model_tasks:
+        #     logging.info("Waiting for model and aggregation tasks to complete...")
+        #     try:
+        #         await asyncio.wait_for(asyncio.gather(*model_tasks, return_exceptions=True), timeout=task_waiting_time)
+        #     except asyncio.TimeoutError:
+        #         logging.info("Model tasks did not complete in time")
 
+        # other_tasks = [t for t in tasks if t not in model_tasks]
+        
+        # for t in other_tasks:
+        #     logging.info(t)
+            
+        # pending = None
+        # if tasks:
+        #     logging.info("Waiting for remaining tasks to complete...")
+        #     try:
+        #         done, pending = await asyncio.wait(tasks, timeout=task_waiting_time, return_when=asyncio.ALL_COMPLETED)
+        #     except Exception as e:
+        #         logging.info("Some tasks did not complete in time, forcing cancellation...")
+        #         for task in tasks:
+        #             if not task.done():
+        #                 task.cancel()
+        #         await asyncio.gather(*tasks, return_exceptions=True)
+        #     finally:
+        #         logging.info("[alex] finally")
+        #         if pending:
+        #             for task in pending:
+        #                 logging.info(f"[alex] pending: {task}")
+        #                 if not task.done():
+        #                     try:
+        #                         task.cancel()
+        #                     except Exception:
+        #                         logging.info("[alex] destruction")
+                    # await asyncio.gather(*pending, return_exceptions=True)
+                
         # Remove all pending tasks
-        asyncio.all_tasks().clear()
+        #asyncio.all_tasks().clear()
 
+        logging.info("All tasks removed")
         # 5.- Shutdown logging
         # Shutdown all logging handlers
-        self.config.shutdown_logging()
+        #self.config.shutdown_logging()
         
         # From here, logging is disabled
-        print("Shutdown complete. Terminating NEBULA CORE...")
+        # print("Shutdown complete. Terminating NEBULA CORE...")
 
         # Kill itself
-        if self.config.participant["scenario_args"]["deployment"] == "docker":
-            try:
-                docker_id = socket.gethostname()
-                logging.info(f"📦  Killing docker container with ID {docker_id}")
-                #self.client.containers.get(docker_id).kill()
-            except Exception as e:
-                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
+        # if self.config.participant["scenario_args"]["deployment"] == "docker":
+        #     try:
+        #         docker_id = socket.gethostname()
+        #         logging.info(f"📦  Killing docker container with ID {docker_id}")
+        #         self.client.containers.get(docker_id).kill()
+        #     except Exception as e:
+        #         logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
 

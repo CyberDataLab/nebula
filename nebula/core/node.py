@@ -2,6 +2,8 @@ import os
 import random
 import sys
 import warnings
+import socket
+import docker
 
 import torch
 
@@ -240,8 +242,16 @@ if __name__ == "__main__":
     config = Config(entity="participant", participant_config_file=config_path)
     if sys.platform == "win32" or config.participant["scenario_args"]["deployment"] == "docker":
         import asyncio
-
         asyncio.run(main(config), debug=False)
+        
+        if config.participant["scenario_args"]["deployment"] == "docker":
+            try:
+                docker_id = socket.gethostname()
+                logging.info(f"📦  Removing docker container with ID {docker_id}")
+                #docker.from_env().containers.get(docker_id).kill()
+                docker.from_env().containers.get(docker_id).remove(force=True)       
+            except Exception as e:
+                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")    
     else:
         try:
             import uvloop
