@@ -20,6 +20,7 @@ from nebula.core.nebulaevents import (
     UpdateNeighborEvent,
     UpdateReceivedEvent,
     ExperimentFinishEvent,
+    ModelPropagationEvent,
 )
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
@@ -357,14 +358,15 @@ class Engine:
 
     async def _federation_federation_models_included_callback(self, source, message):
         logging.info(f"📝  handle_federation_message | Trigger | Received aggregation finished message from {source}")
+        current_round = await self.get_round()
         try:
             await self.cm.get_connections_lock().acquire_async()
-            if self.round is not None and source in self.cm.connections:
+            if current_round is not None and source in self.cm.connections:
                 try:
                     if message is not None and len(message.arguments) > 0:
                         self.cm.connections[source].update_round(int(message.arguments[0])) if message.round in [
-                            self.round - 1,
-                            self.round,
+                            current_round - 1,
+                            current_round,
                         ] else None
                 except Exception as e:
                     logging.exception(f"Error updating round in connection: {e}")
@@ -458,8 +460,9 @@ class Engine:
             federation_models_included: A message containing the round number of the aggregation.
         """
         logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
+        current_round = await self.get_round()
         message = self.cm.create_message(
-            "federation", "federation_models_included", [str(arg) for arg in [self.get_round()]]
+            "federation", "federation_models_included", [str(arg) for arg in [current_round]]
         )
         asyncio.create_task(self.cm.send_message_to_neighbors(message))
 
@@ -670,7 +673,11 @@ class Engine:
                 await self.get_federation_ready_lock().acquire_async()
                 if self.config.participant["device_args"]["start"]:
                     logging.info("Propagate initial model updates.")
-                    await self.cm.propagator.propagate("initialization")
+                    
+                    mpe = ModelPropagationEvent(await self.cm.get_addrs_current_connections(only_direct=True, myself=False), "initialization")
+                    await EventManager.get_instance().publish_node_event(mpe)
+                    
+                    #await self.cm.propagator.propagate("initialization")
                     await self.get_federation_ready_lock().release_async()
 
                 self.trainer.set_epochs(epochs)
@@ -825,12 +832,13 @@ class Engine:
         logging.info("Cleaning pending tasks on the system...")
         # Get all tasks except the current one
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        task_waiting_time = 15
 
         model_tasks = [t for t in tasks if any(name in t.get_name().lower() for name in ["model", "aggregation"])]
         if model_tasks:
             logging.info("Waiting for model and aggregation tasks to complete...")
             try:
-                await asyncio.wait_for(asyncio.gather(*model_tasks, return_exceptions=True), timeout=15)
+                await asyncio.wait_for(asyncio.gather(*model_tasks, return_exceptions=True), timeout=task_waiting_time)
             except asyncio.TimeoutError:
                 logging.warning("Model tasks did not complete in time")
 
@@ -838,7 +846,7 @@ class Engine:
         if other_tasks:
             logging.info("Waiting for remaining tasks to complete...")
             try:
-                await asyncio.wait_for(asyncio.gather(*other_tasks, return_exceptions=True), timeout=15)
+                await asyncio.wait_for(asyncio.gather(*other_tasks, return_exceptions=True), timeout=task_waiting_time)
             except asyncio.TimeoutError:
                 logging.warning("Some tasks did not complete in time, forcing cancellation...")
                 for task in other_tasks:

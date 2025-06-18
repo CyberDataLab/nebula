@@ -3,7 +3,7 @@ import logging
 from nebula.addons.attacks.attacks import create_attack
 from nebula.config.config import Config
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateReceivedEvent
+from nebula.core.nebulaevents import UpdateReceivedEvent, ModelPropagationEvent
 from nebula.core.training.lightning import Lightning
 from enum import Enum
 from abc import ABC, abstractmethod
@@ -116,7 +116,10 @@ class TrainerAggregatorRoleBehavior(RoleBehavior):
         )
         await EventManager.get_instance().publish_node_event(self_update_event)
 
-        await self._engine.cm.propagator.propagate("stable")
+        #await self._engine.cm.propagator.propagate("stable")
+        mpe = ModelPropagationEvent(await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
+        await EventManager.get_instance().publish_node_event(mpe)
+        
         await self._engine._waiting_model_updates()
         
 #TODO update as an only aggregator role
@@ -144,7 +147,10 @@ class AggregatorRoleBehavior(RoleBehavior):
         )
         await EventManager.get_instance().publish_node_event(self_update_event)
 
-        await self._engine.cm.propagator.propagate("stable")
+        #await self._engine.cm.propagator.propagate("stable")
+        mpe = ModelPropagationEvent(await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
+        await EventManager.get_instance().publish_node_event(mpe)
+        
         await self._engine._waiting_model_updates()
         
 class ServerRoleBehavior(RoleBehavior):
@@ -172,7 +178,10 @@ class ServerRoleBehavior(RoleBehavior):
         await EventManager.get_instance().publish_node_event(self_update_event)
 
         await self._engine._waiting_model_updates()
-        await self._engine.cm.propagator.propagate("stable")  
+        
+        mpe = ModelPropagationEvent(await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
+        await EventManager.get_instance().publish_node_event(mpe)
+        #await self._engine.cm.propagator.propagate("stable")  
         
 class TrainerRoleBehavior(RoleBehavior):
     def __init__(self, engine: Engine, config: Config):
@@ -198,7 +207,10 @@ class TrainerRoleBehavior(RoleBehavior):
         )
         await EventManager.get_instance().publish_node_event(self_update_event)
 
-        await self._engine.cm.propagator.propagate("stable")
+        mpe = ModelPropagationEvent(await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
+        await EventManager.get_instance().publish_node_event(mpe)
+        
+        #await self._engine.cm.propagator.propagate("stable")
         await self._engine._waiting_model_updates()
         
 class IdleRoleBehavior(RoleBehavior):

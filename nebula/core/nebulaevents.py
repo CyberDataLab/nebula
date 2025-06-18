@@ -264,6 +264,35 @@ class NodeFoundEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
+    
+class ModelPropagationEvent(NodeEvent):
+    def __init__(self, eligible_neighbors, strategy):
+        """Event triggered when model propagation is ready.
+
+        Args:
+            eligible_neighbors (set): The elegible neighbors to propagate model.
+            strategy (str): Strategy to propagete the model
+        """
+        self.eligible_neighbors = eligible_neighbors
+        self._strategy = strategy
+        
+    def __str__(self):
+        return f"Model propagation event, strategy: {self._strategy}"
+
+    async def get_event_data(self) -> tuple[set, str]:
+        """
+        Retrieves the event data.
+
+        Returns:
+            tuple[set, str]: A tuple containing:
+                - The elegible neighbors to propagate model.
+                - The propagation strategy.
+        """
+        return (self.eligible_neighbors, self._strategy)
+
+    async def is_concurrent(self) -> bool:
+        return False    
+            
 
 
 class UpdateReceivedEvent(NodeEvent):

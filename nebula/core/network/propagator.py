@@ -3,6 +3,8 @@ import logging
 import sys
 from abc import ABC, abstractmethod
 from collections import deque
+from nebula.core.nebulaevents import ModelPropagationEvent
+from nebula.core.eventmanager import EventManager
 from typing import TYPE_CHECKING, Any
 
 from nebula.addons.functions import print_msg_box
@@ -194,7 +196,7 @@ class Propagator:
         else:
             return self._cm
 
-    def start(self):
+    async def start(self):
         """
         Initialize the Propagator by retrieving core components and configuration,
         setting up propagation intervals, history buffer, and strategy instances.
@@ -202,6 +204,7 @@ class Propagator:
         This method must be called before any propagation cycles to ensure that
         all dependencies (engine, trainer, aggregator, etc.) are available.
         """
+        await EventManager.get_instance().subscribe_node_event(ModelPropagationEvent, self._propagate)
         self.engine: Engine = self.cm.engine
         self.config: Config = self.cm.get_config()
         self.addr = self.cm.get_addr()
@@ -283,7 +286,7 @@ class Propagator:
         """
         self.status_history.clear()
 
-    async def propagate(self, strategy_id: str):
+    async def _propagate(self, mpe: ModelPropagationEvent):
         """
         Execute a single propagation cycle using the specified strategy.
 
@@ -302,6 +305,8 @@ class Propagator:
         Returns:
             bool: True if propagation occurred (payload sent), False if halted early.
         """
+        eligible_neighbors, strategy_id = await mpe.get_event_data()
+        
         self.reset_status_history()
         if strategy_id not in self.strategies:
             logging.info(f"Strategy {strategy_id} not found.")
@@ -313,10 +318,10 @@ class Propagator:
         strategy = self.strategies[strategy_id]
         logging.info(f"Starting model propagation with strategy: {strategy_id}")
 
-        current_connections = await self.cm.get_addrs_current_connections(only_direct=True)
-        eligible_neighbors = [
-            neighbor_addr for neighbor_addr in current_connections if await strategy.is_node_eligible(neighbor_addr)
-        ]
+        # current_connections = await self.cm.get_addrs_current_connections(only_direct=True)
+        # eligible_neighbors = [
+        #     neighbor_addr for neighbor_addr in current_connections if await strategy.is_node_eligible(neighbor_addr)
+        # ]
         logging.info(f"Eligible neighbors for model propagation: {eligible_neighbors}")
         if not eligible_neighbors:
             logging.info("Propagation complete: No eligible neighbors.")
@@ -335,7 +340,8 @@ class Propagator:
         else:
             serialized_model = None
 
-        round_number = -1 if strategy_id == "initialization" else await self.get_round()
+        current_round = await self.get_round()
+        round_number = -1 if strategy_id == "initialization" else current_round
         parameters = serialized_model
         message = self.cm.create_message("model", "", round_number, parameters, weight)
         for neighbor_addr in eligible_neighbors:
