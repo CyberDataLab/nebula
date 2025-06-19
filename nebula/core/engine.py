@@ -139,6 +139,7 @@ class Engine:
         self.federation_setup_lock = Locker(name="federation_setup_lock", async_lock=True)
         self.federation_ready_lock = Locker(name="federation_ready_lock", async_lock=True)
         self.round_lock = Locker(name="round_lock", async_lock=True)
+        self._round_in_process_lock = Locker("round_in_process_lock", async_lock=True)
         self.config.reload_config_file()
 
         self._cm = CommunicationsManager(engine=self)
@@ -309,6 +310,22 @@ class Engine:
 
     async def _control_leadership_transfer_callback(self, source, message):
         logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer message from {source}")
+        
+        if await self._round_in_process_lock.locked_async():
+            logging.info("Learning cycle is executing, role behavior will be modified next round")
+            await self.rb.set_next_role(Role.AGGREGATOR, source_to_notificate=source)
+        else:
+            try:
+                logging.info("Modiying Role behavior")
+                await self._round_in_process_lock.acquire_async(timeout=3)
+                self.rb = change_role_behavior(self.rb, Role.AGGREGATOR, self, self.config)
+                await self.rb.set_next_role(Role.AGGREGATOR)
+                await self.update_self_role()
+                await self._round_in_process_lock.release_async(timeout=3)
+            except TimeoutError:
+                logging.info("Learning cycle is locked, role behavior will be modified next round")
+                await self.rb.set_next_role(Role.AGGREGATOR, source_to_notificate=source)
+        
         if self.rb.get_role() == Role.AGGREGATOR:
             neighbors = await self.cm.get_addrs_current_connections(myself=True)
             if len(neighbors) > 1:
@@ -334,6 +351,19 @@ class Engine:
 
     async def _control_leadership_transfer_ack_callback(self, source, message):
         logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer ack message from {source}")
+        # No concurrence of difference ack received treated, be aware of that.
+        if await self._round_in_process_lock.locked_async():
+            logging.info("Learning cycle is executing, role behavior will be modified next round")
+            await self.rb.set_next_role(Role.TRAINER)
+        else:
+            try:
+                logging.info("Modiying Role behavior")
+                await self._round_in_process_lock.acquire_async(timeout=3)
+                self.rb = change_role_behavior(self.rb, Role.TRAINER, self, self.config)
+            except TimeoutError:
+                logging.info("Learning cycle is locked, role behavior will be modified next round")
+                await self.rb.set_next_role(Role.TRAINER)
+        
 
     async def _connection_connect_callback(self, source, message):
         logging.info(f"🔗  handle_connection_message | Trigger | Received connection message from {source}")
@@ -728,7 +758,22 @@ class Engine:
             return False
         else:
             return current_round >= self.total_rounds
-
+        
+    async def get_own_update(self):
+        return (self.trainer.get_model_parameters(), self.trainer.get_model_weight())
+    
+    async def update_self_role(self):
+        if await self.rb.update_role_needed():
+            from_role = self.rb.get_role_name()
+            next_role = await self.rb.get_next_role()
+            source_to_notificate = await self.rb.get_source_to_notificate()
+            self.rb: RoleBehavior = change_role_behavior(self.rb, next_role, self, self.config)
+            to_role = self.rb.get_role_name()
+            logging.info(f"Role behavior changing from: {from_role} to {to_role}")
+            if source_to_notificate:
+                message = self.cm.create_message("control", "leadership_transfer_ack")
+                await self.cm.send_message(source_to_notificate, message)
+             
     async def _learning_cycle(self):
         """
         Main asynchronous loop for executing the Federated Learning process across multiple rounds.
@@ -752,47 +797,53 @@ class Engine:
         This function blocks (awaits) until the full FL process concludes.
         """
         while self.round is not None and self.round < self.total_rounds:
-            current_time = time.time()
-            print_msg_box(
-                msg=f"Round {self.round} of {self.total_rounds - 1} started (max. {self.total_rounds} rounds)",
-                indent=2,
-                title="Round information",
-            )
-            logging.info(f"Federation nodes: {self.federation_nodes}")
-            await self.update_federation_nodes(
-                await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
-            )
-            expected_nodes = await self.get_federation_nodes()
-            rse = RoundStartEvent(self.round, current_time, expected_nodes)
-            await EventManager.get_instance().publish_node_event(rse)
-            self.trainer.on_round_start()
-            logging.info(f"Expected nodes: {expected_nodes}")
-            direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
-            undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
-            logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
-            logging.info(f"[Role {self.rb.get_role_name()}] Starting learning cycle...")
-            await self.aggregator.update_federation_nodes(expected_nodes)
-            async with self._role_behavior_performance_lock:
-                await self.rb.extended_learning_cycle()
+            async with self._round_in_process_lock:
+                current_time = time.time()
+                print_msg_box(
+                    msg=f"Round {self.round} of {self.total_rounds - 1} started (max. {self.total_rounds} rounds)",
+                    indent=2,
+                    title="Round information",
+                )
+                
+                await self.update_self_role()
+                
+                logging.info(f"Federation nodes: {self.federation_nodes}")
+                await self.update_federation_nodes(
+                    await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
+                )
+                expected_nodes = await self.get_federation_nodes()
+                rse = RoundStartEvent(self.round, current_time, expected_nodes)
+                await EventManager.get_instance().publish_node_event(rse)
+                self.trainer.on_round_start()
+                logging.info(f"Expected nodes: {expected_nodes}")
+                direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
+                undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
+                
+                logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
+                logging.info(f"[Role {self.rb.get_role_name()}] Starting learning cycle...")
+                
+                await self.aggregator.update_federation_nodes(expected_nodes)
+                async with self._role_behavior_performance_lock:
+                    await self.rb.extended_learning_cycle()
 
-            current_time = time.time()
-            ree = RoundEndEvent(self.round, current_time)
-            await EventManager.get_instance().publish_node_event(ree)
+                current_time = time.time()
+                ree = RoundEndEvent(self.round, current_time)
+                await EventManager.get_instance().publish_node_event(ree)
 
-            await self.get_round_lock().acquire_async()
+                await self.get_round_lock().acquire_async()
 
-            print_msg_box(
-                msg=f"Round {self.round} of {self.total_rounds - 1} finished (max. {self.total_rounds} rounds)",
-                indent=2,
-                title="Round information",
-            )
-            # await self.aggregator.reset()
-            self.trainer.on_round_end()
-            self.round += 1
-            self.config.participant["federation_args"]["round"] = (
-                self.round
-            )  # Set current round in config (send to the controller)
-            await self.get_round_lock().release_async()
+                print_msg_box(
+                    msg=f"Round {self.round} of {self.total_rounds - 1} finished (max. {self.total_rounds} rounds)",
+                    indent=2,
+                    title="Round information",
+                )
+                # await self.aggregator.reset()
+                self.trainer.on_round_end()
+                self.round += 1
+                self.config.participant["federation_args"]["round"] = (
+                    self.round
+                )  # Set current round in config (send to the controller)
+                await self.get_round_lock().release_async()
 
         # End of the learning cycle
         self.trainer.on_learning_cycle_end()
