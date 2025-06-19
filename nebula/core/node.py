@@ -235,15 +235,52 @@ async def main(config: Config):
 
     if node.cm is not None:
         await node.cm.network_wait()
+        logging.info("Exiciting node ending lock...")
+        
+        tasks = [t for t in asyncio.all_tasks() if not t.done() and t is not asyncio.current_task()]
+    
+        logging.info(f"[ForceShutdown] Cancelling {len(tasks)} tasks...")
+        for task in tasks:
+            logging.info(f"[ForceShutdown] Cacenlling: {task}")
+            task.cancel()
+            
+        loop = asyncio.get_running_loop()
+        logging.info("[ForceShutdown] Stopping event loop...")
+        loop.stop()
+
+        # try:
+        #     await asyncio.wait_for(
+        #         asyncio.gather(*tasks, return_exceptions=True),
+        #         timeout=5
+        #     )
+        # except asyncio.TimeoutError:
+        #     logging.warning("[ForceShutdown] Timeout: some tasks did not finish.")
 
 
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
     config = Config(entity="participant", participant_config_file=config_path)
-    if sys.platform == "win32" or config.participant["scenario_args"]["deployment"] == "docker":
-        import asyncio
-        asyncio.run(main(config), debug=False)
+    try:
+        if sys.platform == "win32" or config.participant["scenario_args"]["deployment"] == "docker":
+            import asyncio
+            asyncio.run(main(config), debug=False)             
+        else:
+            try:
+                import uvloop
+
+                uvloop.run(main(config), debug=False)
+            except ImportError:
+                logging.warning("uvloop not available, using default loop")
+                import asyncio
+
+                asyncio.run(main(config), debug=False)
+                
+    except Exception as e:
+        logging.info(f"{e}")
         
+    finally:
+        logging.info("Removing container protocol starting...")
+            
         if config.participant["scenario_args"]["deployment"] == "docker":
             try:
                 docker_id = socket.gethostname()
@@ -251,14 +288,4 @@ if __name__ == "__main__":
                 #docker.from_env().containers.get(docker_id).kill()
                 docker.from_env().containers.get(docker_id).remove(force=True)       
             except Exception as e:
-                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")    
-    else:
-        try:
-            import uvloop
-
-            uvloop.run(main(config), debug=False)
-        except ImportError:
-            logging.warning("uvloop not available, using default loop")
-            import asyncio
-
-            asyncio.run(main(config), debug=False)
+                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")

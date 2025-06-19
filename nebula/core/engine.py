@@ -838,7 +838,8 @@ class Engine:
             logging.info(t)
             
         await asyncio.sleep(5)
-        await self.cm.stop()
+        
+        #await self.cm.stop()
         
         self.cm.stop_network_engine.set()
 
