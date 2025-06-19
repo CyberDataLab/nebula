@@ -423,6 +423,7 @@ const TopologyManager = (function() {
         } else {
             switch (node.role) {
                 case 'aggregator':
+                case 'trainer_aggregator':
                     geometry = new THREE.SphereGeometry(5);
                     main_color = "#d95f02";
                     break;
@@ -629,7 +630,7 @@ const TopologyManager = (function() {
             case "DFL":
                 // All as aggregators
                 for (let i = 0; i < nodes.length; i++) {
-                    nodes[i].role = "aggregator";
+                    nodes[i].role = "trainer_aggregator";
                 }
                 break;
         }
