@@ -477,11 +477,13 @@ class Scenario:
                     raise ValueError("round_start_attack must be less than round_stop_attack")
 
                 node_attack_params["attacks"] = node_att
+                nodes[node]["malicious"] = True
                 nodes[node]["attack_params"] = node_attack_params
+                nodes[node]["fake_behavior"] = nodes[node]["role"]
+                nodes[node]["role"] = "malicious"
             else:
                 nodes[node]["attack_params"] = {"attacks": "No Attack"}
 
-            nodes[node]["malicious"] = malicious
             nodes[node]["reputation"] = node_reputation
 
             logging.info(
@@ -693,7 +695,8 @@ class ScenarioManagement:
             participant_config["device_args"]["logging"] = self.scenario.logginglevel
             participant_config["aggregator_args"]["algorithm"] = self.scenario.agg_algorithm
             # To be sure that benign nodes have no attack parameters
-            if node_config["malicious"]:
+            if node_config["role"] == "malicious":
+                participant_config["adversarial_args"]["fake_behavior"] = node_config["fake_behavior"]
                 participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
             else:
                 participant_config["adversarial_args"]["attack_params"] = {"attacks": "No Attack"}
