@@ -702,9 +702,6 @@ class Monitor {
                 neighbors_distance: data.neighbors_distance || {}
             });
 
-            // Check if all nodes are offline
-            this.checkAllNodesOffline();
-
             this.log('Node update completed successfully');
         } catch (error) {
             this.error('Error handling node update:', error);
@@ -1466,7 +1463,6 @@ class Monitor {
     startPeriodicStatusCheck() {
         this.log("Starting periodic status check");
         this.checkNodeStatus();
-
         setInterval(() => this.checkNodeStatus(), 5000);
     }
 
@@ -1490,14 +1486,22 @@ class Monitor {
                 return;
             }
 
+            this.log('Request to monitor API successful');
+
             const data = await response.json();
+
+            // Update scenario status if provided
+            if (data.scenario_status) {
+                this.updateScenarioStatusBadge(data.scenario_status);
+            }
+
+            // Process nodes as before
             if (!data.nodes || data.nodes.length === 0) {
                 this.warn('No nodes in status check response');
                 return;
             }
 
             this.log('Received status check data:', data);
-
             // Create a Set to track processed nodes in this status check
             const processedNodes = new Set();
 
@@ -1562,10 +1566,48 @@ class Monitor {
             this.updateAllMarkers();
             this.updateAllRelatedLines();
 
-            // Check if all nodes are offline
-            this.checkAllNodesOffline();
         } catch (error) {
             this.error('Error in status check:', error);
+        }
+    }
+
+    updateScenarioStatusBadge(status) {
+        const statusBadge = document.getElementById('scenario_status');
+        if (!statusBadge) return;
+
+        // Update the data attribute
+        statusBadge.setAttribute('data-scenario-status', status);
+
+        // Update the badge appearance based on status
+        switch (status) {
+            case 'running':
+                statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
+                break;
+            case 'completed':
+                statusBadge.className = 'badge bg-success-subtle text-success px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-check-circle me-2"></i>Completed';
+                // Hide stop button when completed
+                const stopButton = document.getElementById('stop_button');
+                if (stopButton) {
+                    stopButton.style.display = 'none';
+                }
+                break;
+            case 'finished':
+                statusBadge.className = 'badge bg-danger-subtle text-danger px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-times-circle me-2"></i>Finished';
+                // Hide stop button when finished
+                const stopButtonFinished = document.getElementById('stop_button');
+                if (stopButtonFinished) {
+                    stopButtonFinished.style.display = 'none';
+                }
+                break;
+            case 'not exists':
+                statusBadge.className = 'badge bg-secondary-subtle text-secondary px-3 py-2 ms-3';
+                statusBadge.innerHTML = '<i class="fa fa-question-circle me-2"></i>Not Found';
+                break;
+            default:
+                this.warn('Unknown scenario status:', status);
         }
     }
 
@@ -1793,34 +1835,6 @@ class Monitor {
                 marker.getElement().classList.remove('drone-offline');
             }
         });
-    }
-
-    checkAllNodesOffline() {
-        // Get all unique node IPs from markers
-        const allNodeIPs = new Set(Object.values(this.droneMarkers).map(marker => marker.ip));
-
-        // Check if all nodes are in the offlineNodes set
-        const allOffline = allNodeIPs.size > 0 && Array.from(allNodeIPs).every(ip => this.offlineNodes.has(ip));
-
-        // Update scenario status badge
-        const statusBadge = document.getElementById('scenario_status');
-        if (statusBadge) {
-            if (allNodeIPs.size === 0) {
-                // Show Running status when there are no nodes
-                statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
-                statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
-            } else if (allOffline) {
-                statusBadge.className = 'badge bg-danger-subtle text-danger px-3 py-2 ms-3';
-                statusBadge.innerHTML = '<i class="fa fa-times-circle me-2"></i>Finished';
-                const stopButton = document.getElementById('stop_button');
-                if (stopButton) {
-                    stopButton.style.display = 'none';
-                }
-            } else {
-                statusBadge.className = 'badge bg-warning-subtle text-warning px-3 py-2 ms-3';
-                statusBadge.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Running';
-            }
-        }
     }
 
     // Helper method to compare two sets

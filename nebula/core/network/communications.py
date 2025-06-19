@@ -90,6 +90,7 @@ class CommunicationsManager:
 
         self._discoverer = Discoverer(addr=self.addr, config=self.config)
         # self._health = Health(addr=self.addr, config=self.config)
+        self._health = None
         self._forwarder = Forwarder(config=self.config)
         self._propagator = Propagator()
 
@@ -109,6 +110,7 @@ class CommunicationsManager:
         self._external_connection_service = factory_connection_service("nebula", self.addr)
 
         self._initialized = True
+        self._running = asyncio.Event()
         logging.info("Communication Manager initialization completed")
 
     @property
@@ -195,6 +197,7 @@ class CommunicationsManager:
         Args:
             initial_neighbors (list): A list of neighbor addresses to connect to after startup.
         """
+        self._running.set()
         logging.info(f"Neighbors: {self.config.participant['network_args']['neighbors']}")
         logging.info(
             f"💤  Cold start time: {self.config.participant['misc_args']['grace_time_connection']} seconds before connecting to the network"
@@ -379,7 +382,7 @@ class CommunicationsManager:
         Returns:
             bool: True if the ECS is running, False otherwise.
         """
-        return self.ecs.is_running()
+        return await self.ecs.is_running()
 
     async def start_beacon(self):
         """
@@ -551,6 +554,15 @@ class CommunicationsManager:
             try:
                 addr = writer.get_extra_info("peername")
 
+                # Check if learning cycle has finished - reject new connections
+                if self.engine.learning_cycle_finished():
+                    logging.info(f"🔗  [incoming] Rejecting connection from {addr} because learning cycle has finished")
+                    writer.write(b"CONNECTION//CLOSE\n")
+                    await writer.drain()
+                    writer.close()
+                    await writer.wait_closed()
+                    return
+
                 connected_node_id = await reader.readline()
                 connected_node_id = connected_node_id.decode("utf-8").strip()
                 connected_node_port = addr[1]
@@ -682,19 +694,48 @@ class CommunicationsManager:
         await self.disconnect(connected_with, mutual_disconnection=False)
 
     async def stop(self):
-        logging.info("🌐  Stopping Communications Manager... [Removing connections and stopping network engine]")
+        logging.info("🌐  Stopping Communications Manager...")
+
+        # Stop accepting new connections first
+        if self.network_engine:
+            logging.info("🌐  Closing network engine server...")
+            self.network_engine.close()
+            await self.network_engine.wait_closed()
+            if hasattr(self, "network_task") and self.network_task:
+                self.network_task.cancel()
+                try:
+                    await self.network_task
+                except asyncio.CancelledError:
+                    pass
+
+        # Stop all existing connections
         async with self.connections_lock:
             connections = list(self.connections.values())
             for node in connections:
                 await node.stop()
-            if hasattr(self, "server"):
-                self.network_engine.close()
-                await self.network_engine.wait_closed()
-                self.network_task.cancel()
-        if self.forwarder:
-            self.forwarder.shutdown()
+
+        # Stop additional services
+        if self._forwarder:
+            await self._forwarder.stop()
         if self.ecs:
             await self.ecs.stop()
+        if self.discoverer:
+            await self.discoverer.stop()
+        if self.health:
+            try:
+                await self.health.stop()
+            except Exception as e:
+                logging.warning(f"Error stopping health service: {e}")
+        if self._propagator:
+            await self._propagator.stop()
+        if self._blacklist:
+            await self._blacklist.stop()
+
+        self._running.clear()
+
+        self.stop_network_engine.set()
+
+        logging.info("🌐  Communications Manager stopped successfully")
 
     async def run_reconnections(self):
         for connection in self.connections_reconnect:
@@ -854,8 +895,13 @@ class CommunicationsManager:
             priority (str, optional): Priority level for this connection ("low", "medium", "high"). Defaults to "medium".
 
         Returns:
-            bool: True if the connection was successfully established or upgraded, False otherwise.
+            bool: True if the connection action (new or upgrade) succeeded, False otherwise.
         """
+        # Check if learning cycle has finished - don't establish new connections
+        if self.engine.learning_cycle_finished():
+            logging.info(f"🔗  [outgoing] Not establishing connection to {addr} because learning cycle has finished")
+            return False
+
         logging.info(f"🔗  [outgoing] Establishing connection with {addr} (direct: {direct})")
 
         async def process_establish_connection(addr, direct, reconnect, priority):
@@ -1049,7 +1095,7 @@ class CommunicationsManager:
             logging.error(f"Error registering node {self.addr} in the controller")
 
     async def wait_for_controller(self):
-        while True:
+        while await self.is_running():
             response = requests.get(self.wait_endpoint)
             if response.status_code == 200:
                 logging.info("Continue signal received from controller")
@@ -1057,6 +1103,9 @@ class CommunicationsManager:
             else:
                 logging.info("Waiting for controller signal...")
             await asyncio.sleep(1)
+
+    async def is_running(self):
+        return self._running.is_set()
 
     async def disconnect(self, dest_addr, mutual_disconnection=True, forced=False):
         """

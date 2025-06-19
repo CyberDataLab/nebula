@@ -9,7 +9,7 @@ class ExternalConnectionService(ABC):
     for discovering federations and managing beacon signals that announce
     node presence in the network.
     """
-    
+
     @abstractmethod
     async def start(self):
         """
@@ -31,7 +31,7 @@ class ExternalConnectionService(ABC):
         pass
 
     @abstractmethod
-    def is_running(self):
+    async def is_running(self):
         """
         Check whether the external connection service is currently active.
 
@@ -85,6 +85,7 @@ class ExternalConnectionServiceException(Exception):
     """
     Exception raised for errors related to external connection services.
     """
+
     pass
 
 

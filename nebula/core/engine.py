@@ -4,10 +4,9 @@ import os
 import random
 import socket
 import time
+
 import docker
 
-from nebula.core.role import Role, factory_node_role
-from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
 from nebula.addons.reporter import Reporter
 from nebula.addons.reputation.reputation import Reputation
@@ -16,13 +15,14 @@ from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import (
     AggregationEvent,
+    ExperimentFinishEvent,
     RoundEndEvent,
     RoundStartEvent,
     UpdateNeighborEvent,
     UpdateReceivedEvent,
-    ExperimentFinishEvent,
 )
 from nebula.core.network.communications import CommunicationsManager
+from nebula.core.role import Role, factory_node_role
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
 from nebula.core.utils.locker import Locker
 
@@ -155,6 +155,8 @@ class Engine:
         # Additional Components
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
+        else:
+            self._situational_awareness = None
 
         if self.config.participant["defense_args"]["reputation"]["enabled"]:
             self._reputation = Reputation(engine=self, config=self.config)
@@ -320,10 +322,10 @@ class Engine:
                 await self.cm.send_message(source, message)
                 logging.info(f"🔧  handle_control_message | Trigger | Leadership transfer ack message sent to {source}")
             else:
-                logging.info(f"🔧  handle_control_message | Trigger | Only one neighbor found, I am the leader")
+                logging.info("🔧  handle_control_message | Trigger | Only one neighbor found, I am the leader")
         else:
             self.role = Role.AGGREGATOR
-            logging.info(f"🔧  handle_control_message | Trigger | I am now the leader")
+            logging.info("🔧  handle_control_message | Trigger | I am now the leader")
             message = self.cm.create_message("control", "leadership_transfer_ack")
             await self.cm.send_message(source, message)
             logging.info(f"🔧  handle_control_message | Trigger | Leadership transfer ack message sent to {source}")
@@ -462,7 +464,7 @@ class Engine:
         """
         # Don't broadcast if the learning cycle has finished
         if not self.learning_cycle_finished():
-            logging.info(f"🔄  Not broadcasting MODELS_INCLUDED because learning cycle has finished")
+            logging.info("🔄  Not broadcasting MODELS_INCLUDED because learning cycle has finished")
             return
 
         logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
@@ -813,78 +815,15 @@ class Engine:
                 result = await self.reporter.report_scenario_finished()
                 if result:
                     logging.info("📝  Scenario finished reported successfully")
-                    self.reporter.shutdown()
+                    await self.reporter.stop()
                 else:
                     logging.error("📝  Error reporting scenario finished")
             except Exception as e:
-                logging.error(f"📝  Error during scenario finish report: {e}")
+                logging.exception(f"📝  Error during scenario finish report: {e}")
 
-        # Get all tasks except the current one
-        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-        # Cut connections
-        await self.cm.stop()
-
-        logging.info("Starting graceful shutdown process...")
-        
-        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-
-        current_task = asyncio.current_task()
-        all_tasks = asyncio.all_tasks()
-
-        # Log basic task info
-        logging.info("Task Summary:")
-
-        # Log task names if available
-        if current_task:
-            logging.info(f"  • Current task: {current_task}")
-
-        for task in all_tasks:
-            logging.info(f"  • Task: {task}")
-            logging.info(f"  • Task name: {task.get_name()}")
-            logging.info(f"  • Task state: {task.get_state()}")
-            logging.info(f"  • Task coroutine: {task.get_coro()}")
-            logging.info(f"  • Task done: {task.done()}")
-            logging.info(f"  • Task cancelled: {task.cancelled()}")
-            logging.info(f"  • Task exception: {task.exception()}")
-            logging.info(f"  • Task result: {task.result()}")
-            
-            
-        model_tasks = [t for t in tasks if any(name in t.get_name().lower() for name in ["model", "aggregation"])]
-        if model_tasks:
-            logging.info("Waiting for model and aggregation tasks to complete...")
-            try:
-                await asyncio.wait_for(asyncio.gather(*model_tasks, return_exceptions=True), timeout=15)
-            except asyncio.TimeoutError:
-                logging.warning("Model tasks did not complete in time")
-
-        other_tasks = [t for t in tasks if t not in model_tasks]
-        if other_tasks:
-            logging.info("Waiting for remaining tasks to complete...")
-            try:
-                await asyncio.wait_for(asyncio.gather(*other_tasks, return_exceptions=True), timeout=15)
-            except asyncio.TimeoutError:
-                logging.warning("Some tasks did not complete in time, forcing cancellation...")
-                for task in other_tasks:
-                    if not task.done():
-                        task.cancel()
-                await asyncio.gather(*other_tasks, return_exceptions=True)
-
-        # Remove all pending tasks
-        asyncio.all_tasks().clear()
-
-        # Shutdown all logging handlers
-        self.config.shutdown_logging()
-
-        # From here, logging is disabled
-        print("Shutdown complete. Terminating NEBULA CORE...")
-
-        # Kill itself
-        if self.config.participant["scenario_args"]["deployment"] == "docker":
-            try:
-                docker_id = socket.gethostname()
-                self.client.containers.get(docker_id).kill()
-            except Exception as e:
-                print(f"Error stopping Docker container with ID {docker_id}: {e}")
+        # Call centralized shutdown
+        await self.shutdown()
+        return
 
     async def _extended_learning_cycle(self):
         """
@@ -892,3 +831,89 @@ class Engine:
         functionalities. The method is called in the _learning_cycle method.
         """
         pass
+
+    async def shutdown(self):
+        logging.info("🚦 Engine shutdown initiated")
+
+        # Stop addon services first
+        try:
+            await self._addon_manager.stop_additional_services()
+        except Exception as e:
+            logging.exception("Error stopping add-ons: %s", e)
+
+        # Stop reporter
+        try:
+            await self._reporter.stop()
+        except Exception as e:
+            logging.exception("Error stopping reporter: %s", e)
+
+        # Stop communications manager (includes forwarder, discoverer, propagator, ECS)
+        try:
+            await self.cm.stop()
+        except Exception as e:
+            logging.exception("Error stopping communications manager: %s", e)
+
+        # Stop situational awareness
+        try:
+            if self.sa:
+                await self.sa.stop()
+        except Exception as e:
+            logging.exception("Error stopping situational awareness: %s", e)
+
+        # Task cleanup with improved handling
+        logging.info("Starting graceful task cleanup...")
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+        if tasks:
+            logging.info(f"Found {len(tasks)} remaining tasks to clean up")
+            for task in tasks:
+                logging.info(f"  • Task: {task.get_name()} - {task}")
+                logging.info(f"  • State: {task._state} - Done: {task.done()} - Cancelled: {task.cancelled()}")
+
+            # Wait for tasks to complete naturally with shorter timeout
+            try:
+                await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=3)
+            except TimeoutError:
+                logging.warning("Some tasks did not complete in time, forcing cancellation...")
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                # Wait a bit more for cancellations to take effect
+                try:
+                    await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=2)
+                except TimeoutError:
+                    logging.warning("Some tasks still not responding to cancellation")
+
+                    # Final aggressive cleanup - cancel all remaining tasks
+                    remaining_tasks = [
+                        t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()
+                    ]
+                    if remaining_tasks:
+                        logging.warning(f"Forcing cancellation of {len(remaining_tasks)} remaining tasks")
+                        for task in remaining_tasks:
+                            task.cancel()
+                        try:
+                            await asyncio.wait_for(asyncio.gather(*remaining_tasks, return_exceptions=True), timeout=1)
+                        except TimeoutError:
+                            logging.exception("Some tasks still not responding to forced cancellation")
+
+        logging.info("✅ Engine shutdown complete")
+
+        # Kill Docker container if running in Docker
+        if self.config.participant["scenario_args"]["deployment"] == "docker":
+            try:
+                docker_id = socket.gethostname()
+                logging.info(f"📦  Removing docker container with ID {docker_id}")
+                container = self.client.containers.get(docker_id)
+                container.remove(force=True)
+                logging.info(f"📦  Successfully removed docker container {docker_id}")
+            except Exception as e:
+                logging.exception(f"📦  Error removing Docker container {docker_id}: {e}")
+                # Try to force kill the container as last resort
+                try:
+                    import subprocess
+
+                    subprocess.run(["docker", "rm", "-f", docker_id], check=False)
+                    logging.info(f"📦  Forced removal of container {docker_id} via subprocess")
+                except Exception as sub_e:
+                    logging.exception(f"📦  Failed to force remove container {docker_id}: {sub_e}")

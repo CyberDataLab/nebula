@@ -36,15 +36,15 @@
                                     <i class="fa fa-signal me-2"></i>Status
                                 </h5>
                                 {% if scenario.status == "running" %}
-                                <span id="scenario_status" class="badge bg-warning-subtle text-warning px-3 py-2 ms-3">
+                                <span id="scenario_status" data-scenario-status="running" class="badge bg-warning-subtle text-warning px-3 py-2 ms-3">
                                     <i class="fa fa-spinner fa-spin me-2"></i>Running
                                 </span>
                                 {% elif scenario.status == "completed" %}
-                                <span id="scenario_status" class="badge bg-success-subtle text-success px-3 py-2 ms-3">
+                                <span id="scenario_status" data-scenario-status="completed" class="badge bg-success-subtle text-success px-3 py-2 ms-3">
                                     <i class="fa fa-check-circle me-2"></i>Completed
                                 </span>
                                 {% else %}
-                                <span id="scenario_status" class="badge bg-danger-subtle text-danger px-3 py-2 ms-3">
+                                <span id="scenario_status" data-scenario-status="finished" class="badge bg-danger-subtle text-danger px-3 py-2 ms-3">
                                     <i class="fa fa-times-circle me-2"></i>Finished
                                 </span>
                                 {% endif %}

@@ -46,7 +46,7 @@ class SANetwork(SAMComponent):
 
     Inherits from SAMComponent to participate in the broader Situational Awareness pipeline.
     """
-    
+
     NEIGHBOR_VERIFICATION_TIMEOUT = 30
 
     def __init__(self, config):
@@ -61,11 +61,15 @@ class SANetwork(SAMComponent):
         self._sar = config["sar"]  # sar
         self._addr = config["addr"]  # addr
         self._neighbor_policy = factory_NeighborPolicy(self._neighbor_policy)
-        self._restructure_process_lock = Locker(name="restructure_process_lock")
+        self._restructure_process_lock = Locker(name="restructure_process_lock", async_lock=True)
         self._restructure_cooldown = 0
         self._verbose = config["verbose"]  # verbose
         self._cm = CommunicationsManager.get_instance()
         self._sa_network_agent = SANetworkAgent(self)
+
+        # Track verification tasks for proper cleanup during shutdown
+        self._verification_tasks = set()
+        self._verification_tasks_lock = asyncio.Lock()
 
     @property
     def sar(self) -> SAReasoner:
@@ -376,7 +380,7 @@ class SANetwork(SAMComponent):
         4. Release the restructure lock.
         """
         logging.info("Going to reconnect with federation...")
-        self._restructure_process_lock.acquire()
+        await self._restructure_process_lock.acquire_async()
         await self.cm.clear_restrictions()
         # If we got some refs, try to reconnect to them
         if len(await self.np.get_nodes_known()) > 0:
@@ -389,7 +393,7 @@ class SANetwork(SAMComponent):
             if self._verbose:
                 logging.info("Reconnecting | NO Addrs availables")
             await self.sar.sad.start_late_connection_process(connected=False, msg_type="discover_nodes")
-        self._restructure_process_lock.release()
+        await self._restructure_process_lock.release_async()
 
     async def upgrade_connection_robustness(self, possible_neighbors):
         """
@@ -404,7 +408,7 @@ class SANetwork(SAMComponent):
         Args:
             possible_neighbors (set): Addresses of candidate nodes for connection enhancement.
         """
-        self._restructure_process_lock.acquire()
+        await self._restructure_process_lock.acquire_async()
         # If we got some refs, try to connect to them
         if possible_neighbors and len(possible_neighbors) > 0:
             if self._verbose:
@@ -416,7 +420,7 @@ class SANetwork(SAMComponent):
             if self._verbose:
                 logging.info("Reestructuring | NO Addrs availables")
             await self.sar.sad.start_late_connection_process(connected=True, msg_type="discover_nodes")
-        self._restructure_process_lock.release()
+        await self._restructure_process_lock.release_async()
 
     async def stop_connections_with_federation(self):
         """
@@ -456,7 +460,24 @@ class SANetwork(SAMComponent):
         if neighbors:
             nodes_to_forget.difference_update(neighbors)
         logging.info(f"Connections dont stablished: {nodes_to_forget}")
-        self.forget_nodes(nodes_to_forget)
+        await self.forget_nodes(nodes_to_forget)
+
+    async def create_verification_task(self, nodes: set):
+        """
+        Create and track a verification task for neighbor establishment.
+
+        Args:
+            nodes (set): The set of node addresses for which connections were attempted.
+
+        Returns:
+            asyncio.Task: The created verification task.
+        """
+        verification_task = asyncio.create_task(self.verify_neighbors_stablished(nodes))
+
+        async with self._verification_tasks_lock:
+            self._verification_tasks.add(verification_task)
+
+        return verification_task
 
     async def forget_nodes(self, nodes_to_forget):
         """
@@ -466,6 +487,35 @@ class SANetwork(SAMComponent):
             nodes_to_forget (set): Addresses of nodes to be purged from policy memory.
         """
         await self.np.forget_nodes(nodes_to_forget)
+
+    async def stop(self):
+        """
+        Stop the SANetwork component by releasing locks and clearing any pending operations.
+        """
+        logging.info("🛑  Stopping SANetwork...")
+
+        # Cancel all verification tasks
+        async with self._verification_tasks_lock:
+            if self._verification_tasks:
+                tasks_to_cancel = [task for task in self._verification_tasks if not task.done()]
+                logging.info(f"🛑  Cancelling {len(tasks_to_cancel)} verification tasks...")
+                for task in tasks_to_cancel:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                self._verification_tasks.clear()
+                logging.info("🛑  All verification tasks cancelled")
+
+        # Release any held locks
+        try:
+            if self._restructure_process_lock.locked():
+                self._restructure_process_lock.release()
+        except Exception as e:
+            logging.warning(f"Error releasing restructure_process_lock: {e}")
+
+        logging.info("✅  SANetwork stopped successfully")
 
     """                                                     ###############################
                                                             #       SA NETWORK AGENT      #
@@ -489,7 +539,9 @@ class SANetworkAgent(SAModuleAgent):
     async def notify_all_suggestions_done(self, event_type):
         await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)
 
-    async def create_and_suggest_action(self, saca: SACommandAction, function: Callable = None, more_suggestions=False, *args):
+    async def create_and_suggest_action(
+        self, saca: SACommandAction, function: Callable = None, more_suggestions=False, *args
+    ):
         """
         Create a situational awareness command based on the specified action and suggest it for arbitration.
 
@@ -529,7 +581,7 @@ class SANetworkAgent(SAModuleAgent):
             sa_command_state = await sac.get_state_future()  # By using 'await' we get future.set_result()
             if sa_command_state == SACommandState.EXECUTED:
                 (nodes_to_forget,) = args
-                asyncio.create_task(self._san.verify_neighbors_stablished(nodes_to_forget))
+                await self._san.create_verification_task(nodes_to_forget)
         elif saca == SACommandAction.RECONNECT:
             sac = factory_sa_command(
                 "connectivity", SACommandAction.RECONNECT, self, "", SACommandPRIO.HIGH, True, function

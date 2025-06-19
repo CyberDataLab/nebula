@@ -50,24 +50,28 @@ class Mobility:
         """
         logging.info("Starting mobility module...")
         self.config = config
-        self.grace_time = self.config.participant["mobility_args"]["grace_time_mobility"]
-        self.period = self.config.participant["mobility_args"]["change_geo_interval"]
+        self._verbose = verbose
+        self._running = asyncio.Event()
+        self._nodes_distances = {}
+        self._nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
+        self._mobility_task = None  # Track the background task
+
+        # Mobility configuration
         self.mobility = self.config.participant["mobility_args"]["mobility"]
         self.mobility_type = self.config.participant["mobility_args"]["mobility_type"]
-        self.radius_federation = float(self.config.participant["mobility_args"]["radius_federation"])
-        self.scheme_mobility = self.config.participant["mobility_args"]["scheme_mobility"]
-        self.round_frequency = int(self.config.participant["mobility_args"]["round_frequency"])
+        self.grace_time = self.config.participant["mobility_args"]["grace_time_mobility"]
+        self.period = self.config.participant["mobility_args"]["change_geo_interval"]
         # INFO: These values may change according to the needs of the federation
         self.max_distance_with_direct_connections = 150  # meters
         self.max_movement_random_strategy = 50  # meters
         self.max_movement_nearest_strategy = 50  # meters
         self.max_initiate_approximation = self.max_distance_with_direct_connections * 1.2
+        self.radius_federation = float(config.participant["mobility_args"]["radius_federation"])
+        self.scheme_mobility = config.participant["mobility_args"]["scheme_mobility"]
+        self.round_frequency = int(config.participant["mobility_args"]["round_frequency"])
         # Logging box with mobility information
         mobility_msg = f"Mobility: {self.mobility}\nMobility type: {self.mobility_type}\nRadius federation: {self.radius_federation}\nScheme mobility: {self.scheme_mobility}\nEach {self.round_frequency} rounds"
         print_msg_box(msg=mobility_msg, indent=2, title="Mobility information")
-        self._nodes_distances = {}
-        self._nodes_distances_lock = Locker("nodes_distances_lock", async_lock=True)
-        self._verbose = verbose
 
     @cached_property
     def cm(self):
@@ -103,8 +107,30 @@ class Mobility:
         """
         await EventManager.get_instance().subscribe_addonevent(GPSEvent, self.update_nodes_distances)
         await EventManager.get_instance().subscribe_addonevent(GPSEvent, self.update_nodes_distances)
-        task = asyncio.create_task(self.run_mobility())
-        return task
+        self._running.set()
+        self._mobility_task = asyncio.create_task(self.run_mobility(), name="Mobility_run_mobility")
+        return self._mobility_task
+
+    async def stop(self):
+        """
+        Stops the mobility module.
+        """
+        logging.info("Stopping Mobility module...")
+        self._running.clear()
+
+        # Cancel the background task
+        if self._mobility_task and not self._mobility_task.done():
+            logging.info("🛑  Cancelling Mobility background task...")
+            self._mobility_task.cancel()
+            try:
+                await self._mobility_task
+            except asyncio.CancelledError:
+                pass
+            self._mobility_task = None
+            logging.info("🛑  Mobility background task cancelled")
+
+    async def is_running(self):
+        return self._running.is_set()
 
     async def update_nodes_distances(self, gpsevent: GPSEvent):
         distances = await gpsevent.get_event_data()
@@ -138,7 +164,7 @@ class Mobility:
         if not self.mobility:
             return
         # await asyncio.sleep(self.grace_time)
-        while True:
+        while await self.is_running():
             await self.change_geo_location()
             await asyncio.sleep(self.period)
 
