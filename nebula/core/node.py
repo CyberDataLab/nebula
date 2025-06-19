@@ -248,15 +248,6 @@ async def main(config: Config):
         logging.info("[ForceShutdown] Stopping event loop...")
         loop.stop()
 
-        # try:
-        #     await asyncio.wait_for(
-        #         asyncio.gather(*tasks, return_exceptions=True),
-        #         timeout=5
-        #     )
-        # except asyncio.TimeoutError:
-        #     logging.warning("[ForceShutdown] Timeout: some tasks did not finish.")
-
-
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
     config = Config(entity="participant", participant_config_file=config_path)
