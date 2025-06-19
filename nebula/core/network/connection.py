@@ -169,19 +169,23 @@ class Connection:
         periodically checking if the last activity exceeds the inactivity threshold.
         If inactive, marks the connection as inactive and logs a warning.
         """
-        while await self.is_running():
-            if self.direct:
-                break
-            await asyncio.sleep(self.INACTIVITY_DAEMON_SLEEP_TIME)
-            async with self._activity_lock:
-                time_since_last = time.time() - self._last_activity
-                if time_since_last > self.INACTIVITY_TIMER:
-                    if not self._inactivity:
-                        self._inactivity = True
-                        logging.info(f"[{self}] Connection marked as inactive.")
-                else:
-                    if self._inactivity:
-                        self._inactivity = False
+        try:
+            while await self.is_running():
+                if self.direct:
+                    break
+                await asyncio.sleep(self.INACTIVITY_DAEMON_SLEEP_TIME)
+                async with self._activity_lock:
+                    time_since_last = time.time() - self._last_activity
+                    if time_since_last > self.INACTIVITY_TIMER:
+                        if not self._inactivity:
+                            self._inactivity = True
+                            logging.info(f"[{self}] Connection marked as inactive.")
+                    else:
+                        if self._inactivity:
+                            self._inactivity = False
+        except asyncio.CancelledError:
+            logging.info("_monitor_inactivity cancelled during shutdown.")
+            return
 
     def get_federated_round(self):
         return self.federated_round
@@ -482,21 +486,19 @@ class Connection:
         try:
             while await self.is_running():
                 if self.pending_messages_queue.full():
-                    await asyncio.sleep(0.1)  # Wait a bit if the queue is full to create backpressure
+                    await asyncio.sleep(0.1)
                     continue
                 header = await self._read_exactly(self.HEADER_SIZE)
                 message_id, chunk_index, is_last_chunk = self._parse_header(header)
-
                 chunk_data = await self._read_chunk(reusable_buffer)
                 await self._update_activity()
                 self._store_chunk(message_id, chunk_index, chunk_data, is_last_chunk)
-                # logging.debug(f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes")
-                # Active connection without fails
                 self.incompleted_reconnections = 0
                 if is_last_chunk:
                     await self._process_complete_message(message_id)
-        except asyncio.CancelledError as e:
-            logging.exception(f"Message handling cancelled: {e}")
+        except asyncio.CancelledError:
+            logging.info("handle_incoming_message cancelled during shutdown.")
+            return
         except ConnectionError as e:
             logging.exception(f"Connection closed while reading: {e}")
         except Exception as e:
@@ -678,27 +680,23 @@ class Connection:
     async def process_message_queue(self) -> None:
         """
         Continuously processes messages from the pending queue.
-
-        Behavior:
-            - Retrieves messages from the queue one by one.
-            - Delegates the message to the appropriate handler based on its type.
-            - Ensures the queue is marked as processed.
-
-        Notes:
-            Runs indefinitely unless externally cancelled or stopped.
         """
-        while await self.is_running():
-            try:
-                if self.pending_messages_queue is None:
-                    logging.error("Pending messages queue is not initialized")
-                    return
-                data_type_prefix, message = await self.pending_messages_queue.get()
-                await self._handle_message(data_type_prefix, message)
-                self.pending_messages_queue.task_done()
-            except Exception as e:
-                logging.exception(f"Error processing message queue: {e}")
-            finally:
-                await asyncio.sleep(0)
+        try:
+            while await self.is_running():
+                try:
+                    if self.pending_messages_queue is None:
+                        logging.error("Pending messages queue is not initialized")
+                        return
+                    data_type_prefix, message = await self.pending_messages_queue.get()
+                    await self._handle_message(data_type_prefix, message)
+                    self.pending_messages_queue.task_done()
+                except Exception as e:
+                    logging.exception(f"Error processing message queue: {e}")
+                finally:
+                    await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            logging.info("process_message_queue cancelled during shutdown.")
+            return
 
     async def _handle_message(self, data_type_prefix: bytes, message: bytes) -> None:
         """

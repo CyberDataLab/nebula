@@ -873,6 +873,11 @@ class Engine:
             # Wait for tasks to complete naturally with shorter timeout
             try:
                 await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=3)
+            except asyncio.CancelledError:
+                logging.warning(
+                    "Timeout reached during task cleanup (CancelledError); proceeding with shutdown anyway."
+                )
+                # Do not re-raise, just continue
             except TimeoutError:
                 logging.warning("Some tasks did not complete in time, forcing cancellation...")
                 for task in tasks:
@@ -881,9 +886,13 @@ class Engine:
                 # Wait a bit more for cancellations to take effect
                 try:
                     await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=2)
+                except asyncio.CancelledError:
+                    logging.warning(
+                        "Timeout reached during forced cancellation (CancelledError); proceeding with shutdown anyway."
+                    )
+                    # Do not re-raise, just continue
                 except TimeoutError:
                     logging.warning("Some tasks still not responding to cancellation")
-
                     # Final aggressive cleanup - cancel all remaining tasks
                     remaining_tasks = [
                         t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()
@@ -894,8 +903,17 @@ class Engine:
                             task.cancel()
                         try:
                             await asyncio.wait_for(asyncio.gather(*remaining_tasks, return_exceptions=True), timeout=1)
+                        except asyncio.CancelledError:
+                            logging.warning(
+                                "Timeout reached during final forced cancellation (CancelledError); proceeding with shutdown anyway."
+                            )
+                            # Do not re-raise, just continue
                         except TimeoutError:
                             logging.exception("Some tasks still not responding to forced cancellation")
+            # Proceed anyway after all cancellation attempts
+            logging.warning("Proceeding with shutdown even if some tasks are still pending/cancelled.")
+        else:
+            logging.info("No remaining tasks to clean up.")
 
         logging.info("✅ Engine shutdown complete")
 

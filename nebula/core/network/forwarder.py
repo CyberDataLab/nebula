@@ -75,14 +75,17 @@ class Forwarder:
         if self.config.participant["scenario_args"]["federation"] == "CFL":
             logging.info("🔁  Federation is CFL. Forwarder is disabled...")
             return
-        while await self.is_running():
-            # logging.debug(f"🔁  Pending messages: {self.pending_messages.qsize()}")
-            start_time = time.time()
-            await self.pending_messages_lock.acquire_async()
-            await self.process_pending_messages(messages_left=self.number_forwarded_messages)
-            await self.pending_messages_lock.release_async()
-            sleep_time = max(0, self.interval - (time.time() - start_time))
-            await asyncio.sleep(sleep_time)
+        try:
+            while await self.is_running():
+                start_time = time.time()
+                await self.pending_messages_lock.acquire_async()
+                await self.process_pending_messages(messages_left=self.number_forwarded_messages)
+                await self.pending_messages_lock.release_async()
+                sleep_time = max(0, self.interval - (time.time() - start_time))
+                await asyncio.sleep(sleep_time)
+        except asyncio.CancelledError:
+            logging.info("run_forwarder cancelled during shutdown.")
+            return
 
     async def stop(self):
         self._running.clear()

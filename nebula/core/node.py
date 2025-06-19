@@ -235,6 +235,13 @@ async def main(config):
     if node.cm is not None:
         await node.cm.network_wait()
 
+    # Ensure shutdown is always called and awaited before main() returns
+    if hasattr(node, "shutdown") and callable(node.shutdown):
+        logging.info("Calling node.shutdown() for final cleanup and Docker removal...")
+        await node.shutdown()
+    else:
+        logging.warning("Node does not have a shutdown() method; skipping explicit shutdown.")
+
 
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
