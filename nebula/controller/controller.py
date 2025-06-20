@@ -368,7 +368,7 @@ async def stop_scenario(
     from nebula.controller.scenarios import ScenarioManagement
 
     # ScenarioManagement.stop_participants(scenario_name)
-    # DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{username}-participant")
+    DockerUtils.remove_containers_by_prefix(f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{username}-participant")
     DockerUtils.remove_docker_network(
         f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(username).lower()}-nebula-net-scenario"
     )
