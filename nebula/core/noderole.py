@@ -1,6 +1,8 @@
 from __future__ import annotations
 import logging
+import asyncio
 from nebula.addons.attacks.attacks import create_attack
+from nebula.addons.functions import print_msg_box
 from nebula.config.config import Config
 from nebula.core.utils.locker import Locker
 from nebula.core.eventmanager import EventManager
@@ -101,11 +103,18 @@ class RoleBehavior(ABC):
 class MaliciousRoleBehavior(RoleBehavior):
     def __init__(self, engine: Engine, config: Config):
         super().__init__()
+        print_msg_box(
+            msg=f"Role Behavior Malicious initialization",
+            indent=2,
+            title="Role initialization",
+        )
         self._engine = engine
         self._config = config
+        logging.info("Creating attack behavior...")
         self.attack = create_attack(self._engine)
+        logging.info("Attack behavior created")
         self.aggregator_bening = self._engine._aggregator
-        benign_role = self._config.participant["adversarial_args"]["attack_params"]["fake_behavior"]
+        benign_role = self._config.participant["adversarial_args"]["fake_behavior"]
         self._fake_role_behavior = factory_role_behavior(benign_role, self._engine, self._config)
         self._role = factory_node_role("malicious")
     
@@ -179,6 +188,7 @@ class AggregatorRoleBehavior(RoleBehavior):
         self._engine = engine
         self._config = config
         self._role = factory_node_role("aggregator")
+        self._transfer_send = False
         
     def get_role(self):
         return self._role    
@@ -201,11 +211,12 @@ class AggregatorRoleBehavior(RoleBehavior):
         
         # Transfer leadership
         neighbors = await self._engine.cm.get_addrs_current_connections(myself=True)
-        if len(neighbors):
-            random_neighbor = random.choice(neighbors)
+        if len(neighbors) and not self._transfer_send:
+            random_neighbor = random.choice(list(neighbors))
             lt_message = self._engine.cm.create_message("control", "leadership_transfer")
             logging.info(f"Sending transfer leadership to: {random_neighbor}")
-            await self._engine.cm.send_message(random_neighbor, lt_message)
+            asyncio.create_task(self._engine.cm.send_message(random_neighbor, lt_message))
+            self._transfer_send = True
         
     async def select_nodes_to_wait(self):
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)

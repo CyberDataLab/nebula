@@ -91,19 +91,11 @@ class Engine:
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
         self.addr = config.participant["network_args"]["addr"]
-        role = config.participant["device_args"]["role"]
-        self._role_behavior: RoleBehavior = factory_role_behavior(role, self, config)
-        self._role_behavior_performance_lock = Locker("role_behavior_performance_lock", async_lock=True)
+        
         self.name = config.participant["device_args"]["name"]
         self.client = docker.from_env()
 
         print_banner()
-
-        print_msg_box(
-            msg=f"Name {self.name}\nRole: {self._role_behavior.get_role_name()}",
-            indent=2,
-            title="Node information",
-        )
 
         self._trainer = None
         self._aggregator = None
@@ -121,6 +113,16 @@ class Engine:
 
         self._secure_neighbors = []
         self._is_malicious = self.config.participant["adversarial_args"]["attack_params"]["attacks"] != "No Attack"
+
+        role = config.participant["device_args"]["role"]
+        self._role_behavior: RoleBehavior = factory_role_behavior(role, self, config)
+        self._role_behavior_performance_lock = Locker("role_behavior_performance_lock", async_lock=True)
+
+        print_msg_box(
+            msg=f"Name {self.name}\nRole: {self._role_behavior.get_role_name()}",
+            indent=2,
+            title="Node information",
+        )
 
         msg = f"Trainer: {self._trainer.__class__.__name__}"
         msg += f"\nDataset: {self.config.participant['data_args']['dataset']}"
@@ -316,38 +318,16 @@ class Engine:
             await self.rb.set_next_role(Role.AGGREGATOR, source_to_notificate=source)
         else:
             try:
-                logging.info("Modiying Role behavior")
-                await self._round_in_process_lock.acquire_async(timeout=3)
-                self.rb = change_role_behavior(self.rb, Role.AGGREGATOR, self, self.config)
+                logging.info("Trying to modify Role behavior")
+                lock_task = asyncio.create_task(self._round_in_process_lock.acquire_async())
+                await asyncio.wait_for(lock_task, timeout=3)
+                self._role_behavior = change_role_behavior(self.rb, Role.AGGREGATOR, self, self.config)
                 await self.rb.set_next_role(Role.AGGREGATOR)
                 await self.update_self_role()
-                await self._round_in_process_lock.release_async(timeout=3)
+                await self._round_in_process_lock.release_async()
             except TimeoutError:
                 logging.info("Learning cycle is locked, role behavior will be modified next round")
                 await self.rb.set_next_role(Role.AGGREGATOR, source_to_notificate=source)
-        
-        if self.rb.get_role() == Role.AGGREGATOR:
-            neighbors = await self.cm.get_addrs_current_connections(myself=True)
-            if len(neighbors) > 1:
-                random_neighbor = random.choice(neighbors)
-                message = self.cm.create_message("control", "leadership_transfer")
-                await self.cm.send_message(random_neighbor, message)
-                logging.info(
-                    f"🔧  handle_control_message | Trigger | Leadership transfer message sent to {random_neighbor}"
-                )
-                message = self.cm.create_message("control", "leadership_transfer_ack")
-                await self.cm.send_message(source, message)
-                logging.info(f"🔧  handle_control_message | Trigger | Leadership transfer ack message sent to {source}")
-            else:
-                logging.info(f"🔧  handle_control_message | Trigger | Only one neighbor found, I am the leader")
-        else:
-            async with self._role_behavior_performance_lock:
-                self.rb = change_role_behavior(self.rb, Role.AGGREGATOR, self, self.config)
-                
-            logging.info(f"🔧  handle_control_message | Trigger | I am now the leader")
-            message = self.cm.create_message("control", "leadership_transfer_ack")
-            await self.cm.send_message(source, message)
-            logging.info(f"🔧  handle_control_message | Trigger | Leadership transfer ack message sent to {source}")
 
     async def _control_leadership_transfer_ack_callback(self, source, message):
         logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer ack message from {source}")
@@ -357,9 +337,15 @@ class Engine:
             await self.rb.set_next_role(Role.TRAINER)
         else:
             try:
-                logging.info("Modiying Role behavior")
-                await self._round_in_process_lock.acquire_async(timeout=3)
-                self.rb = change_role_behavior(self.rb, Role.TRAINER, self, self.config)
+                lock_task = asyncio.create_task(self._round_in_process_lock.acquire_async())
+                await asyncio.wait_for(lock_task, timeout=3)
+
+                logging.info("Role behavior could be executed...")
+                await self.rb.set_next_role(Role.TRAINER)
+                await self.update_self_role()
+
+                await self._round_in_process_lock.release_async()
+
             except TimeoutError:
                 logging.info("Learning cycle is locked, role behavior will be modified next round")
                 await self.rb.set_next_role(Role.TRAINER)
@@ -489,7 +475,7 @@ class Engine:
         Sends:
             federation_models_included: A message containing the round number of the aggregation.
         """
-        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
+        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {await self.get_round()}")
         current_round = await self.get_round()
         message = self.cm.create_message(
             "federation", "federation_models_included", [str(arg) for arg in [current_round]]
@@ -764,15 +750,17 @@ class Engine:
     
     async def update_self_role(self):
         if await self.rb.update_role_needed():
+            logging.info("Starting Role Behavior modification...")
             from_role = self.rb.get_role_name()
             next_role = await self.rb.get_next_role()
             source_to_notificate = await self.rb.get_source_to_notificate()
-            self.rb: RoleBehavior = change_role_behavior(self.rb, next_role, self, self.config)
+            self._role_behavior: RoleBehavior = change_role_behavior(self.rb, next_role, self, self.config)
             to_role = self.rb.get_role_name()
             logging.info(f"Role behavior changing from: {from_role} to {to_role}")
             if source_to_notificate:
+                logging.info("Sending role modification ACK to transferer: source_to_notificate")
                 message = self.cm.create_message("control", "leadership_transfer_ack")
-                await self.cm.send_message(source_to_notificate, message)
+                asyncio.create_task(self.cm.send_message(source_to_notificate, message))
              
     async def _learning_cycle(self):
         """
@@ -811,7 +799,7 @@ class Engine:
                 await self.update_federation_nodes(
                     await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
                 )
-                expected_nodes = await self.get_federation_nodes()
+                expected_nodes = await self.rb.select_nodes_to_wait()
                 rse = RoundStartEvent(self.round, current_time, expected_nodes)
                 await EventManager.get_instance().publish_node_event(rse)
                 self.trainer.on_round_start()
