@@ -210,7 +210,7 @@ class AggregatorRoleBehavior(RoleBehavior):
         await EventManager.get_instance().publish_node_event(mpe)
         
         # Transfer leadership
-        neighbors = await self._engine.cm.get_addrs_current_connections(myself=True)
+        neighbors = await self._engine.cm.get_addrs_current_connections(myself=False)
         if len(neighbors) and not self._transfer_send:
             random_neighbor = random.choice(list(neighbors))
             lt_message = self._engine.cm.create_message("control", "leadership_transfer")
