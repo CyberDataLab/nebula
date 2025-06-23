@@ -48,7 +48,7 @@ class Aggregator(ABC):
             return None
 
     async def init(self):
-        await self.us.init(self.engine.rb.get_role_name())
+        await self.us.init(self.engine.rb.get_role_name(True))
 
     async def update_federation_nodes(self, federation_nodes: set):
         """
@@ -131,8 +131,8 @@ class Aggregator(ABC):
         await self.us.stop_notifying_updates()
         updates = await self.us.get_round_updates()
         if not updates:
-            logging.info(f"🔄  get_aggregation | No updates has been received..using own model to continue...")
-            updates = {self._addr: await self.engine.get_own_update()}
+            logging.info(f"🔄  get_aggregation | No updates has been received..resolving conflict to continue...")
+            updates = {self._addr: await self.engine.resolve_missing_updates()}
         
         missing_nodes = await self.us.get_round_missing_nodes()
         if missing_nodes:

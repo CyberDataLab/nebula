@@ -73,6 +73,10 @@ class RoleBehavior(ABC):
     async def select_nodes_to_wait(self):
         raise NotImplementedError
     
+    @abstractmethod
+    async def resolve_missing_updates(self):
+        raise NotImplementedError
+    
     async def set_next_role(self, role: Role, source_to_notificate = None):
         async with self._next_role_locker:
             self._next_role = role
@@ -138,6 +142,9 @@ class MaliciousRoleBehavior(RoleBehavior):
     async def select_nodes_to_wait(self):
         nodes = await self._fake_role_behavior.select_nodes_to_wait()
         return nodes
+    
+    async def resolve_missing_updates(self):
+        return await self._fake_role_behavior.resolve_missing_updates()
 
 """                                                         ###############################
                                                             # TRAINER AGGREGATOR BEHAVIOR #
@@ -176,6 +183,9 @@ class TrainerAggregatorRoleBehavior(RoleBehavior):
     async def select_nodes_to_wait(self):
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
         return nodes
+    
+    async def resolve_missing_updates(self):
+        return {}
 
 """                                                         ##############################
                                                             #    AGGREGATOR BEHAVIOR     #
@@ -199,11 +209,6 @@ class AggregatorRoleBehavior(RoleBehavior):
     async def extended_learning_cycle(self):
         await self._engine.trainer.test()
             
-        # self_update_event = UpdateReceivedEvent(
-        #     self._engine.trainer.get_model_parameters(), self._engine.trainer.BYPASS_MODEL_WEIGHT, self._engine.addr, self._engine.round
-        # )
-        # await EventManager.get_instance().publish_node_event(self_update_event)
-
         await self._engine._waiting_model_updates()
         
         mpe = ModelPropagationEvent(await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
@@ -221,6 +226,9 @@ class AggregatorRoleBehavior(RoleBehavior):
     async def select_nodes_to_wait(self):
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
         return nodes
+    
+    async def resolve_missing_updates(self):
+        return (self._engine.trainer.get_model_parameters(), self._engine.trainer.BYPASS_MODEL_WEIGHT)
         
 """                                                         ##############################
                                                             #       SERVER BEHAVIOR      #
@@ -246,11 +254,6 @@ class ServerRoleBehavior(RoleBehavior):
     async def extended_learning_cycle(self):
         await self._engine.trainer.test()
 
-        # self_update_event = UpdateReceivedEvent(
-        #     self._engine.trainer.get_model_parameters(), self._engine.trainer.BYPASS_MODEL_WEIGHT, self._engine.addr, self._engine.round
-        # )
-        # await EventManager.get_instance().publish_node_event(self_update_event)
-
         await self._engine._waiting_model_updates()
         
         mpe = ModelPropagationEvent(await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
@@ -259,6 +262,9 @@ class ServerRoleBehavior(RoleBehavior):
     async def select_nodes_to_wait(self):
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
         return nodes 
+    
+    async def resolve_missing_updates(self):
+        return (self._engine.trainer.get_model_parameters(), self._engine.trainer.BYPASS_MODEL_WEIGHT)
 
 """                                                         ##############################
                                                             #      TRAINER BEHAVIOR      #
@@ -284,11 +290,6 @@ class TrainerRoleBehavior(RoleBehavior):
         await self._engine.trainer.test()
         await self._engine.trainer.train()
 
-        # self_update_event = UpdateReceivedEvent(
-        #     self._engine.trainer.get_model_parameters(), self._engine.trainer.get_model_weight(), self._engine.addr, self._engine.round, local=True
-        # )
-        # await EventManager.get_instance().publish_node_event(self_update_event)
-
         mpe = ModelPropagationEvent(await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False), "stable")
         await EventManager.get_instance().publish_node_event(mpe)
         
@@ -297,6 +298,9 @@ class TrainerRoleBehavior(RoleBehavior):
     async def select_nodes_to_wait(self):
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
         return nodes
+    
+    async def resolve_missing_updates(self):
+        return (self._engine.trainer.get_model_parameters(), self._engine.trainer.get_model_weight())
 
 """                                                         ##############################
                                                             #       IDLE BEHAVIOR        #
@@ -323,6 +327,9 @@ class IdleRoleBehavior(RoleBehavior):
     async def select_nodes_to_wait(self):
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
         return nodes
+    
+    async def resolve_missing_updates(self):
+        raise NotImplementedError
         
 """                                                         ##############################
                                                             #       PROXY BEHAVIOR       #
@@ -349,6 +356,9 @@ class ProxyRoleBehavior(RoleBehavior):
     async def select_nodes_to_wait(self):
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
         return nodes 
+    
+    async def resolve_missing_updates(self):
+        raise NotImplementedError
 
 """                                                         ##############################
                                                             #    UTILS ROLE BEHAVIORS    #

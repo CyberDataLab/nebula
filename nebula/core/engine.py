@@ -745,8 +745,9 @@ class Engine:
         else:
             return current_round >= self.total_rounds
         
-    async def get_own_update(self):
-        return (self.trainer.get_model_parameters(), self.trainer.get_model_weight())
+    async def resolve_missing_updates(self):
+        logging.info(f"Using Role behavior: {self.rb.get_role_name()} conflict resolve strategy")
+        return await self.rb.resolve_missing_updates()
     
     async def update_self_role(self):
         if await self.rb.update_role_needed():
@@ -758,7 +759,7 @@ class Engine:
             to_role = self.rb.get_role_name()
             logging.info(f"Role behavior changing from: {from_role} to {to_role}")
             if source_to_notificate:
-                logging.info("Sending role modification ACK to transferer: source_to_notificate")
+                logging.info(f"Sending role modification ACK to transferer: {source_to_notificate}")
                 message = self.cm.create_message("control", "leadership_transfer_ack")
                 asyncio.create_task(self.cm.send_message(source_to_notificate, message))
              
