@@ -1,9 +1,11 @@
+import logging
 from typing import TYPE_CHECKING
-from nebula.config.config import Config
+
 from nebula.addons.functions import print_msg_box
 from nebula.addons.gps.gpsmodule import factory_gpsmodule
 from nebula.addons.mobility import Mobility
 from nebula.addons.networksimulation.networksimulator import factory_network_simulator
+from nebula.config.config import Config
 
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
@@ -16,7 +18,7 @@ class AddondManager:
     This class handles the lifecycle of optional services (add-ons) such as mobility simulation,
     GPS module, and network simulation. Add-ons are conditionally deployed based on the provided configuration.
     """
-    
+
     def __init__(self, engine: "Engine", config: Config):
         """
         Initializes the AddondManager instance.
@@ -51,10 +53,10 @@ class AddondManager:
         print_msg_box(msg="Deploying Additional Services", indent=2, title="Addons Manager")
         if self._config.participant["trustworthiness"]:
             from nebula.addons.trustworthiness.trustworthiness import Trustworthiness
-            
+
             trustworthiness = Trustworthiness(self._engine, self._config)
             self._addons.append(trustworthiness)
-            
+
         if self._config.participant["mobility_args"]["mobility"]:
             mobility = Mobility(self._config, verbose=False)
             self._addons.append(mobility)
@@ -70,3 +72,17 @@ class AddondManager:
 
         for add in self._addons:
             await add.start()
+
+    async def stop_additional_services(self):
+        """
+        Stops all additional services.
+        """
+        logging.info("🛑  Stopping additional services...")
+        for add in self._addons:
+            try:
+                logging.info(f"🛑  Stopping addon: {add.__class__.__name__}")
+                await add.stop()
+                logging.info(f"✅  Successfully stopped addon: {add.__class__.__name__}")
+            except Exception as e:
+                logging.exception(f"❌  Error stopping addon {add.__class__.__name__}: {e}")
+        logging.info("🛑  Finished stopping additional services")

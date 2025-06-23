@@ -37,28 +37,44 @@ class FederationConnector(ISADiscovery):
     """
 
     def __init__(self, aditional_participant, selector, model_handler, engine: "Engine", verbose=False):
+        """
+        Initialize the FederationConnector.
+
+        Args:
+            aditional_participant (bool): Whether this is an additional participant.
+            selector: The candidate selector instance.
+            model_handler: The model handler instance.
+            engine (Engine): The main engine instance.
+            verbose (bool): Whether to enable verbose logging.
+        """
         self._aditional_participant = aditional_participant
         self._selector = selector
+        self._model_handler = model_handler
+        self._engine = engine
+        self._verbose = verbose
+        self._sar = None
+
+        # Locks for thread safety
+        self._update_neighbors_lock = Locker("update_neighbors_lock", async_lock=True)
+        self.pending_confirmation_from_nodes_lock = Locker("pending_confirmation_from_nodes_lock", async_lock=True)
+        self.discarded_offers_addr_lock = Locker("discarded_offers_addr_lock", async_lock=True)
+        self.accept_candidates_lock = Locker("accept_candidates_lock", async_lock=True)
+        self.late_connection_process_lock = Locker("late_connection_process_lock", async_lock=True)
+
+        # Data structures
+        self.pending_confirmation_from_nodes = set()
+        self.discarded_offers_addr = []
+        self._background_tasks = []  # Track background tasks
+
         print_msg_box(msg="Starting FederationConnector module...", indent=2, title="FederationConnector module")
         logging.info("🌐  Initializing Federation Connector")
-        self._engine = engine
         self._cm = None
         self.config = engine.get_config()
         logging.info("Initializing Candidate Selector")
         self._candidate_selector = factory_CandidateSelector(self._selector)
         logging.info("Initializing Model Handler")
         self._model_handler = factory_ModelHandler(model_handler)
-        self._update_neighbors_lock = Locker(name="_update_neighbors_lock", async_lock=True)
-        self.late_connection_process_lock = Locker(name="late_connection_process_lock")
-        self.pending_confirmation_from_nodes = set()
-        self.pending_confirmation_from_nodes_lock = Locker(name="pending_confirmation_from_nodes_lock", async_lock=True)
-        self.accept_candidates_lock = Locker(name="accept_candidates_lock")
         self.recieve_offer_timer = OFFER_TIMEOUT
-        self.discarded_offers_addr_lock = Locker(name="discarded_offers_addr_lock", async_lock=True)
-        self.discarded_offers_addr = []
-
-        self._sa_reasoner: ISAReasoner = None
-        self._verbose = verbose
 
     @property
     def engine(self):
@@ -83,7 +99,7 @@ class FederationConnector(ISADiscovery):
     @property
     def sar(self):
         """Situational Awareness Reasoner"""
-        return self._sa_reasoner
+        return self._sar
 
     async def init(self, sa_reasoner):
         """
@@ -107,7 +123,7 @@ class FederationConnector(ISADiscovery):
             sa_reasoner (ISAReasoner): An instance of the situational awareness reasoner used for decision-making.
         """
         logging.info("Building Federation Connector configurations...")
-        self._sa_reasoner: ISAReasoner = sa_reasoner
+        self._sar: ISAReasoner = sa_reasoner
         await self._register_message_events_callbacks()
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self._update_neighbors)
         await EventManager.get_instance().subscribe(("model", "update"), self._model_update_callback)
@@ -146,10 +162,10 @@ class FederationConnector(ISADiscovery):
 
     async def _add_pending_connection_confirmation(self, addr):
         """
-        Adds a node to the set of pending connection confirmations if it's not already known or pending.
+        Adds a node to the pending confirmation set and schedules a cleanup task.
 
         Args:
-            addr (str): The address of the node to track for pending confirmation.
+            addr (str): Address of the node to add to pending confirmations.
         """
         added = False
         async with self._update_neighbors_lock:
@@ -160,7 +176,10 @@ class FederationConnector(ISADiscovery):
                         self.pending_confirmation_from_nodes.add(addr)
                         added = True
         if added:
-            asyncio.create_task(self._clear_pending_confirmations(node=addr))
+            task = asyncio.create_task(
+                self._clear_pending_confirmations(node=addr), name=f"FederationConnector_clear_pending_{addr}"
+            )
+            self._background_tasks.append(task)
 
     async def _remove_pending_confirmation_from(self, addr):
         """
@@ -362,7 +381,7 @@ class FederationConnector(ISADiscovery):
         to nearby nodes. Nodes that receive this message respond with an `OFFER_MODEL` or `OFFER_METRIC` message,
         which contains the necessary information to evaluate and select the most suitable candidates.
 
-        The process is protected by locks to avoid race conditions, and it continues iteratively until at least 
+        The process is protected by locks to avoid race conditions, and it continues iteratively until at least
         one valid candidate is found. Once candidates are selected, a connection message is sent to the best nodes.
 
         Args:
@@ -377,7 +396,7 @@ class FederationConnector(ISADiscovery):
         """
         logging.info("🌐  Initializing late connection process..")
 
-        self.late_connection_process_lock.acquire()
+        await self.late_connection_process_lock.acquire_async()
         best_candidates = []
         await self.candidate_selector.remove_candidates()
 
@@ -393,7 +412,7 @@ class FederationConnector(ISADiscovery):
             await asyncio.sleep(self.recieve_offer_timer)
 
         # acquire lock to not accept late candidates
-        self.accept_candidates_lock.acquire()
+        await self.accept_candidates_lock.acquire_async()
 
         if await self.candidate_selector.any_candidate():
             if self._verbose:
@@ -415,19 +434,20 @@ class FederationConnector(ISADiscovery):
                 if self._verbose:
                     logging.info("Error during stablishment")
 
-            self.accept_candidates_lock.release()
-            self.late_connection_process_lock.release()
+            await self.accept_candidates_lock.release_async()
+            await self.late_connection_process_lock.release_async()
             await self.candidate_selector.remove_candidates()
             logging.info("🌐  Ending late connection process..")
         # if no candidates, repeat process
         else:
             if self._verbose:
                 logging.info("❗️  No Candidates found...")
-            self.accept_candidates_lock.release()
-            self.late_connection_process_lock.release()
+            await self.accept_candidates_lock.release_async()
+            await self.late_connection_process_lock.release_async()
             if not connected:
-                 if self._verbose: logging.info("❗️  repeating process...")
-                 await self.start_late_connection_process(connected, msg_type, addrs_known)
+                if self._verbose:
+                    logging.info("❗️  repeating process...")
+                await self.start_late_connection_process(connected, msg_type, addrs_known)
 
     """                                                     ##############################
                                                             #     Mobility callbacks     #
@@ -615,6 +635,40 @@ class FederationConnector(ISADiscovery):
 
     async def _link_disconnect_from_callback(self, source, message):
         logging.info(f"🔗  handle_link_message | Trigger | Received disconnect_from message from {source}")
-        addrs = message.addrs
-        for addr in addrs.split():
-            await asyncio.create_task(self.cm.disconnect(addr, mutual_disconnection=False))
+        for addr in message.addrs.split():
+            await self.cm.disconnect(addr, mutual_disconnection=True)
+
+    async def stop(self):
+        """
+        Stop the FederationConnector by clearing pending confirmations and stopping background tasks.
+        """
+        logging.info("🛑  Stopping FederationConnector...")
+
+        # Cancel all background tasks
+        if self._background_tasks:
+            logging.info(f"🛑  Cancelling {len(self._background_tasks)} background tasks...")
+            for task in self._background_tasks:
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+            self._background_tasks.clear()
+            logging.info("🛑  All background tasks cancelled")
+
+        # Clear any pending confirmations
+        try:
+            async with self.pending_confirmation_from_nodes_lock:
+                self.pending_confirmation_from_nodes.clear()
+        except Exception as e:
+            logging.warning(f"Error clearing pending confirmations: {e}")
+
+        # Clear discarded offers
+        try:
+            async with self.discarded_offers_addr_lock:
+                self.discarded_offers_addr.clear()
+        except Exception as e:
+            logging.warning(f"Error clearing discarded offers: {e}")
+
+        logging.info("✅  FederationConnector stopped successfully")

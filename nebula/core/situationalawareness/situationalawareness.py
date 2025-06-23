@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 
 from nebula.addons.functions import print_msg_box
@@ -10,7 +11,7 @@ class ISADiscovery(ABC):
     Defines methods for initializing discovery, handling late connection processes,
     and retrieving training-related information.
     """
-    
+
     @abstractmethod
     async def init(self, sa_reasoner):
         """
@@ -51,7 +52,7 @@ class ISAReasoner(ABC):
     Defines methods for initializing the reasoner, accepting or rejecting connections,
     and querying known nodes and available actions.
     """
-    
+
     @abstractmethod
     async def init(self, sa_discovery):
         """
@@ -162,7 +163,7 @@ class SituationalAwareness:
     Manages discovery and reasoning components, wiring them together
     and exposing simple methods for initialization and late-connection handling.
     """
-    
+
     def __init__(self, config, engine):
         """
         Initialize Situational Awareness module by creating discovery and reasoner instances.
@@ -234,3 +235,20 @@ class SituationalAwareness:
             Any: Information relevant to training decisions.
         """
         return await self.sad.get_trainning_info()
+
+    async def stop(self):
+        """
+        Stop both discovery and reasoner components if they implement a stop method.
+        """
+        sad_stop = getattr(self.sad, "stop", None)
+        if callable(sad_stop):
+            if asyncio.iscoroutinefunction(sad_stop):
+                await sad_stop()
+            else:
+                sad_stop()
+        sar_stop = getattr(self.sar, "stop", None)
+        if callable(sar_stop):
+            if asyncio.iscoroutinefunction(sar_stop):
+                await sar_stop()
+            else:
+                sar_stop()

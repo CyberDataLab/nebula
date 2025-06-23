@@ -31,7 +31,6 @@ class Settings:
         resources_threshold (float): Threshold for resource usage alerts (default: 0.0).
         port (int): Port for the Nebula frontend service (default: 6060).
         production (bool): Whether the application is running in production mode.
-        gpu_available (bool): Whether GPU resources are available.
         advanced_analytics (bool): Whether advanced analytics features are enabled.
         host_platform (str): Underlying host operating platform (e.g., 'unix').
         log_dir (str): Directory path where application logs are stored.
@@ -51,7 +50,6 @@ class Settings:
     resources_threshold: float = 0.0
     port: int = os.environ.get("NEBULA_FRONTEND_PORT", 6060)
     production: bool = os.environ.get("NEBULA_PRODUCTION", "False") == "True"
-    gpu_available: bool = os.environ.get("NEBULA_GPU_AVAILABLE", "False") == "True"
     advanced_analytics: bool = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
     host_platform: str = os.environ.get("NEBULA_HOST_PLATFORM", "unix")
     log_dir: str = os.environ.get("NEBULA_LOGS_DIR")
@@ -388,7 +386,7 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
         return templates.TemplateResponse("405.html", context, status_code=exc.status_code)
     elif exc.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE:
         return templates.TemplateResponse("413.html", context, status_code=exc.status_code)
-    return await request.app.default_exception_handler(request, exc)
+    return JSONResponse({"detail": exc.detail, "status_code": exc.status_code}, status_code=exc.status_code)
 
 
 async def retry_with_backoff(func, *args, max_retries=5, initial_delay=1):
@@ -470,7 +468,8 @@ async def controller_post(url, data=None):
                 if response.status == 200:
                     return await response.json()
                 else:
-                    raise HTTPException(status_code=response.status, detail="Error posting data")
+                    detail = await response.text()
+                    raise HTTPException(status_code=response.status, detail=detail)
 
     return await retry_with_backoff(_post)
 
@@ -513,31 +512,32 @@ async def frontend_discover_vpn(session: dict = Depends(get_session)):
     to the internal controller, then returns the JSON result back to the client.
     Requires the user to be logged in.
     """
- 
+
     # 1) Enforce authentication
     if "user" not in session:
-        # If there’s no user in session, return HTTP 401 Unauthorized
+        # If there's no user in session, return HTTP 401 Unauthorized
         raise HTTPException(status_code=401, detail="Login required")
- 
+
     # 2) Build the controller URL (using host/port from settings)
     url = f"http://{settings.controller_host}:{settings.controller_port}/discover-vpn"
- 
+
     try:
-        # 3) Call the controller’s /discover-vpn endpoint
+        # 3) Call the controller's /discover-vpn endpoint
         data = await controller_get(url)
- 
+
         # 4) Return whatever JSON the controller gave us
         return JSONResponse(content=data)
- 
+
     except HTTPException as e:
         # 5) If the controller itself raised an HTTPException, propagate it as-is
         raise e
- 
+
     except Exception as e:
         # 6) For any other error, log it and return a generic 500 response
         logging.exception(f"Error proxying discover-vpn: {e}")
         raise HTTPException(status_code=500, detail="Error discovering VPN devices")
- 
+
+
 @app.get("/platform/api/physical/state/{ip}", response_class=JSONResponse)
 async def proxy_physical_state(ip: str):
     """
@@ -547,22 +547,23 @@ async def proxy_physical_state(ip: str):
     """
     url = f"http://{settings.controller_host}:{settings.controller_port}/physical/state/{ip}"
     return await controller_get(url)
- 
- 
+
+
 async def physical_nodes_available(ips: list[str]) -> bool:
     """
     Return True only if *every* ip answered with {"running": false}.
     Any error or timeout counts as *not available*.
     """
-    tasks  = [controller_get(
-                  f"http://{settings.controller_host}:{settings.controller_port}/physical/state/{ip}"
-              ) for ip in ips]
+    tasks = [
+        controller_get(f"http://{settings.controller_host}:{settings.controller_port}/physical/state/{ip}")
+        for ip in ips
+    ]
     states = await asyncio.gather(*tasks, return_exceptions=True)
- 
+
     for st in states:
         if not isinstance(st, dict):
-            return False               
-        if st.get("running") is True:  
+            return False
+        if st.get("running") is True:
             return False
     return True
 
@@ -1095,6 +1096,54 @@ async def nebula_admin(request: Request, session: dict = Depends(get_session)):
         return templates.TemplateResponse("admin.html", {"request": request, "users": user_table})
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+@app.get("/platform/settings", response_class=HTMLResponse)
+async def nebula_settings(request: Request, session: dict = Depends(get_session)):
+    """
+    Render the settings interface for authenticated users.
+    Enable to change the password of the user.
+    """
+    if "user" in session:
+        return templates.TemplateResponse("settings.html", {"request": request})
+    else:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+@app.post("/platform/user/change_password")
+async def nebula_change_password(
+    request: Request,
+    session: dict = Depends(get_session),
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+):
+    """
+    Allow an authenticated user to change their own password by verifying the current password first.
+    """
+    if "user" not in session:
+        return RedirectResponse(url="/platform/login", status_code=status.HTTP_302_FOUND)
+
+    username = session["user"]
+    # Verify current password
+    try:
+        user_data = await verify_user(username, current_password)
+    except HTTPException as e:
+        if e.status_code == 401:
+            return templates.TemplateResponse(
+                "settings.html",
+                {"request": request, "error": "Current password is incorrect."},
+            )
+        else:
+            return templates.TemplateResponse(
+                "settings.html",
+                {"request": request, "error": f"Error: {e.detail}"},
+            )
+    # Update password (keep role unchanged)
+    await update_user(username, new_password, user_data["role"])
+    return templates.TemplateResponse(
+        "settings.html",
+        {"request": request, "success": "Password changed successfully."},
+    )
 
 
 @app.post("/platform/dashboard/{scenario_name}/save_note")
@@ -1688,8 +1737,8 @@ async def nebula_update_node(scenario_name: str, request: Request):
 @app.post("/platform/dashboard/{scenario_name}/node/done")
 async def node_stopped(scenario_name: str, request: Request):
     """
-    Handle notification that a node has finished its task; mark the node as finished,
-    stop the scenario if all nodes are done, and signal scenario completion.
+    Handle notification that a node has finished its task; mark the node as finished
+    and signal scenario completion when all nodes are done.
 
     Parameters:
         scenario_name (str): Name of the scenario.
@@ -1708,14 +1757,13 @@ async def node_stopped(scenario_name: str, request: Request):
         data = await request.json()
         user_data.nodes_finished.append(data["idx"])
         nodes_list = await list_nodes_by_scenario_name(scenario_name)
-        finished = True
-        # Check if all the nodes of the scenario have finished the experiment
-        for node in nodes_list:
-            if str(node["idx"]) not in map(str, user_data.nodes_finished):
-                finished = False
 
-        if finished:
-            await stop_scenario_by_name(scenario_name, user)
+        # Check if all nodes have finished by comparing sets of node IDs
+        finished_node_ids = set(map(str, user_data.nodes_finished))
+        all_node_ids = {str(node["idx"]) for node in nodes_list}
+        all_nodes_finished = finished_node_ids >= all_node_ids
+
+        if all_nodes_finished:
             user_data.nodes_finished.clear()
             user_data.finish_scenario_event.set()
             return JSONResponse(
@@ -2092,7 +2140,6 @@ async def nebula_dashboard_deployment(request: Request, session: dict = Depends(
             "request": request,
             "scenario_running": scenario_running,
             "user_logged_in": session.get("user"),
-            "gpu_available": settings.gpu_available,
         },
     )
 
@@ -2165,7 +2212,7 @@ async def run_scenario(scenario_data: dict, role: str, user: str) -> None:
 
     # PHYSICAL  ➜ wait until all nodes are idle
     is_physical = scenario_data.get("deployment") == "physical"
-    phys_ips    = scenario_data.get("physical_ips", [])
+    phys_ips = scenario_data.get("physical_ips", [])
 
     if is_physical:
         wait_start = asyncio.get_event_loop().time()
@@ -2186,11 +2233,10 @@ async def run_scenario(scenario_data: dict, role: str, user: str) -> None:
 
     # Register for synchronization
     user_data.nodes_registration[scenario_name] = {
-        "n_nodes":   scenario_data["n_nodes"],
-        "nodes":     set(),
+        "n_nodes": scenario_data["n_nodes"],
+        "nodes": set(),
         "condition": asyncio.Condition(),
     }
-
 
 
 # Deploy the list of scenarios

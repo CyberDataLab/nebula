@@ -56,25 +56,37 @@ class Aggregator(ABC):
 
         This method informs the update handler (`us`) about the new set of federation nodes, 
         clears any pending models, and attempts to acquire the aggregation lock to prepare 
-        for model aggregation. If the aggregation process is already running, it raises an exception.
+        for model aggregation. If the aggregation process is already running, it releases the lock
+        and tries again to ensure proper cleanup between rounds.
 
         Args:
             federation_nodes (set): A set of addresses representing the nodes expected to contribute 
                                     updates for the next aggregation round.
 
         Raises:
-            Exception: If the aggregation process is already running and the lock is currently held.
+            Exception: If the aggregation process is already running and the lock cannot be released.
         """
         await self.us.round_expected_updates(federation_nodes=federation_nodes)
 
-        if not self._aggregation_done_lock.locked():
-            self._federation_nodes = federation_nodes
-            self._pending_models_to_aggregate.clear()
-            await self._aggregation_done_lock.acquire_async(
-                timeout=self.config.participant["aggregator_args"]["aggregation_timeout"]
-            )
-        else:
-            raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
+        # If the aggregation lock is held, release it to prepare for the new round
+        if self._aggregation_done_lock.locked():
+            logging.info("🔄  update_federation_nodes | Aggregation lock is held, releasing for new round")
+            try:
+                await self._aggregation_done_lock.release_async()
+            except Exception as e:
+                logging.warning(f"🔄  update_federation_nodes | Error releasing aggregation lock: {e}")
+                # If we can't release the lock, we might be in the middle of aggregation
+                # In this case, we should wait a bit and try again
+                await asyncio.sleep(0.1)
+                if self._aggregation_done_lock.locked():
+                    raise Exception("It is not possible to set nodes to aggregate when the aggregation is running.")
+
+        # Now acquire the lock for the new round
+        self._federation_nodes = federation_nodes
+        self._pending_models_to_aggregate.clear()
+        await self._aggregation_done_lock.acquire_async(
+            timeout=self.config.participant["aggregator_args"]["aggregation_timeout"]
+        )
 
     def get_nodes_pending_models_to_aggregate(self):
         return self._federation_nodes
@@ -97,6 +109,11 @@ class Aggregator(ABC):
             asyncio.CancelledError: If the aggregation lock acquisition is cancelled.
             Exception: For any other unexpected errors during the aggregation process.
         """
+        # Check if learning cycle has finished to prevent blocking
+        if self.engine.learning_cycle_finished():
+            logging.info("🔄  get_aggregation | Learning cycle has finished, skipping aggregation")
+            return None
+            
         try:
             timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
             logging.info(f"Aggregation timeout: {timeout} starts...")

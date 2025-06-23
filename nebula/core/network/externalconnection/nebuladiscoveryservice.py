@@ -2,6 +2,7 @@ import asyncio
 import logging
 import socket
 import struct
+
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import BeaconRecievedEvent, ChangeLocationEvent
 from nebula.core.network.externalconnection.externalconnectionservice import ExternalConnectionService
@@ -115,6 +116,12 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
         asyncio.create_task(self.keep_search())
 
+    async def stop(self):
+        """
+        Stop the client protocol by setting the search_done event to release any waiting tasks.
+        """
+        self.search_done.set()
+
     async def keep_search(self):
         """
         Periodically broadcast search requests to discover other nodes in the federation.
@@ -126,7 +133,6 @@ class NebulaClientProtocol(asyncio.DatagramProtocol):
         to indicate that the search phase is finished.
         """
         logging.info("Federation searching loop started")
-        # while True:
         for _ in range(self.SEARCH_TRIES):
             await self.search()
             await asyncio.sleep(self.SEARCH_INTERVAL)
@@ -180,15 +186,15 @@ class NebulaBeacon:
         self.nebula_service: NebulaConnectionService = nebula_service
         self.addr = addr
         self.interval = interval  # Send interval in seconds
-        self.running = False
         self._latitude = None
         self._longitude = None
+        self._running = asyncio.Event()
 
     async def start(self):
         logging.info("[NebulaBeacon]: Starting sending pressence beacon")
-        self.running = True
+        self._running.set()
         await EventManager.get_instance().subscribe_addonevent(ChangeLocationEvent, self._proces_change_location_event)
-        while self.running:
+        while await self.is_running():
             await asyncio.sleep(self.interval)
             await self.send_beacon()
 
@@ -199,7 +205,11 @@ class NebulaBeacon:
 
     async def stop(self):
         logging.info("[NebulaBeacon]: Stop existance beacon")
-        self.running = False
+        self._running.clear()
+        logging.info("[NebulaBeacon]: _running event cleared")
+
+    async def is_running(self):
+        return self._running.is_set()
 
     async def modify_beacon_frequency(self, frequency):
         logging.info(f"[NebulaBeacon]: Changing beacon frequency from {self.interval}s to {frequency}s")
@@ -235,7 +245,8 @@ class NebulaConnectionService(ExternalConnectionService):
         self.server: NebulaServerProtocol = None
         self.client: NebulaClientProtocol = None
         self.beacon: NebulaBeacon = NebulaBeacon(self, self.addr)
-        self.running = False
+        self._running = asyncio.Event()
+        self._beacon_task = None  # Track the beacon task
 
     @property
     def cm(self):
@@ -248,44 +259,67 @@ class NebulaConnectionService(ExternalConnectionService):
             return self._cm
 
     async def start(self):
-        loop = asyncio.get_running_loop()
-        transport, self.server = await loop.create_datagram_endpoint(
-            lambda: NebulaServerProtocol(self, self.addr), local_addr=("0.0.0.0", 1900)
-        )
+        self._running.set()
+        try:
+            loop = asyncio.get_running_loop()
+            transport, self.server = await loop.create_datagram_endpoint(
+                lambda: NebulaServerProtocol(self, self.addr), local_addr=("0.0.0.0", 1900)
+            )
+        except Exception as e:
+            logging.exception(f"Error starting Nebula Connection Service server: {e}")
+            await self.stop()
         try:
             # Advanced socket settings
             sock = transport.get_extra_info("socket")
             if sock is not None:
-                group = socket.inet_aton("239.255.255.250")                         # Multicast to binary format.
-                mreq = struct.pack("4sL", group, socket.INADDR_ANY)                 # Join multicast group in every interface available
+                group = socket.inet_aton("239.255.255.250")  # Multicast to binary format.
+                mreq = struct.pack("4sL", group, socket.INADDR_ANY)  # Join multicast group in every interface available
                 sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)  # SO listen multicast packages
         except Exception as e:
-            logging.exception(f"{e}")
-        self.running = True
+            logging.exception(f"Error starting Nebula Connection Service client: {e}")
+            await self.stop()
 
     async def stop(self):
-        logging.info("Stop Nebula Connection Service")
-        if self.server and self.server.transport:
-            self.server.transport.close()
-        await self.beacon.stop()
-        self.running = False
+        logging.info("🔗  Stopping Nebula Connection Service...")
+        if self.server:
+            if self.server.transport:
+                self.server.transport.close()
+            self.server = None
+        if self.client:
+            await self.client.stop()
+            if self.client.transport:
+                self.client.transport.close()
+            self.client = None
+        if self.beacon:
+            await self.stop_beacon()
+            self.beacon = None
+        self._running.clear()
 
     async def start_beacon(self):
         if not self.beacon:
             self.beacon = NebulaBeacon(self, self.addr)
-        asyncio.create_task(self.beacon.start())
+        self._beacon_task = asyncio.create_task(self.beacon.start(), name="NebulaBeacon_start")
 
     async def stop_beacon(self):
         if self.beacon:
             await self.beacon.stop()
-            # self.beacon = None
+            # Cancel the beacon task
+            if self._beacon_task and not self._beacon_task.done():
+                logging.info("🛑  Cancelling NebulaBeacon background task...")
+                self._beacon_task.cancel()
+                try:
+                    await self._beacon_task
+                except asyncio.CancelledError:
+                    pass
+                self._beacon_task = None
+                logging.info("🛑  NebulaBeacon background task cancelled")
 
     async def modify_beacon_frequency(self, frequency):
         if self.beacon:
             await self.beacon.modify_beacon_frequency(frequency=frequency)
 
-    def is_running(self):
-        return self.running
+    async def is_running(self):
+        return self._running.is_set()
 
     async def find_federation(self):
         logging.info(f"Node {self.addr} trying to find federation...")

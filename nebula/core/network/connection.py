@@ -39,7 +39,7 @@ class Connection:
     """
     Manages TCP communication channels using asyncio for asynchronous networking.
 
-    This class encapsulates the logic for establishing, maintaining, 
+    This class encapsulates the logic for establishing, maintaining,
     and handling TCP connections between nodes in the distributed system.
 
     Responsibilities:
@@ -51,12 +51,12 @@ class Connection:
     Usage:
         - Used by nodes to communicate asynchronously with others.
         - Supports concurrent message exchange via asyncio streams.
-    
+
     Note:
         This implementation leverages asyncio to enable scalable
         and efficient networking in distributed federated learning scenarios.
     """
-    
+
     DEFAULT_FEDERATED_ROUND = -1
     INACTIVITY_TIMER = 120
     INACTIVITY_DAEMON_SLEEP_TIME = 20
@@ -91,6 +91,7 @@ class Connection:
         self.loop = asyncio.get_event_loop()
         self.read_task = None
         self.process_task = None
+        self.inactivity_task = None
         self.pending_messages_queue = asyncio.Queue(maxsize=100)
         self.message_buffers: dict[bytes, dict[int, MessageChunk]] = {}
         self._prio: ConnectionPriority = ConnectionPriority(prio)
@@ -112,6 +113,7 @@ class Connection:
 
         self.incompleted_reconnections = 0
         self.forced_disconnection = False
+        self._running = asyncio.Event()
 
         logging.info(
             f"Connection [established]: {self.addr} (id: {self.id}) (active: {self.active}) (direct: {self.direct})"
@@ -122,9 +124,6 @@ class Connection:
 
     def __repr__(self):
         return self.__str__()
-
-    async def __del__(self):
-        await self.stop()
 
     @property
     def cm(self):
@@ -147,7 +146,7 @@ class Connection:
     async def is_inactive(self):
         """
         Check if the connection is currently marked as inactive.
-        
+
         Returns:
             bool: True if inactive, False otherwise.
         """
@@ -165,24 +164,28 @@ class Connection:
     async def _monitor_inactivity(self):
         """
         Background task that monitors the connection for inactivity.
-        
+
         Runs indefinitely until the connection is marked as direct,
         periodically checking if the last activity exceeds the inactivity threshold.
         If inactive, marks the connection as inactive and logs a warning.
         """
-        while True:
-            if self.direct:
-                break
-            await asyncio.sleep(self.INACTIVITY_DAEMON_SLEEP_TIME)
-            async with self._activity_lock:
-                time_since_last = time.time() - self._last_activity
-                if time_since_last > self.INACTIVITY_TIMER:
-                    if not self._inactivity:
-                        self._inactivity = True
-                        logging.info(f"[{self}] Connection marked as inactive.")
-                else:
-                    if self._inactivity:
-                        self._inactivity = False
+        try:
+            while await self.is_running():
+                if self.direct:
+                    break
+                await asyncio.sleep(self.INACTIVITY_DAEMON_SLEEP_TIME)
+                async with self._activity_lock:
+                    time_since_last = time.time() - self._last_activity
+                    if time_since_last > self.INACTIVITY_TIMER:
+                        if not self._inactivity:
+                            self._inactivity = True
+                            logging.info(f"[{self}] Connection marked as inactive.")
+                    else:
+                        if self._inactivity:
+                            self._inactivity = False
+        except asyncio.CancelledError:
+            logging.info("_monitor_inactivity cancelled during shutdown.")
+            return
 
     def get_federated_round(self):
         return self.federated_round
@@ -199,7 +202,7 @@ class Connection:
     def get_direct(self):
         """
         Check if the connection is marked as direct ( a.k.a neighbor ).
-        
+
         Returns:
             bool: True if direct, False otherwise.
         """
@@ -224,6 +227,9 @@ class Connection:
     def get_last_active(self):
         return self.last_active
 
+    async def is_running(self):
+        return self._running.is_set()
+
     async def start(self):
         """
         Start the connection by launching asynchronous tasks for handling incoming messages,
@@ -234,9 +240,10 @@ class Connection:
         2. `process_message_queue` - processes messages queued for sending or further handling.
         3. `_monitor_inactivity` - periodically checks if the connection has been inactive and updates its state accordingly.
         """
+        self._running.set()
         self.read_task = asyncio.create_task(self.handle_incoming_message(), name=f"Connection {self.addr} reader")
         self.process_task = asyncio.create_task(self.process_message_queue(), name=f"Connection {self.addr} processor")
-        asyncio.create_task(self._monitor_inactivity())
+        self.inactivity_task = asyncio.create_task(self._monitor_inactivity())
 
     async def stop(self):
         """
@@ -248,9 +255,10 @@ class Connection:
         - Cancels the read and process tasks if they exist, awaiting their cancellation and logging any cancellation exceptions.
         - Closes the writer stream safely, awaiting its closure and logging any errors that occur during the closing process.
         """
+        self._running.clear()
         logging.info(f"❗️  Connection [stopped]: {self.addr} (id: {self.id})")
         self.forced_disconnection = True
-        tasks = [self.read_task, self.process_task]
+        tasks = [self.read_task, self.process_task, self.inactivity_task]
         for task in tasks:
             if task is not None:
                 task.cancel()
@@ -279,13 +287,18 @@ class Connection:
             - Upon success, recreates the read and process asyncio tasks for this connection.
             - Logs the successful reconnection if not forced to disconnect, then returns.
         - If all retries fail, logs the failure and terminates the failed reconnection via the Communication manager.
-        
+
         Args:
             max_retries (int): Maximum number of reconnection attempts. Defaults to 5.
             delay (int): Delay in seconds between reconnection attempts. Defaults to 5.
         """
         if self.forced_disconnection or not self.direct:
             logging.info("Not going to reconnect because this connection is not direct")
+            return
+
+        # Check if learning cycle has finished - don't reconnect
+        if self.cm.learning_finished():
+            logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
             return
 
         self.incompleted_reconnections += 1
@@ -316,7 +329,6 @@ class Connection:
                 logging.exception(f"Reconnection attempt {attempt + 1} failed: {e}")
                 await asyncio.sleep(delay)
         logging.error(f"Failed to reconnect to {self.addr} after {max_retries} attempts. Stopping connection...")
-        # await self.stop()
         await self.cm.terminate_failed_reconnection(self)
 
     async def send(
@@ -345,6 +357,11 @@ class Connection:
             logging.error("Cannot send data, writer is None")
             return
 
+        # Check if learning cycle has finished - don't send messages
+        if self.cm.learning_finished():
+            logging.info(f"Not sending message to {self.addr} because learning cycle has finished")
+            return
+
         try:
             message_id = uuid.uuid4().bytes
             data_prefix, encoded_data = self._prepare_data(data, pb, encoding_type)
@@ -361,8 +378,10 @@ class Connection:
             await self._send_chunks(message_id, data_to_send)
         except Exception as e:
             logging.exception(f"Error sending data: {e}")
-            if self.direct:
+            if self.direct and not self.cm.learning_finished():
                 await self.reconnect()
+            elif self.cm.learning_finished():
+                logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
 
     def _prepare_data(self, data: Any, pb: bool, encoding_type: str) -> tuple[bytes, bytes]:
         """
@@ -417,8 +436,8 @@ class Connection:
         """
         Sends the encoded data over the connection in fixed-size chunks.
 
-        Each chunk is prefixed with a header containing the message ID, chunk index, 
-        a flag indicating if it's the last chunk, and the size of the chunk. 
+        Each chunk is prefixed with a header containing the message ID, chunk index,
+        a flag indicating if it's the last chunk, and the size of the chunk.
         An end-of-transmission (EOT) character is appended to each chunk.
 
         Args:
@@ -465,32 +484,30 @@ class Connection:
         """
         reusable_buffer = bytearray(self.MAX_CHUNK_SIZE)
         try:
-            while True:
+            while await self.is_running():
                 if self.pending_messages_queue.full():
-                    await asyncio.sleep(0.1)  # Wait a bit if the queue is full to create backpressure
+                    await asyncio.sleep(0.1)
                     continue
                 header = await self._read_exactly(self.HEADER_SIZE)
                 message_id, chunk_index, is_last_chunk = self._parse_header(header)
-
                 chunk_data = await self._read_chunk(reusable_buffer)
                 await self._update_activity()
                 self._store_chunk(message_id, chunk_index, chunk_data, is_last_chunk)
-                # logging.debug(f"Received chunk {chunk_index} of message {message_id.hex()} | size: {len(chunk_data)} bytes")
-                # Active connection without fails
                 self.incompleted_reconnections = 0
                 if is_last_chunk:
                     await self._process_complete_message(message_id)
-        except asyncio.CancelledError as e:
-            logging.exception(f"Message handling cancelled: {e}")
+        except asyncio.CancelledError:
+            logging.info("handle_incoming_message cancelled during shutdown.")
+            return
         except ConnectionError as e:
             logging.exception(f"Connection closed while reading: {e}")
         except Exception as e:
             logging.exception(f"Error handling incoming message: {e}")
-        except BrokenPipeError:
-            logging.exception(f"Error handling incoming message: {e}")
         finally:
             if self.direct or self._prio == ConnectionPriority.HIGH:
                 await self.reconnect()
+            elif self.cm.learning_finished():
+                logging.info(f"Not attempting reconnection to {self.addr} because learning cycle has finished")
 
     async def _read_exactly(self, num_bytes: int, max_retries: int = 3) -> bytes:
         """
@@ -517,7 +534,7 @@ class Connection:
             try:
                 while remaining > 0:
                     chunk = await self.reader.read(min(remaining, self.BUFFER_SIZE))
-                    if not chunk and not self.cm.learning_finished():
+                    if not chunk:
                         raise ConnectionError("Connection closed while reading")
                     data += chunk
                     remaining -= len(chunk)
@@ -554,7 +571,7 @@ class Connection:
         Reads a data chunk from the stream, validating its size and EOT marker.
 
         Args:
-            buffer (bytearray, optional): A reusable buffer to store the chunk. 
+            buffer (bytearray, optional): A reusable buffer to store the chunk.
                 If not provided, a new buffer of MAX_CHUNK_SIZE will be created.
 
         Returns:
@@ -663,27 +680,23 @@ class Connection:
     async def process_message_queue(self) -> None:
         """
         Continuously processes messages from the pending queue.
-
-        Behavior:
-            - Retrieves messages from the queue one by one.
-            - Delegates the message to the appropriate handler based on its type.
-            - Ensures the queue is marked as processed.
-
-        Notes:
-            Runs indefinitely unless externally cancelled or stopped.
         """
-        while True:
-            try:
-                if self.pending_messages_queue is None:
-                    logging.error("Pending messages queue is not initialized")
-                    return
-                data_type_prefix, message = await self.pending_messages_queue.get()
-                await self._handle_message(data_type_prefix, message)
-                self.pending_messages_queue.task_done()
-            except Exception as e:
-                logging.exception(f"Error processing message queue: {e}")
-            finally:
-                await asyncio.sleep(0)
+        try:
+            while await self.is_running():
+                try:
+                    if self.pending_messages_queue is None:
+                        logging.error("Pending messages queue is not initialized")
+                        return
+                    data_type_prefix, message = await self.pending_messages_queue.get()
+                    await self._handle_message(data_type_prefix, message)
+                    self.pending_messages_queue.task_done()
+                except Exception as e:
+                    logging.exception(f"Error processing message queue: {e}")
+                finally:
+                    await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            logging.info("process_message_queue cancelled during shutdown.")
+            return
 
     async def _handle_message(self, data_type_prefix: bytes, message: bytes) -> None:
         """

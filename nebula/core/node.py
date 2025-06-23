@@ -1,3 +1,4 @@
+import asyncio
 import os
 import random
 import sys
@@ -37,8 +38,8 @@ from nebula.core.models.fashionmnist.cnn import FashionMNISTModelCNN
 from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
-from nebula.core.role import Role
 from nebula.core.noderole import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
+from nebula.core.role import Role
 from nebula.core.training.lightning import Lightning
 from nebula.core.training.siamese import Siamese
 
@@ -160,7 +161,7 @@ async def main(config):
         local_test_set_indices=dataset.local_test_indices,
         num_workers=num_workers,
         batch_size=batch_size,
-        samples_per_label = samples_per_label
+        samples_per_label=samples_per_label,
     )
 
     trainer = None
@@ -234,21 +235,20 @@ async def main(config):
     if node.cm is not None:
         await node.cm.network_wait()
 
+    # Ensure shutdown is always called and awaited before main() returns
+    if hasattr(node, "shutdown") and callable(node.shutdown):
+        logging.info("Calling node.shutdown() for final cleanup and Docker removal...")
+        await node.shutdown()
+    else:
+        logging.warning("Node does not have a shutdown() method; skipping explicit shutdown.")
+
 
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
     config = Config(entity="participant", participant_config_file=config_path)
-    if sys.platform == "win32" or config.participant["scenario_args"]["deployment"] == "docker":
-        import asyncio
 
+    try:
         asyncio.run(main(config), debug=False)
-    else:
-        try:
-            import uvloop
-
-            uvloop.run(main(config), debug=False)
-        except ImportError:
-            logging.warning("uvloop not available, using default loop")
-            import asyncio
-
-            asyncio.run(main(config), debug=False)
+    except Exception as e:
+        logging.exception(f"Error starting node {config.participant['device_args']['idx']}: {e}")
+        raise e

@@ -15,6 +15,7 @@ class Health:
         self.alive_interval = self.config.participant["health_args"]["send_alive_interval"]
         self.check_alive_interval = self.config.participant["health_args"]["check_alive_interval"]
         self.timeout = self.config.participant["health_args"]["alive_timeout"]
+        self._running = asyncio.Event()
 
     @property
     def cm(self):
@@ -35,7 +36,7 @@ class Health:
         # Set all connections to active at the beginning of the health module
         for conn in self.cm.connections.values():
             conn.set_active(True)
-        while True:
+        while await self.is_running():
             if len(self.cm.connections) > 0:
                 message = self.cm.create_message("control", "alive", log="Alive message")
                 current_connections = list(self.cm.connections.values())
@@ -51,7 +52,7 @@ class Health:
 
     async def run_check_alive(self):
         await asyncio.sleep(self.config.participant["health_args"]["grace_time_health"] + self.check_alive_interval)
-        while True:
+        while await self.is_running():
             if len(self.cm.connections) > 0:
                 current_connections = list(self.cm.connections.values())
                 for conn in current_connections:
@@ -69,3 +70,9 @@ class Health:
         if conn.get_last_active() < current_time:
             logging.debug(f"🕒  Updating last active time for {source}")
             conn.set_active(True)
+
+    async def is_running(self):
+        return self._running.is_set()
+
+    async def stop(self):
+        self._running.clear()

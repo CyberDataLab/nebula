@@ -234,6 +234,8 @@
                                     {{ request.session.get("role") }}</a></li>
                             {% if request.session.get("role", None) == "admin" %}
                             <li><a href="{{ url_for('nebula_admin') }}">Admin Dashboard</a></li>
+                            {% else %}
+                            <li><a href="{{ url_for('nebula_settings') }}">Settings</a></li>
                             {% endif %}
                             <li><a href="{{ url_for('nebula_logout') }}">Logout</a></li>
                         </ul>

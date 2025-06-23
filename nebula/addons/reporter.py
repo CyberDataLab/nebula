@@ -67,6 +67,8 @@ class Reporter:
         self.acc_bytes_recv = 0
         self.acc_packets_sent = 0
         self.acc_packets_recv = 0
+        self._running = asyncio.Event()
+        self._reporter_task = None  # Track the background task
 
     @property
     def cm(self):
@@ -113,9 +115,10 @@ class Reporter:
             - The grace period allows for a delay before the first reporting cycle.
             - The reporter loop runs in the background, ensuring continuous data updates.
         """
+        self._running.set()
         await asyncio.sleep(self.grace_time)
-        task = asyncio.create_task(self.run_reporter())
-        return task
+        self._reporter_task = asyncio.create_task(self.run_reporter(), name="Reporter_run_reporter")
+        return self._reporter_task
 
     async def run_reporter(self):
         """
@@ -132,7 +135,7 @@ class Reporter:
         Notes:
             - The reporting frequency is determined by the 'report_frequency' setting in the config file.
         """
-        while True:
+        while self._running.is_set():
             if self.config.participant["reporter_args"]["report_status_data_queue"]:
                 if self.config.participant["scenario_args"]["controller"] != "nebula-test":
                     await self.__report_status_to_controller()
@@ -193,6 +196,21 @@ class Reporter:
         except aiohttp.ClientError:
             logging.exception(f"Error connecting to the controller at {url}")
         return False
+
+    async def stop(self):
+        logging.info("🔍  Stopping reporter module...")
+        self._running.clear()
+
+        # Cancel the background task
+        if self._reporter_task and not self._reporter_task.done():
+            logging.info("🛑  Cancelling Reporter background task...")
+            self._reporter_task.cancel()
+            try:
+                await self._reporter_task
+            except asyncio.CancelledError:
+                pass
+            self._reporter_task = None
+            logging.info("🛑  Reporter background task cancelled")
 
     async def __report_data_queue(self):
         """

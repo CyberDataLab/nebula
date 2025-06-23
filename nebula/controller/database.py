@@ -1031,7 +1031,7 @@ def get_running_scenario(username=None, get_all=False):
         sqlite3.Row or list[sqlite3.Row]: A single scenario record or a list of scenario records matching the criteria.
 
     Behavior:
-        - Filters scenarios with status "running" or "completed".
+        - Filters scenarios with status "running".
         - Applies username filter if provided.
         - Returns either one or all matching records depending on get_all.
     """
@@ -1042,14 +1042,14 @@ def get_running_scenario(username=None, get_all=False):
         if username:
             command = """
                 SELECT * FROM scenarios
-                WHERE (status = ? OR status = ?) AND username = ?;
+                WHERE (status = ?) AND username = ?;
             """
-            c.execute(command, ("running", "completed", username))
+            c.execute(command, ("running", username))
 
             result = c.fetchone()
         else:
-            command = "SELECT * FROM scenarios WHERE status = ? OR status = ?;"
-            c.execute(command, ("running", "completed"))
+            command = "SELECT * FROM scenarios WHERE status = ?;"
+            c.execute(command, ("running",))
             if get_all:
                 result = c.fetchall()
             else:
@@ -1174,7 +1174,8 @@ def check_scenario_federation_completed(scenario_name):
                 return False
 
             # Check if all nodes have completed the total rounds
-            return all(node["round"] == total_rounds for node in nodes)
+            total_rounds_str = str(total_rounds)
+            return all(str(node["round"]) == total_rounds_str for node in nodes)
 
     except sqlite3.Error as e:
         print(f"Database error: {e}")
@@ -1243,10 +1244,10 @@ def save_notes(scenario, notes):
 def get_notes(scenario):
     """
     Retrieve notes associated with a specific scenario.
-    
+
     Parameters:
         scenario (str): The unique identifier of the scenario.
-    
+
     Returns:
         sqlite3.Row or None: The notes record for the given scenario, or None if no notes exist.
     """
@@ -1275,7 +1276,7 @@ def remove_note(scenario):
 if __name__ == "__main__":
     """
     Entry point for the script to print the list of users.
-    
+
     When executed directly, this block calls the `list_users()` function
     and prints its returned list of users.
     """
