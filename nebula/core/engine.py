@@ -746,10 +746,33 @@ class Engine:
             return current_round >= self.total_rounds
         
     async def resolve_missing_updates(self):
+        """
+        Delegates the resolution strategy for missing updates to the current role behavior.
+
+        This function is called when the node receives no model updates from neighbors
+        and needs to apply a fallback strategy depending on its role (e.g., using default weights
+        if aggregator, or local model if trainer).
+
+        Returns:
+            The result of the role-specific resolution strategy.
+        """
         logging.info(f"Using Role behavior: {self.rb.get_role_name()} conflict resolve strategy")
         return await self.rb.resolve_missing_updates()
     
     async def update_self_role(self):
+        """
+        Checks whether a role update is required and performs the transition if necessary.
+
+        If a new role has been assigned (i.e., self.rb.update_role_needed() is True),
+        this function updates the role behavior accordingly and notifies the source
+        that initiated the role transfer, if applicable.
+
+        It logs the role change and spawns an async task to send a control message
+        acknowledging the update to the initiating node.
+
+        Raises:
+            Any exceptions from change_role_behavior or communication logic.
+        """
         if await self.rb.update_role_needed():
             logging.info("Starting Role Behavior modification...")
             from_role = self.rb.get_role_name()

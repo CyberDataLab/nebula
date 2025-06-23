@@ -52,6 +52,18 @@ def factory_node_role(role: str) -> Role:
         return ""
 
 class RoleBehavior(ABC):
+    """
+    Abstract base class for defining the role-specific behavior of a node in CFL, DFL, or SDFL systems.
+
+    Each subclass encapsulates the logic needed for a particular node role (e.g., trainer, aggregator),
+    providing custom implementations for role-related operations such as training cycles,
+    update aggregation, and recovery strategies.
+
+    Attributes:
+        _next_role (Role): The role to which the node is expected to transition.
+        _next_role_locker (Locker): An asynchronous lock to protect access to _next_role.
+        _source_to_notificate (Optional[Any]): The source node to notify once a role change is applied.
+    """
     def __init__(self):
         self._next_role: Role = None
         self._next_role_locker = Locker("next_role_locker", async_lock=True)
@@ -59,42 +71,102 @@ class RoleBehavior(ABC):
         
     @abstractmethod
     def get_role(self):
+        """
+        Returns the Role enum value representing the current role of the node.
+        """
         raise NotImplementedError
     
     @abstractmethod
     def get_role_name(self, effective=False):
+        """
+        Returns a string representation of the current role.
+        
+        Args:
+            effective (bool): Whether to return the name of the current effective role when going as malicious.
+        
+        Returns:
+            str: Name of the role.
+        """
         raise NotImplementedError
     
     @abstractmethod
     async def extended_learning_cycle(self):
+        """
+        Performs the main learning or aggregation cycle associated with the current role.
+
+        This method encapsulates all the logic tied to the behavior of the node in its current role,
+        including training, aggregating updates, and coordinating with neighbors.
+        """
         raise NotImplementedError
     
     @abstractmethod
     async def select_nodes_to_wait(self):
+        """
+        Determines which neighbors the node should wait for during the current cycle.
+
+        This logic varies depending on whether the node is an aggregator, trainer, or other role.
+        
+        Returns:
+            Set[Any]: A set of neighbor node identifiers to wait for.
+        """
         raise NotImplementedError
     
     @abstractmethod
     async def resolve_missing_updates(self):
+        """
+        Defines the fallback strategy when expected model updates are not received.
+
+        For example, an aggregator might default to a fresh model, while a trainer might proceed
+        with its own local model.
+        
+        Returns:
+            Any: The resolution outcome depending on the role's specific logic.
+        """
         raise NotImplementedError
     
     async def set_next_role(self, role: Role, source_to_notificate = None):
+        """
+        Schedules a role change and optionally stores the source to notify upon completion.
+        
+        Args:
+            role (Role): The new role to transition to.
+            source_to_notificate (Optional[Any]): Identifier of the node that triggered the change.
+        """
         async with self._next_role_locker:
             self._next_role = role
             self._source_to_notificate = source_to_notificate
         
     async def get_next_role(self) -> Role:
+        """
+        Retrieves and clears the next role value.
+
+        Returns:
+            Role: The next role to transition into.
+        """
         async with self._next_role_locker:
             next_role = self._next_role
             self._next_role = None
         return next_role
     
     async def get_source_to_notificate(self):
+        """
+        Retrieves and clears the stored source to notify after a role change.
+
+        Returns:
+            Any: The source node identifier, or None if not set.
+        """
         async with self._next_role_locker:
             source_to_notificate = self._source_to_notificate
             self._source_to_notificate = None
         return source_to_notificate
         
     async def update_role_needed(self):
+        """
+        Checks whether a role update is scheduled.
+
+        Returns:
+            bool: True if a role update is pending, False otherwise.
+        """
         async with self._next_role_locker:
             updt_needed = self._next_role != None
         return updt_needed
