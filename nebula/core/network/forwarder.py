@@ -19,7 +19,7 @@ class Forwarder:
     This class is designed to run asynchronously, leveraging the existing connection pool
     and message routing logic to propagate messages reliably across the network.
     """
-    
+
     def __init__(self, config):
         """
         Initialize the Forwarder module.
@@ -35,10 +35,12 @@ class Forwarder:
         self._cm = None
         self.pending_messages = asyncio.Queue()
         self.pending_messages_lock = Locker("pending_messages_lock", verbose=False, async_lock=True)
+        self._forwarder_task = None  # Track the background task
 
         self.interval = self.config.participant["forwarder_args"]["forwarder_interval"]
         self.number_forwarded_messages = self.config.participant["forwarder_args"]["number_forwarded_messages"]
         self.messages_interval = self.config.participant["forwarder_args"]["forward_messages_interval"]
+        self._running = asyncio.Event()
 
     @property
     def cm(self):
@@ -60,7 +62,8 @@ class Forwarder:
         """
         Start the forwarder by scheduling the forwarding loop as a background task.
         """
-        asyncio.create_task(self.run_forwarder())
+        self._running.set()
+        self._forwarder_task = asyncio.create_task(self.run_forwarder(), name="Forwarder_run_forwarder")
 
     async def run_forwarder(self):
         """
@@ -72,14 +75,35 @@ class Forwarder:
         if self.config.participant["scenario_args"]["federation"] == "CFL":
             logging.info("🔁  Federation is CFL. Forwarder is disabled...")
             return
-        while True:
-            # logging.debug(f"🔁  Pending messages: {self.pending_messages.qsize()}")
-            start_time = time.time()
-            await self.pending_messages_lock.acquire_async()
-            await self.process_pending_messages(messages_left=self.number_forwarded_messages)
-            await self.pending_messages_lock.release_async()
-            sleep_time = max(0, self.interval - (time.time() - start_time))
-            await asyncio.sleep(sleep_time)
+        try:
+            while await self.is_running():
+                start_time = time.time()
+                await self.pending_messages_lock.acquire_async()
+                await self.process_pending_messages(messages_left=self.number_forwarded_messages)
+                await self.pending_messages_lock.release_async()
+                sleep_time = max(0, self.interval - (time.time() - start_time))
+                await asyncio.sleep(sleep_time)
+        except asyncio.CancelledError:
+            logging.info("run_forwarder cancelled during shutdown.")
+            return
+
+    async def stop(self):
+        self._running.clear()
+        logging.info("🔁  Stopping Forwarder module...")
+
+        # Cancel the background task
+        if self._forwarder_task and not self._forwarder_task.done():
+            logging.info("🛑  Cancelling Forwarder background task...")
+            self._forwarder_task.cancel()
+            try:
+                await self._forwarder_task
+            except asyncio.CancelledError:
+                pass
+            self._forwarder_task = None
+            logging.info("🛑  Forwarder background task cancelled")
+
+    async def is_running(self):
+        return self._running.is_set()
 
     async def process_pending_messages(self, messages_left):
         """

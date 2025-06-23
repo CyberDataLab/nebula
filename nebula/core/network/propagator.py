@@ -23,7 +23,7 @@ class PropagationStrategy(ABC):
     Subclasses implement eligibility checks and payload preparation for sending
     model updates to specific nodes in the federation.
     """
-    
+
     @abstractmethod
     async def is_node_eligible(self, node: str) -> bool:
         """
@@ -58,7 +58,7 @@ class InitialModelPropagation(PropagationStrategy):
 
     Sends a fresh model initialized by the trainer with a default weight.
     """
-    
+
     def __init__(self, aggregator: "Aggregator", trainer: "Lightning", engine: "Engine"):
         """
         Args:
@@ -113,7 +113,7 @@ class StableModelPropagation(PropagationStrategy):
 
     Sends the latest trained model to neighbors.
     """
-    
+
     def __init__(self, aggregator: "Aggregator", trainer: "Lightning", engine: "Engine"):
         """
         Args:
@@ -176,9 +176,10 @@ class Propagator:
     Designed to work asynchronously, ensuring timely and scalable message dissemination
     across dynamically changing network topologies.
     """
-    
+
     def __init__(self):
         self._cm = None
+        self._running = asyncio.Event()
 
     @property
     def cm(self):
@@ -228,6 +229,7 @@ class Propagator:
             indent=2,
             title="Propagator",
         )
+        self._running.set()
 
     async def get_round(self):
         """
@@ -392,3 +394,10 @@ class Propagator:
             return (serialized_model, rounds, await self.get_round())
 
         return None
+
+    async def stop(self):
+        logging.info("🌐  Stopping Propagator module...")
+        self._running.clear()
+
+    async def is_running(self):
+        return self._running.is_set()

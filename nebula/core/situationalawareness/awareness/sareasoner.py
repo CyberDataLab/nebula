@@ -88,9 +88,9 @@ class SAReasoner(ISAReasoner):
         self._config = copy.deepcopy(config.participant)
         self._addr = config.participant["network_args"]["addr"]
         self._topology = config.participant["mobility_args"]["topology_type"]
-        self._situational_awareness_network = None
+        self._situational_awareness_network: SANetwork | None = None
         self._situational_awareness_training = None
-        self._restructure_process_lock = Locker(name="restructure_process_lock")
+        self._restructure_process_lock = Locker(name="restructure_process_lock", async_lock=True)
         self._restructure_cooldown = 0
         self._arbitrator_notification = asyncio.Event()
         self._suggestion_buffer = SuggestionBuffer(self._arbitrator_notification, verbose=True)
@@ -99,11 +99,11 @@ class SAReasoner(ISAReasoner):
         arb_pol = config.participant["situational_awareness"]["sa_reasoner"]["arbitration_policy"]
         self._arbitatrion_policy = factory_arbitration_policy(arb_pol, True)
         self._sa_components: dict[str, SAMComponent] = {}
-        self._sa_discovery: ISADiscovery = None
+        self._sa_discovery: ISADiscovery | None = None
         self._verbose = config.participant["situational_awareness"]["sa_reasoner"]["verbose"]
 
     @property
-    def san(self) -> SANetwork:
+    def san(self) -> SANetwork | None:
         """Situational Awareness Network"""
         return self._situational_awareness_network
 
@@ -123,7 +123,7 @@ class SAReasoner(ISAReasoner):
         return self._arbitatrion_policy
 
     @property
-    def sad(self) -> ISADiscovery:
+    def sad(self) -> ISADiscovery | None:
         """SA Discovery"""
         return self._sa_discovery
 
@@ -134,7 +134,7 @@ class SAReasoner(ISAReasoner):
         Args:
             sa_discovery (ISADiscovery): The discovery component to coordinate with.
         """
-        self._sa_discovery: ISADiscovery = sa_discovery
+        self._sa_discovery = sa_discovery
         await self._loading_sa_components()
         await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._process_round_end_event)
         await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._process_aggregation_event)
@@ -154,6 +154,8 @@ class SAReasoner(ISAReasoner):
     """
 
     def get_restructure_process_lock(self):
+        if self.san is None:
+            raise RuntimeError("Situational Awareness Network (san) is not initialized.")
         return self.san.get_restructure_process_lock()
 
     """                                                     ###############################
@@ -162,44 +164,18 @@ class SAReasoner(ISAReasoner):
     """
 
     async def get_nodes_known(self, neighbors_too=False, neighbors_only=False):
-        """
-        Retrieve the set of nodes known to the situational awareness reasoner.
-
-        This may include additional metadata depending on the flags.
-
-        Args:
-            neighbors_too (bool, optional): If True, include neighboring nodes in the result. Defaults to False.
-            neighbors_only (bool, optional): If True, return only neighbors. Defaults to False.
-
-        Returns:
-            set: Identifiers of known nodes based on the provided filters.
-        """
+        if self.san is None:
+            raise RuntimeError("Situational Awareness Network (san) is not initialized.")
         return await self.san.get_nodes_known(neighbors_too, neighbors_only)
 
     async def accept_connection(self, source, joining=False):
-        """
-        Decide whether to accept a connection request from a source node.
-
-        Delegates to the underlying reasoner logic to determine acceptance.
-
-        Args:
-            source (str): The identifier or address of the requesting node.
-            joining (bool, optional): If True, this connection is part of a join operation. Defaults to False.
-
-        Returns:
-            bool: True if the connection should be accepted, False otherwise.
-        """
+        if self.san is None:
+            raise RuntimeError("Situational Awareness Network (san) is not initialized.")
         return await self.san.accept_connection(source, joining)
 
     async def get_actions(self):
-        """
-        Retrieve the list of situational awareness actions available to execute.
-
-        Delegates to the underlying reasoner component.
-
-        Returns:
-            list: Action identifiers that the reasoner can perform.
-        """
+        if self.san is None:
+            raise RuntimeError("Situational Awareness Network (san) is not initialized.")
         return await self.san.get_actions()
 
     """                                                     ###############################
@@ -381,13 +357,15 @@ class SAReasoner(ISAReasoner):
                 await sacomp.init()
 
     def _load_minimal_requirement_config(self):
-        #self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["addr"] = self._addr
-        #self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["sar"] = self
-        self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["strict_topology"] = self._config["situational_awareness"]["strict_topology"]
-        
+        # self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["addr"] = self._addr
+        # self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["sar"] = self
+        self._config["situational_awareness"]["sa_reasoner"]["sa_network"]["strict_topology"] = self._config[
+            "situational_awareness"
+        ]["strict_topology"]
+
         # SA Reasoner instance for all SA Reasoner Components
         sar_components: dict = self._config["situational_awareness"]["sa_reasoner"]["sar_components"]
-        for sar_comp in sar_components.keys():
+        for sar_comp in sar_components:
             self._config["situational_awareness"]["sa_reasoner"][sar_comp]["sar"] = self
             self._config["situational_awareness"]["sa_reasoner"][sar_comp]["addr"] = self._addr
 
@@ -397,3 +375,27 @@ class SAReasoner(ISAReasoner):
             self._situational_awareness_network = self._sa_components["sanetwork"]
         else:
             raise ValueError("SA Network not found")
+
+    async def stop(self):
+        """
+        Stop the SAReasoner by stopping all SA components and clearing any pending operations.
+        """
+        logging.info("🛑  Stopping SAReasoner...")
+        self._arbitrator_notification.set()
+
+        # Stop all SA components
+        if self._sa_components:
+            for component_name, component in self._sa_components.items():
+                try:
+                    # Check if component has a stop method
+                    stop_method = getattr(component, "stop", None)
+                    if stop_method and callable(stop_method):
+                        if asyncio.iscoroutinefunction(stop_method):
+                            await stop_method()
+                        else:
+                            stop_method()
+                        logging.info(f"✅  Stopped SA component: {component_name}")
+                except Exception as e:
+                    logging.warning(f"Error stopping SA component {component_name}: {e}")
+
+        logging.info("✅  SAReasoner stopped successfully")

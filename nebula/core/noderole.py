@@ -253,7 +253,7 @@ class TrainerAggregatorRoleBehavior(RoleBehavior):
         await self._engine._waiting_model_updates()
         
     async def select_nodes_to_wait(self):
-        nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
+        nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=True)
         return nodes
     
     async def resolve_missing_updates(self):

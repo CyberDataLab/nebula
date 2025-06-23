@@ -4,6 +4,7 @@ import os
 import random
 import socket
 import time
+
 import docker
 
 from nebula.core.noderole import factory_role_behavior, change_role_behavior, Role, RoleBehavior
@@ -15,6 +16,7 @@ from nebula.core.aggregation.aggregator import create_aggregator
 from nebula.core.eventmanager import EventManager
 from nebula.core.nebulaevents import (
     AggregationEvent,
+    ExperimentFinishEvent,
     RoundEndEvent,
     RoundStartEvent,
     UpdateNeighborEvent,
@@ -23,6 +25,7 @@ from nebula.core.nebulaevents import (
     ModelPropagationEvent,
 )
 from nebula.core.network.communications import CommunicationsManager
+from nebula.core.role import Role, factory_node_role
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
 from nebula.core.utils.locker import Locker
 
@@ -159,6 +162,8 @@ class Engine:
         # Additional Components
         if "situational_awareness" in self.config.participant:
             self._situational_awareness = SituationalAwareness(self.config, self)
+        else:
+            self._situational_awareness = None
 
         if self.config.participant["defense_args"]["reputation"]["enabled"]:
             self._reputation = Reputation(engine=self, config=self.config)
@@ -719,7 +724,7 @@ class Engine:
         - Logs an error indicating aggregation failure.
 
         This method is called after local training and before proceeding to the next round,
-        ensuring the model is synchronized with the federation’s latest aggregated state.
+        ensuring the model is synchronized with the federation's latest aggregated state.
         """
         logging.info(f"💤  Waiting convergence in round {self.round}.")
         params = await self.aggregator.get_aggregation()
@@ -879,22 +884,122 @@ class Engine:
             indent=2,
             title="End of the experiment",
         )
-        
-        # 3.- Report finish experiment to the controller
-        logging.info("Reporting Experiment Finish to the controller...")
+        # Report
+        if self.config.participant["scenario_args"]["controller"] != "nebula-test":
+            try:
+                result = await self.reporter.report_scenario_finished()
+                if result:
+                    logging.info("📝  Scenario finished reported successfully")
+                    await self.reporter.stop()
+                else:
+                    logging.error("📝  Error reporting scenario finished")
+            except Exception as e:
+                logging.exception(f"📝  Error during scenario finish report: {e}")
+
+        # Call centralized shutdown
+        await self.shutdown()
+        return
+
+    async def shutdown(self):
+        logging.info("🚦 Engine shutdown initiated")
+
+        # Stop addon services first
         try:
-            result = await self.reporter.report_scenario_finished()
-            if result:
-                logging.info("📝  Scenario finished reported successfully")
-            else:
-                logging.error("📝  Error reporting scenario finished")
+            await self._addon_manager.stop_additional_services()
         except Exception as e:
-            logging.error(f"📝  Error during scenario finish report: {e}")
-              
-        await asyncio.sleep(5)
-        
-        # 4.- Set finish condition 
-        self.cm.stop_network_engine.set()
+            logging.exception("Error stopping add-ons: %s", e)
 
+        # Stop reporter
+        try:
+            await self._reporter.stop()
+        except Exception as e:
+            logging.exception("Error stopping reporter: %s", e)
 
+        # Stop communications manager (includes forwarder, discoverer, propagator, ECS)
+        try:
+            await self.cm.stop()
+        except Exception as e:
+            logging.exception("Error stopping communications manager: %s", e)
 
+        # Stop situational awareness
+        try:
+            if self.sa:
+                await self.sa.stop()
+        except Exception as e:
+            logging.exception("Error stopping situational awareness: %s", e)
+
+        # Task cleanup with improved handling
+        logging.info("Starting graceful task cleanup...")
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+
+        if tasks:
+            logging.info(f"Found {len(tasks)} remaining tasks to clean up")
+            for task in tasks:
+                logging.info(f"  • Task: {task.get_name()} - {task}")
+                logging.info(f"  • State: {task._state} - Done: {task.done()} - Cancelled: {task.cancelled()}")
+
+            # Wait for tasks to complete naturally with shorter timeout
+            try:
+                await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=3)
+            except asyncio.CancelledError:
+                logging.warning(
+                    "Timeout reached during task cleanup (CancelledError); proceeding with shutdown anyway."
+                )
+                # Do not re-raise, just continue
+            except TimeoutError:
+                logging.warning("Some tasks did not complete in time, forcing cancellation...")
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                # Wait a bit more for cancellations to take effect
+                try:
+                    await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=2)
+                except asyncio.CancelledError:
+                    logging.warning(
+                        "Timeout reached during forced cancellation (CancelledError); proceeding with shutdown anyway."
+                    )
+                    # Do not re-raise, just continue
+                except TimeoutError:
+                    logging.warning("Some tasks still not responding to cancellation")
+                    # Final aggressive cleanup - cancel all remaining tasks
+                    remaining_tasks = [
+                        t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()
+                    ]
+                    if remaining_tasks:
+                        logging.warning(f"Forcing cancellation of {len(remaining_tasks)} remaining tasks")
+                        for task in remaining_tasks:
+                            task.cancel()
+                        try:
+                            await asyncio.wait_for(asyncio.gather(*remaining_tasks, return_exceptions=True), timeout=1)
+                        except asyncio.CancelledError:
+                            logging.warning(
+                                "Timeout reached during final forced cancellation (CancelledError); proceeding with shutdown anyway."
+                            )
+                            # Do not re-raise, just continue
+                        except TimeoutError:
+                            logging.exception("Some tasks still not responding to forced cancellation")
+            # Proceed anyway after all cancellation attempts
+            logging.warning("Proceeding with shutdown even if some tasks are still pending/cancelled.")
+        else:
+            logging.info("No remaining tasks to clean up.")
+
+        logging.info("✅ Engine shutdown complete")
+
+        # Kill Docker container if running in Docker
+        if self.config.participant["scenario_args"]["deployment"] == "docker":
+            try:
+                docker_id = socket.gethostname()
+                logging.info(f"📦  Removing docker container with ID {docker_id}")
+                container = self.client.containers.get(docker_id)
+                container.remove(force=True)
+                logging.info(f"📦  Successfully removed docker container {docker_id}")
+            except Exception as e:
+                logging.exception(f"📦  Error removing Docker container {docker_id}: {e}")
+                # Try to force kill the container as last resort
+                try:
+                    import subprocess
+
+                    subprocess.run(["docker", "rm", "-f", docker_id], check=False)
+                    logging.info(f"📦  Forced removal of container {docker_id} via subprocess")
+                except Exception as sub_e:
+                    logging.exception(f"📦  Failed to force remove container {docker_id}: {sub_e}")

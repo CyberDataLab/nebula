@@ -227,16 +227,7 @@
                                                     class="btn btn-sm btn-outline-danger" title="Stop scenario">
                                                     <i class="fa fa-stop"></i>
                                                 </a>
-                                                {% elif scenario.status == "completed" %}
-                                                <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all=False) }}"
-                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario">
-                                                    <i class="fa fa-stop"></i>
-                                                </a>
-                                                <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all=True) }}"
-                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario queue">
-                                                    <i class="fa fa-stop-circle"></i>
-                                                </a>
-                                                {% else %}
+                                                {% elif scenario.status == "completed" or scenario.status == "finished" %}
                                                 <button id="relaunch-btn" title="Relaunch Scenario"
                                                     data-scenario-name="{{ scenario.name }}"
                                                     data-scenario-title="{{ scenario.title }}"
@@ -248,6 +239,15 @@
                                                     class="btn btn-sm btn-outline-danger">
                                                     <i class="fa fa-trash"></i>
                                                 </button>
+                                                {% else %}
+                                                <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all=False) }}"
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario">
+                                                    <i class="fa fa-stop"></i>
+                                                </a>
+                                                <a href="{{ url_for('nebula_stop_scenario', scenario_name=scenario.name, stop_all=True) }}"
+                                                    class="btn btn-sm btn-outline-danger" title="Stop scenario queue">
+                                                    <i class="fa fa-stop-circle"></i>
+                                                </a>
                                                 {% endif %}
                                             </div>
                                         </td>

@@ -13,6 +13,7 @@ class Discoverer:
         self.grace_time = self.config.participant["discoverer_args"]["grace_time_discovery"]
         self.period = self.config.participant["discoverer_args"]["discovery_frequency"]
         self.interval = self.config.participant["discoverer_args"]["discovery_interval"]
+        self._running = asyncio.Event()
 
     @property
     def cm(self):
@@ -25,6 +26,7 @@ class Discoverer:
             return self._cm
 
     async def start(self):
+        self._running.set()
         asyncio.create_task(self.run_discover())
 
     async def run_discover(self):
@@ -32,7 +34,7 @@ class Discoverer:
             logging.info("🔍  Federation is CFL. Discoverer is disabled...")
             return
         await asyncio.sleep(self.grace_time)
-        while True:
+        while await self.is_running():
             if len(self.cm.connections) > 0:
                 latitude = self.config.participant["mobility_args"]["latitude"]
                 longitude = self.config.participant["mobility_args"]["longitude"]
@@ -44,3 +46,10 @@ class Discoverer:
                 except Exception as e:
                     logging.exception(f"🔍  Cannot send discovery message to neighbors. Error: {e!s}")
             await asyncio.sleep(self.period)
+
+    async def stop(self):
+        self._running.clear()
+        logging.info("🔍  Stopping Discoverer module...")
+
+    async def is_running(self):
+        return self._running.is_set()

@@ -1,3 +1,4 @@
+import asyncio
 import os
 import random
 import sys
@@ -161,7 +162,7 @@ async def main(config: Config):
         local_test_set_indices=dataset.local_test_indices,
         num_workers=num_workers,
         batch_size=batch_size,
-        samples_per_label = samples_per_label
+        samples_per_label=samples_per_label,
     )
 
     trainer = None
@@ -235,48 +236,21 @@ async def main(config: Config):
 
     if node.cm is not None:
         await node.cm.network_wait()
-        logging.info("Exiciting node ending lock...")
-        
-        tasks = [t for t in asyncio.all_tasks() if not t.done() and t is not asyncio.current_task()]
-    
-        logging.info(f"[ForceShutdown] Cancelling {len(tasks)} tasks...")
-        for task in tasks:
-            logging.info(f"[ForceShutdown] Cacenlling: {task}")
-            task.cancel()
-            
-        loop = asyncio.get_running_loop()
-        logging.info("[ForceShutdown] Stopping event loop...")
-        loop.stop()
+
+    # Ensure shutdown is always called and awaited before main() returns
+    if hasattr(node, "shutdown") and callable(node.shutdown):
+        logging.info("Calling node.shutdown() for final cleanup and Docker removal...")
+        await node.shutdown()
+    else:
+        logging.warning("Node does not have a shutdown() method; skipping explicit shutdown.")
+
 
 if __name__ == "__main__":
     config_path = str(sys.argv[1])
     config = Config(entity="participant", participant_config_file=config_path)
+
     try:
-        if sys.platform == "win32" or config.participant["scenario_args"]["deployment"] == "docker":
-            import asyncio
-            asyncio.run(main(config), debug=False)             
-        else:
-            try:
-                import uvloop
-
-                uvloop.run(main(config), debug=False)
-            except ImportError:
-                logging.warning("uvloop not available, using default loop")
-                import asyncio
-
-                asyncio.run(main(config), debug=False)
-                
+        asyncio.run(main(config), debug=False)
     except Exception as e:
-        logging.info(f"{e}")
-        
-    finally:
-        logging.info("Removing container protocol starting...")
-            
-        if config.participant["scenario_args"]["deployment"] == "docker":
-            try:
-                docker_id = socket.gethostname()
-                logging.info(f"📦  Removing docker container with ID {docker_id}")
-                #docker.from_env().containers.get(docker_id).kill()
-                docker.from_env().containers.get(docker_id).remove(force=True)       
-            except Exception as e:
-                logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
+        logging.exception(f"Error starting node {config.participant['device_args']['idx']}: {e}")
+        raise e

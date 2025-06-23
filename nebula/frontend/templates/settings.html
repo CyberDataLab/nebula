@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% block body %}
+{{ super() }}
+
+<section id="home" class="home">
+    <div class="container" style="text-align: center">
+        <h1 class="logo" style="text-align: center">Settings</h1>
+        <p style="text-align: center" class="fst-italic">Change your password</p>
+    </div>
+</section>
+
+<!-- Modal -->
+<div class="modal fade" id="user-modal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="user-modal-title"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="user-modal-content"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-dark" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section id="user-section" class="base">
+    <div class="container">
+        <div class="row p-3 justify-content-center">
+            <div class="col-lg-6">
+                <h3>Change Password</h3>
+                <form action="/platform/user/change_password" method="post">
+                    <div class="form-group">
+                        <label for="current_password">Current Password</label>
+                        <input type="password" class="form-control" name="current_password" id="current_password" placeholder="Enter current password" required>
+                    </div>
+                    <div class="form-group mt-3">
+                        <label for="new_password">New Password</label>
+                        <input type="password" class="form-control" name="new_password" id="new_password" placeholder="Enter new password" required>
+                    </div>
+                    <div class="form-group mt-3">
+                        <button type="submit" class="btn btn-dark">Change Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% if success %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        showAlert('success', '{{ success }}');
+    });
+</script>
+{% endif %}
+{% if error %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        showAlert('danger', '{{ error }}');
+    });
+</script>
+{% endif %}
+
+{% endblock %}

@@ -668,12 +668,6 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        try:
-            subprocess.check_call(["nvidia-smi"])
-            self.gpu_available = True
-        except Exception:
-            logging.info("No GPU available for the frontend, nodes will be deploy in CPU mode")
-
         network_name = f"{os.environ['USER']}_nebula-net-base"
 
         # Create the Docker network
@@ -684,7 +678,6 @@ class Deployer:
         environment = {
             "NEBULA_CONTROLLER_NAME": os.environ["USER"],
             "NEBULA_PRODUCTION": self.production,
-            "NEBULA_GPU_AVAILABLE": self.gpu_available,
             "NEBULA_ADVANCED_ANALYTICS": self.advanced_analytics,
             "NEBULA_FRONTEND_LOG": "/nebula/app/logs/frontend.log",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
@@ -756,6 +749,12 @@ class Deployer:
                 )
 
         network_name = f"{os.environ['USER']}_nebula-net-base"
+        
+        try:
+            subprocess.check_call(["nvidia-smi"])
+            self.gpu_available = True
+        except Exception:
+            logging.info("No GPU available for the frontend, nodes will be deploy in CPU mode")
 
         # Create the Docker network
         base = DockerUtils.create_docker_network(network_name)
@@ -790,6 +789,11 @@ class Deployer:
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={self.controller_port: self.controller_port},
+            device_requests=[{
+                "Driver": "nvidia",
+                "Count": -1,
+                "Capabilities": [["gpu"]],
+            }] if self.gpu_available else None,
         )
 
         networking_config = client.api.create_networking_config({
