@@ -78,7 +78,7 @@ const ScenarioManager = (function() {
             reputation: {
                 enabled: window.ReputationManager.getReputationConfig().enabled || false,
                 metrics: window.ReputationManager.getReputationConfig().metrics || {},
-                initial_reputation: window.ReputationManager.getReputationConfig().initialReputation || 0.6,
+                initial_reputation: window.ReputationManager.getReputationConfig().initialReputation || 0.2,
                 weighting_factor: window.ReputationManager.getReputationConfig().weightingFactor || "dynamic"
             },
             mobility: window.MobilityManager.getMobilityConfig().enabled || false,

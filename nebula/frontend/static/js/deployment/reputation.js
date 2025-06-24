@@ -95,7 +95,7 @@ const ReputationManager = (function() {
         document.getElementById("weighting-settings").style.display = config.enabled ? "block" : "none";
 
         // Set initial reputation
-        document.getElementById("initial-reputation").value = config.initialReputation || 0.6;
+        document.getElementById("initial-reputation").value = config.initialReputation || 0.2;
 
         // Set weighting factor
         document.getElementById("weighting-factor").value = config.weightingFactor || "dynamic";
@@ -133,7 +133,7 @@ const ReputationManager = (function() {
         document.getElementById("reputation-metrics").style.display = "none";
         document.getElementById("reputation-settings").style.display = "none";
         document.getElementById("weighting-settings").style.display = "none";
-        document.getElementById("initial-reputation").value = "0.6";
+        document.getElementById("initial-reputation").value = "0.2";
         document.getElementById("weighting-factor").value = "dynamic";
         document.getElementById("weight-warning").style.display = "none";
 

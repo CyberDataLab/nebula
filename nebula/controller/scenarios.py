@@ -697,7 +697,7 @@ class ScenarioManagement:
                 participant_config["adversarial_args"]["attack_params"] = node_config["attack_params"]
             else:
                 participant_config["adversarial_args"]["attack_params"] = {"attacks": "No Attack"}
-            participant_config["defense_args"]["reputation"] = self.scenario.reputation
+                participant_config["defense_args"]["reputation"] = self.scenario.reputation
 
             participant_config["mobility_args"]["random_geo"] = self.scenario.random_geo
             participant_config["mobility_args"]["latitude"] = self.scenario.latitude

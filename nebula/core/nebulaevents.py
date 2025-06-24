@@ -333,7 +333,26 @@ class BeaconRecievedEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
+    
+class DuplicatedMessageEvent(NodeEvent):
+    """
+    Event triggered when a message is received that has already been processed.
 
+    Attributes:
+        source (str): The address of the node that sent the duplicated message.
+    """
+    
+    def __init__(self, source: str, message_type: str):
+        self.source = source
+
+    def __str__(self):
+        return f"DuplicatedMessageEvent from {self.source}"
+
+    async def get_event_data(self) -> tuple[str]:
+        return (self.source)
+
+    async def is_concurrent(self) -> bool:
+        return True
 
 """                                                     ##############################
                                                         #         ADDON EVENTS       #

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import requests
 
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import MessageEvent
+from nebula.core.nebulaevents import MessageEvent, DuplicatedMessageEvent
 from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer
@@ -803,7 +803,7 @@ class CommunicationsManager:
         await self._forwarder.start()
         self._propagator.start()
 
-    async def include_received_message_hash(self, hash_message):
+    async def include_received_message_hash(self, hash_message, source):
         """
         Adds a received message hash to the tracking list if it hasn't been seen before.
 
@@ -819,6 +819,8 @@ class CommunicationsManager:
             await self.receive_messages_lock.acquire_async()
             if hash_message in self.received_messages_hashes:
                 logging.info("❗️  handle_incoming_message | Ignoring message already received.")
+                duplicated_event = DuplicatedMessageEvent(source, "Duplicated message received")
+                asyncio.create_task(EventManager.get_instance().publish_node_event(duplicated_event))
                 return False
             self.received_messages_hashes.append(hash_message)
             if len(self.received_messages_hashes) % 10000 == 0:

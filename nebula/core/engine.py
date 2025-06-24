@@ -380,6 +380,22 @@ class Engine:
         finally:
             await self.cm.get_connections_lock().release_async()
 
+    async def _reputation_share_callback(self, source, message):
+        try:
+            logging.info(f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
+
+            current_node = self.addr
+            nei = message.node_id
+
+            if hasattr(self, '_reputation') and self._reputation is not None:
+                if current_node != nei:
+                    key = (current_node, nei, message.round)
+                    if key not in self._reputation.reputation_with_all_feedback:
+                        self._reputation.reputation_with_all_feedback[key] = []
+                    self._reputation.reputation_with_all_feedback[key].append(message.score)
+        except Exception as e:
+            logging.exception(f"Error handling reputation message: {e}")
+
     """                                                     ##############################
                                                             #    REGISTERING CALLBACKS   #
                                                             ##############################
