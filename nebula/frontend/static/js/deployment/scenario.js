@@ -75,12 +75,7 @@ const ScenarioManager = (function() {
             report_status_data_queue: document.getElementById("reportingSwitch").checked,
             epochs: parseInt(document.getElementById("epochs").value),
             attack_params: attackConfig,
-            reputation: {
-                enabled: window.ReputationManager.getReputationConfig().enabled || false,
-                metrics: window.ReputationManager.getReputationConfig().metrics || {},
-                initial_reputation: window.ReputationManager.getReputationConfig().initialReputation || 0.6,
-                weighting_factor: window.ReputationManager.getReputationConfig().weightingFactor || "dynamic"
-            },
+            reputation: window.ReputationManager.getReputationConfig(),
             mobility: window.MobilityManager.getMobilityConfig().enabled || false,
             network_simulation: window.MobilityManager.getMobilityConfig().network_simulation || false,
             mobility_type: window.MobilityManager.getMobilityConfig().mobilityType || "random",

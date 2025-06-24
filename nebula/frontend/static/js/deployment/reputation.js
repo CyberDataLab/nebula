@@ -60,70 +60,62 @@ const ReputationManager = (function() {
     }
 
     function getReputationConfig() {
+        const rep_metrics = [];
+
+        if (document.getElementById("model-similarity").checked)
+            rep_metrics.push("model_similarity");
+        if (document.getElementById("num-messages").checked)
+            rep_metrics.push("num_messages");
+        if (document.getElementById("model-arrival-latency").checked)
+            rep_metrics.push("model_arrival_latency");
+        if (document.getElementById("fraction-parameters-changed").checked)
+            rep_metrics.push("fraction_parameters_changed");
+
         return {
-            enabled: document.getElementById("reputationSwitch").checked,
-            initialReputation: parseFloat(document.getElementById("initial-reputation").value),
-            weightingFactor: document.getElementById("weighting-factor").value,
-            metrics: {
-                model_similarity: {
-                    enabled: document.getElementById("model-similarity").checked,
-                    weight: parseFloat(document.getElementById("weight-model-similarity").value)
-                },
-                num_messages: {
-                    enabled: document.getElementById("num-messages").checked,
-                    weight: parseFloat(document.getElementById("weight-num-messages").value)
-                },
-                model_arrival_latency: {
-                    enabled: document.getElementById("model-arrival-latency").checked,
-                    weight: parseFloat(document.getElementById("weight-model-arrival-latency").value)
-                },
-                fraction_parameters_changed: {
-                    enabled: document.getElementById("fraction-parameters-changed").checked,
-                    weight: parseFloat(document.getElementById("weight-fraction-parameters-changed").value)
-                }
-            }
+            with_reputation: document.getElementById("reputationSwitch").checked,
+            reputation_metrics: rep_metrics,
+            initial_reputation: parseFloat(document.getElementById("initial-reputation").value),
+            weighting_factor: document.getElementById("weighting-factor").value,
+            weight_model_arrival_latency: parseFloat(document.getElementById("weight-model-arrival-latency").value),
+            weight_model_similarity: parseFloat(document.getElementById("weight-model-similarity").value),
+            weight_num_messages: parseFloat(document.getElementById("weight-num-messages").value),
+            weight_fraction_params_changed: parseFloat(document.getElementById("weight-fraction-parameters-changed").value),
         };
     }
 
     function setReputationConfig(config) {
         if (!config) return;
 
-        // Set reputation enabled/disabled
-        document.getElementById("reputationSwitch").checked = config.enabled;
-        document.getElementById("reputation-metrics").style.display = config.enabled ? "block" : "none";
-        document.getElementById("reputation-settings").style.display = config.enabled ? "block" : "none";
-        document.getElementById("weighting-settings").style.display = config.enabled ? "block" : "none";
+        const enabled = config.with_reputation ?? config.enabled ?? false;
 
-        // Set initial reputation
-        document.getElementById("initial-reputation").value = config.initialReputation || 0.6;
+        // Set reputation switch and visibility
+        document.getElementById("reputationSwitch").checked = enabled;
+        document.getElementById("reputation-metrics").style.display = enabled ? "block" : "none";
+        document.getElementById("reputation-settings").style.display = enabled ? "block" : "none";
+        document.getElementById("weighting-settings").style.display = enabled ? "block" : "none";
 
-        // Set weighting factor
-        document.getElementById("weighting-factor").value = config.weightingFactor || "dynamic";
-        const showWeights = config.weightingFactor === "static";
+        // Initial reputation and weighting factor
+        document.getElementById("initial-reputation").value = config.initial_reputation ?? config.initialReputation ?? 0.2;
+        document.getElementById("weighting-factor").value = config.weighting_factor ?? config.weightingFactor ?? "dynamic";
+
+        const showWeights = (config.weighting_factor ?? config.weightingFactor) === "static";
         document.querySelectorAll(".weight-input").forEach(input => {
             input.style.display = showWeights ? "inline-block" : "none";
         });
 
-        // Set metrics
-        if (config.metrics) {
-            // Model Similarity
-            document.getElementById("model-similarity").checked = config.metrics.modelSimilarity?.enabled || false;
-            document.getElementById("weight-model-similarity").value = config.metrics.modelSimilarity?.weight || 0;
+        // Metrics (both legacy flat and nested)
+        document.getElementById("model-similarity").checked = config.reputation_metrics?.includes("modelSimilarity") ?? config.metrics?.modelSimilarity?.enabled ?? false;
+        document.getElementById("weight-model-similarity").value = config.weight_model_similarity ?? config.metrics?.modelSimilarity?.weight ?? 0;
 
-            // Number of Messages
-            document.getElementById("num-messages").checked = config.metrics.numMessages?.enabled || false;
-            document.getElementById("weight-num-messages").value = config.metrics.numMessages?.weight || 0;
+        document.getElementById("num-messages").checked = config.reputation_metrics?.includes("numMessages") ?? config.metrics?.numMessages?.enabled ?? false;
+        document.getElementById("weight-num-messages").value = config.weight_num_messages ?? config.metrics?.numMessages?.weight ?? 0;
 
-            // Model Arrival Latency
-            document.getElementById("model-arrival-latency").checked = config.metrics.modelArrivalLatency?.enabled || false;
-            document.getElementById("weight-model-arrival-latency").value = config.metrics.modelArrivalLatency?.weight || 0;
+        document.getElementById("model-arrival-latency").checked = config.reputation_metrics?.includes("modelArrivalLatency") ?? config.metrics?.modelArrivalLatency?.enabled ?? false;
+        document.getElementById("weight-model-arrival-latency").value = config.weight_model_arrival_latency ?? config.metrics?.modelArrivalLatency?.weight ?? 0;
 
-            // Fraction Parameters Changed
-            document.getElementById("fraction-parameters-changed").checked = config.metrics.fractionParametersChanged?.enabled || false;
-            document.getElementById("weight-fraction-parameters-changed").value = config.metrics.fractionParametersChanged?.weight || 0;
-        }
+        document.getElementById("fraction-parameters-changed").checked = config.reputation_metrics?.includes("fractionParametersChanged") ?? config.metrics?.fractionParametersChanged?.enabled ?? false;
+        document.getElementById("weight-fraction-parameters-changed").value = config.weight_fraction_params_changed ?? config.metrics?.fractionParametersChanged?.weight ?? 0;
 
-        // Validate weights
         validateWeights();
     }
 
@@ -133,7 +125,7 @@ const ReputationManager = (function() {
         document.getElementById("reputation-metrics").style.display = "none";
         document.getElementById("reputation-settings").style.display = "none";
         document.getElementById("weighting-settings").style.display = "none";
-        document.getElementById("initial-reputation").value = "0.6";
+        document.getElementById("initial-reputation").value = "0.2";
         document.getElementById("weighting-factor").value = "dynamic";
         document.getElementById("weight-warning").style.display = "none";
 
