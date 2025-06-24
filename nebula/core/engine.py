@@ -382,12 +382,14 @@ class Engine:
 
     async def _reputation_share_callback(self, source, message):
         try:
-            logging.info(f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}")
+            logging.info(
+                f"handle_reputation_message | Trigger | Received reputation message from {source} | Node: {message.node_id} | Score: {message.score} | Round: {message.round}"
+            )
 
             current_node = self.addr
             nei = message.node_id
 
-            if hasattr(self, '_reputation') and self._reputation is not None:
+            if hasattr(self, "_reputation") and self._reputation is not None:
                 if current_node != nei:
                     key = (current_node, nei, message.round)
 

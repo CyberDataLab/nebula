@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import requests
 
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import MessageEvent, DuplicatedMessageEvent
+from nebula.core.nebulaevents import DuplicatedMessageEvent, MessageEvent
 from nebula.core.network.blacklist import BlackList
 from nebula.core.network.connection import Connection
 from nebula.core.network.discoverer import Discoverer

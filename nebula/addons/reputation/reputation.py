@@ -1,9 +1,6 @@
 import logging
 import random
 import time
-import os
-import csv
-import json
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -12,7 +9,7 @@ import torch
 
 from nebula.addons.functions import print_msg_box
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import AggregationEvent, RoundStartEvent, UpdateReceivedEvent, DuplicatedMessageEvent
+from nebula.core.nebulaevents import AggregationEvent, DuplicatedMessageEvent, RoundStartEvent, UpdateReceivedEvent
 from nebula.core.utils.helper import (
     cosine_metric,
     euclidean_metric,
@@ -100,8 +97,12 @@ class Reputation:
             self._weight_model_arrival_latency = float(
                 self._config.participant["defense_args"]["reputation"]["weight_model_arrival_latency"]
             )
-            self._weight_model_similarity = float(self._config.participant["defense_args"]["reputation"]["weight_model_similarity"])
-            self._weight_num_messages = float(self._config.participant["defense_args"]["reputation"]["weight_num_messages"])
+            self._weight_model_similarity = float(
+                self._config.participant["defense_args"]["reputation"]["weight_model_similarity"]
+            )
+            self._weight_num_messages = float(
+                self._config.participant["defense_args"]["reputation"]["weight_num_messages"]
+            )
             self._weight_fraction_params_changed = float(
                 self._config.participant["defense_args"]["reputation"]["weight_fraction_params_changed"]
             )
@@ -198,7 +199,9 @@ class Reputation:
                 await EventManager.get_instance().subscribe(
                     ("federation", "federation_models_included"), self.recollect_number_message
                 )
-                await EventManager.get_instance().subscribe_node_event(DuplicatedMessageEvent, self.recollect_duplicated_number_message)
+                await EventManager.get_instance().subscribe_node_event(
+                    DuplicatedMessageEvent, self.recollect_duplicated_number_message
+                )
 
     def init_reputation(
         self, addr, federation_nodes=None, round_num=None, last_feedback_round=None, init_reputation=None
@@ -1034,7 +1037,7 @@ class Reputation:
             logging.info(f"count_all_neighbors: {counts_all_neighbors}, percentile_reference: {percentile_reference}")
             std_dev = np.std(counts_all_neighbors) if counts_all_neighbors else 0
             mean_messages_all_neighbors = np.mean(counts_all_neighbors) if counts_all_neighbors else 0
-            aument_mean =  mean_messages_all_neighbors * 2 if current_round <= 1 else mean_messages_all_neighbors * 1.1
+            aument_mean = mean_messages_all_neighbors * 2 if current_round <= 1 else mean_messages_all_neighbors * 1.1
 
             if percentile_reference > 0:
                 raw_relative_increase = (messages_count - percentile_reference) / percentile_reference

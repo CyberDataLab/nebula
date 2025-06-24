@@ -6,15 +6,12 @@ import logging
 import math
 import os
 import shutil
-import subprocess
-import sys
 import time
 from datetime import datetime
 from urllib.parse import quote
 
-from aiohttp import FormData
 import docker
-import tensorboard_reducer as tbr
+from aiohttp import FormData
 
 from nebula.addons.topologymanager import TopologyManager
 from nebula.config.config import Config
@@ -199,30 +196,30 @@ class Scenario:
         self.mobile_participants_percent = mobile_participants_percent
         self.additional_participants = additional_participants
         self.with_trustworthiness = with_trustworthiness
-        self.robustness_pillar = robustness_pillar,
-        self.resilience_to_attacks = resilience_to_attacks,
-        self.algorithm_robustness = algorithm_robustness,
-        self.client_reliability = client_reliability,
-        self.privacy_pillar = privacy_pillar,
-        self.technique = technique,
-        self.uncertainty = uncertainty,
-        self.indistinguishability = indistinguishability,
-        self.fairness_pillar = fairness_pillar,
-        self.selection_fairness = selection_fairness,
-        self.performance_fairness = performance_fairness,
-        self.class_distribution = class_distribution,
-        self.explainability_pillar = explainability_pillar,
-        self.interpretability = interpretability,
-        self.post_hoc_methods = post_hoc_methods,
-        self.accountability_pillar = accountability_pillar,
-        self.factsheet_completeness = factsheet_completeness,
-        self.architectural_soundness_pillar = architectural_soundness_pillar,
-        self.client_management = client_management,
-        self.optimization = optimization,
-        self.sustainability_pillar = sustainability_pillar,
-        self.energy_source = energy_source,
-        self.hardware_efficiency = hardware_efficiency,
-        self.federation_complexity = federation_complexity,
+        self.robustness_pillar = (robustness_pillar,)
+        self.resilience_to_attacks = (resilience_to_attacks,)
+        self.algorithm_robustness = (algorithm_robustness,)
+        self.client_reliability = (client_reliability,)
+        self.privacy_pillar = (privacy_pillar,)
+        self.technique = (technique,)
+        self.uncertainty = (uncertainty,)
+        self.indistinguishability = (indistinguishability,)
+        self.fairness_pillar = (fairness_pillar,)
+        self.selection_fairness = (selection_fairness,)
+        self.performance_fairness = (performance_fairness,)
+        self.class_distribution = (class_distribution,)
+        self.explainability_pillar = (explainability_pillar,)
+        self.interpretability = (interpretability,)
+        self.post_hoc_methods = (post_hoc_methods,)
+        self.accountability_pillar = (accountability_pillar,)
+        self.factsheet_completeness = (factsheet_completeness,)
+        self.architectural_soundness_pillar = (architectural_soundness_pillar,)
+        self.client_management = (client_management,)
+        self.optimization = (optimization,)
+        self.sustainability_pillar = (sustainability_pillar,)
+        self.energy_source = (energy_source,)
+        self.hardware_efficiency = (hardware_efficiency,)
+        self.federation_complexity = (federation_complexity,)
         self.schema_additional_participants = schema_additional_participants
         self.random_topology_probability = random_topology_probability
         self.with_sa = with_sa
@@ -698,8 +695,12 @@ class ScenarioManagement:
             else:
                 participant_config["adversarial_args"]["attack_params"] = {"attacks": "No Attack"}
                 # Defense parameters
-                participant_config["defense_args"]["reputation"]["with_reputation"] = self.scenario.reputation.get("with_reputation", False)
-                participant_config["defense_args"]["reputation"]["initial_reputation"] = self.scenario.reputation.get("initial_reputation", 0.2)
+                participant_config["defense_args"]["reputation"]["with_reputation"] = self.scenario.reputation.get(
+                    "with_reputation", False
+                )
+                participant_config["defense_args"]["reputation"]["initial_reputation"] = self.scenario.reputation.get(
+                    "initial_reputation", 0.2
+                )
                 metrics_list = self.scenario.reputation.get("reputation_metrics", [])
                 if isinstance(metrics_list, list):
                     metrics_dict = {
@@ -711,11 +712,21 @@ class ScenarioManagement:
                     participant_config["defense_args"]["reputation"]["reputation_metrics"] = metrics_dict
                 else:
                     participant_config["defense_args"]["reputation"]["reputation_metrics"] = metrics_list
-                participant_config["defense_args"]["reputation"]["weighting_factor"] = self.scenario.reputation.get("weighting_factor", "dynamic")
-                participant_config["defense_args"]["reputation"]["weight_model_arrival_latency"] = self.scenario.reputation.get("weight_model_arrival_latency", 1.0)
-                participant_config["defense_args"]["reputation"]["weight_model_similarity"] = self.scenario.reputation.get("weight_model_similarity", 1.0)
-                participant_config["defense_args"]["reputation"]["weight_num_messages"] = self.scenario.reputation.get("weight_num_messages", 1.0)
-                participant_config["defense_args"]["reputation"]["weight_fraction_params_changed"] = self.scenario.reputation.get("weight_fraction_params_changed", 1.0)
+                participant_config["defense_args"]["reputation"]["weighting_factor"] = self.scenario.reputation.get(
+                    "weighting_factor", "dynamic"
+                )
+                participant_config["defense_args"]["reputation"]["weight_model_arrival_latency"] = (
+                    self.scenario.reputation.get("weight_model_arrival_latency", 1.0)
+                )
+                participant_config["defense_args"]["reputation"]["weight_model_similarity"] = (
+                    self.scenario.reputation.get("weight_model_similarity", 1.0)
+                )
+                participant_config["defense_args"]["reputation"]["weight_num_messages"] = self.scenario.reputation.get(
+                    "weight_num_messages", 1.0
+                )
+                participant_config["defense_args"]["reputation"]["weight_fraction_params_changed"] = (
+                    self.scenario.reputation.get("weight_fraction_params_changed", 1.0)
+                )
             # Mobility and network simulation parameters
             participant_config["mobility_args"]["random_geo"] = self.scenario.random_geo
             participant_config["mobility_args"]["latitude"] = self.scenario.latitude

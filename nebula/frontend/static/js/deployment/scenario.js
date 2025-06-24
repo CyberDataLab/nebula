@@ -348,16 +348,16 @@ const ScenarioManager = (function() {
     function setPhysicalIPs(ipList = []) {
         physical_ips = [...ipList];
     }
- 
+
     function setActualScenario(index) {
         actual_scenario = index;
         if (scenariosList[index]) {
             // Clear the current graph
             window.TopologyManager.clearGraph();
-            
+
             // Load new scenario data
             loadScenarioData(scenariosList[index]);
-            
+
             // If physical deployment, set physical IPs
             if (scenariosList[index].deployment === 'physical' && scenariosList[index].physical_ips) {
                 window.TopologyManager.setPhysicalIPs(scenariosList[index].physical_ips);
