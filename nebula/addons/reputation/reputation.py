@@ -1446,7 +1446,6 @@ class Reputation:
         if key not in self.number_message_history:
             self.number_message_history[key] = {}
         
-        # Determinar si fue penalizado comparando con el valor base (1.0)
         was_penalized = normalized_messages < 1.0
         
         self.number_message_history[key][current_round] = {
@@ -1567,37 +1566,47 @@ class Reputation:
 
         Args:
             nei: The neighbor identifier
-            current_round: The current round number (unused but kept for compatibility)
+            current_round: The current round number
 
         Returns:
             float: The computed similarity value (0.0 if no metrics found)
         """
-        metrics_instance = self.connection_metrics.get(nei)
-        if not metrics_instance:
-            logging.error(f"No metrics instance found for neighbor {nei}")
+        try:
+            metrics_instance = self.connection_metrics.get(nei)
+            if not metrics_instance:
+                return 0.0
+
+            relevant_metrics = [
+                metric for metric in metrics_instance.similarity 
+                if metric.get("nei") == nei and metric.get("current_round") == current_round
+            ]
+            
+            if not relevant_metrics:
+                relevant_metrics = [
+                    metric for metric in metrics_instance.similarity 
+                    if metric.get("nei") == nei
+                ]
+                
+            if not relevant_metrics:
+                return 0.0
+            neighbor_metric = relevant_metrics[-1]
+
+            similarity_weights = {
+                "cosine": 0.25,
+                "euclidean": 0.25, 
+                "manhattan": 0.25,
+                "pearson_correlation": 0.25,
+            }
+
+            similarity_value = sum(
+                similarity_weights[metric_name] * float(neighbor_metric.get(metric_name, 0))
+                for metric_name in similarity_weights
+            )
+
+            return max(0.0, min(1.0, similarity_value))
+            
+        except Exception:
             return 0.0
-
-        neighbor_metric = next(
-            (metric for metric in metrics_instance.similarity if metric.get("nei") == nei),
-            None
-        )
-        
-        if not neighbor_metric:
-            return 0.0
-
-        similarity_weights = {
-            "cosine": 0.25,
-            "euclidean": 0.25, 
-            "manhattan": 0.25,
-            "pearson_correlation": 0.25,
-        }
-
-        similarity_value = sum(
-            similarity_weights[metric_name] * float(neighbor_metric.get(metric_name, 0))
-            for metric_name in similarity_weights
-        )
-
-        return similarity_value
 
     async def calculate_reputation(self, ae: AggregationEvent):
         """
@@ -1978,6 +1987,16 @@ class Reputation:
 
     def _calculate_all_similarity_metrics(self, local_model: dict, received_model: dict) -> dict:
         """Calculate all similarity metrics between two models."""
+        if not local_model or not received_model:
+            return {
+                "cosine": 0.0,
+                "euclidean": 0.0,
+                "manhattan": 0.0,
+                "pearson_correlation": 0.0,
+                "jaccard": 0.0,
+                "minkowski": 0.0,
+            }
+        
         similarity_functions = [
             ("cosine", cosine_metric),
             ("euclidean", euclidean_metric),
@@ -1989,20 +2008,26 @@ class Reputation:
         similarity_values = {}
         
         for name, metric_func in similarity_functions:
-            similarity_values[name] = metric_func(local_model, received_model, similarity=True)
+            try:
+                similarity_values[name] = metric_func(local_model, received_model, similarity=True)
+            except Exception:
+                similarity_values[name] = 0.0
         
-        similarity_values["minkowski"] = minkowski_metric(
-            local_model, received_model, p=2, similarity=True
-        )
+        try:
+            similarity_values["minkowski"] = minkowski_metric(
+                local_model, received_model, p=2, similarity=True
+            )
+        except Exception:
+            similarity_values["minkowski"] = 0.0
         
         return similarity_values
 
     def _store_similarity_metrics(self, nei: str, similarity_metrics: dict):
         """Store similarity metrics for the given neighbor."""
-        if nei in self.connection_metrics:
-            self.connection_metrics[nei].similarity.append(similarity_metrics)
-        else:
-            logging.warning(f"No metrics instance found for neighbor {nei}")
+        if nei not in self.connection_metrics:
+            self.connection_metrics[nei] = Metrics()
+            
+        self.connection_metrics[nei].similarity.append(similarity_metrics)
 
     def _check_similarity_threshold(self, nei: str, cosine_value: float):
         """Check if cosine similarity is below threshold and mark node if necessary."""
