@@ -786,6 +786,7 @@ class Engine:
             self._role_behavior: RoleBehavior = change_role_behavior(self.rb, next_role, self, self.config)
             to_role = self.rb.get_role_name()
             logging.info(f"Role behavior changing from: {from_role} to {to_role}")
+            self.config.participant["device_args"]["role"] = to_role
             if source_to_notificate:
                 logging.info(f"Sending role modification ACK to transferer: {source_to_notificate}")
                 message = self.cm.create_message("control", "leadership_transfer_ack")
