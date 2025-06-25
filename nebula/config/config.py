@@ -77,27 +77,6 @@ class Config:
 
         logging.shutdown()
 
-    def shutdown_logging(self):
-        """
-        Properly shuts down all loggers and their handlers in the system.
-        This ensures all buffered logs are written to their respective files.
-        """
-        for handler in logging.getLogger().handlers:
-            handler.flush()
-            handler.close()
-
-        training_logger = logging.getLogger(TRAINING_LOGGER)
-        for handler in training_logger.handlers:
-            handler.flush()
-            handler.close()
-
-        pl_logger = logging.getLogger("lightning.pytorch")
-        for handler in pl_logger.handlers:
-            handler.flush()
-            handler.close()
-
-        logging.shutdown()
-
     def __default_config(self):
         self.participant["device_args"]["name"] = (
             f"participant_{self.participant['device_args']['idx']}_{self.participant['network_args']['ip']}_{self.participant['network_args']['port']}"

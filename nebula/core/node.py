@@ -176,20 +176,6 @@ async def main(config: Config):
     else:
         raise ValueError(f"Trainer {trainer_str} not supported")
 
-    # if config.participant["device_args"]["malicious"]:
-    #     node_cls = MaliciousNode
-    # else:
-    #     if config.participant["device_args"]["role"] == Role.AGGREGATOR.value:
-    #         node_cls = AggregatorNode
-    #     elif config.participant["device_args"]["role"] == Role.TRAINER.value:
-    #         node_cls = TrainerNode
-    #     elif config.participant["device_args"]["role"] == Role.SERVER.value:
-    #         node_cls = ServerNode
-    #     elif config.participant["device_args"]["role"] == Role.IDLE.value:
-    #         node_cls = IdleNode
-    #     else:
-    #         raise ValueError(f"Role {config.participant['device_args']['role']} not supported")
-
     VARIABILITY = 0.5
 
     def randomize_value(value, variability):

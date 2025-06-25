@@ -698,7 +698,6 @@ class Engine:
                     mpe = ModelPropagationEvent(await self.cm.get_addrs_current_connections(only_direct=True, myself=False), "initialization")
                     await EventManager.get_instance().publish_node_event(mpe)
                     
-                    #await self.cm.propagator.propagate("initialization")
                     await self.get_federation_ready_lock().release_async()
 
                 self.trainer.set_epochs(epochs)
