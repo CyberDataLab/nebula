@@ -18,5 +18,5 @@ By submitting a pull request, patch or code snippet, you agree that:
    your contribution and that Authors may use, sell or license the
    software containing your contribution at its sole discretion.
 
-Signed-off-by: *\<Your Name\> (\<email\>)*  
-Date: *\<YYYY-MM-DD\>*
+Signed-off-by: *Enrique Tomás Martínez Beltrán (enriquetomas@um.es)*  
+Date: *2025-06-25*

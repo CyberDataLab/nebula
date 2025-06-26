@@ -95,7 +95,7 @@
     "reputation": {
       "enabled": false,
       "metrics": {},
-      "initial_reputation": 0.6,
+      "initial_reputation": 0.2,
       "weighting_factor": "dynamic"
     }
   },
