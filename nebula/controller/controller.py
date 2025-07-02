@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import copy
 from typing import Annotated
 
 import aiohttp
@@ -15,7 +16,7 @@ import uvicorn
 from fastapi import Body, FastAPI, Request, status, HTTPException, Path, File, UploadFile
 from fastapi.concurrency import asynccontextmanager
 
-from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
+# from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.utils import DockerUtils
 
@@ -105,12 +106,12 @@ def configure_logger(controller_log):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    databases_dir: str = os.environ.get("NEBULA_DATABASES_DIR")
+    # databases_dir: str = os.environ.get("NEBULA_DATABASES_DIR")
     controller_log: str = os.environ.get("NEBULA_CONTROLLER_LOG")
 
-    from nebula.controller.database import initialize_databases
+    # from nebula.controller.database import initialize_databases
 
-    await initialize_databases(databases_dir)
+    # await initialize_databases(databases_dir)
 
     configure_logger(controller_log)
 
@@ -309,13 +310,18 @@ async def run_scenario(
 
     validate_physical_fields(scenario_data)
 
+    db_scenario = copy.deepcopy(scenario_data)
+
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario_data, user)
+
+    logging.info(f"[FER] scenario run_scenario {scenario_data}")
 
     await update_scenario(
         scenario_name=scenarioManagement.scenario_name,
         start_time=scenarioManagement.start_date_scenario,
         end_time="",
+        scenario=db_scenario,
         scenario=scenario_data,
         status="running",
         role=role,
@@ -372,14 +378,14 @@ async def stop_scenario(
     DockerUtils.remove_docker_network(
         f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(username).lower()}-nebula-net-scenario"
     )
-    try:
-        if all:
-            scenario_set_all_status_to_finished()
-        else:
-            scenario_set_status_to_finished(scenario_name)
-    except Exception as e:
-        logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    # try:
+    #     if all:
+    #         scenario_set_all_status_to_finished()
+    #     else:
+    #         scenario_set_status_to_finished(scenario_name)
+    # except Exception as e:
+    #     logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
+    #     raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/scenarios/remove")
@@ -464,11 +470,11 @@ async def update_scenario(
         dict: A message confirming the update.
     """
     from nebula.controller.database import scenario_update_record
-    from nebula.controller.scenarios import Scenario
+    # from nebula.controller.scenarios import Scenario
 
     try:
-        scenario = Scenario.from_dict(scenario)
-        scenario_update_record(scenario_name, start_time, end_time, scenario, status, role, username)
+        logging.info(f"[FER] scenario controller.py {scenario}")
+        scenario_update_record(scenario_name, start_time, end_time, scenario, status, username)
     except Exception as e:
         logging.exception(f"Error updating scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -985,34 +991,34 @@ async def get_physical_scenario_state(scenario_name: str):
                                             #          none is training
         }
     """
-    # 1) Retrieve scenario metadata and node list from the DB
-    scenario = await get_scenario_by_name(scenario_name)
-    if not scenario:
-        raise HTTPException(status_code=404, detail="Scenario not found")
+    # # 1) Retrieve scenario metadata and node list from the DB
+    # scenario = await get_scenario_by_name(scenario_name)
+    # if not scenario:
+    #     raise HTTPException(status_code=404, detail="Scenario not found")
  
-    nodes = await list_nodes_by_scenario_name(scenario_name)
-    if not nodes:
-        raise HTTPException(status_code=404, detail="No nodes found for scenario")
+    # nodes = await list_nodes_by_scenario_name(scenario_name)
+    # if not nodes:
+    #     raise HTTPException(status_code=404, detail="No nodes found for scenario")
  
-    # 2) Probe all nodes concurrently
-    ips   = [n["ip"] for n in nodes]
-    tasks = [get_physical_node_state(ip) for ip in ips]
-    states = await asyncio.gather(*tasks)               # parallel HTTP calls
+    # # 2) Probe all nodes concurrently
+    # ips   = [n["ip"] for n in nodes]
+    # tasks = [get_physical_node_state(ip) for ip in ips]
+    # states = await asyncio.gather(*tasks)               # parallel HTTP calls
  
-    # 3) Aggregate results
-    nodes_state  = dict(zip(ips, states))
-    any_running  = any(s.get("running") for s in states)
-    # 'all_available' is true only if *every* node answered with running=False
-    # *and* without an error field.
-    all_available = all(
-        (not s.get("running")) and (not s.get("error")) for s in states
-    )
+    # # 3) Aggregate results
+    # nodes_state  = dict(zip(ips, states))
+    # any_running  = any(s.get("running") for s in states)
+    # # 'all_available' is true only if *every* node answered with running=False
+    # # *and* without an error field.
+    # all_available = all(
+    #     (not s.get("running")) and (not s.get("error")) for s in states
+    # )
  
-    return {
-        "running": any_running,
-        "nodes_state": nodes_state,
-        "all_available": all_available,
-    }
+    # return {
+    #     "running": any_running,
+    #     "nodes_state": nodes_state,
+    #     "all_available": all_available,
+    # }
 
 
 @app.post("/user/add")

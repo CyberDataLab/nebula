@@ -584,6 +584,7 @@ async def deploy_scenario(scenario_data, role, user):
         HTTPException: If the underlying HTTP POST request fails.
     """
     url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/run"
+    logging.info(f"[FER] scenario {scenario_data}")
     data = {"scenario_data": scenario_data, "role": role, "user": user}
     return await controller_post(url, data)
 
@@ -1534,6 +1535,7 @@ async def nebula_dashboard(request: Request, session: dict = Depends(get_session
         scenario_running = None
 
     bool_completed = False
+    logging.info(f"[FER] scenarios {scenarios} scenario_running {scenario_running}")
     if scenario_running:
         bool_completed = scenario_running["status"] == "completed"
     if scenarios:

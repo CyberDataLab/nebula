@@ -1,299 +1,51 @@
-import asyncio
-import datetime
-import json
 import logging
 import os
-import sqlite3
+import psycopg2
+import psycopg2.extras
+from passlib.context import CryptContext
+import datetime
+import json
+import asyncpg
+import asyncio
 
-import aiosqlite
-from argon2 import PasswordHasher
+from nebula.controller.scenarios import Scenario
 
-user_db_file_location = None
-node_db_file_location = None
-scenario_db_file_location = None
-notes_db_file_location = None
+# --- Configuration ---
+# Use environment variables for database credentials from the Docker Compose file
+DATABASE_URL = f"postgresql://{os.environ.get('DB_USER')}:{os.environ.get('DB_PASSWORD')}@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/nebula"
 
+# Password hashing context (using Argon2)
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+# Asynchronous lock for node updates
 _node_lock = asyncio.Lock()
 
-PRAGMA_SETTINGS = [
-    "PRAGMA journal_mode=WAL;",
-    "PRAGMA synchronous=NORMAL;",
-    "PRAGMA journal_size_limit=1048576;",
-    "PRAGMA cache_size=10000;",
-    "PRAGMA temp_store=MEMORY;",
-    "PRAGMA cache_spill=0;",
-]
+
+# --- Connection Management Helper Functions ---
+
+def get_sync_conn():
+    """Establishes a synchronous PostgreSQL connection."""
+    return psycopg2.connect(DATABASE_URL)
 
 
-async def setup_database(db_file_location):
-    """
-    Initializes the SQLite database with the required PRAGMA settings.
-
-    This function:
-        - Connects asynchronously to the specified SQLite database file.
-        - Applies a predefined list of PRAGMA settings to configure the database.
-        - Commits the changes after applying the settings.
-
-    Args:
-        db_file_location (str): Path to the SQLite database file.
-
-    Exceptions:
-        PermissionError: Logged if the application lacks permission to create or modify the database file.
-        Exception: Logs any other unexpected error that occurs during setup.
-    """
-    try:
-        async with aiosqlite.connect(db_file_location) as db:
-            for pragma in PRAGMA_SETTINGS:
-                await db.execute(pragma)
-            await db.commit()
-    except PermissionError:
-        logging.info("No permission to create the databases. Change the default databases directory")
-    except Exception as e:
-        logging.exception(f"An error has ocurred during setup_database: {e}")
+async def get_async_conn():
+    """Establishes an asynchronous PostgreSQL connection."""
+    return await asyncpg.connect(DATABASE_URL)
 
 
-async def ensure_columns(conn, table_name, desired_columns):
-    """
-    Ensures that a table contains all the desired columns, adding any that are missing.
-
-    This function:
-        - Retrieves the current columns of the specified table.
-        - Compares them with the desired columns.
-        - Adds any missing columns to the table using ALTER TABLE statements.
-
-    Args:
-        conn (aiosqlite.Connection): Active connection to the SQLite database.
-        table_name (str): Name of the table to check and modify.
-        desired_columns (dict): Dictionary mapping column names to their SQL definitions.
-
-    Note:
-        This operation is committed immediately after all changes are applied.
-    """
-    _c = await conn.execute(f"PRAGMA table_info({table_name});")
-    existing_columns = [row[1] for row in await _c.fetchall()]
-    for column_name, column_definition in desired_columns.items():
-        if column_name not in existing_columns:
-            await conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition};")
-    await conn.commit()
-
-
-async def initialize_databases(databases_dir):
-    """
-    Initializes all required SQLite databases and their corresponding tables for the system.
-
-    This function:
-        - Defines paths for user, node, scenario, and notes databases based on the provided directory.
-        - Sets up each database with appropriate PRAGMA settings.
-        - Creates necessary tables if they do not exist.
-        - Ensures all expected columns are present in each table, adding any missing ones.
-        - Creates a default admin user if no users are present.
-
-    Args:
-        databases_dir (str): Path to the directory where the database files will be created or accessed.
-
-    Note:
-        Default credentials (username and password) are taken from environment variables:
-        - NEBULA_DEFAULT_USER
-        - NEBULA_DEFAULT_PASSWORD
-    """
-    global user_db_file_location, node_db_file_location, scenario_db_file_location, notes_db_file_location
-
-    user_db_file_location = os.path.join(databases_dir, "users.db")
-    node_db_file_location = os.path.join(databases_dir, "nodes.db")
-    scenario_db_file_location = os.path.join(databases_dir, "scenarios.db")
-    notes_db_file_location = os.path.join(databases_dir, "notes.db")
-
-    await setup_database(user_db_file_location)
-    await setup_database(node_db_file_location)
-    await setup_database(scenario_db_file_location)
-    await setup_database(notes_db_file_location)
-
-    async with aiosqlite.connect(user_db_file_location) as conn:
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                user TEXT PRIMARY KEY,
-                password TEXT,
-                role TEXT
-            );
-            """
-        )
-        desired_columns = {"user": "TEXT PRIMARY KEY", "password": "TEXT", "role": "TEXT"}
-        await ensure_columns(conn, "users", desired_columns)
-
-    async with aiosqlite.connect(node_db_file_location) as conn:
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS nodes (
-                uid TEXT PRIMARY KEY,
-                idx TEXT,
-                ip TEXT,
-                port TEXT,
-                role TEXT,
-                neighbors TEXT,
-                latitude TEXT,
-                longitude TEXT,
-                timestamp TEXT,
-                federation TEXT,
-                round TEXT,
-                scenario TEXT,
-                hash TEXT,
-                malicious TEXT
-            );
-            """
-        )
-        desired_columns = {
-            "uid": "TEXT PRIMARY KEY",
-            "idx": "TEXT",
-            "ip": "TEXT",
-            "port": "TEXT",
-            "role": "TEXT",
-            "neighbors": "TEXT",
-            "latitude": "TEXT",
-            "longitude": "TEXT",
-            "timestamp": "TEXT",
-            "federation": "TEXT",
-            "round": "TEXT",
-            "scenario": "TEXT",
-            "hash": "TEXT",
-            "malicious": "TEXT",
-        }
-        await ensure_columns(conn, "nodes", desired_columns)
-
-    async with aiosqlite.connect(scenario_db_file_location) as conn:
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS scenarios (
-                name TEXT PRIMARY KEY,
-                start_time TEXT,
-                end_time TEXT,
-                title TEXT,
-                description TEXT,
-                deployment TEXT,
-                federation TEXT,
-                topology TEXT,
-                nodes TEXT,
-                nodes_graph TEXT,
-                n_nodes TEXT,
-                matrix TEXT,
-                random_topology_probability TEXT,
-                dataset TEXT,
-                iid TEXT,
-                partition_selection TEXT,
-                partition_parameter TEXT,
-                model TEXT,
-                agg_algorithm TEXT,
-                rounds TEXT,
-                logginglevel TEXT,
-                report_status_data_queue TEXT,
-                accelerator TEXT,
-                network_subnet TEXT,
-                network_gateway TEXT,
-                epochs TEXT,
-                attack_params TEXT,
-                reputation TEXT,
-                random_geo TEXT,
-                latitude TEXT,
-                longitude TEXT,
-                mobility TEXT,
-                mobility_type TEXT,
-                radius_federation TEXT,
-                scheme_mobility TEXT,
-                round_frequency TEXT,
-                mobile_participants_percent TEXT,
-                additional_participants TEXT,
-                schema_additional_participants TEXT,
-                status TEXT,
-                role TEXT,
-                username TEXT,
-                gpu_id TEXT
-            );
-            """
-        )
-        desired_columns = {
-            "name": "TEXT PRIMARY KEY",
-            "start_time": "TEXT",
-            "end_time": "TEXT",
-            "title": "TEXT",
-            "description": "TEXT",
-            "deployment": "TEXT",
-            "federation": "TEXT",
-            "topology": "TEXT",
-            "nodes": "TEXT",
-            "nodes_graph": "TEXT",
-            "n_nodes": "TEXT",
-            "matrix": "TEXT",
-            "random_topology_probability": "TEXT",
-            "dataset": "TEXT",
-            "iid": "TEXT",
-            "partition_selection": "TEXT",
-            "partition_parameter": "TEXT",
-            "model": "TEXT",
-            "agg_algorithm": "TEXT",
-            "rounds": "TEXT",
-            "logginglevel": "TEXT",
-            "report_status_data_queue": "TEXT",
-            "accelerator": "TEXT",
-            "gpu_id": "TEXT",
-            "network_subnet": "TEXT",
-            "network_gateway": "TEXT",
-            "epochs": "TEXT",
-            "attack_params": "TEXT",
-            "reputation": "TEXT",
-            "random_geo": "TEXT",
-            "latitude": "TEXT",
-            "longitude": "TEXT",
-            "mobility": "TEXT",
-            "mobility_type": "TEXT",
-            "radius_federation": "TEXT",
-            "scheme_mobility": "TEXT",
-            "round_frequency": "TEXT",
-            "mobile_participants_percent": "TEXT",
-            "additional_participants": "TEXT",
-            "schema_additional_participants": "TEXT",
-            "status": "TEXT",
-            "role": "TEXT",
-            "username": "TEXT",
-        }
-        await ensure_columns(conn, "scenarios", desired_columns)
-
-    async with aiosqlite.connect(notes_db_file_location) as conn:
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS notes (
-                scenario TEXT PRIMARY KEY,
-                scenario_notes TEXT
-            );
-            """
-        )
-        desired_columns = {"scenario": "TEXT PRIMARY KEY", "scenario_notes": "TEXT"}
-        await ensure_columns(conn, "notes", desired_columns)
-
-    username = os.environ.get("NEBULA_DEFAULT_USER", "admin")
-    password = os.environ.get("NEBULA_DEFAULT_PASSWORD", "admin")
-    if not list_users():
-        add_user(username, password, "admin")
-    if not verify_hash_algorithm(username):
-        update_user(username, password, "admin")
-
+# --- User Management Functions ---
 
 def list_users(all_info=False):
     """
     Retrieves a list of users from the users database.
-
-    Args:
-        all_info (bool): If True, returns full user records; otherwise, returns only usernames. Default is False.
-
-    Returns:
-        list: A list of usernames or full user records depending on the all_info flag.
     """
-    with sqlite3.connect(user_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM users")
-        result = c.fetchall()
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            c.execute("SELECT * FROM users")
+            result = c.fetchall()
 
     if not all_info:
+        # In PostgreSQL, you can access columns by key from DictCursor
         result = [user["user"] for user in result]
 
     return result
@@ -302,150 +54,102 @@ def list_users(all_info=False):
 def get_user_info(user):
     """
     Fetches detailed information for a specific user from the users database.
-
-    Args:
-        user (str): The username to retrieve information for.
-
-    Returns:
-        sqlite3.Row or None: A row containing the user's information if found, otherwise None.
     """
-    with sqlite3.connect(user_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-
-        command = "SELECT * FROM users WHERE user = ?"
-        c.execute(command, (user,))
-        result = c.fetchone()
-
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            c.execute("SELECT * FROM users WHERE \"user\" = %s", (user,))
+            result = c.fetchone()
     return result
 
 
 def verify(user, password):
     """
     Verifies whether the provided password matches the stored hashed password for a user.
-
-    Args:
-        user (str): The username to verify.
-        password (str): The plain text password to check against the stored hash.
-
-    Returns:
-        bool: True if the password is correct, False otherwise.
     """
-    ph = PasswordHasher()
-    with sqlite3.connect(user_db_file_location) as conn:
-        c = conn.cursor()
-
-        c.execute("SELECT password FROM users WHERE user = ?", (user,))
-        result = c.fetchone()
-        if result:
-            try:
-                return ph.verify(result[0], password)
-            except:
-                return False
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            c.execute("SELECT password FROM users WHERE \"user\" = %s", (user,))
+            result = c.fetchone()
+            if result:
+                try:
+                    return pwd_context.verify(password, result[0])
+                except:
+                    return False
     return False
 
 
 def verify_hash_algorithm(user):
     """
     Checks if the stored password hash for a user uses a supported Argon2 algorithm.
-
-    Args:
-        user (str): The username to check (case-insensitive, converted to uppercase).
-
-    Returns:
-        bool: True if the password hash starts with a valid Argon2 prefix, False otherwise.
     """
     user = user.upper()
     argon2_prefixes = ("$argon2i$", "$argon2id$")
-
-    with sqlite3.connect(user_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-
-        c.execute("SELECT password FROM users WHERE user = ?", (user,))
-        result = c.fetchone()
-        if result:
-            password_hash = result["password"]
-            return password_hash.startswith(argon2_prefixes)
-
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            c.execute("SELECT password FROM users WHERE \"user\" = %s", (user,))
+            result = c.fetchone()
+            if result:
+                password_hash = result["password"]
+                return password_hash.startswith(argon2_prefixes)
     return False
 
 
 def delete_user_from_db(user):
     """
     Deletes a user record from the users database.
-
-    Args:
-        user (str): The username of the user to be deleted.
     """
-    with sqlite3.connect(user_db_file_location) as conn:
-        c = conn.cursor()
-        c.execute("DELETE FROM users WHERE user = ?", (user,))
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            c.execute("DELETE FROM users WHERE \"user\" = %s", (user,))
+        conn.commit()
 
 
 def add_user(user, password, role):
     """
     Adds a new user to the users database with a hashed password.
-
-    Args:
-        user (str): The username to add (stored in uppercase).
-        password (str): The plain text password to hash and store.
-        role (str): The role assigned to the user.
     """
-    ph = PasswordHasher()
-    with sqlite3.connect(user_db_file_location) as conn:
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO users VALUES (?, ?, ?)",
-            (user.upper(), ph.hash(password), role),
-        )
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            hashed_password = pwd_context.hash(password)
+            c.execute(
+                "INSERT INTO users (\"user\", password, role) VALUES (%s, %s, %s)",
+                (user.upper(), hashed_password, role),
+            )
+        conn.commit()
 
 
 def update_user(user, password, role):
     """
     Updates the password and role of an existing user in the users database.
-
-    Args:
-        user (str): The username to update (case-insensitive, stored as uppercase).
-        password (str): The new plain text password to hash and store.
-        role (str): The new role to assign to the user.
     """
-    ph = PasswordHasher()
-    with sqlite3.connect(user_db_file_location) as conn:
-        c = conn.cursor()
-        c.execute(
-            "UPDATE users SET password = ?, role = ? WHERE user = ?",
-            (ph.hash(password), role, user.upper()),
-        )
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            hashed_password = pwd_context.hash(password)
+            c.execute(
+                "UPDATE users SET password = %s, role = %s WHERE \"user\" = %s",
+                (hashed_password, role, user.upper()),
+            )
+        conn.commit()
 
+# --- Node Management Functions ---
 
 def list_nodes(scenario_name=None, sort_by="idx"):
     """
     Retrieves a list of nodes from the nodes database, optionally filtered by scenario and sorted.
-
-    Args:
-        scenario_name (str, optional): Name of the scenario to filter nodes by. If None, returns all nodes.
-        sort_by (str): Column name to sort the results by. Defaults to "idx".
-
-    Returns:
-        list or None: A list of sqlite3.Row objects representing nodes, or None if an error occurs.
     """
     try:
-        with sqlite3.connect(node_db_file_location) as conn:
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
+        with get_sync_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+                if scenario_name:
+                    command = f"SELECT * FROM nodes WHERE scenario = %s ORDER BY {psycopg2.extensions.AsIs(sort_by)};"
+                    c.execute(command, (scenario_name,))
+                else:
+                    command = f"SELECT * FROM nodes ORDER BY {psycopg2.extensions.AsIs(sort_by)};"
+                    c.execute(command)
 
-            if scenario_name:
-                command = "SELECT * FROM nodes WHERE scenario = ? ORDER BY " + sort_by + ";"
-                c.execute(command, (scenario_name,))
-            else:
-                command = "SELECT * FROM nodes ORDER BY " + sort_by + ";"
-                c.execute(command)
-
-            result = c.fetchall()
-
+                result = c.fetchall()
             return result
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Error occurred while listing nodes: {e}")
         return None
 
@@ -453,737 +157,365 @@ def list_nodes(scenario_name=None, sort_by="idx"):
 def list_nodes_by_scenario_name(scenario_name):
     """
     Fetches all nodes associated with a specific scenario, ordered by their index as integers.
-
-    Args:
-        scenario_name (str): The name of the scenario to filter nodes by.
-
-    Returns:
-        list or None: A list of sqlite3.Row objects for nodes in the scenario, or None if an error occurs.
     """
     try:
-        with sqlite3.connect(node_db_file_location) as conn:
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-
-            command = "SELECT * FROM nodes WHERE scenario = ? ORDER BY CAST(idx AS INTEGER) ASC;"
-            c.execute(command, (scenario_name,))
-            result = c.fetchall()
-
+        with get_sync_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+                # Use a specific cast in PostgreSQL to order by integer value of idx
+                command = "SELECT * FROM nodes WHERE scenario = %s ORDER BY CAST(idx AS INTEGER) ASC;"
+                c.execute(command, (scenario_name,))
+                result = c.fetchall()
             return result
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Error occurred while listing nodes by scenario name: {e}")
         return None
 
 
 async def update_node_record(
-    node_uid,
-    idx,
-    ip,
-    port,
-    role,
-    neighbors,
-    latitude,
-    longitude,
-    timestamp,
-    federation,
-    federation_round,
-    scenario,
-    run_hash,
-    malicious,
+    node_uid, idx, ip, port, role, neighbors, latitude, longitude,
+    timestamp, federation, federation_round, scenario, run_hash, malicious,
 ):
     """
     Inserts or updates a node record in the database for a given scenario, ensuring thread-safe access.
-
-    Args:
-        node_uid (str): Unique identifier of the node.
-        idx (str): Index or identifier within the scenario.
-        ip (str): IP address of the node.
-        port (str): Port used by the node.
-        role (str): Role of the node in the federation.
-        neighbors (str): Neighbors of the node (serialized).
-        latitude (str): Geographic latitude of the node.
-        longitude (str): Geographic longitude of the node.
-        timestamp (str): Timestamp of the last update.
-        federation (str): Federation identifier the node belongs to.
-        federation_round (str): Current federation round.
-        scenario (str): Scenario name the node is part of.
-        run_hash (str): Hash of the current run/state.
-        malicious (str): Indicator if the node is malicious.
-
-    Returns:
-        dict or None: The updated or inserted node record as a dictionary, or None if insertion/update failed.
     """
-    global _node_lock
     async with _node_lock:
-        async with aiosqlite.connect(node_db_file_location) as conn:
-            conn.row_factory = aiosqlite.Row
-            _c = await conn.cursor()
-
-            # Check if the node already exists
-            await _c.execute("SELECT * FROM nodes WHERE uid = ? AND scenario = ?;", (node_uid, scenario))
-            result = await _c.fetchone()
-
-            if result is None:
-                # Insert new node
-                await _c.execute(
-                    "INSERT INTO nodes (uid, idx, ip, port, role, neighbors, latitude, longitude, timestamp, federation, round, scenario, hash, malicious) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-                    (
-                        node_uid,
-                        idx,
-                        ip,
-                        port,
-                        role,
-                        neighbors,
-                        latitude,
-                        longitude,
-                        timestamp,
-                        federation,
-                        federation_round,
-                        scenario,
-                        run_hash,
-                        malicious,
-                    ),
-                )
-            else:
-                # Update existing node
-                await _c.execute(
-                    "UPDATE nodes SET idx = ?, ip = ?, port = ?, role = ?, neighbors = ?, latitude = ?, longitude = ?, timestamp = ?, federation = ?, round = ?, hash = ?, malicious = ? WHERE uid = ? AND scenario = ?;",
-                    (
-                        idx,
-                        ip,
-                        port,
-                        role,
-                        neighbors,
-                        latitude,
-                        longitude,
-                        timestamp,
-                        federation,
-                        federation_round,
-                        run_hash,
-                        malicious,
-                        node_uid,
-                        scenario,
-                    ),
+        # CORRECTED: Use get_async_conn() directly as the async context manager.
+        # This assumes get_async_conn() returns a connection object that supports the
+        # asynchronous context manager protocol (i.e., has __aenter__ and __aexit__).
+        # A typical implementation of get_async_conn() using asyncpg would be 'return pool.acquire()'.
+        async with get_async_conn() as conn: 
+            # Use a connection-bound cursor
+            async with conn.transaction():
+                # Use a SELECT ... FOR UPDATE to lock the row and avoid race conditions
+                result = await conn.fetchrow(
+                    "SELECT * FROM nodes WHERE uid = $1 AND scenario = $2 FOR UPDATE;",
+                    node_uid, scenario
                 )
 
-            await conn.commit()
-
-            # Fetch the updated or newly inserted row
-            await _c.execute("SELECT * FROM nodes WHERE uid = ? AND scenario = ?;", (node_uid, scenario))
-            updated_row = await _c.fetchone()
-            return dict(updated_row) if updated_row else None
+                if result is None:
+                    # Insert new node
+                    await conn.execute(
+                        """
+                        INSERT INTO nodes (uid, idx, ip, port, role, neighbors, latitude, longitude,
+                                           timestamp, federation, round, scenario, hash, malicious)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+                        """,
+                        node_uid, idx, ip, port, role, neighbors, latitude, longitude,
+                        timestamp, federation, federation_round, scenario, run_hash, malicious,
+                    )
+                else:
+                    # Update existing node
+                    await conn.execute(
+                        """
+                        UPDATE nodes SET idx = $1, ip = $2, port = $3, role = $4, neighbors = $5,
+                        latitude = $6, longitude = $7, timestamp = $8, federation = $9, round = $10,
+                        hash = $11, malicious = $12
+                        WHERE uid = $13 AND scenario = $14;
+                        """,
+                        idx, ip, port, role, neighbors, latitude, longitude,
+                        timestamp, federation, federation_round, run_hash, malicious,
+                        node_uid, scenario,
+                    )
+                
+                # Fetch the updated or newly inserted row
+                updated_row = await conn.fetchrow("SELECT * from nodes WHERE uid = $1 AND scenario = $2;", node_uid, scenario)
+                return dict(updated_row) if updated_row else None
 
 
 def remove_all_nodes():
     """
     Deletes all node records from the nodes database.
-
-    This operation removes every entry in the nodes table.
-
-    Returns:
-        None
     """
-    with sqlite3.connect(node_db_file_location) as conn:
-        c = conn.cursor()
-        command = "DELETE FROM nodes;"
-        c.execute(command)
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            c.execute("TRUNCATE nodes;") # TRUNCATE is faster than DELETE FROM for clearing tables
+        conn.commit()
 
 
 def remove_nodes_by_scenario_name(scenario_name):
     """
     Deletes all nodes associated with a specific scenario from the database.
-
-    Args:
-        scenario_name (str): The name of the scenario whose nodes should be removed.
-
-    Returns:
-        None
     """
-    with sqlite3.connect(node_db_file_location) as conn:
-        c = conn.cursor()
-        command = "DELETE FROM nodes WHERE scenario = ?;"
-        c.execute(command, (scenario_name,))
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            c.execute("DELETE FROM nodes WHERE scenario = %s;", (scenario_name,))
+        conn.commit()
 
+# --- Scenario Management Functions ---
 
 def get_all_scenarios(username, role, sort_by="start_time"):
     """
-    Retrieve all scenarios from the database filtered by user role and sorted by a specified field.
-
-    Parameters:
-        username (str): The username of the requesting user.
-        role (str): The role of the user, e.g., "admin" or regular user.
-        sort_by (str, optional): The field name to sort the results by. Defaults to "start_time".
-
-    Returns:
-        list[sqlite3.Row]: A list of scenario records as SQLite Row objects.
-
-    Behavior:
-        - Admin users retrieve all scenarios.
-        - Non-admin users retrieve only scenarios associated with their username.
-        - Sorting by "start_time" applies custom datetime ordering.
-        - Other sort fields are applied directly in the ORDER BY clause.
+    Retrieves all scenarios from the database, accessing the fields
+    inside the 'config' (JSONB) column.
+    Filters by user role and sorts by the specified field.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        if role == "admin":
-            if sort_by == "start_time":
-                command = """
-                SELECT * FROM scenarios
-                ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
-                """
-                c.execute(command)
-            else:
-                command = "SELECT * FROM scenarios ORDER BY ?;"
-                c.execute(command, (sort_by,))
-        else:
-            if sort_by == "start_time":
-                command = """
-                SELECT * FROM scenarios
-                WHERE username = ?
-                ORDER BY strftime('%Y-%m-%d %H:%M:%S', substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8));
-                """
-                c.execute(command, (username,))
-            else:
-                command = "SELECT * FROM scenarios WHERE username = ? ORDER BY ?;"
-                c.execute(
-                    command,
-                    (
-                        username,
-                        sort_by,
-                    ),
-                )
-        result = c.fetchall()
+    # Safe list of allowed sorting fields to prevent SQL injection
+    allowed_sort_fields = ["start_time", "title", "username", "status", "name"]
+    if sort_by not in allowed_sort_fields:
+        sort_by = "start_time"  # Use a safe default value
 
+    # Building the ORDER BY clause
+    if sort_by == "start_time":
+        # Special sorting for dates saved as text, handling nulls/empty strings
+        order_by_clause = """
+            ORDER BY
+                CASE
+                    WHEN start_time IS NULL OR start_time = '' THEN 1
+                    ELSE 0
+                END,
+                to_timestamp(start_time, 'YYYY/MM/DD HH24:MI:SS') DESC
+        """
+    else:
+        # Sorting is built dynamically but safely,
+        # since 'sort_by' has been validated against the allowed list.
+        order_by_clause = f"ORDER BY config->>'{sort_by}'"
+
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            # Base query. It's flexible to return 'name' and the full 'config' object.
+            # The code that calls this function can access any field from the config object.
+            command = "SELECT name, username, start_time, end_time, status, config FROM scenarios"
+            params = []
+
+            # Conditionally add the WHERE filter if the role is not admin
+            if role != "admin":
+                command += " WHERE config->>'username' = %s"
+                params.append(username)
+
+            # Combine the query with the sorting clause
+            full_command = f"{command} {order_by_clause};"
+
+            c.execute(full_command, tuple(params))
+            result = c.fetchall()
+    
     return result
 
 
 def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
     """
-    Retrieve all scenarios with detailed fields and update the status of running scenarios if their federation is completed.
-
-    Parameters:
-        username (str): The username of the requesting user.
-        role (str): The role of the user, e.g., "admin" or regular user.
-        sort_by (str, optional): The field name to sort the results by. Defaults to "start_time".
-
-    Returns:
-        list[sqlite3.Row]: A list of scenario records including name, username, title, start_time, model, dataset, rounds, and status.
-
-    Behavior:
-        - Admin users retrieve all scenarios.
-        - Non-admin users retrieve only scenarios associated with their username.
-        - Scenarios are sorted by start_time with special handling for null or empty values.
-        - For scenarios with status "running", checks if federation is completed:
-            - If completed, updates the scenario status to "completed".
-            - Refreshes the returned scenario list after updates.
+    Retrieves all scenarios from the JSONB field, sorts them, and updates the status if necessary.
+    Returns a list of dictionaries, where each dictionary represents a scenario.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
+    # Safe list of allowed sorting fields to prevent SQL injection.
+    allowed_sort_fields = ["start_time", "title", "username", "status", "name"]
+    if sort_by not in allowed_sort_fields:
+        sort_by = "start_time"  # Safe default value
 
-        if role == "admin":
-            if sort_by == "start_time":
-                command = """
-                SELECT name, username, title, start_time, model, dataset, rounds, status FROM scenarios
-                ORDER BY
-                    CASE
-                        WHEN start_time IS NULL OR start_time = '' THEN 1
-                        ELSE 0
-                    END,
-                    strftime(
-                        '%Y-%m-%d %H:%M:%S',
-                        substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8)
-                    );
-                """
-                c.execute(command)
-            else:
-                command = "SELECT name, username, title, start_time, model, dataset, rounds, status FROM scenarios ORDER BY ?;"
-                c.execute(command, (sort_by,))
-            result = c.fetchall()
-        else:
-            if sort_by == "start_time":
-                command = """
-                SELECT name, username, title, start_time, model, dataset, rounds, status FROM scenarios
-                WHERE username = ?
-                ORDER BY
-                    CASE
-                        WHEN start_time IS NULL OR start_time = '' THEN 1
-                        ELSE 0
-                    END,
-                    strftime(
-                        '%Y-%m-%d %H:%M:%S',
-                        substr(start_time, 7, 4) || '-' || substr(start_time, 4, 2) || '-' || substr(start_time, 1, 2) || ' ' || substr(start_time, 12, 8)
-                    );
-                """
-                c.execute(command, (username,))
-            else:
-                command = "SELECT name, username, title, start_time, model, dataset, rounds, status FROM scenarios WHERE username = ? ORDER BY ?;"
-                c.execute(
-                    command,
-                    (
-                        username,
-                        sort_by,
-                    ),
-                )
-            result = c.fetchall()
+    # Building the ORDER BY clause
+    if sort_by == "start_time":
+        order_by_clause = """
+            ORDER BY
+                CASE
+                    WHEN start_time IS NULL OR start_time = '' THEN 1
+                    ELSE 0
+                END,
+                to_timestamp(start_time, 'YYYY/MM/DD HH24:MI:SS') DESC
+        """
+    else:
+        # We use a safe f-string because the value of sort_by has been validated
+        order_by_clause = f"ORDER BY config->>'{sort_by}'"
 
-        for scenario in result:
-            if scenario["status"] == "running":
-                if check_scenario_federation_completed(scenario["name"]):
-                    scenario_set_status_to_completed(scenario["name"])
-                    result = get_all_scenarios(username, role)
-
-    return result
-
-
-def scenario_update_record(name, start_time, end_time, scenario, status, role, username):
-    """
-    Insert a new scenario record or update an existing one in the database based on the scenario name.
-
-    Parameters:
-        name (str): The unique name identifier of the scenario.
-        start_time (str): The start time of the scenario.
-        end_time (str): The end time of the scenario.
-        scenario (object): An object containing detailed scenario attributes.
-        status (str): The current status of the scenario.
-        role (str): The role of the user performing the operation.
-        username (str): The username of the user performing the operation.
-
-    Behavior:
-        - Checks if a scenario with the given name exists.
-        - If not, inserts a new record with all scenario details.
-        - If exists, updates the existing record with the provided data.
-        - Commits the transaction to persist changes.
-    """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-
-        select_command = "SELECT * FROM scenarios WHERE name = ?;"
-        c.execute(select_command, (name,))
-        result = c.fetchone()
-
-        if result is None:
-            insert_command = """
-                INSERT INTO scenarios (
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            # Base query that extracts fields from the JSONB using the ->> operator
+            command = f"""
+                SELECT
                     name,
-                    start_time,
-                    end_time,
-                    title,
-                    description,
-                    deployment,
-                    federation,
-                    topology,
-                    nodes,
-                    nodes_graph,
-                    n_nodes,
-                    matrix,
-                    random_topology_probability,
-                    dataset,
-                    iid,
-                    partition_selection,
-                    partition_parameter,
-                    model,
-                    agg_algorithm,
-                    rounds,
-                    logginglevel,
-                    report_status_data_queue,
-                    accelerator,
-                    gpu_id,
-                    network_subnet,
-                    network_gateway,
-                    epochs,
-                    attack_params,
-                    reputation,
-                    random_geo,
-                    latitude,
-                    longitude,
-                    mobility,
-                    mobility_type,
-                    radius_federation,
-                    scheme_mobility,
-                    round_frequency,
-                    mobile_participants_percent,
-                    additional_participants,
-                    schema_additional_participants,
-                    status,
-                    role,
-                    username
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                );
-            """
-            c.execute(
-                insert_command,
-                (
-                    name,
-                    start_time,
-                    end_time,
-                    scenario.scenario_title,
-                    scenario.scenario_description,
-                    scenario.deployment,
-                    scenario.federation,
-                    scenario.topology,
-                    json.dumps(scenario.nodes),
-                    json.dumps(scenario.nodes_graph),
-                    scenario.n_nodes,
-                    json.dumps(scenario.matrix),
-                    scenario.random_topology_probability,
-                    scenario.dataset,
-                    scenario.iid,
-                    scenario.partition_selection,
-                    scenario.partition_parameter,
-                    scenario.model,
-                    scenario.agg_algorithm,
-                    scenario.rounds,
-                    scenario.logginglevel,
-                    scenario.report_status_data_queue,
-                    scenario.accelerator,
-                    json.dumps(scenario.gpu_id),
-                    scenario.network_subnet,
-                    scenario.network_gateway,
-                    scenario.epochs,
-                    json.dumps(scenario.attack_params),
-                    json.dumps(scenario.reputation),
-                    scenario.random_geo,
-                    scenario.latitude,
-                    scenario.longitude,
-                    scenario.mobility,
-                    scenario.mobility_type,
-                    scenario.radius_federation,
-                    scenario.scheme_mobility,
-                    scenario.round_frequency,
-                    scenario.mobile_participants_percent,
-                    json.dumps(scenario.additional_participants),
-                    scenario.schema_additional_participants,
-                    status,
-                    role,
                     username,
-                ),
-            )
-        else:
-            update_command = """
-                UPDATE scenarios SET
-                    start_time = ?,
-                    end_time = ?,
-                    title = ?,
-                    description = ?,
-                    deployment = ?,
-                    federation = ?,
-                    topology = ?,
-                    nodes = ?,
-                    nodes_graph = ?,
-                    n_nodes = ?,
-                    matrix = ?,
-                    random_topology_probability = ?,
-                    dataset = ?,
-                    iid = ?,
-                    partition_selection = ?,
-                    partition_parameter = ?,
-                    model = ?,
-                    agg_algorithm = ?,
-                    rounds = ?,
-                    logginglevel = ?,
-                    report_status_data_queue = ?,
-                    accelerator = ?,
-                    gpu_id = ?,
-                    network_subnet = ?,
-                    network_gateway = ?,
-                    epochs = ?,
-                    attack_params = ?,
-                    reputation = ?,
-                    random_geo = ?,
-                    latitude = ?,
-                    longitude = ?,
-                    mobility = ?,
-                    mobility_type = ?,
-                    radius_federation = ?,
-                    scheme_mobility = ?,
-                    round_frequency = ?,
-                    mobile_participants_percent = ?,
-                    additional_participants = ?,
-                    schema_additional_participants = ?,
-                    status = ?,
-                    role = ?,
-                    username = ?
-                WHERE name = ?;
-            """
-            c.execute(
-                update_command,
-                (
+                    status,
                     start_time,
                     end_time,
-                    scenario.scenario_title,
-                    scenario.scenario_description,
-                    scenario.deployment,
-                    scenario.federation,
-                    scenario.topology,
-                    json.dumps(scenario.nodes),
-                    json.dumps(scenario.nodes_graph),
-                    scenario.n_nodes,
-                    json.dumps(scenario.matrix),
-                    scenario.random_topology_probability,
-                    scenario.dataset,
-                    scenario.iid,
-                    scenario.partition_selection,
-                    scenario.partition_parameter,
-                    scenario.model,
-                    scenario.agg_algorithm,
-                    scenario.rounds,
-                    scenario.logginglevel,
-                    scenario.report_status_data_queue,
-                    scenario.accelerator,
-                    json.dumps(scenario.gpu_id),
-                    scenario.network_subnet,
-                    scenario.network_gateway,
-                    scenario.epochs,
-                    json.dumps(scenario.attack_params),
-                    json.dumps(scenario.reputation),
-                    scenario.random_geo,
-                    scenario.latitude,
-                    scenario.longitude,
-                    scenario.mobility,
-                    scenario.mobility_type,
-                    scenario.radius_federation,
-                    scenario.scheme_mobility,
-                    scenario.round_frequency,
-                    scenario.mobile_participants_percent,
-                    json.dumps(scenario.additional_participants),
-                    scenario.schema_additional_participants,
-                    status,
-                    role,
-                    username,
-                    name,
-                ),
-            )
+                    config->>'title' AS title,
+                    config->>'model' AS model,
+                    config->>'dataset' AS dataset,
+                    config->>'rounds' AS rounds,
+                    config  -- Return the full config object
+                FROM scenarios
+            """
+            params = []
+            if role != "admin":
+                command += " WHERE config->>'username' = %s"
+                params.append(username)
 
-        conn.commit()
+            command += f" {order_by_clause};"
+            
+            c.execute(command, tuple(params))
+            result_dicts = c.fetchall() # This already returns a list of DictRow objects (which act like dicts)
+
+            # Logic to check for completed scenarios and update status.
+            # It's important to modify the `result_dicts` directly or handle the recursion carefully.
+            
+            # Create a mutable list from DictRow objects for potential status updates
+            scenarios_to_return = [dict(s) for s in result_dicts]
+
+            re_fetch_required = False
+            for scenario in scenarios_to_return:
+                if scenario["status"] == "running":
+                    if check_scenario_federation_completed(scenario["name"]):
+                        scenario_set_status_to_completed(scenario["name"])
+                        # If a scenario's status changes, it's best to re-query the database
+                        # to ensure the most up-to-date information is returned for ALL scenarios.
+                        # This avoids inconsistencies if multiple scenarios complete in a single call.
+                        re_fetch_required = True
+                        break # Break after finding one completed scenario to trigger re-fetch
+
+            if re_fetch_required:
+                # If any status was updated, recursively call the function again to get the fresh data.
+                # This ensures the returned list reflects the updated status from the DB.
+                # Make sure `get_all_scenarios` is indeed this function if you rename it.
+                return get_all_scenarios(username, role, sort_by) 
+            
+    return scenarios_to_return
+
+
+def scenario_update_record(name, start_time, end_time, scenario, status, username):
+    """
+    Inserts or updates a scenario record using the PostgreSQL "UPSERT" pattern.
+    All configuration is saved in the 'config' column of type JSONB.
+    """
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            command = """
+                INSERT INTO scenarios (name, start_time, end_time, username, status, config)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (name) DO UPDATE SET
+                    config = scenarios.config || excluded.config;
+            """
+            logging.info(f"[FER] scenario database.py {json.dumps(scenario, indent=2)}")
+            c.execute(command, (name, start_time, end_time, username, status, json.dumps(scenario, indent=2)))
+            conn.commit()
 
 
 def scenario_set_all_status_to_finished():
     """
-    Set the status of all currently running scenarios to "finished" and update their end time to the current datetime.
-
-    Behavior:
-        - Finds all scenarios with status "running".
-        - Updates their status to "finished".
-        - Sets the end_time to the current timestamp.
-        - Commits the changes to the database.
+    Sets the status of all 'running' scenarios to 'finished'
+    and updates their 'end_time' within the JSONB.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        current_time = str(datetime.datetime.now())
-        c.execute("UPDATE scenarios SET status = 'finished', end_time = ? WHERE status = 'running';", (current_time,))
-        conn.commit()
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            # We use jsonb_set to update specific fields within the JSONB.
+            # We nest the calls to update multiple fields.
+            command = """
+                UPDATE scenarios
+                SET status = 'finished', end_time = %s
+                WHERE status = 'running';
+            """
+            c.execute(command, (json.dumps(current_time),))
+            conn.commit()
 
 
 def scenario_set_status_to_finished(scenario_name):
     """
-    Set the status of a specific scenario to "finished" and update its end time to the current datetime.
-
-    Parameters:
-        scenario_name (str): The unique name identifier of the scenario to update.
-
-    Behavior:
-        - Updates the scenario's status to "finished".
-        - Sets the end_time to the current timestamp.
-        - Commits the update to the database.
+    Sets the status of a specific scenario to 'finished' and updates its 'end_time'.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        current_time = str(datetime.datetime.now())
-        c.execute(
-            "UPDATE scenarios SET status = 'finished', end_time = ? WHERE name = ?;", (current_time, scenario_name)
-        )
-        conn.commit()
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            command = """
+                UPDATE scenarios
+                SET config = jsonb_set(
+                                 jsonb_set(config, '{status}', '"finished"'),
+                                 '{end_time}', %s::jsonb
+                               )
+                WHERE name = %s;
+            """
+            c.execute(command, (json.dumps(current_time), scenario_name))
+            conn.commit()
 
 
 def scenario_set_status_to_completed(scenario_name):
     """
-    Set the status of a specific scenario to "completed".
-
-    Parameters:
-        scenario_name (str): The unique name identifier of the scenario to update.
-
-    Behavior:
-        - Updates the scenario's status to "completed".
-        - Commits the change to the database.
+    Sets the status of a specific scenario to 'completed'.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("UPDATE scenarios SET status = 'completed' WHERE name = ?;", (scenario_name,))
-        conn.commit()
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            command = """
+                UPDATE scenarios
+                SET status = "completed"
+                WHERE name = %s;
+            """
+            c.execute(command, (scenario_name,))
+            conn.commit()
 
 
 def get_running_scenario(username=None, get_all=False):
     """
-    Retrieve running or completed scenarios from the database, optionally filtered by username.
-
-    Parameters:
-        username (str, optional): The username to filter scenarios by. If None, no user filter is applied.
-        get_all (bool, optional): If True, returns all matching scenarios; otherwise returns only one. Defaults to False.
-
-    Returns:
-        sqlite3.Row or list[sqlite3.Row]: A single scenario record or a list of scenario records matching the criteria.
-
-    Behavior:
-        - Filters scenarios with status "running".
-        - Applies username filter if provided.
-        - Returns either one or all matching records depending on get_all.
+    Retrieves scenarios with a 'running' status, optionally filtered by user.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-
-        if username:
-            command = """
-                SELECT * FROM scenarios
-                WHERE (status = ?) AND username = ?;
-            """
-            c.execute(command, ("running", username))
-
-            result = c.fetchone()
-        else:
-            command = "SELECT * FROM scenarios WHERE status = ?;"
-            c.execute(command, ("running",))
-            if get_all:
-                result = c.fetchall()
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            params = ["running"]
+            command = "SELECT name, config FROM scenarios WHERE config->>'status' = %s"
+            
+            if username:
+                command += " AND config->>'username' = %s"
+                params.append(username)
+                
+            c.execute(command, tuple(params))
+            
+            if get_all: 
+                raw_results = c.fetchall()
+                if raw_results:
+                    processed_results = []
+                    for row in raw_results:
+                        processed_results.append({
+                            'name': row['name'],
+                            'config': row['config']
+                        })
+                    result = processed_results
             else:
                 result = c.fetchone()
-
+                if result:
+                    result = result['config']
     return result
 
 
 def get_completed_scenario():
     """
-    Retrieve a single scenario with status "completed" from the database.
-
-    Returns:
-        sqlite3.Row: A scenario record with status "completed", or None if no such scenario exists.
-
-    Behavior:
-        - Fetches the first scenario found with status "completed".
+    Retrieves a single scenario with a 'completed' status.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        command = "SELECT * FROM scenarios WHERE status = ?;"
-        c.execute(command, ("completed",))
-        result = c.fetchone()
-
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            command = "SELECT name, config FROM scenarios WHERE config->>'status' = %s;"
+            c.execute(command, ("completed",))
+            result = c.fetchone()
     return result
 
 
 def get_scenario_by_name(scenario_name):
     """
-    Retrieve a scenario record by its unique name.
-
-    Parameters:
-        scenario_name (str): The unique name identifier of the scenario.
-
-    Returns:
-        sqlite3.Row: The scenario record matching the given name, or None if not found.
+    Retrieves the complete record of a scenario by its name.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM scenarios WHERE name = ?;", (scenario_name,))
-        result = c.fetchone()
-
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            c.execute("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE name = %s;", (scenario_name,))
+            result = c.fetchone()
     return result
 
 
 def get_user_by_scenario_name(scenario_name):
     """
-    Retrieve the username associated with a given scenario name.
-
-    Parameters:
-        scenario_name (str): The unique name identifier of the scenario.
-
-    Returns:
-        str: The username linked to the specified scenario, or None if not found.
+    Retrieves the username associated with a scenario from the JSONB field.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT username FROM scenarios WHERE name = ?;", (scenario_name,))
-        result = c.fetchone()
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            c.execute("SELECT username FROM scenarios WHERE name = %s;", (scenario_name,))
+            result = c.fetchone()
+    return result["username"] if result else None
 
-    return result["username"]
-
-
-def remove_scenario_by_name(scenario_name):
-    """
-    Delete a scenario from the database by its unique name.
-
-    Parameters:
-        scenario_name (str): The unique name identifier of the scenario to be removed.
-
-    Behavior:
-        - Removes the scenario record matching the given name.
-        - Commits the deletion to the database.
-    """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("DELETE FROM scenarios WHERE name = ?;", (scenario_name,))
-        conn.commit()
-
-
+# Placeholder for `check_scenario_federation_completed`.
+# You need to implement this based on your application logic.
 def check_scenario_federation_completed(scenario_name):
     """
-    Check if all nodes in a given scenario have completed the required federation rounds.
-
-    Parameters:
-        scenario_name (str): The unique name identifier of the scenario to check.
-
-    Returns:
-        bool: True if all nodes have completed the total rounds specified for the scenario, False otherwise or if an error occurs.
-
-    Behavior:
-        - Retrieves the total number of rounds defined for the scenario.
-        - Fetches the current round progress of all nodes in that scenario.
-        - Returns True only if every node has reached the total rounds.
-        - Handles database errors and missing scenario cases gracefully.
+    Placeholder function to check if a scenario's federation is completed.
+    This should be implemented based on your specific application logic.
+    For example, it could check if the last round has been reached.
     """
-    try:
-        # Connect to the scenario database to get the total rounds for the scenario
-        with sqlite3.connect(scenario_db_file_location) as conn:
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            c.execute("SELECT rounds FROM scenarios WHERE name = ?;", (scenario_name,))
-            scenario = c.fetchone()
-
-            if not scenario:
-                raise ValueError(f"Scenario '{scenario_name}' not found.")
-
-            total_rounds = scenario["rounds"]
-
-        # Connect to the node database to check the rounds for each node
-        with sqlite3.connect(node_db_file_location) as conn:
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            c.execute("SELECT round FROM nodes WHERE scenario = ?;", (scenario_name,))
-            nodes = c.fetchall()
-
-            if len(nodes) == 0:
-                return False
-
-            # Check if all nodes have completed the total rounds
-            total_rounds_str = str(total_rounds)
-            return all(str(node["round"]) == total_rounds_str for node in nodes)
-
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return False
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return False
-
+    print(f"Checking if scenario '{scenario_name}' is completed...")
+    # Example logic:
+    # return get_current_round(scenario_name) >= get_total_rounds(scenario_name)
+    return False # Placeholder value
 
 def check_scenario_with_role(role, scenario_name):
     """
@@ -1196,20 +528,16 @@ def check_scenario_with_role(role, scenario_name):
     Returns:
         bool: True if a scenario with the given role and name exists, False otherwise.
     """
-    with sqlite3.connect(scenario_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute(
-            "SELECT * FROM scenarios WHERE role = ? AND name = ?;",
-            (
-                role,
-                scenario_name,
-            ),
-        )
-        result = c.fetchone()
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            # Use %s placeholders for query parameters
+            c.execute(
+                "SELECT 1 FROM scenarios WHERE role = %s AND name = %s;",
+                (role, scenario_name),
+            )
+            result = c.fetchone()
 
     return result is not None
-
 
 def save_notes(scenario, notes):
     """
@@ -1222,24 +550,24 @@ def save_notes(scenario, notes):
     Behavior:
         - Inserts new notes if the scenario does not exist in the database.
         - Updates existing notes if the scenario already has notes saved.
-        - Handles SQLite integrity and general database errors gracefully.
+        - Handles database errors gracefully.
     """
     try:
-        with sqlite3.connect(notes_db_file_location) as conn:
-            c = conn.cursor()
-            c.execute(
-                """
-                INSERT INTO notes (scenario, scenario_notes) VALUES (?, ?)
-                ON CONFLICT(scenario) DO UPDATE SET scenario_notes = excluded.scenario_notes;
-                """,
-                (scenario, notes),
-            )
+        with get_sync_conn() as conn:
+            with conn.cursor() as c:
+                # Use INSERT ... ON CONFLICT (UPSERT)
+                c.execute(
+                    """
+                    INSERT INTO notes (scenario, scenario_notes) VALUES (%s, %s)
+                    ON CONFLICT(scenario) DO UPDATE SET scenario_notes = EXCLUDED.scenario_notes;
+                    """,
+                    (scenario, notes),
+                )
             conn.commit()
-    except sqlite3.IntegrityError as e:
-        print(f"SQLite integrity error: {e}")
-    except sqlite3.Error as e:
-        print(f"SQLite error: {e}")
-
+    except psycopg2.IntegrityError as e:
+        print(f"PostgreSQL integrity error: {e}")
+    except psycopg2.Error as e:
+        print(f"PostgreSQL error: {e}")
 
 def get_notes(scenario):
     """
@@ -1249,16 +577,13 @@ def get_notes(scenario):
         scenario (str): The unique identifier of the scenario.
 
     Returns:
-        sqlite3.Row or None: The notes record for the given scenario, or None if no notes exist.
+        psycopg2.extras.DictRow or None: The notes record for the given scenario, or None if no notes exist.
     """
-    with sqlite3.connect(notes_db_file_location) as conn:
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM notes WHERE scenario = ?;", (scenario,))
-        result = c.fetchone()
-
+    with get_sync_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+            c.execute("SELECT * FROM notes WHERE scenario = %s;", (scenario,))
+            result = c.fetchone()
     return result
-
 
 def remove_note(scenario):
     """
@@ -1267,17 +592,13 @@ def remove_note(scenario):
     Parameters:
         scenario (str): The unique identifier of the scenario whose note should be removed.
     """
-    with sqlite3.connect(notes_db_file_location) as conn:
-        c = conn.cursor()
-        c.execute("DELETE FROM notes WHERE scenario = ?;", (scenario,))
+    with get_sync_conn() as conn:
+        with conn.cursor() as c:
+            c.execute("DELETE FROM notes WHERE scenario = %s;", (scenario,))
         conn.commit()
-
 
 if __name__ == "__main__":
     """
     Entry point for the script to print the list of users.
-
-    When executed directly, this block calls the `list_users()` function
-    and prints its returned list of users.
     """
     print(list_users())

@@ -74,6 +74,12 @@ update-dockers:				## Update docker images
 	else \
 		echo "Skipping nebula-controller docker build."; \
 	fi
+	@echo "🐳 Building nebula-database docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-database -f nebula/database/Dockerfile .; \
+	else \
+		echo "Skipping nebula-database docker build."; \
+	fi
 	@echo ""
 	@echo "🐳 Building nebula-frontend docker image. Do you want to continue (overrides existing image)? (y/n)"
 	@read ans; if [ "$${ans:-N}" = y ]; then \

@@ -548,6 +548,26 @@ class Scenario:
         scenario = cls(**scenario_data)
 
         return scenario
+    
+    @staticmethod
+    def to_json(scenario_obj):
+        """
+        Converts a Scenario object to a JSON string.
+
+        Args:
+            scenario_obj (Scenario): An instance of the Scenario class.
+
+        Returns:
+            str: A JSON string representation of the Scenario object.
+        """
+        if not isinstance(scenario_obj, Scenario):
+            raise TypeError("Input must be an instance of the Scenario class.")
+
+        # Get all attributes of the Scenario object
+        scenario_dict = scenario_obj.__dict__
+
+        # Convert the dictionary to a JSON string
+        return json.dumps(scenario_dict, indent=2) # Using indent for pretty-printing
 
 
 # Class to manage the current scenario
@@ -572,6 +592,7 @@ class ScenarioManagement:
     def __init__(self, scenario, user=None):
         # Current scenario
         self.scenario = Scenario.from_dict(scenario)
+        logging.info(f"[FER] scenario from scenarios.py {Scenario.to_json(self.scenario)}")
         # Uid of the user
         self.user = user
         # Scenario management settings

@@ -586,7 +586,8 @@ class Deployer:
 
         self.run_controller()
         logging.info("NEBULA Controller is running")
-        logging.info(f"NEBULA Databases created in {self.databases_dir}")
+        self.run_database()
+        logging.info(f"NEBULA Databases docker is running")
         self.run_frontend()
         logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
         if self.production:
@@ -736,6 +737,112 @@ class Deployer:
         """
         DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-frontend")
 
+    def run_database(self):
+        """
+        Runs the Nebula database within a Docker container, ensuring the required Docker environment is available.
+        """
+        if sys.platform == "win32":
+            if not os.path.exists("//./pipe/docker_Engine"):
+                raise Exception(
+                    "Docker is not running, please check if Docker is running and Docker Compose is installed."
+                )
+        else:
+            if not os.path.exists("/var/run/docker.sock"):
+                raise Exception(
+                    "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
+                )
+
+        network_name = f"{os.environ['USER']}_nebula-net-base"
+        
+        ###############
+        # POSTGRES DB #
+        ###############
+        
+        host_port = 54312
+
+        # Create the Docker network
+        base = DockerUtils.create_docker_network(network_name)
+
+        client = docker.from_env()
+
+        environment = {
+            "POSTGRES_USER": "nebula",
+            "POSTGRES_PASSWORD": "nebula",
+            "POSTGRES_DB": "nebula",
+            "NEBULA_DATABASES_PORT": self.controller_host,
+        }
+
+        host_sql_path = os.path.join(self.root_path, "nebula/database/init-configs.sql")
+        container_sql_path = "/docker-entrypoint-initdb.d/init-configs.sql"
+
+        host_config = client.api.create_host_config(
+            binds=[
+                f"{host_sql_path}:{container_sql_path}",
+            ],
+            extra_hosts={"host.docker.internal": "host-gateway"},
+            port_bindings={5432: host_port},
+        )
+
+        networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.125")
+        })
+
+        container_id = client.api.create_container(
+            image="nebula-database",
+            name=f"{os.environ['USER']}_nebula-database",
+            detach=True,
+            environment=environment,
+            host_config=host_config,
+            networking_config=networking_config,
+        )
+
+        client.api.start(container_id)
+        
+        ################
+        # POSTGRES WEB #
+        ################
+        
+        pgweb_host_port = 8085
+        pgweb_container_port = 8081 
+        
+        pgweb_host_config = client.api.create_host_config(
+            port_bindings={pgweb_container_port: pgweb_host_port},
+            device_requests=[{
+                "Driver": "nvidia",
+                "Count": -1,
+                "Capabilities": [["gpu"]],
+            }] if self.gpu_available else None,
+        )
+        
+        pgweb_networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.135")
+        })
+        
+        pgweb_container_name = f"{os.environ.get('USER')}_nebula-pgweb"
+        
+        pgweb_container_id = client.api.create_container(
+            image="nebula-pgweb",
+            name=pgweb_container_name,
+            detach=True,
+            host_config=pgweb_host_config,
+            networking_config=pgweb_networking_config,
+        )
+        
+        client.api.start(pgweb_container_id)
+
+    def stop_database(self):
+        """
+        Stops and removes all NEBULA database Docker containers associated with the current user.
+
+        Responsibilities:
+            - Detects running Docker containers with names starting with '<user>_nebula-database'.
+            - Gracefully stops and removes these database containers.
+
+        Typical use cases:
+            - Cleaning up database containers during shutdown or redeployment processes.
+        """
+        DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-database")
+
     def run_controller(self):
         if sys.platform == "win32":
             if not os.path.exists("//./pipe/docker_Engine"):
@@ -775,6 +882,10 @@ class Deployer:
             "NEBULA_CONTROLLER_PORT": self.controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
+            "DB_HOST": f"{os.environ['USER']}_nebula-database",
+            "DB_PORT": 5432,
+            "DB_USER": "nebula",
+            "DB_PASSWORD": "nebula",
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]
