@@ -27,11 +27,7 @@ else
     uvicorn app:app --uds /tmp/$NEBULA_SOCK --log-level info --proxy-headers --forwarded-allow-ips "*" &
 fi
 
-if [ "$NEBULA_ADVANCED_ANALYTICS" = "False" ]; then
-    echo "Starting Tensorboard analytics"
-    tensorboard --host 0.0.0.0 --port 8080 --logdir $NEBULA_LOGS_DIR --window_title "NEBULA Statistics" --reload_interval 30 --max_reload_threads 10 --reload_multifile true &
-else
-    echo "Advanced analytics are enabled"
-fi
+echo "Starting Tensorboard analytics"
+tensorboard --host 0.0.0.0 --port 8080 --logdir $NEBULA_LOGS_DIR --window_title "NEBULA Statistics" --reload_interval 30 --max_reload_threads 10 --reload_multifile true &
 
 tail -f /dev/null

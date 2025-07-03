@@ -31,7 +31,6 @@ class Settings:
         resources_threshold (float): Threshold for resource usage alerts (default: 0.0).
         port (int): Port for the Nebula frontend service (default: 6060).
         production (bool): Whether the application is running in production mode.
-        advanced_analytics (bool): Whether advanced analytics features are enabled.
         host_platform (str): Underlying host operating platform (e.g., 'unix').
         log_dir (str): Directory path where application logs are stored.
         config_dir (str): Directory path for general configuration files.
@@ -50,7 +49,6 @@ class Settings:
     resources_threshold: float = 0.0
     port: int = os.environ.get("NEBULA_FRONTEND_PORT", 6060)
     production: bool = os.environ.get("NEBULA_PRODUCTION", "False") == "True"
-    advanced_analytics: bool = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
     host_platform: str = os.environ.get("NEBULA_HOST_PLATFORM", "unix")
     log_dir: str = os.environ.get("NEBULA_LOGS_DIR")
     config_dir: str = os.environ.get("NEBULA_CONFIG_DIR")
@@ -1856,8 +1854,6 @@ async def remove_scenario(scenario_name=None, user=None):
 
     user_data = user_data_store[user]
 
-    if settings.advanced_analytics:
-        logging.info("Advanced analytics enabled")
     # Remove registered nodes and conditions
     user_data.nodes_registration.pop(scenario_name, None)
     await remove_nodes_by_scenario_name(scenario_name)
@@ -1937,14 +1933,6 @@ async def nebula_remove_scenario(scenario_name: str, session: dict = Depends(get
         return RedirectResponse(url="/platform/dashboard")
     else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-
-
-if settings.advanced_analytics:
-    logging.info("Advanced analytics enabled")
-else:
-    logging.info("Advanced analytics disabled")
-
-    # TENSORBOARD START
 
 
 @app.get("/platform/dashboard/statistics/", response_class=HTMLResponse)

@@ -64,14 +64,12 @@ argparser.add_argument(
     help="Stop NEBULA platform or nodes only (use '--stop nodes' to stop only the nodes)",
 )
 
-argparser.add_argument("-s", "--simulation", action="store_false", dest="simulation", help="Run simulation")
-
 argparser.add_argument(
     "-c",
     "--config",
     dest="config",
     default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "config"),
-    help="Config directory path",
+    help="NEBULA config directory path",
 )
 
 argparser.add_argument(
@@ -79,7 +77,7 @@ argparser.add_argument(
     "--database",
     dest="databases",
     default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "databases"),
-    help="Nebula databases path",
+    help="NEBULA databases directory path",
 )
 
 argparser.add_argument(
@@ -87,7 +85,7 @@ argparser.add_argument(
     "--logs",
     dest="logs",
     default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"),
-    help="Logs directory path",
+    help="NEBULA logs directory path",
 )
 
 argparser.add_argument(
@@ -95,7 +93,7 @@ argparser.add_argument(
     "--certs",
     dest="certs",
     default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "certs"),
-    help="Certs directory path",
+    help="NEBULA certs directory path",
 )
 
 argparser.add_argument(
@@ -106,24 +104,13 @@ argparser.add_argument(
     help=".env file path",
 )
 
-argparser.add_argument("-dev", "--developement", dest="developement", default=True, help="Nebula for devs")
-
 argparser.add_argument(
     "-p",
     "--production",
     dest="production",
     action="store_true",
     default=False,
-    help="Production mode",
-)
-
-argparser.add_argument(
-    "-ad",
-    "--advanced",
-    dest="advanced_analytics",
-    action="store_true",
-    default=False,
-    help="Advanced analytics",
+    help="Deploy Nebula in production mode",
 )
 
 argparser.add_argument(

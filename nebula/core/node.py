@@ -42,7 +42,6 @@ from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
 from nebula.core.engine import Engine
 from nebula.core.training.lightning import Lightning
-from nebula.core.training.siamese import Siamese
 
 # os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 # os.environ["TORCH_LOGS"] = "+dynamo"
@@ -70,7 +69,6 @@ async def main(config: Config):
 
     Raises:
         ValueError: If an unsupported model, dataset, or device role is specified.
-        NotImplementedError: If an unsupported training strategy (e.g., "scikit") is requested.
 
     Returns:
         Coroutine that initializes and starts the NEBULA node.
@@ -169,10 +167,6 @@ async def main(config: Config):
     trainer_str = config.participant["training_args"]["trainer"]
     if trainer_str == "lightning":
         trainer = Lightning
-    elif trainer_str == "scikit":
-        raise NotImplementedError
-    elif trainer_str == "siamese":
-        trainer = Siamese
     else:
         raise ValueError(f"Trainer {trainer_str} not supported")
 

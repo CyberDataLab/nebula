@@ -104,7 +104,7 @@
   },
   "tracking_args": {
     "enable_remote_tracking": false,
-    "local_tracking": "basic",
+    "local_tracking": "default",
     "log_dir": "/Users/enrique/Documents/nebula/app/logs",
     "config_dir": "/Users/enrique/Documents/nebula/app/config",
     "run_hash": ""

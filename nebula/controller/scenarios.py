@@ -579,10 +579,9 @@ class ScenarioManagement:
         self.scenario_name = f"nebula_{self.scenario.federation}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}"
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
-        self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), self.scenario_name)
-        self.log_dir = os.environ.get("NEBULA_LOGS_DIR")
-        self.cert_dir = os.environ.get("NEBULA_CERTS_DIR")
-        self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
+        self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR", "config"), self.scenario_name)
+        self.log_dir = os.environ.get("NEBULA_LOGS_DIR", "logs")
+        self.cert_dir = os.environ.get("NEBULA_CERTS_DIR", "certs")
         self.config = Config(entity="scenarioManagement")
 
         # If physical set the neighbours correctly
@@ -761,6 +760,24 @@ class ScenarioManagement:
             with open(participant_file, "w") as f:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
 
+    @property
+    def deployment_prefix(self):
+        """
+        Returns the deployment prefix for the current deployment.
+
+        This property is used to prefix the names of the containers and networks
+        in the deployment.
+
+        Returns:
+            str: The deployment prefix, either "production_" or an empty string.
+
+        Typical use cases:
+            - Prefixing container and network names in the deployment.
+            - Ensuring consistent naming conventions across different environments.
+
+        """
+        return os.environ.get("NEBULA_DEPLOYMENT_PREFIX", "")
+
     @staticmethod
     def stop_participants(scenario_name=None):
         """
@@ -870,7 +887,6 @@ class ScenarioManagement:
         # Update participants configuration
         is_start_node = False
         config_participants = []
-        # ap = len(additional_participants) if additional_participants else 0
         additional_nodes = len(additional_participants) if additional_participants else 0
         logging.info(f"######## nodes: {self.n_nodes} + additionals: {additional_nodes} ######")
 
@@ -902,7 +918,7 @@ class ScenarioManagement:
                 participant_config["mobility_args"]["latitude"] = self.scenario.latitude
                 participant_config["mobility_args"]["longitude"] = self.scenario.longitude
             # If not, use the given coordinates in the frontend
-            participant_config["tracking_args"]["local_tracking"] = "advanced" if self.advanced_analytics else "basic"
+            participant_config["tracking_args"]["local_tracking"] = "default"
             participant_config["tracking_args"]["log_dir"] = self.log_dir
             participant_config["tracking_args"]["config_dir"] = self.config_dir
 
@@ -953,7 +969,6 @@ class ScenarioManagement:
 
                 logging.info(f"Configuration | additional nodes |  participant: {self.n_nodes + i + 1}")
                 last_ip = participant_config["network_args"]["ip"]
-                logging.info(f"Valores de la ultima ip: ({last_ip})")
                 participant_config["scenario_args"]["n_nodes"] = self.n_nodes + additional_nodes  # self.n_nodes + i + 1
                 participant_config["device_args"]["idx"] = last_participant_index + i
                 participant_config["network_args"]["neighbors"] = ""
@@ -1178,7 +1193,7 @@ class ScenarioManagement:
         logging.info("Starting nodes using Docker Compose...")
         logging.info(f"env path: {self.env_path}")
 
-        network_name = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{str(self.user).lower()}-nebula-net-scenario"
+        network_name = f"{self.deployment_prefix}{os.environ.get('NEBULA_CONTROLLER_NAME')}_{str(self.user).lower()}-nebula-net-scenario"
 
         # Create the Docker network
         base = DockerUtils.create_docker_network(network_name)
@@ -1190,7 +1205,7 @@ class ScenarioManagement:
         container_ids = []
         for idx, node in enumerate(self.config.participants):
             image = "nebula-core"
-            name = f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_{self.user}-participant{node['device_args']['idx']}"
+            name = f"{self.deployment_prefix}{os.environ.get('NEBULA_CONTROLLER_NAME')}_{self.user}-participant{node['device_args']['idx']}"
 
             if node["device_args"]["accelerator"] == "gpu":
                 environment = {
@@ -1226,7 +1241,7 @@ class ScenarioManagement:
                 f"{network_name}": client.api.create_endpoint_config(
                     ipv4_address=f"{base}.{i}",
                 ),
-                f"{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
+                f"{self.deployment_prefix}{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
             })
 
             node["tracking_args"]["log_dir"] = "/nebula/app/logs"

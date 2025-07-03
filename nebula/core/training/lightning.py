@@ -152,9 +152,7 @@ class Lightning:
         self.datamodule = datamodule
 
     def create_logger(self):
-        if self.config.participant["tracking_args"]["local_tracking"] == "csv":
-            nebulalogger = CSVLogger(f"{self.log_dir}", name="metrics", version=f"participant_{self.idx}")
-        elif self.config.participant["tracking_args"]["local_tracking"] == "basic":
+        if self.config.participant["tracking_args"]["local_tracking"] == "default":
             logger_config = None
             if self._logger is not None:
                 logger_config = self._logger.get_logger_config()
@@ -167,6 +165,8 @@ class Lightning:
             )
             # Restore logger configuration
             nebulalogger.set_logger_config(logger_config)
+        elif self.config.participant["tracking_args"]["local_tracking"] == "csv":
+            nebulalogger = CSVLogger(f"{self.log_dir}", name="metrics", version=f"participant_{self.idx}")
         else:
             nebulalogger = None
 

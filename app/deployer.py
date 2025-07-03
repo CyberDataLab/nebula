@@ -289,17 +289,17 @@ class NebulaEventHandler(PatternMatchingEventHandler):
     def kill_script_processes(self, pids_file):
         """
         Forcefully terminates processes listed in a given PID file, including their child processes.
-    
+
         Args:
             pids_file (str): Path to the file containing PIDs, one per line.
-    
+
         Behavior:
             - Reads the PIDs from the file.
             - For each PID, checks if the process exists.
             - If it exists, kills all child processes recursively before killing the main process.
             - Handles and logs exceptions such as missing processes or invalid PID entries.
             - Logs warnings and errors appropriately.
-    
+
         Typical use case:
             Used to clean up running processes related to a scenario or script that has been deleted or stopped.
         """
@@ -344,7 +344,7 @@ def run_observer():
     """
     Starts a watchdog observer to monitor the configuration directory for changes.
 
-    This function is typically used to execute additional scripts or trigger events 
+    This function is typically used to execute additional scripts or trigger events
     during the execution of a federated learning session by monitoring file system changes.
 
     Main functionalities:
@@ -357,7 +357,7 @@ def run_observer():
         - Trigger specific actions during a federation lifecycle.
 
     Note:
-        The observer runs in a blocking mode and will keep the process alive 
+        The observer runs in a blocking mode and will keep the process alive
         until manually stopped or interrupted.
     """
     # Watchdog for running additional scripts in the host machine (i.e. during the execution of a federation)
@@ -373,8 +373,8 @@ class Deployer:
     """
     Handles the configuration and initialization of deployment parameters for the NEBULA system.
 
-    This class reads and stores various deployment-related settings such as port assignments, 
-    environment paths, logging configuration, and system mode (production, development, or simulation).
+    This class reads and stores various deployment-related settings such as port assignments,
+    environment paths, logging configuration, and system mode (production or development).
 
     Main functionalities:
         - Parses and validates input arguments for deployment.
@@ -384,7 +384,7 @@ class Deployer:
 
     Typical use cases:
         - Used to deploy the NEBULA system components with the correct configuration.
-        - Enables deployment in different environments (e.g., local simulation, production, development).
+        - Enables deployment in different environments (e.g., production, development).
 
     Attributes:
         - controller_port (int): Port for the main controller service.
@@ -395,9 +395,7 @@ class Deployer:
         - statistics_port (int): Port for the statistics service.
         - production (bool): Flag indicating if the system is in production mode.
         - dev (bool): Flag indicating if the system is in development mode.
-        - advanced_analytics (bool): Enables advanced analytics modules.
         - databases_dir (str): Path to the database directory.
-        - simulation (str): Simulation scenario path.
         - config_dir (str): Path to the configuration directory.
         - log_dir (str): Path to the logs directory.
         - env_path (str): Path to the Python environment.
@@ -409,6 +407,7 @@ class Deployer:
     Note:
         This class does not launch any services directly; it only prepares and stores configuration.
     """
+
     def __init__(self, args):
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
@@ -417,10 +416,7 @@ class Deployer:
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
         self.production = args.production if hasattr(args, "production") else False
-        self.dev = args.developement if hasattr(args, "developement") else False
-        self.advanced_analytics = args.advanced_analytics if hasattr(args, "advanced_analytics") else False
         self.databases_dir = args.databases if hasattr(args, "databases") else "/nebula/app/databases"
-        self.simulation = args.simulation
         self.config_dir = args.config
         self.log_dir = args.logs
         self.env_path = args.env
@@ -434,11 +430,29 @@ class Deployer:
         self.gpu_available = False
         self.configure_logger()
 
+    @property
+    def deployment_prefix(self):
+        """
+        Returns the deployment prefix for the current deployment.
+
+        This property is used to prefix the names of the containers and networks
+        in the deployment.
+
+        Returns:
+            str: The deployment prefix, either "production_" or an empty string.
+
+        Typical use cases:
+            - Prefixing container and network names in the deployment.
+            - Ensuring consistent naming conventions across different environments.
+
+        """
+        return "production_" if self.production else ""
+
     def configure_logger(self):
         """
         Configures the logging system for the deployment controller.
 
-        This method sets up both console and file logging with a consistent format and appropriate log levels. 
+        This method sets up both console and file logging with a consistent format and appropriate log levels.
         It also ensures that Uvicorn loggers are properly configured to avoid duplicate log outputs.
 
         Main functionalities:
@@ -452,7 +466,7 @@ class Deployer:
             - Ensures clean and consistent logging output during deployment.
 
         Note:
-            This method does not set up file logging directly, but prepares the base configuration 
+            This method does not set up file logging directly, but prepares the base configuration
             and Uvicorn logger behavior for further logging use.
         """
         log_console_format = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
@@ -475,7 +489,7 @@ class Deployer:
         """
         Ensures that the specified directory exists and is writable.
 
-        This method attempts to create the directory if it does not exist and verifies 
+        This method attempts to create the directory if it does not exist and verifies
         write access by writing and deleting a temporary metadata file.
 
         Args:
@@ -514,15 +528,17 @@ class Deployer:
 
         except Exception as e:
             logging.exception(f"Failed to create/access directory {directory_path}: {str(e)}")
-            logging.exception("Please check directory permissions or choose a different location using --database option")
+            logging.exception(
+                "Please check directory permissions or choose a different location using --database option"
+            )
             raise SystemExit(1) from e
 
     def start(self):
         """
         Starts the NEBULA deployment process and all associated services.
 
-        This method initializes the NEBULA platform by setting up the environment, 
-        checking port availability, starting key services (controller, frontend, WAF), 
+        This method initializes the NEBULA platform by setting up the environment,
+        checking port availability, starting key services (controller, frontend, WAF),
         and launching a filesystem observer to react to configuration changes.
 
         Main functionalities:
@@ -535,14 +551,14 @@ class Deployer:
             - Handles system signals for clean shutdown.
 
         Typical use cases:
-            - Used to launch NEBULA in production, development, or simulation environments.
+            - Used to launch NEBULA in production or development environments.
             - Central entry point for managing NEBULA components during deployment.
 
         Note:
-            The method blocks indefinitely until manually interrupted, 
+            The method blocks indefinitely until manually interrupted,
             and ensures graceful shutdown upon receiving SIGINT or SIGTERM.
         """
-        banner = """
+        banner = f"""
                     ███╗   ██╗███████╗██████╗ ██╗   ██╗██╗      █████╗
                     ████╗  ██║██╔════╝██╔══██╗██║   ██║██║     ██╔══██╗
                     ██╔██╗ ██║█████╗  ██████╔╝██║   ██║██║     ███████║
@@ -558,6 +574,8 @@ class Deployer:
                        • Fernando Torres Vega
 
                       https://nebula-dfl.com / https://nebula-dfl.eu
+
+                      [{"Production" if self.production else "Development"} mode]
                 """
         print("\x1b[0;36m" + banner + "\x1b[0m")
 
@@ -616,8 +634,8 @@ class Deployer:
         """
         Handles system termination signals to ensure a clean shutdown.
 
-        This method is triggered when the application receives SIGTERM or SIGINT signals 
-        (e.g., via Ctrl+C or `kill`). It logs the event, performs cleanup actions, and 
+        This method is triggered when the application receives SIGTERM or SIGINT signals
+        (e.g., via Ctrl+C or `kill`). It logs the event, performs cleanup actions, and
         terminates the process gracefully.
 
         Args:
@@ -668,7 +686,7 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        network_name = f"{os.environ['USER']}_nebula-net-base"
+        network_name = f"{self.deployment_prefix}{os.environ['USER']}_nebula-net-base"
 
         # Create the Docker network
         base = DockerUtils.create_docker_network(network_name)
@@ -678,7 +696,7 @@ class Deployer:
         environment = {
             "NEBULA_CONTROLLER_NAME": os.environ["USER"],
             "NEBULA_PRODUCTION": self.production,
-            "NEBULA_ADVANCED_ANALYTICS": self.advanced_analytics,
+            "NEBULA_DEPLOYMENT_PREFIX": self.deployment_prefix,
             "NEBULA_FRONTEND_LOG": "/nebula/app/logs/frontend.log",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
@@ -706,12 +724,14 @@ class Deployer:
         )
 
         networking_config = client.api.create_networking_config({
-            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.100")
+            f"{network_name}": client.api.create_endpoint_config(
+                ipv4_address=f"{base}.100"
+            )
         })
 
         container_id = client.api.create_container(
             image="nebula-frontend",
-            name=f"{os.environ['USER']}_nebula-frontend",
+            name=f"{self.deployment_prefix}{os.environ['USER']}_nebula-frontend",
             detach=True,
             environment=environment,
             volumes=volumes,
@@ -748,8 +768,8 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        network_name = f"{os.environ['USER']}_nebula-net-base"
-        
+        network_name = f"{self.deployment_prefix}{os.environ['USER']}_nebula-net-base"
+
         try:
             subprocess.check_call(["nvidia-smi"])
             self.gpu_available = True
@@ -763,9 +783,8 @@ class Deployer:
 
         environment = {
             "USER": os.environ["USER"],
-            "NEBULA_PRODUCTION": self.production,
+            "NEBULA_DEPLOYMENT_PREFIX": self.deployment_prefix,
             "NEBULA_ROOT_HOST": self.root_path,
-            "NEBULA_ADVANCED_ANALYTICS": self.advanced_analytics,
             "NEBULA_DATABASES_DIR": "/nebula/app/databases",
             "NEBULA_CONTROLLER_LOG": "/nebula/app/logs/controller.log",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
@@ -785,24 +804,30 @@ class Deployer:
             binds=[
                 f"{self.root_path}:/nebula",
                 "/var/run/docker.sock:/var/run/docker.sock",
-                f"{self.databases_dir}:/nebula/app/databases"
+                f"{self.databases_dir}:/nebula/app/databases",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={self.controller_port: self.controller_port},
-            device_requests=[{
-                "Driver": "nvidia",
-                "Count": -1,
-                "Capabilities": [["gpu"]],
-            }] if self.gpu_available else None,
+            device_requests=[
+                {
+                    "Driver": "nvidia",
+                    "Count": -1,
+                    "Capabilities": [["gpu"]],
+                }
+            ]
+            if self.gpu_available
+            else None,
         )
 
         networking_config = client.api.create_networking_config({
-            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.150")
+            f"{network_name}": client.api.create_endpoint_config(
+                ipv4_address=f"{base}.150"
+            )
         })
 
         container_id = client.api.create_container(
             image="nebula-controller",
-            name=f"{os.environ['USER']}_nebula-controller",
+            name=f"{self.deployment_prefix}{os.environ['USER']}_nebula-controller",
             detach=True,
             environment=environment,
             volumes=volumes,
@@ -844,7 +869,7 @@ class Deployer:
             - Deploying an integrated WAF solution alongside monitoring and logging components in the Nebula system.
             - Ensuring comprehensive security monitoring and log management through containerized services.
         """
-        network_name = f"{os.environ['USER']}_nebula-net-base"
+        network_name = f"{self.deployment_prefix}{os.environ['USER']}_nebula-net-base"
         base = DockerUtils.create_docker_network(network_name)
 
         client = docker.from_env()
@@ -860,12 +885,14 @@ class Deployer:
         )
 
         networking_config_waf = client.api.create_networking_config({
-            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.200")
+            f"{network_name}": client.api.create_endpoint_config(
+                ipv4_address=f"{base}.200"
+            )
         })
 
         container_id_waf = client.api.create_container(
             image="nebula-waf",
-            name=f"{os.environ['USER']}_nebula-waf",
+            name=f"{self.deployment_prefix}{os.environ['USER']}_nebula-waf",
             detach=True,
             volumes=volumes_waf,
             host_config=host_config_waf,
@@ -894,12 +921,14 @@ class Deployer:
         )
 
         networking_config = client.api.create_networking_config({
-            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.201")
+            f"{network_name}": client.api.create_endpoint_config(
+                ipv4_address=f"{base}.201"
+            )
         })
 
         container_id = client.api.create_container(
             image="nebula-waf-grafana",
-            name=f"{os.environ['USER']}_nebula-waf-grafana",
+            name=f"{self.deployment_prefix}{os.environ['USER']}_nebula-waf-grafana",
             detach=True,
             environment=environment,
             host_config=host_config,
@@ -918,12 +947,14 @@ class Deployer:
         )
 
         networking_config_loki = client.api.create_networking_config({
-            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.202")
+            f"{network_name}": client.api.create_endpoint_config(
+                ipv4_address=f"{base}.202"
+            )
         })
 
         container_id_loki = client.api.create_container(
             image="nebula-waf-loki",
-            name=f"{os.environ['USER']}_nebula-waf-loki",
+            name=f"{self.deployment_prefix}{os.environ['USER']}_nebula-waf-loki",
             detach=True,
             command=command,
             host_config=host_config_loki,
@@ -942,12 +973,14 @@ class Deployer:
         )
 
         networking_config_promtail = client.api.create_networking_config({
-            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.203")
+            f"{network_name}": client.api.create_endpoint_config(
+                ipv4_address=f"{base}.203"
+            )
         })
 
         container_id_promtail = client.api.create_container(
             image="nebula-waf-promtail",
-            name=f"{os.environ['USER']}_nebula-waf-promtail",
+            name=f"{self.deployment_prefix}{os.environ['USER']}_nebula-waf-promtail",
             detach=True,
             volumes=volumes_promtail,
             host_config=host_config_promtail,
