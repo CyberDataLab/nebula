@@ -592,7 +592,6 @@ class ScenarioManagement:
     def __init__(self, scenario, user=None):
         # Current scenario
         self.scenario = Scenario.from_dict(scenario)
-        logging.info(f"[FER] scenario from scenarios.py {Scenario.to_json(self.scenario)}")
         # Uid of the user
         self.user = user
         # Scenario management settings

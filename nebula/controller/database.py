@@ -45,7 +45,6 @@ def list_users(all_info=False):
             result = c.fetchall()
 
     if not all_info:
-        # In PostgreSQL, you can access columns by key from DictCursor
         result = [user["user"] for user in result]
 
     return result
@@ -73,7 +72,9 @@ def verify(user, password):
             if result:
                 try:
                     return pwd_context.verify(password, result[0])
-                except:
+                except Exception:
+                    # Catch more general exceptions during verification to be safe
+                    logging.error(f"Error during password verification for user {user}", exc_info=True)
                     return False
     return False
 
@@ -140,7 +141,13 @@ def list_nodes(scenario_name=None, sort_by="idx"):
     try:
         with get_sync_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+                # Validate sort_by to prevent SQL injection
+                allowed_sort_fields = ["uid", "idx", "ip", "port", "role", "timestamp", "federation", "round"]
+                if sort_by not in allowed_sort_fields:
+                    sort_by = "idx" # Default to a safe field
+
                 if scenario_name:
+                    # Using psycopg2.extensions.AsIs for safe insertion of column names
                     command = f"SELECT * FROM nodes WHERE scenario = %s ORDER BY {psycopg2.extensions.AsIs(sort_by)};"
                     c.execute(command, (scenario_name,))
                 else:
@@ -150,25 +157,26 @@ def list_nodes(scenario_name=None, sort_by="idx"):
                 result = c.fetchall()
             return result
     except psycopg2.Error as e:
-        print(f"Error occurred while listing nodes: {e}")
+        logging.error(f"Error occurred while listing nodes: {e}")
         return None
 
 
-def list_nodes_by_scenario_name(scenario_name):
+async def list_nodes_by_scenario_name(scenario_name):
     """
     Fetches all nodes associated with a specific scenario, ordered by their index as integers.
     """
+    conn = None
     try:
-        with get_sync_conn() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
-                # Use a specific cast in PostgreSQL to order by integer value of idx
-                command = "SELECT * FROM nodes WHERE scenario = %s ORDER BY CAST(idx AS INTEGER) ASC;"
-                c.execute(command, (scenario_name,))
-                result = c.fetchall()
-            return result
-    except psycopg2.Error as e:
-        print(f"Error occurred while listing nodes by scenario name: {e}")
+        conn = await get_async_conn()
+        command = "SELECT * FROM nodes WHERE scenario = $1 ORDER BY CAST(idx AS INTEGER) ASC;"
+        result = await conn.fetch(command, scenario_name)
+        return [dict(record) for record in result]
+    except Exception as e:
+        logging.error(f"Error occurred while listing nodes by scenario name: {e}")
         return None
+    finally:
+        if conn:
+            await conn.close()
 
 
 async def update_node_record(
@@ -179,14 +187,10 @@ async def update_node_record(
     Inserts or updates a node record in the database for a given scenario, ensuring thread-safe access.
     """
     async with _node_lock:
-        # CORRECTED: Use get_async_conn() directly as the async context manager.
-        # This assumes get_async_conn() returns a connection object that supports the
-        # asynchronous context manager protocol (i.e., has __aenter__ and __aexit__).
-        # A typical implementation of get_async_conn() using asyncpg would be 'return pool.acquire()'.
-        async with get_async_conn() as conn: 
-            # Use a connection-bound cursor
+        # Await the get_async_conn() call to get the actual connection object
+        conn = await get_async_conn() 
+        try:
             async with conn.transaction():
-                # Use a SELECT ... FOR UPDATE to lock the row and avoid race conditions
                 result = await conn.fetchrow(
                     "SELECT * FROM nodes WHERE uid = $1 AND scenario = $2 FOR UPDATE;",
                     node_uid, scenario
@@ -200,7 +204,7 @@ async def update_node_record(
                                            timestamp, federation, round, scenario, hash, malicious)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
                         """,
-                        node_uid, idx, ip, port, role, neighbors, latitude, longitude,
+                        node_uid, idx, ip, port, role, json.dumps(neighbors), latitude, longitude,
                         timestamp, federation, federation_round, scenario, run_hash, malicious,
                     )
                 else:
@@ -212,14 +216,16 @@ async def update_node_record(
                         hash = $11, malicious = $12
                         WHERE uid = $13 AND scenario = $14;
                         """,
-                        idx, ip, port, role, neighbors, latitude, longitude,
+                        idx, ip, port, role, json.dumps(neighbors), latitude, longitude,
                         timestamp, federation, federation_round, run_hash, malicious,
                         node_uid, scenario,
                     )
-                
-                # Fetch the updated or newly inserted row
+
                 updated_row = await conn.fetchrow("SELECT * from nodes WHERE uid = $1 AND scenario = $2;", node_uid, scenario)
                 return dict(updated_row) if updated_row else None
+        finally:
+            # Ensure the connection is closed after use
+            await conn.close()
 
 
 def remove_all_nodes():
@@ -228,7 +234,7 @@ def remove_all_nodes():
     """
     with get_sync_conn() as conn:
         with conn.cursor() as c:
-            c.execute("TRUNCATE nodes;") # TRUNCATE is faster than DELETE FROM for clearing tables
+            c.execute("TRUNCATE nodes CASCADE;") # Use CASCADE if there are foreign key dependencies
         conn.commit()
 
 
@@ -245,18 +251,15 @@ def remove_nodes_by_scenario_name(scenario_name):
 
 def get_all_scenarios(username, role, sort_by="start_time"):
     """
-    Retrieves all scenarios from the database, accessing the fields
-    inside the 'config' (JSONB) column.
-    Filters by user role and sorts by the specified field.
+    Retrieves all scenarios from the database, accessing fields from the 'config' (JSONB) column
+    and direct columns. Filters by user role and sorts by the specified field.
     """
-    # Safe list of allowed sorting fields to prevent SQL injection
     allowed_sort_fields = ["start_time", "title", "username", "status", "name"]
     if sort_by not in allowed_sort_fields:
-        sort_by = "start_time"  # Use a safe default value
+        sort_by = "start_time"
 
-    # Building the ORDER BY clause
+    # Determine the ORDER BY clause based on sort_by
     if sort_by == "start_time":
-        # Special sorting for dates saved as text, handling nulls/empty strings
         order_by_clause = """
             ORDER BY
                 CASE
@@ -265,26 +268,36 @@ def get_all_scenarios(username, role, sort_by="start_time"):
                 END,
                 to_timestamp(start_time, 'YYYY/MM/DD HH24:MI:SS') DESC
         """
-    else:
-        # Sorting is built dynamically but safely,
-        # since 'sort_by' has been validated against the allowed list.
+    elif sort_by in ["title", "model", "dataset", "rounds"]: # These are inside config JSONB
         order_by_clause = f"ORDER BY config->>'{sort_by}'"
+    else: # For direct table columns like name, username, status
+        order_by_clause = f"ORDER BY {sort_by}"
+
 
     with get_sync_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
-            # Base query. It's flexible to return 'name' and the full 'config' object.
-            # The code that calls this function can access any field from the config object.
-            command = "SELECT name, username, start_time, end_time, status, config FROM scenarios"
+            # Select direct columns and relevant fields from config JSONB
+            command = """
+                SELECT
+                    name,
+                    username,
+                    status,
+                    start_time,
+                    end_time,
+                    config->>'title' AS title,
+                    config->>'model' AS model,
+                    config->>'dataset' AS dataset,
+                    config->>'rounds' AS rounds,
+                    config -- return the full config JSONB
+                FROM scenarios
+            """
             params = []
 
-            # Conditionally add the WHERE filter if the role is not admin
             if role != "admin":
-                command += " WHERE config->>'username' = %s"
+                command += " WHERE username = %s" # username is a direct column now
                 params.append(username)
 
-            # Combine the query with the sorting clause
             full_command = f"{command} {order_by_clause};"
-
             c.execute(full_command, tuple(params))
             result = c.fetchall()
     
@@ -293,7 +306,7 @@ def get_all_scenarios(username, role, sort_by="start_time"):
 
 def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
     """
-    Retrieves all scenarios from the JSONB field, sorts them, and updates the status if necessary.
+    Retrieves all scenarios, sorts them, and updates the status if necessary.
     Returns a list of dictionaries, where each dictionary represents a scenario.
     """
     # Safe list of allowed sorting fields to prevent SQL injection.
@@ -301,7 +314,7 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
     if sort_by not in allowed_sort_fields:
         sort_by = "start_time"  # Safe default value
 
-    # Building the ORDER BY clause
+    # Building the ORDER BY clause (same as get_all_scenarios)
     if sort_by == "start_time":
         order_by_clause = """
             ORDER BY
@@ -309,11 +322,13 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
                     WHEN start_time IS NULL OR start_time = '' THEN 1
                     ELSE 0
                 END,
-                to_timestamp(start_time, 'YYYY/MM/DD HH24:MI:SS') DESC
+                -- CORRECTED: Changed 'DD/MM/YYYY' to 'YYYY/MM/DD' to match the storage format
+                to_timestamp(start_time, 'DD/MM/YYYY HH24:MI:SS') DESC
         """
-    else:
-        # We use a safe f-string because the value of sort_by has been validated
+    elif sort_by in ["title", "model", "dataset", "rounds"]: # These are inside config JSONB
         order_by_clause = f"ORDER BY config->>'{sort_by}'"
+    else: # For direct table columns like name, username, status
+        order_by_clause = f"ORDER BY {sort_by}"
 
     with get_sync_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
@@ -334,18 +349,14 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
             """
             params = []
             if role != "admin":
-                command += " WHERE config->>'username' = %s"
+                command += " WHERE username = %s" # username is a direct column
                 params.append(username)
 
             command += f" {order_by_clause};"
             
             c.execute(command, tuple(params))
-            result_dicts = c.fetchall() # This already returns a list of DictRow objects (which act like dicts)
-
-            # Logic to check for completed scenarios and update status.
-            # It's important to modify the `result_dicts` directly or handle the recursion carefully.
+            result_dicts = c.fetchall() 
             
-            # Create a mutable list from DictRow objects for potential status updates
             scenarios_to_return = [dict(s) for s in result_dicts]
 
             re_fetch_required = False
@@ -353,86 +364,103 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
                 if scenario["status"] == "running":
                     if check_scenario_federation_completed(scenario["name"]):
                         scenario_set_status_to_completed(scenario["name"])
-                        # If a scenario's status changes, it's best to re-query the database
-                        # to ensure the most up-to-date information is returned for ALL scenarios.
-                        # This avoids inconsistencies if multiple scenarios complete in a single call.
                         re_fetch_required = True
-                        break # Break after finding one completed scenario to trigger re-fetch
+                        break
 
             if re_fetch_required:
-                # If any status was updated, recursively call the function again to get the fresh data.
-                # This ensures the returned list reflects the updated status from the DB.
-                # Make sure `get_all_scenarios` is indeed this function if you rename it.
-                return get_all_scenarios(username, role, sort_by) 
+                # Recursively call get_all_scenarios_and_check_completed to get fresh data
+                return get_all_scenarios_and_check_completed(username, role, sort_by) 
             
     return scenarios_to_return
 
 
-def scenario_update_record(name, start_time, end_time, scenario, status, username):
+def scenario_update_record(name, start_time, end_time, scenario_config, status, username):
     """
     Inserts or updates a scenario record using the PostgreSQL "UPSERT" pattern.
     All configuration is saved in the 'config' column of type JSONB.
+    Direct columns (name, start_time, end_time, username, status) are also handled.
     """
     with get_sync_conn() as conn:
         with conn.cursor() as c:
+            # Ensure scenario_config is a dictionary before dumping to JSON
+            if not isinstance(scenario_config, dict):
+                try:
+                    scenario_config = json.loads(scenario_config)
+                except json.JSONDecodeError:
+                    logging.error("scenario_config is not a valid JSON string or dict.")
+                    return
+
             command = """
                 INSERT INTO scenarios (name, start_time, end_time, username, status, config)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb)
                 ON CONFLICT (name) DO UPDATE SET
-                    config = scenarios.config || excluded.config;
+                    start_time = EXCLUDED.start_time,
+                    end_time = EXCLUDED.end_time,
+                    username = EXCLUDED.username,
+                    status = EXCLUDED.status,
+                    config = scenarios.config || EXCLUDED.config; -- Merge JSONB
             """
-            logging.info(f"[FER] scenario database.py {json.dumps(scenario, indent=2)}")
-            c.execute(command, (name, start_time, end_time, username, status, json.dumps(scenario, indent=2)))
+            c.execute(command, (name, start_time, end_time, username, status, json.dumps(scenario_config)))
             conn.commit()
 
 
 def scenario_set_all_status_to_finished():
     """
     Sets the status of all 'running' scenarios to 'finished'
-    and updates their 'end_time' within the JSONB.
+    and updates their 'end_time' (both in the direct column and within JSONB).
     """
     with get_sync_conn() as conn:
         with conn.cursor() as c:
-            current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-            # We use jsonb_set to update specific fields within the JSONB.
-            # We nest the calls to update multiple fields.
+            current_time = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') # Consistent format
+            # Update direct columns first, then update JSONB within config
             command = """
                 UPDATE scenarios
-                SET status = 'finished', end_time = %s
+                SET
+                    status = 'finished',
+                    end_time = %s,
+                    config = jsonb_set(config, '{status}', '"finished"') ||
+                             jsonb_set(config, '{end_time}', %s::jsonb)
                 WHERE status = 'running';
             """
-            c.execute(command, (json.dumps(current_time),))
+            c.execute(command, (current_time, json.dumps(current_time)))
             conn.commit()
 
 
 def scenario_set_status_to_finished(scenario_name):
     """
     Sets the status of a specific scenario to 'finished' and updates its 'end_time'.
+    Updates both the direct columns and the JSONB 'config'.
     """
     with get_sync_conn() as conn:
         with conn.cursor() as c:
-            current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            current_time = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') # Consistent format
             command = """
                 UPDATE scenarios
-                SET config = jsonb_set(
+                SET
+                    status = 'finished',
+                    end_time = %s,
+                    config = jsonb_set(
                                  jsonb_set(config, '{status}', '"finished"'),
                                  '{end_time}', %s::jsonb
                                )
                 WHERE name = %s;
             """
-            c.execute(command, (json.dumps(current_time), scenario_name))
+            c.execute(command, (current_time, json.dumps(current_time), scenario_name))
             conn.commit()
 
 
 def scenario_set_status_to_completed(scenario_name):
     """
     Sets the status of a specific scenario to 'completed'.
+    Updates both the direct column and the JSONB 'config'.
     """
     with get_sync_conn() as conn:
         with conn.cursor() as c:
             command = """
                 UPDATE scenarios
-                SET status = "completed"
+                SET
+                    status = 'completed',
+                    config = jsonb_set(config, '{status}', '"completed"')
                 WHERE name = %s;
             """
             c.execute(command, (scenario_name,))
@@ -442,44 +470,40 @@ def scenario_set_status_to_completed(scenario_name):
 def get_running_scenario(username=None, get_all=False):
     """
     Retrieves scenarios with a 'running' status, optionally filtered by user.
+    Returns full scenario record (including direct columns and config JSONB).
     """
     with get_sync_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
             params = ["running"]
-            command = "SELECT name, config FROM scenarios WHERE config->>'status' = %s"
+            # Select all columns to get both direct and config data
+            command = "SELECT name, username, status, start_time, end_time, config FROM scenarios WHERE status = %s"
             
             if username:
-                command += " AND config->>'username' = %s"
+                command += " AND username = %s"
                 params.append(username)
                 
             c.execute(command, tuple(params))
             
             if get_all: 
-                raw_results = c.fetchall()
-                if raw_results:
-                    processed_results = []
-                    for row in raw_results:
-                        processed_results.append({
-                            'name': row['name'],
-                            'config': row['config']
-                        })
-                    result = processed_results
+                result = [dict(row) for row in c.fetchall()] # Convert DictRows to dicts
             else:
-                result = c.fetchone()
-                if result:
-                    result = result['config']
+                result_row = c.fetchone()
+                result = dict(result_row) if result_row else None
     return result
 
 
 def get_completed_scenario():
     """
     Retrieves a single scenario with a 'completed' status.
+    Returns full scenario record (including direct columns and config JSONB).
     """
     with get_sync_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
-            command = "SELECT name, config FROM scenarios WHERE config->>'status' = %s;"
+            # The status is now a direct column, not just in config->>'status'
+            command = "SELECT name, username, status, start_time, end_time, config FROM scenarios WHERE status = %s;"
             c.execute(command, ("completed",))
-            result = c.fetchone()
+            result_row = c.fetchone()
+            result = dict(result_row) if result_row else None
     return result
 
 
@@ -490,13 +514,26 @@ def get_scenario_by_name(scenario_name):
     with get_sync_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
             c.execute("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE name = %s;", (scenario_name,))
-            result = c.fetchone()
+            result_row = c.fetchone()
+            result = dict(result_row) if result_row else None
+            
+            if result and result.get('config'):
+                # Assuming 'config' is already parsed into a Python dictionary by DictCursor
+                # If it's still a string, you might need: config_data = json.loads(result['config'])
+                config_data = result['config']
+                
+                # Extract the 'scenario_title' and add it as a top-level key
+                # Use .get() for safety in case 'scenario_title' is also missing within config
+                result['title'] = config_data.get('scenario_title') 
+                
+                # Also, if 'description' is inside config, you'll need to extract it similarly
+                result['description'] = config_data.get('description') # Assuming 'description' is also in config
     return result
 
 
 def get_user_by_scenario_name(scenario_name):
     """
-    Retrieves the username associated with a scenario from the JSONB field.
+    Retrieves the username associated with a scenario (from the direct 'username' column).
     """
     with get_sync_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
@@ -504,58 +541,129 @@ def get_user_by_scenario_name(scenario_name):
             result = c.fetchone()
     return result["username"] if result else None
 
-# Placeholder for `check_scenario_federation_completed`.
-# You need to implement this based on your application logic.
-def check_scenario_federation_completed(scenario_name):
-    """
-    Placeholder function to check if a scenario's federation is completed.
-    This should be implemented based on your specific application logic.
-    For example, it could check if the last round has been reached.
-    """
-    print(f"Checking if scenario '{scenario_name}' is completed...")
-    # Example logic:
-    # return get_current_round(scenario_name) >= get_total_rounds(scenario_name)
-    return False # Placeholder value
 
-def check_scenario_with_role(role, scenario_name):
+def remove_scenario_by_name(scenario_name):
     """
-    Verify if a scenario exists with a specific role and name.
+    Delete a scenario from the database by its unique name.
 
     Parameters:
-        role (str): The role associated with the scenario (e.g., "admin", "user").
-        scenario_name (str): The unique name identifier of the scenario.
-
-    Returns:
-        bool: True if a scenario with the given role and name exists, False otherwise.
-    """
-    with get_sync_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
-            # Use %s placeholders for query parameters
-            c.execute(
-                "SELECT 1 FROM scenarios WHERE role = %s AND name = %s;",
-                (role, scenario_name),
-            )
-            result = c.fetchone()
-
-    return result is not None
-
-def save_notes(scenario, notes):
-    """
-    Save or update notes associated with a specific scenario.
-
-    Parameters:
-        scenario (str): The unique identifier of the scenario.
-        notes (str): The textual notes to be saved for the scenario.
+        scenario_name (str): The unique name identifier of the scenario to be removed.
 
     Behavior:
-        - Inserts new notes if the scenario does not exist in the database.
-        - Updates existing notes if the scenario already has notes saved.
-        - Handles database errors gracefully.
+        - Removes the scenario record matching the given name.
+        - Commits the deletion to the database.
     """
     try:
         with get_sync_conn() as conn:
             with conn.cursor() as c:
-                # Use INSERT ... ON CONFLICT (UPSERT)
+                c.execute("DELETE FROM scenarios WHERE name = %s;", (scenario_name,))
+            conn.commit()
+        logging.info(f"Scenario '{scenario_name}' successfully removed.")
+    except psycopg2.Error as e:
+        logging.error(f"Error occurred while deleting scenario '{scenario_name}': {e}")
+
+
+def check_scenario_federation_completed(scenario_name):
+    """
+    Check if all nodes in a given scenario have completed the required federation rounds.
+
+    Parameters:
+        scenario_name (str): The unique name identifier of the scenario to check.
+
+    Returns:
+        bool: True if all nodes have completed the total rounds specified for the scenario, False otherwise or if an error occurs.
+
+    Behavior:
+        - Retrieves the total number of rounds defined for the scenario.
+        - Fetches the current round progress of all nodes in that scenario.
+        - Returns True only if every node has reached the total rounds.
+        - Handles database errors and missing scenario cases gracefully.
+    """
+    try:
+        with get_sync_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
+                # Retrieve the total rounds for the scenario from the 'config' JSONB column
+                c.execute("SELECT config->>'rounds' AS rounds FROM scenarios WHERE name = %s;", (scenario_name,))
+                scenario = c.fetchone()
+
+                if not scenario or scenario["rounds"] is None:
+                    logging.warning(f"Scenario '{scenario_name}' not found or 'rounds' not defined.")
+                    return False
+
+                # Ensure total_rounds is an integer for comparison
+                try:
+                    total_rounds = int(scenario["rounds"])
+                except (ValueError, TypeError):
+                    logging.error(f"Invalid 'rounds' value for scenario '{scenario_name}': {scenario['rounds']}")
+                    return False
+
+                # Fetch the current round progress of all nodes in that scenario
+                # The 'round' column in 'nodes' is a direct column
+                c.execute("SELECT round FROM nodes WHERE scenario = %s;", (scenario_name,))
+                nodes = c.fetchall()
+
+                if not nodes:
+                    logging.info(f"No nodes found for scenario '{scenario_name}'. Federation not considered completed.")
+                    return False
+
+                # Check if all nodes have completed the total rounds
+                # The 'round' column in nodes is likely stored as a string or a numeric type.
+                # Assuming 'round' in 'nodes' is a numeric type, we convert it to int for comparison.
+                return all(int(node["round"]) >= total_rounds for node in nodes)
+
+    except psycopg2.Error as e:
+        logging.error(f"PostgreSQL error during check_scenario_federation_completed for scenario '{scenario_name}': {e}")
+        return False
+    except ValueError as e:
+        logging.error(f"Data error during check_scenario_federation_completed for scenario '{scenario_name}': {e}")
+        return False
+
+
+def check_scenario_with_role(role, scenario_name, current_username=None):
+    """
+    Verify if a scenario exists that the user with the given role and username can access.
+
+    Parameters:
+        role (str): The role of the current user (e.g., "admin", "user").
+        scenario_name (str): The unique name identifier of the scenario to check.
+        current_username (str, optional): The username of the currently authenticated user.
+                                          Required for non-admin roles.
+
+    Returns:
+        bool: True if the scenario exists and the user has access, False otherwise.
+
+    Behavior:
+        - If the user's role is "admin", they can access any existing scenario.
+        - If the user's role is not "admin", they can only access scenarios where the
+          scenario's 'username' matches their `current_username`.
+    """
+    scenario_info = get_scenario_by_name(scenario_name)
+
+    if not scenario_info:
+        return False  # Scenario does not exist
+
+    if role == "admin":
+        return True  # Admins can access any existing scenario
+    else:
+        # For non-admin roles, check if the scenario's username matches the current user's username
+        if current_username is None:
+            logging.warning(
+                "`check_scenario_with_role` called for non-admin role without `current_username`. "
+                "Cannot verify user-specific scenario access."
+            )
+            return False # Cannot verify access without the current user's username
+
+        return scenario_info.get("username") == current_username
+
+# --- Notes Management Functions ---
+
+def save_notes(scenario, notes):
+    """
+    Save or update notes associated with a specific scenario.
+    """
+    try:
+        with get_sync_conn() as conn:
+            with conn.cursor() as c:
                 c.execute(
                     """
                     INSERT INTO notes (scenario, scenario_notes) VALUES (%s, %s)
@@ -565,19 +673,14 @@ def save_notes(scenario, notes):
                 )
             conn.commit()
     except psycopg2.IntegrityError as e:
-        print(f"PostgreSQL integrity error: {e}")
+        logging.error(f"PostgreSQL integrity error during save_notes: {e}")
     except psycopg2.Error as e:
-        print(f"PostgreSQL error: {e}")
+        logging.error(f"PostgreSQL error during save_notes: {e}")
+
 
 def get_notes(scenario):
     """
     Retrieve notes associated with a specific scenario.
-
-    Parameters:
-        scenario (str): The unique identifier of the scenario.
-
-    Returns:
-        psycopg2.extras.DictRow or None: The notes record for the given scenario, or None if no notes exist.
     """
     with get_sync_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as c:
@@ -585,20 +688,64 @@ def get_notes(scenario):
             result = c.fetchone()
     return result
 
+
 def remove_note(scenario):
     """
     Delete the note associated with a specific scenario.
-
-    Parameters:
-        scenario (str): The unique identifier of the scenario whose note should be removed.
     """
     with get_sync_conn() as conn:
         with conn.cursor() as c:
             c.execute("DELETE FROM notes WHERE scenario = %s;", (scenario,))
         conn.commit()
 
+
 if __name__ == "__main__":
     """
     Entry point for the script to print the list of users.
     """
-    print(list_users())
+    # Example usage (assuming DB_USER, DB_PASSWORD, DB_HOST, DB_PORT are set in env)
+    # os.environ['DB_USER'] = 'your_db_user'
+    # os.environ['DB_PASSWORD'] = 'your_db_password'
+    # os.environ['DB_HOST'] = 'localhost'
+    # os.environ['DB_PORT'] = '5432'
+    
+    logging.basicConfig(level=logging.INFO)
+
+    print("Listing users:")
+    users = list_users(all_info=True)
+    for user in users:
+        print(f"- User: {user['user']}, Role: {user['role']}")
+
+    # Example of adding/updating a user
+    # print("\nAdding/Updating test user:")
+    # add_user("TESTUSER", "testpassword123", "user")
+    # print(get_user_info("TESTUSER"))
+
+    # Example of scenario operations
+    # print("\nScenario operations:")
+    # current_time_str = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+    # scenario_data = {
+    #     "title": "My Test Scenario",
+    #     "model": "NN",
+    #     "dataset": "MNIST",
+    #     "rounds": "10",
+    #     "description": "A test scenario for demonstration."
+    # }
+    # scenario_update_record("test_scenario_1", current_time_str, "", scenario_data, "running", "ADMIN")
+    # print("Running scenarios:")
+    # print(get_running_scenario(username="ADMIN", get_all=True))
+
+    # print("\nAll scenarios:")
+    # all_scenarios = get_all_scenarios_and_check_completed("ADMIN", "admin", sort_by="start_time")
+    # for s in all_scenarios:
+    #     print(f"Scenario: {s['name']}, Status: {s['status']}, Title: {s.get('title')}")
+
+    # print("\nSetting a scenario to finished:")
+    # scenario_set_status_to_finished("test_scenario_1")
+    # print(get_scenario_by_name("test_scenario_1"))
+
+    # print("\nTesting notes:")
+    # save_notes("test_scenario_1", "These are some notes for test scenario 1.")
+    # print(get_notes("test_scenario_1"))
+    # remove_note("test_scenario_1")
+    # print(get_notes("test_scenario_1"))

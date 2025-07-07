@@ -17,6 +17,7 @@ from fastapi import Body, FastAPI, Request, status, HTTPException, Path, File, U
 from fastapi.concurrency import asynccontextmanager
 
 # from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
+from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.utils import DockerUtils
 
@@ -315,13 +316,10 @@ async def run_scenario(
     # Manager for the actual scenario
     scenarioManagement = ScenarioManagement(scenario_data, user)
 
-    logging.info(f"[FER] scenario run_scenario {scenario_data}")
-
     await update_scenario(
         scenario_name=scenarioManagement.scenario_name,
         start_time=scenarioManagement.start_date_scenario,
         end_time="",
-        scenario=db_scenario,
         scenario=scenario_data,
         status="running",
         role=role,
@@ -378,14 +376,14 @@ async def stop_scenario(
     DockerUtils.remove_docker_network(
         f"{(os.environ.get('NEBULA_CONTROLLER_NAME'))}_{str(username).lower()}-nebula-net-scenario"
     )
-    # try:
-    #     if all:
-    #         scenario_set_all_status_to_finished()
-    #     else:
-    #         scenario_set_status_to_finished(scenario_name)
-    # except Exception as e:
-    #     logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
-    #     raise HTTPException(status_code=500, detail="Internal server error")
+    try:
+        if all:
+            scenario_set_all_status_to_finished()
+        else:
+            scenario_set_status_to_finished(scenario_name)
+    except Exception as e:
+        logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/scenarios/remove")
@@ -473,7 +471,6 @@ async def update_scenario(
     # from nebula.controller.scenarios import Scenario
 
     try:
-        logging.info(f"[FER] scenario controller.py {scenario}")
         scenario_update_record(scenario_name, start_time, end_time, scenario, status, username)
     except Exception as e:
         logging.exception(f"Error updating scenario {scenario_name}: {e}")
@@ -601,7 +598,7 @@ async def list_nodes_by_scenario_name(
     from nebula.controller.database import list_nodes_by_scenario_name
 
     try:
-        nodes = list_nodes_by_scenario_name(scenario_name)
+        nodes = await list_nodes_by_scenario_name(scenario_name)
     except Exception as e:
         logging.exception(f"Error obtaining nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -732,21 +729,20 @@ async def get_notes_by_scenario_name(
 ):
     """
     Endpoint to retrieve notes associated with a scenario.
-
-    Path Parameters:
-    - scenario_name: Name of the scenario.
-
-    Returns the notes or raises an HTTPException on error.
     """
     from nebula.controller.database import get_notes
 
     try:
-        notes = get_notes(scenario_name)
-    except Exception as e:
-        logging.exception(f"Error obtaining notes {notes}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        notes_record = get_notes(scenario_name)
 
-    return notes
+        if notes_record is not None:
+            notes_record = dict(notes_record.items())
+
+        return notes_record
+
+    except Exception as e:
+        logging.exception(f"Error obtaining notes for scenario {scenario_name}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/notes/update")
