@@ -3,9 +3,6 @@ FROM postgres:17.5-alpine3.22
 # Rename the official entrypoint so we can wrap it
 RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh.orig
 
-ENV POSTGRES_DB=configdb
-ENV POSTGRES_USER=appuser
-
 # Copy SQL init file and custom entrypoint script
 COPY /nebula/database/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
@@ -51,5 +48,5 @@ RUN uv sync --group database
 
 ENV PATH=".venv/bin:$PATH"
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["postgres"]
+# ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# CMD ["postgres"]

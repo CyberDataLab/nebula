@@ -830,6 +830,70 @@ class Deployer:
         
         client.api.start(pgweb_container_id)
 
+        #########
+        # REDIS #
+        #########
+
+        # network_name = "redis-network"
+        # base = DockerUtils.create_docker_network(network_name)
+
+        # --- REDIS ---
+
+        host_port_redis = 6379  # You can change this if you want a different external port
+
+        host_config_redis = client.api.create_host_config(
+            binds=[
+                f"redis:/var/lib/redis",
+            ],
+            extra_hosts={"host.docker.internal": "host-gateway"},
+            port_bindings={6379: host_port_redis},
+        )
+
+        redis_networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.126")
+        })
+
+        redis_container = client.api.create_container(
+            image="nebula-redis",
+            name=f"{os.environ['USER']}_redis",
+            detach=True,
+            command="redis-server",
+            host_config=host_config_redis,
+            networking_config=redis_networking_config,
+        )
+
+        client.api.start(redis_container)
+
+        # --- REDIS COMMANDER ---
+
+        host_port_commander = 8081
+
+        environment_commander = {
+            "REDIS_HOSTS": "local:redis:6379",
+            "HTTP_USER": "root",
+            "HTTP_PASSWORD": "root",
+        }
+
+        host_config_commander = client.api.create_host_config(
+            extra_hosts={"host.docker.internal": "host-gateway"},
+            port_bindings={8081: host_port_commander},
+        )
+
+        commander_networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.127")
+        })
+
+        commander_container = client.api.create_container(
+            image="nebula-rediscommander",
+            name=f"{os.environ['USER']}_redis_commander",
+            detach=True,
+            environment=environment_commander,
+            host_config=host_config_commander,
+            networking_config=commander_networking_config,
+        )
+
+        client.api.start(commander_container)
+
     def stop_database(self):
         """
         Stops and removes all NEBULA database Docker containers associated with the current user.
@@ -842,6 +906,9 @@ class Deployer:
             - Cleaning up database containers during shutdown or redeployment processes.
         """
         DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-database")
+        DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-pgweb")
+        DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-redis")
+        DockerUtils.remove_containers_by_prefix(f"{os.environ['USER']}_nebula-rediscommander")
 
     def run_controller(self):
         if sys.platform == "win32":

@@ -548,7 +548,7 @@ class Scenario:
         scenario = cls(**scenario_data)
 
         return scenario
-    
+
     @staticmethod
     def to_json(scenario_obj):
         """

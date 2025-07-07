@@ -188,7 +188,7 @@ async def update_node_record(
     """
     async with _node_lock:
         # Await the get_async_conn() call to get the actual connection object
-        conn = await get_async_conn() 
+        conn = await get_async_conn()
         try:
             async with conn.transaction():
                 result = await conn.fetchrow(
@@ -300,7 +300,7 @@ def get_all_scenarios(username, role, sort_by="start_time"):
             full_command = f"{command} {order_by_clause};"
             c.execute(full_command, tuple(params))
             result = c.fetchall()
-    
+
     return result
 
 
@@ -353,10 +353,10 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
                 params.append(username)
 
             command += f" {order_by_clause};"
-            
+
             c.execute(command, tuple(params))
-            result_dicts = c.fetchall() 
-            
+            result_dicts = c.fetchall()
+
             scenarios_to_return = [dict(s) for s in result_dicts]
 
             re_fetch_required = False
@@ -369,8 +369,8 @@ def get_all_scenarios_and_check_completed(username, role, sort_by="start_time"):
 
             if re_fetch_required:
                 # Recursively call get_all_scenarios_and_check_completed to get fresh data
-                return get_all_scenarios_and_check_completed(username, role, sort_by) 
-            
+                return get_all_scenarios_and_check_completed(username, role, sort_by)
+
     return scenarios_to_return
 
 
@@ -477,14 +477,14 @@ def get_running_scenario(username=None, get_all=False):
             params = ["running"]
             # Select all columns to get both direct and config data
             command = "SELECT name, username, status, start_time, end_time, config FROM scenarios WHERE status = %s"
-            
+
             if username:
                 command += " AND username = %s"
                 params.append(username)
-                
+
             c.execute(command, tuple(params))
-            
-            if get_all: 
+
+            if get_all:
                 result = [dict(row) for row in c.fetchall()] # Convert DictRows to dicts
             else:
                 result_row = c.fetchone()
@@ -516,16 +516,16 @@ def get_scenario_by_name(scenario_name):
             c.execute("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE name = %s;", (scenario_name,))
             result_row = c.fetchone()
             result = dict(result_row) if result_row else None
-            
+
             if result and result.get('config'):
                 # Assuming 'config' is already parsed into a Python dictionary by DictCursor
                 # If it's still a string, you might need: config_data = json.loads(result['config'])
                 config_data = result['config']
-                
+
                 # Extract the 'scenario_title' and add it as a top-level key
                 # Use .get() for safety in case 'scenario_title' is also missing within config
-                result['title'] = config_data.get('scenario_title') 
-                
+                result['title'] = config_data.get('scenario_title')
+
                 # Also, if 'description' is inside config, you'll need to extract it similarly
                 result['description'] = config_data.get('description') # Assuming 'description' is also in config
     return result
@@ -708,7 +708,7 @@ if __name__ == "__main__":
     # os.environ['DB_PASSWORD'] = 'your_db_password'
     # os.environ['DB_HOST'] = 'localhost'
     # os.environ['DB_PORT'] = '5432'
-    
+
     logging.basicConfig(level=logging.INFO)
 
     print("Listing users:")
