@@ -500,18 +500,18 @@ class Deployer:
                         isinstance(data, list) and data
                     ):
                         warning_msg = (
-                            "NEBULA appears to be already running or was not cleanly shut down. "
-                            "Please stop the existing instance or remove the metadata file before starting a new one."
+                            "\n\033[91mERROR: NEBULA appears to be already running or was not cleanly shut down. "
+                            "Please stop the existing instance or remove the metadata file before starting a new one.\033[0m\n"
+                            "You can use 'docker ps -a --filter name={deployment_prefix}' to see the containers."
                         )
-                        logging.warning(warning_msg)
+                        logging.exception(warning_msg)
                         sys.exit(1)
             except Exception:
                 warning_msg = (
-                    "NEBULA metadata file is corrupt or unreadable. "
-                    "Please remove or fix the file before starting a new instance."
+                    "\n\033[91mERROR: NEBULA metadata file is corrupt or unreadable. "
+                    "Please remove or fix the file before starting a new instance.\033[0m\n"
                 )
-                print(warning_msg)
-                logging.warning(warning_msg)
+                logging.exception(warning_msg)
                 sys.exit(1)
 
         # --- Tag logic: CLI args > environment > fallback ---
@@ -527,7 +527,6 @@ class Deployer:
         self.prefix_tag = arg_prefix if arg_prefix else (prefix_tag if prefix_tag else "dev")
         self.user_tag = user_tag
 
-        # 4. Update .env file
         FileUtils.update_env_file(getattr(args, "env", ".env"), "NEBULA_ENV_TAG", self.env_tag)
         FileUtils.update_env_file(getattr(args, "env", ".env"), "NEBULA_PREFIX_TAG", self.prefix_tag)
         FileUtils.update_env_file(getattr(args, "env", ".env"), "NEBULA_USER_TAG", self.user_tag)
@@ -535,7 +534,6 @@ class Deployer:
         self.production = self.env_tag == "prod"
         self.prefix = self.prefix_tag
 
-        # --- 4. Block deployment if Docker containers with the same tag-based prefix exist ---
         deployment_prefix = f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_"
         if DockerUtils.check_docker_by_prefix(deployment_prefix):
             warning_msg = (
@@ -544,11 +542,9 @@ class Deployer:
                 f"Please stop/remove existing containers before starting a new deployment.\033[0m\n"
                 f"You can use 'docker ps -a --filter name={deployment_prefix}' to see the containers."
             )
-            print(warning_msg)
-            logging.error(warning_msg)
+            logging.exception(warning_msg)
             sys.exit(1)
 
-        # --- 5. Set up other configuration ---
         self.databases_dir = args.databases if hasattr(args, "databases") else "/nebula/app/databases"
         self.config_dir = args.config
         self.log_dir = args.logs
@@ -561,7 +557,6 @@ class Deployer:
         self.host_platform = "windows" if sys.platform == "win32" else "unix"
         self.gpu_available = False
 
-        # Use new naming for controller_host
         self.controller_host = self.get_container_name("nebula-controller")
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
