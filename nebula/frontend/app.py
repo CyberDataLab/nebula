@@ -30,7 +30,9 @@ class Settings:
         controller_port (int): Port on which the Nebula controller listens (default: 5050).
         resources_threshold (float): Threshold for resource usage alerts (default: 0.0).
         port (int): Port for the Nebula frontend service (default: 6060).
-        production (bool): Whether the application is running in production mode.
+        env_tag (str): Tag for the environment (e.g., 'dev', 'prod').
+        prefix_tag (str): Tag for the deployment prefix (e.g., 'dev', 'prod').
+        user_tag (str): Tag for the user (e.g., 'admin', 'user').
         host_platform (str): Underlying host operating platform (e.g., 'unix').
         log_dir (str): Directory path where application logs are stored.
         config_dir (str): Directory path for general configuration files.
@@ -48,8 +50,9 @@ class Settings:
     controller_port: int = os.environ.get("NEBULA_CONTROLLER_PORT", 5050)
     resources_threshold: float = 0.0
     port: int = os.environ.get("NEBULA_FRONTEND_PORT", 6060)
-    production: bool = os.environ.get("NEBULA_PRODUCTION", "False") == "True"
-    prefix: str = os.environ.get("NEBULA_DEPLOYMENT_PREFIX", "dev")
+    env_tag: str = os.environ.get("NEBULA_ENV_TAG", "dev")
+    prefix_tag: str = os.environ.get("NEBULA_PREFIX_TAG", "dev")
+    user_tag: str = os.environ.get("NEBULA_USER_TAG", os.environ.get("USER", "unknown"))
     host_platform: str = os.environ.get("NEBULA_HOST_PLATFORM", "unix")
     log_dir: str = os.environ.get("NEBULA_LOGS_DIR")
     config_dir: str = os.environ.get("NEBULA_CONFIG_DIR")
@@ -115,8 +118,8 @@ from nebula.utils import FileUtils
 
 logging.info(f"🚀  Starting Nebula Frontend on port {settings.port}")
 
-logging.info(f"NEBULA_PRODUCTION: {settings.production}")
-logging.info(f"NEBULA_DEPLOYMENT_PREFIX: {settings.prefix}")
+logging.info(f"NEBULA_PRODUCTION: {settings.env_tag == 'prod'}")
+logging.info(f"NEBULA_DEPLOYMENT_PREFIX: {settings.prefix_tag}")
 
 if "SECRET_KEY" not in os.environ:
     logging.info("Generating SECRET_KEY")
@@ -292,9 +295,8 @@ def add_global_context(request: Request):
             prefix: The prefix of the application.
     """
     return {
-        # If the prefix is production or prefix contains production, then the application is in production mode
-        "is_production": settings.production or "production" in settings.prefix,
-        "prefix": settings.prefix,
+        "is_production": settings.env_tag == "prod",
+        "prefix": settings.prefix_tag,
     }
 
 

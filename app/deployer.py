@@ -485,6 +485,12 @@ class Deployer:
         Deployer._write_metadata(metadata)
 
     def __init__(self, args):
+        """
+        Initializes the Deployer with robust handling of environment and prefix logic using tags only.
+        - Only sets NEBULA_ENV_TAG, NEBULA_PREFIX_TAG, and NEBULA_USER_TAG in the .env file.
+        - All logic and naming use tag helpers and tag variables.
+        - Defaults for prefix and production are consistent with main.py.
+        """
         # Prevent running NEBULA twice by checking metadata file
         if os.path.exists(self.METADATA_FILE):
             try:
@@ -497,7 +503,6 @@ class Deployer:
                             "NEBULA appears to be already running or was not cleanly shut down. "
                             "Please stop the existing instance or remove the metadata file before starting a new one."
                         )
-                        print(warning_msg)
                         logging.warning(warning_msg)
                         sys.exit(1)
             except Exception:
@@ -509,7 +514,41 @@ class Deployer:
                 logging.warning(warning_msg)
                 sys.exit(1)
 
-        # Set up basic configuration first to determine the prefix
+        # --- Tag logic: CLI args > environment > fallback ---
+        arg_production = getattr(args, "production", False)
+        arg_prefix = getattr(args, "prefix", "dev")
+        arg_user = os.environ.get("USER", "unknown")
+
+        env_tag = os.environ.get("NEBULA_ENV_TAG")
+        prefix_tag = os.environ.get("NEBULA_PREFIX_TAG")
+        user_tag = os.environ.get("NEBULA_USER_TAG", arg_user)
+
+        self.env_tag = ("prod" if arg_production else "dev") if env_tag is None else env_tag
+        self.prefix_tag = arg_prefix if arg_prefix else (prefix_tag if prefix_tag else "dev")
+        self.user_tag = user_tag
+
+        # 4. Update .env file
+        FileUtils.update_env_file(getattr(args, "env", ".env"), "NEBULA_ENV_TAG", self.env_tag)
+        FileUtils.update_env_file(getattr(args, "env", ".env"), "NEBULA_PREFIX_TAG", self.prefix_tag)
+        FileUtils.update_env_file(getattr(args, "env", ".env"), "NEBULA_USER_TAG", self.user_tag)
+
+        self.production = self.env_tag == "prod"
+        self.prefix = self.prefix_tag
+
+        # --- 4. Block deployment if Docker containers with the same tag-based prefix exist ---
+        deployment_prefix = f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_"
+        if DockerUtils.check_docker_by_prefix(deployment_prefix):
+            warning_msg = (
+                f"\n\033[91mERROR: Found existing Docker containers with prefix '{deployment_prefix}'. "
+                f"NEBULA cannot be deployed with the same prefix. "
+                f"Please stop/remove existing containers before starting a new deployment.\033[0m\n"
+                f"You can use 'docker ps -a --filter name={deployment_prefix}' to see the containers."
+            )
+            print(warning_msg)
+            logging.error(warning_msg)
+            sys.exit(1)
+
+        # --- 5. Set up other configuration ---
         self.databases_dir = args.databases if hasattr(args, "databases") else "/nebula/app/databases"
         self.config_dir = args.config
         self.log_dir = args.logs
@@ -521,34 +560,9 @@ class Deployer:
         )
         self.host_platform = "windows" if sys.platform == "win32" else "unix"
         self.gpu_available = False
-        # Determine prefix: args > .env > default
-        env_prefix = os.environ.get("NEBULA_DEPLOYMENT_PREFIX")
-        env_prefix = os.environ.get("NEBULA_DEPLOYMENT_PREFIX")
-        self.production = bool(getattr(args, "production", False))
-        if hasattr(args, "prefix") and args.prefix:
-            self.prefix = args.prefix
-        elif env_prefix:
-            self.prefix = env_prefix
-        else:
-            self.prefix = "production" if self.production else "dev"
-        # Save prefix to .env if not present or different
-        if not env_prefix or env_prefix != self.prefix:
-            FileUtils.update_env_file(self.env_path, "NEBULA_DEPLOYMENT_PREFIX", self.prefix)
 
-        # Check for existing Docker containers with the same prefix
-        deployment_prefix = f"{self.prefix}_{os.environ.get('USER', 'unknown')}_"
-        if DockerUtils.check_docker_by_prefix(deployment_prefix):
-            warning_msg = (
-                f"⚠️  WARNING: Found existing Docker containers with prefix '{deployment_prefix}'. "
-                f"This may indicate that NEBULA is already running or was not cleanly shut down. "
-                f"Consider stopping existing containers before starting a new deployment. "
-                f"You can use 'docker ps -a --filter name={deployment_prefix}' to see the containers."
-            )
-            print(warning_msg)
-            logging.warning(warning_msg)
-            # Don't exit, just warn the user
-
-        self.controller_host = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-controller"
+        # Use new naming for controller_host
+        self.controller_host = self.get_container_name("nebula-controller")
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
@@ -557,6 +571,26 @@ class Deployer:
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
 
         self.configure_logger()
+
+    def get_container_name(self, role_tag: str) -> str:
+        """
+        Generate a standardized container name using tags.
+        Args:
+            role_tag (str): The component role (e.g., 'nebula-controller').
+        Returns:
+            str: The composed container name.
+        """
+        return f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_{role_tag}"
+
+    def get_network_name(self, suffix: str = "net-base") -> str:
+        """
+        Generate a standardized network name using tags.
+        Args:
+            suffix (str): Suffix for the network (default: 'net-base').
+        Returns:
+            str: The composed network name.
+        """
+        return f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_{suffix}"
 
     @property
     def deployment_prefix(self):
@@ -735,7 +769,8 @@ class Deployer:
         logging.info(f"NEBULA Databases created in {self.databases_dir}")
         self.run_frontend()
         logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
-        if self.production:
+        if self.production and self.prefix == "production":
+            logging.info("Deploying NEBULA WAF in production mode")
             self.run_waf()
             logging.info("NEBULA WAF is running")
 
@@ -814,7 +849,7 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        network_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-net-base"
+        network_name = self.get_network_name()
 
         # Create the Docker network
         base = DockerUtils.create_docker_network(network_name)
@@ -823,9 +858,10 @@ class Deployer:
         client = docker.from_env()
 
         environment = {
-            "NEBULA_CONTROLLER_NAME": os.environ["USER"],
             "NEBULA_PRODUCTION": self.production,
-            "NEBULA_DEPLOYMENT_PREFIX": self.deployment_prefix,
+            "NEBULA_ENV_TAG": self.env_tag,
+            "NEBULA_PREFIX_TAG": self.prefix_tag,
+            "NEBULA_USER_TAG": self.user_tag,
             "NEBULA_FRONTEND_LOG": "/nebula/app/logs/frontend.log",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
@@ -856,7 +892,7 @@ class Deployer:
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.100")
         })
 
-        frontend_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-frontend"
+        frontend_container_name = self.get_container_name("nebula-frontend")
 
         try:
             existing = client.containers.get(frontend_container_name)
@@ -893,7 +929,7 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        network_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-net-base"
+        network_name = self.get_network_name()
 
         try:
             subprocess.check_call(["nvidia-smi"])
@@ -909,7 +945,9 @@ class Deployer:
 
         environment = {
             "USER": os.environ["USER"],
-            "NEBULA_DEPLOYMENT_PREFIX": self.deployment_prefix,
+            "NEBULA_ENV_TAG": self.env_tag,
+            "NEBULA_PREFIX_TAG": self.prefix_tag,
+            "NEBULA_USER_TAG": self.user_tag,
             "NEBULA_ROOT_HOST": self.root_path,
             "NEBULA_DATABASES_DIR": "/nebula/app/databases",
             "NEBULA_CONTROLLER_LOG": "/nebula/app/logs/controller.log",
@@ -949,7 +987,7 @@ class Deployer:
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.150")
         })
 
-        controller_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-controller"
+        controller_container_name = self.get_container_name("nebula-controller")
 
         try:
             existing = client.containers.get(controller_container_name)
@@ -990,7 +1028,7 @@ class Deployer:
             - Deploying an integrated WAF solution alongside monitoring and logging components in the NEBULA system.
             - Ensuring comprehensive security monitoring and log management through containerized services.
         """
-        network_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-net-base"
+        network_name = self.get_network_name()
         base = DockerUtils.create_docker_network(network_name)
         Deployer._add_network_to_metadata(network_name)
 
@@ -1010,7 +1048,7 @@ class Deployer:
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.200")
         })
 
-        waf_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf"
+        waf_container_name = self.get_container_name("nebula-waf")
 
         try:
             existing = client.containers.get(waf_container_name)
@@ -1053,7 +1091,7 @@ class Deployer:
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.201")
         })
 
-        waf_grafana_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf-grafana"
+        waf_grafana_container_name = self.get_container_name("nebula-waf-grafana")
 
         try:
             existing = client.containers.get(waf_grafana_container_name)
@@ -1088,7 +1126,7 @@ class Deployer:
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.202")
         })
 
-        waf_loki_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf-loki"
+        waf_loki_container_name = self.get_container_name("nebula-waf-loki")
 
         try:
             existing = client.containers.get(waf_loki_container_name)
@@ -1123,7 +1161,7 @@ class Deployer:
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.203")
         })
 
-        waf_promtail_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf-promtail"
+        waf_promtail_container_name = self.get_container_name("nebula-waf-promtail")
 
         try:
             existing = client.containers.get(waf_promtail_container_name)

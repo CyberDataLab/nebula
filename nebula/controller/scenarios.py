@@ -584,6 +584,11 @@ class ScenarioManagement:
         self.cert_dir = os.environ.get("NEBULA_CERTS_DIR", "certs")
         self.config = Config(entity="scenarioManagement")
 
+        # Tag-based naming for scenario resources
+        self.env_tag = os.environ.get("NEBULA_ENV_TAG", "dev")
+        self.prefix_tag = os.environ.get("NEBULA_PREFIX_TAG", "dev")
+        self.user_tag = os.environ.get("NEBULA_USER_TAG", os.environ.get("USER", "unknown"))
+
         # If physical set the neighbours correctly
         if self.scenario.deployment == "physical" and self.scenario.physical_ips:
             for idx, ip in enumerate(self.scenario.physical_ips):
@@ -760,23 +765,23 @@ class ScenarioManagement:
             with open(participant_file, "w") as f:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
 
-    @property
-    def deployment_prefix(self):
+    def get_scenario_network_name(self) -> str:
         """
-        Returns the deployment prefix for the current deployment.
-
-        This property is used to prefix the names of the containers and networks
-        in the deployment.
-
+        Generate a standardized network name for the scenario using tags.
         Returns:
-            str: The deployment prefix, either "production_" or an empty string.
-
-        Typical use cases:
-            - Prefixing container and network names in the deployment.
-            - Ensuring consistent naming conventions across different environments.
-
+            str: The composed network name.
         """
-        return os.environ.get("NEBULA_DEPLOYMENT_PREFIX", "dev")
+        return f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_{self.scenario_name}-net-scenario"
+
+    def get_participant_container_name(self, idx: int) -> str:
+        """
+        Generate a standardized container name for a participant using tags.
+        Args:
+            idx (int): The participant index.
+        Returns:
+            str: The composed container name.
+        """
+        return f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_{self.scenario_name}_participant{idx}"
 
     @staticmethod
     def stop_participants(scenario_name=None):
@@ -1193,7 +1198,7 @@ class ScenarioManagement:
         logging.info("Starting nodes using Docker Compose...")
         logging.info(f"env path: {self.env_path}")
 
-        network_name = f"{self.deployment_prefix}_{os.environ.get('NEBULA_CONTROLLER_NAME')}_{str(self.user).lower()}-nebula-net-scenario"
+        network_name = self.get_scenario_network_name()
 
         # Create the Docker network
         base = DockerUtils.create_docker_network(network_name)
@@ -1206,7 +1211,7 @@ class ScenarioManagement:
         container_names = []  # Track names for metadata
         for idx, node in enumerate(self.config.participants):
             image = "nebula-core"
-            name = f"{self.deployment_prefix}_{os.environ.get('NEBULA_CONTROLLER_NAME')}_{self.user}-participant{node['device_args']['idx']}"
+            name = self.get_participant_container_name(node["device_args"]["idx"])
 
             if node["device_args"]["accelerator"] == "gpu":
                 environment = {
@@ -1239,10 +1244,11 @@ class ScenarioManagement:
             ]
 
             networking_config = client.api.create_networking_config({
-                f"{network_name}": client.api.create_endpoint_config(
+                network_name: client.api.create_endpoint_config(
                     ipv4_address=f"{base}.{i}",
                 ),
-                f"{self.deployment_prefix}_{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
+                # Attach to the base network for controller communication (optional, can be refactored)
+                # f"{self.deployment_prefix}_{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
             })
 
             node["tracking_args"]["log_dir"] = "/nebula/app/logs"
