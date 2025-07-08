@@ -523,17 +523,14 @@ class Deployer:
         self.gpu_available = False
         # Determine prefix: args > .env > default
         env_prefix = os.environ.get("NEBULA_DEPLOYMENT_PREFIX")
-        if hasattr(args, "production") and args.production:
-            self.production = True
-            self.prefix = "production"
+        env_prefix = os.environ.get("NEBULA_DEPLOYMENT_PREFIX")
+        self.production = bool(getattr(args, "production", False))
+        if hasattr(args, "prefix") and args.prefix:
+            self.prefix = args.prefix
+        elif env_prefix:
+            self.prefix = env_prefix
         else:
-            self.production = False
-            if hasattr(args, "prefix") and args.prefix:
-                self.prefix = args.prefix
-            elif env_prefix:
-                self.prefix = env_prefix
-            else:
-                self.prefix = "dev"
+            self.prefix = "production" if self.production else "dev"
         # Save prefix to .env if not present or different
         if not env_prefix or env_prefix != self.prefix:
             FileUtils.update_env_file(self.env_path, "NEBULA_DEPLOYMENT_PREFIX", self.prefix)
@@ -706,7 +703,7 @@ class Deployer:
 
                       https://nebula-dfl.com / https://nebula-dfl.eu
 
-                      [{"Production" if self.production else "Development"} mode]
+                      [{"Production" if self.production else "Development"} mode] [{self.deployment_prefix} prefix]
                 """
         print("\x1b[0;36m" + banner + "\x1b[0m")
 

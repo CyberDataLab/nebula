@@ -49,6 +49,7 @@ class Settings:
     resources_threshold: float = 0.0
     port: int = os.environ.get("NEBULA_FRONTEND_PORT", 6060)
     production: bool = os.environ.get("NEBULA_PRODUCTION", "False") == "True"
+    prefix: str = os.environ.get("NEBULA_DEPLOYMENT_PREFIX", "dev")
     host_platform: str = os.environ.get("NEBULA_HOST_PLATFORM", "unix")
     log_dir: str = os.environ.get("NEBULA_LOGS_DIR")
     config_dir: str = os.environ.get("NEBULA_CONFIG_DIR")
@@ -115,6 +116,7 @@ from nebula.utils import FileUtils
 logging.info(f"🚀  Starting Nebula Frontend on port {settings.port}")
 
 logging.info(f"NEBULA_PRODUCTION: {settings.production}")
+logging.info(f"NEBULA_DEPLOYMENT_PREFIX: {settings.prefix}")
 
 if "SECRET_KEY" not in os.environ:
     logging.info("Generating SECRET_KEY")
@@ -287,9 +289,12 @@ def add_global_context(request: Request):
     Returns:
         dict[str, bool]:
             is_production: Flag indicating if the application is running in production mode.
+            prefix: The prefix of the application.
     """
     return {
-        "is_production": settings.production,
+        # If the prefix is production or prefix contains production, then the application is in production mode
+        "is_production": settings.production or "production" in settings.prefix,
+        "prefix": settings.prefix,
     }
 
 
