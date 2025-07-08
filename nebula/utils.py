@@ -33,6 +33,27 @@ class FileUtils:
             raise Exception("Not allowed")
         return full_path
 
+    @classmethod
+    def update_env_file(cls, env_file, key, value):
+        """
+        Update or add a key-value pair in the .env file.
+        """
+        import re
+        lines = []
+        if os.path.exists(env_file):
+            with open(env_file, "r") as f:
+                lines = f.readlines()
+        key_found = False
+        for i, line in enumerate(lines):
+            if re.match(rf"^{key}=.*", line):
+                lines[i] = f"{key}={value}\n"
+                key_found = True
+                break
+        if not key_found:
+            lines.append(f"{key}={value}\n")
+        with open(env_file, "w") as f:
+            f.writelines(lines)
+
 
 class SocketUtils:
     """

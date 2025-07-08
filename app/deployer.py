@@ -531,7 +531,7 @@ class Deployer:
                 self.prefix = "dev"
         # Save prefix to .env if not present or different
         if not env_prefix or env_prefix != self.prefix:
-            FileUtils._update_env_file(self.env_path, "NEBULA_DEPLOYMENT_PREFIX", self.prefix)
+            FileUtils.update_env_file(self.env_path, "NEBULA_DEPLOYMENT_PREFIX", self.prefix)
 
         # Check for existing Docker containers with the same prefix
         deployment_prefix = f"{self.prefix}_{os.environ.get('USER', 'unknown')}_"
