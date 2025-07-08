@@ -110,7 +110,15 @@ argparser.add_argument(
     dest="production",
     action="store_true",
     default=False,
-    help="Deploy Nebula in production mode",
+    help="Deploy NEBULA in production mode",
+)
+
+argparser.add_argument(
+    "-pr",
+    "--prefix",
+    dest="prefix",
+    default="dev",
+    help="Deploy NEBULA components with a prefix",
 )
 
 argparser.add_argument(
