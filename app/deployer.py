@@ -510,6 +510,18 @@ class Deployer:
                 sys.exit(1)
 
         # Set up basic configuration first to determine the prefix
+        self.databases_dir = args.databases if hasattr(args, "databases") else "/nebula/app/databases"
+        self.config_dir = args.config
+        self.log_dir = args.logs
+        self.env_path = args.env
+        self.root_path = (
+            args.root_path
+            if hasattr(args, "root_path")
+            else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        self.host_platform = "windows" if sys.platform == "win32" else "unix"
+        self.controller_host = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-controller"
+        self.gpu_available = False
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
@@ -546,18 +558,6 @@ class Deployer:
             logging.warning(warning_msg)
             # Don't exit, just warn the user
 
-        self.databases_dir = args.databases if hasattr(args, "databases") else "/nebula/app/databases"
-        self.config_dir = args.config
-        self.log_dir = args.logs
-        self.env_path = args.env
-        self.root_path = (
-            args.root_path
-            if hasattr(args, "root_path")
-            else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        self.host_platform = "windows" if sys.platform == "win32" else "unix"
-        self.controller_host = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-controller"
-        self.gpu_available = False
         self.configure_logger()
 
     @property
