@@ -765,13 +765,15 @@ class ScenarioManagement:
             with open(participant_file, "w") as f:
                 json.dump(participant_config, f, sort_keys=False, indent=2)
 
-    def get_scenario_network_name(self) -> str:
+    def get_network_name(self, suffix: str) -> str:
         """
-        Generate a standardized network name for the scenario using tags.
+        Generate a standardized network name using tags.
+        Args:
+            suffix (str): Suffix for the network (default: 'net-base').
         Returns:
             str: The composed network name.
         """
-        return f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_{self.scenario_name}-net-scenario"
+        return f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_{suffix}"
 
     def get_participant_container_name(self, idx: int) -> str:
         """
@@ -1198,7 +1200,8 @@ class ScenarioManagement:
         logging.info("Starting nodes using Docker Compose...")
         logging.info(f"env path: {self.env_path}")
 
-        network_name = self.get_scenario_network_name()
+        network_name = self.get_network_name(f"{self.scenario_name}-net-scenario")
+        base_network_name = self.get_network_name("net-base")
 
         # Create the Docker network
         base = DockerUtils.create_docker_network(network_name)
@@ -1247,8 +1250,7 @@ class ScenarioManagement:
                 network_name: client.api.create_endpoint_config(
                     ipv4_address=f"{base}.{i}",
                 ),
-                # Attach to the base network for controller communication (optional, can be refactored)
-                # f"{self.deployment_prefix}_{os.environ.get('NEBULA_CONTROLLER_NAME')}_nebula-net-base": client.api.create_endpoint_config(),
+                base_network_name: client.api.create_endpoint_config(),
             })
 
             node["tracking_args"]["log_dir"] = "/nebula/app/logs"

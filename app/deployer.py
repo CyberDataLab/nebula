@@ -577,7 +577,7 @@ class Deployer:
         """
         return f"{self.env_tag}_{self.prefix_tag}_{self.user_tag}_{role_tag}"
 
-    def get_network_name(self, suffix: str = "net-base") -> str:
+    def get_network_name(self, suffix: str) -> str:
         """
         Generate a standardized network name using tags.
         Args:
@@ -844,7 +844,7 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        network_name = self.get_network_name()
+        network_name = self.get_network_name("net-base")
 
         # Create the Docker network
         base = DockerUtils.create_docker_network(network_name)
@@ -924,7 +924,7 @@ class Deployer:
                     "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
                 )
 
-        network_name = self.get_network_name()
+        network_name = self.get_network_name("net-base")
 
         try:
             subprocess.check_call(["nvidia-smi"])
@@ -1023,7 +1023,7 @@ class Deployer:
             - Deploying an integrated WAF solution alongside monitoring and logging components in the NEBULA system.
             - Ensuring comprehensive security monitoring and log management through containerized services.
         """
-        network_name = self.get_network_name()
+        network_name = self.get_network_name("net-base")
         base = DockerUtils.create_docker_network(network_name)
         Deployer._add_network_to_metadata(network_name)
 
