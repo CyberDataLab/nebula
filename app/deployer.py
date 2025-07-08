@@ -17,7 +17,7 @@ from watchdog.observers import Observer
 from nebula.addons.env import check_environment
 from nebula.controller.controller import TermEscapeCodeFormatter
 from nebula.controller.scenarios import ScenarioManagement
-from nebula.utils import DockerUtils, SocketUtils
+from nebula.utils import DockerUtils, FileUtils, SocketUtils
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -516,13 +516,22 @@ class Deployer:
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
-        self.production = args.production if hasattr(args, "production") else False
-        if self.production:
-            # Prefix for production is always "production"
+        # Determine prefix: args > .env > default
+        env_prefix = os.environ.get("NEBULA_DEPLOYMENT_PREFIX")
+        if hasattr(args, "production") and args.production:
+            self.production = True
             self.prefix = "production"
         else:
-            # Prefix for development is the prefix passed as argument (default is dev)
-            self.prefix = args.prefix if hasattr(args, "prefix") else "dev"
+            self.production = False
+            if hasattr(args, "prefix") and args.prefix:
+                self.prefix = args.prefix
+            elif env_prefix:
+                self.prefix = env_prefix
+            else:
+                self.prefix = "dev"
+        # Save prefix to .env if not present or different
+        if not env_prefix or env_prefix != self.prefix:
+            FileUtils._update_env_file(self.env_path, "NEBULA_DEPLOYMENT_PREFIX", self.prefix)
 
         # Check for existing Docker containers with the same prefix
         deployment_prefix = f"{self.prefix}_{os.environ.get('USER', 'unknown')}_"
