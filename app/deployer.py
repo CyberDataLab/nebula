@@ -520,14 +520,7 @@ class Deployer:
             else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
         self.host_platform = "windows" if sys.platform == "win32" else "unix"
-        self.controller_host = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-controller"
         self.gpu_available = False
-        self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
-        self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
-        self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
-        self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
-        self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
-        self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
         # Determine prefix: args > .env > default
         env_prefix = os.environ.get("NEBULA_DEPLOYMENT_PREFIX")
         if hasattr(args, "production") and args.production:
@@ -557,6 +550,14 @@ class Deployer:
             print(warning_msg)
             logging.warning(warning_msg)
             # Don't exit, just warn the user
+
+        self.controller_host = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-controller"
+        self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
+        self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
+        self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
+        self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
+        self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
+        self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
 
         self.configure_logger()
 
