@@ -1254,6 +1254,12 @@ class ScenarioManagement:
             node["security_args"]["cafile"] = "/nebula/app/certs/ca_cert.pem"
             node = json.loads(json.dumps(node).replace("192.168.50.", f"{base}."))  # TODO change this
 
+            try:
+                existing = client.containers.get(name)
+                logging.warning(f"Container {name} already exists. Deployment may fail or cause conflicts.")
+            except docker.errors.NotFound:
+                pass  # No conflict, safe to proceed
+
             # Write the config file in config directory
             with open(f"{self.config_dir}/participant_{node['device_args']['idx']}.json", "w") as f:
                 json.dump(node, f, indent=4)

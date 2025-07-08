@@ -851,6 +851,14 @@ class Deployer:
 
         frontend_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-frontend"
 
+        try:
+            existing = client.containers.get(frontend_container_name)
+            logging.warning(
+                f"Container {frontend_container_name} already exists. Deployment may fail or cause conflicts."
+            )
+        except docker.errors.NotFound:
+            pass  # No conflict, safe to proceed
+
         container_id = client.api.create_container(
             image="nebula-frontend",
             name=frontend_container_name,
@@ -936,6 +944,14 @@ class Deployer:
 
         controller_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-controller"
 
+        try:
+            existing = client.containers.get(controller_container_name)
+            logging.warning(
+                f"Container {controller_container_name} already exists. Deployment may fail or cause conflicts."
+            )
+        except docker.errors.NotFound:
+            pass  # No conflict, safe to proceed
+
         container_id = client.api.create_container(
             image="nebula-controller",
             name=controller_container_name,
@@ -989,6 +1005,12 @@ class Deployer:
 
         waf_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf"
 
+        try:
+            existing = client.containers.get(waf_container_name)
+            logging.warning(f"Container {waf_container_name} already exists. Deployment may fail or cause conflicts.")
+        except docker.errors.NotFound:
+            pass  # No conflict, safe to proceed
+
         container_id_waf = client.api.create_container(
             image="nebula-waf",
             name=waf_container_name,
@@ -1026,6 +1048,14 @@ class Deployer:
 
         waf_grafana_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf-grafana"
 
+        try:
+            existing = client.containers.get(waf_grafana_container_name)
+            logging.warning(
+                f"Container {waf_grafana_container_name} already exists. Deployment may fail or cause conflicts."
+            )
+        except docker.errors.NotFound:
+            pass  # No conflict, safe to proceed
+
         container_id = client.api.create_container(
             image="nebula-waf-grafana",
             name=waf_grafana_container_name,
@@ -1053,6 +1083,14 @@ class Deployer:
 
         waf_loki_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf-loki"
 
+        try:
+            existing = client.containers.get(waf_loki_container_name)
+            logging.warning(
+                f"Container {waf_loki_container_name} already exists. Deployment may fail or cause conflicts."
+            )
+        except docker.errors.NotFound:
+            pass  # No conflict, safe to proceed
+
         container_id_loki = client.api.create_container(
             image="nebula-waf-loki",
             name=waf_loki_container_name,
@@ -1079,6 +1117,14 @@ class Deployer:
         })
 
         waf_promtail_container_name = f"{self.deployment_prefix}_{os.environ['USER']}_nebula-waf-promtail"
+
+        try:
+            existing = client.containers.get(waf_promtail_container_name)
+            logging.warning(
+                f"Container {waf_promtail_container_name} already exists. Deployment may fail or cause conflicts."
+            )
+        except docker.errors.NotFound:
+            pass  # No conflict, safe to proceed
 
         container_id_promtail = client.api.create_container(
             image="nebula-waf-promtail",
