@@ -636,7 +636,7 @@ async def update_nodes(
             str(config["network_args"]["ip"]),
             str(config["network_args"]["port"]),
             str(config["device_args"]["role"]),
-            str(config["network_args"]["neighbors"]),
+            config["network_args"]["neighbors"],
             str(config["mobility_args"]["latitude"]),
             str(config["mobility_args"]["longitude"]),
             str(timestamp),

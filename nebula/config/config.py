@@ -55,7 +55,7 @@ class Config:
 
         self.__set_default_logging(mode="a")
         self.__set_training_logging(mode="a")
-        
+
     def shutdown_logging(self):
         """
         Properly shuts down all loggers and their handlers in the system.
@@ -204,40 +204,46 @@ class Config:
 
     def add_neighbor_from_config(self, addr):
         if self.participant != {}:
-            if self.participant["network_args"]["neighbors"] == "":
-                self.participant["network_args"]["neighbors"] = addr
+            neighbors = self.participant["network_args"]["neighbors"]
+
+            if not neighbors:
+                self.participant["network_args"]["neighbors"] = [addr]
                 self.participant["mobility_args"]["neighbors_distance"][addr] = None
             else:
-                if addr not in self.participant["network_args"]["neighbors"]:
-                    self.participant["network_args"]["neighbors"] += " " + addr
+                if addr not in neighbors:
+                    self.participant["network_args"]["neighbors"].append(addr)
                     self.participant["mobility_args"]["neighbors_distance"][addr] = None
 
     def update_nodes_distance(self, distances: dict):
         self.participant["mobility_args"]["neighbors_distance"] = {node: dist for node, (dist, _) in distances.items()}
 
     def update_neighbors_from_config(self, current_connections, dest_addr):
-        final_neighbors = []
-        for n in current_connections:
-            if n != dest_addr:
-                final_neighbors.append(n)
+        final_neighbors = [n for n in current_connections if n != dest_addr]
 
-        final_neighbors_string = " ".join(final_neighbors)
-        # Update neighbors
-        self.participant["network_args"]["neighbors"] = final_neighbors_string
+        # Update neighbors como lista (no string)
+        self.participant["network_args"]["neighbors"] = final_neighbors
+
         # Update neighbors location
         self.participant["mobility_args"]["neighbors_distance"] = {
             n: self.participant["mobility_args"]["neighbors_distance"][n]
             for n in final_neighbors
             if n in self.participant["mobility_args"]["neighbors_distance"]
         }
-        logging.info(f"Final neighbors: {final_neighbors_string} (config updated))")
+
+        logging.info(f"Final neighbors: {final_neighbors} (config updated)")
+
 
     def remove_neighbor_from_config(self, addr):
-        if self.participant != {}:
-            if self.participant["network_args"]["neighbors"] != "":
-                self.participant["network_args"]["neighbors"] = (
-                    self.participant["network_args"]["neighbors"].replace(addr, "").replace("  ", " ").strip()
-                )
+        if self.participant:
+            neighbors = self.participant["network_args"]["neighbors"]
+
+            if addr in neighbors:
+                neighbors.remove(addr)
+                self.participant["network_args"]["neighbors"] = neighbors
+
+                if addr in self.participant["mobility_args"]["neighbors_distance"]:
+                    del self.participant["mobility_args"]["neighbors_distance"][addr]
+
 
     def reload_config_file(self):
         config_dir = self.participant["tracking_args"]["config_dir"]

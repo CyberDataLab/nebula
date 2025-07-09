@@ -322,15 +322,16 @@ class TopologyManager:
 
     def get_neighbors_string(self, node_idx):
         """
-        Retrieves the neighbors of a given node as a string representation.
+        Retrieves the neighbors of a given node as a list of string representations.
 
-        This method checks the `topology` attribute to find the neighbors of the node at the specified index (`node_idx`). It then returns a string that lists the coordinates of each neighbor.
+        This method checks the `topology` attribute to find the neighbors of the node at the specified index (`node_idx`).
+        It then returns a list that contains the coordinates of each neighbor in string format.
 
         Parameters:
             node_idx (int): The index of the node for which neighbors are to be retrieved.
 
         Returns:
-            str: A space-separated string of neighbors' coordinates in the format "latitude:longitude".
+            list[str]: A list of neighbors' coordinates in the format "latitude:longitude".
         """
         logging.info(f"Getting neighbors for node {node_idx}")
         logging.info(f"Topology shape: {self.topology.shape}")
@@ -342,9 +343,8 @@ class TopologyManager:
                 logging.info(f"Found neighbor at index {i}: {self.nodes[i]}")
 
         neighbors_data_strings = [f"{i[0]}:{i[1]}" for i in neighbors_data]
-        neighbors_data_string = " ".join(neighbors_data_strings)
-        logging.info(f"Neighbors of node participant_{node_idx}: {neighbors_data_string}")
-        return neighbors_data_string
+        logging.info(f"Neighbors of node participant_{node_idx}: {neighbors_data_strings}")
+        return neighbors_data_strings
 
     def __ring_topology(self, increase_convergence=False):
         """

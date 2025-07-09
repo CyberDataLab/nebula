@@ -61,7 +61,7 @@ class Reputation:
     The class handles collection of metrics, calculation of static and dynamic reputation,
     updating history, and communication of reputation scores to neighbors.
     """
-    
+
     REPUTATION_THRESHOLD = 0.6
     SIMILARITY_THRESHOLD = 0.6
     INITIAL_ROUND_FOR_REPUTATION = 1
@@ -70,12 +70,12 @@ class Reputation:
     WEIGHTED_HISTORY_ROUNDS = 3
     FRACTION_ANOMALY_MULTIPLIER = 1.20
     THRESHOLD_ANOMALY_MULTIPLIER = 1.15
-    
+
     # Augmentation factors
     LATENCY_AUGMENT_FACTOR = 1.4
     MESSAGE_AUGMENT_FACTOR_EARLY = 2.0
     MESSAGE_AUGMENT_FACTOR_NORMAL = 1.1
-    
+
     # Penalty and decay factors
     HISTORICAL_PENALTY_THRESHOLD = 0.9
     NEGATIVE_LATENCY_PENALTY = 0.3
@@ -104,7 +104,7 @@ class Reputation:
         self._addr = engine.addr
         self._log_dir = engine.log_dir
         self._idx = engine.idx
-        
+
         self._initialize_data_structures()
         self._configure_constants()
         self._load_configuration()
@@ -116,7 +116,7 @@ class Reputation:
         """Configure system constants from config or use defaults."""
         reputation_config = self._config.participant.get("defense_args", {}).get("reputation", {})
         constants_config = reputation_config.get("constants", {})
-        
+
         self.REPUTATION_THRESHOLD = constants_config.get("reputation_threshold", self.REPUTATION_THRESHOLD)
         self.SIMILARITY_THRESHOLD = constants_config.get("similarity_threshold", self.SIMILARITY_THRESHOLD)
         self.INITIAL_ROUND_FOR_REPUTATION = constants_config.get("initial_round_for_reputation", self.INITIAL_ROUND_FOR_REPUTATION)
@@ -180,15 +180,15 @@ class Reputation:
 
     def _setup_connection_metrics(self):
         """Initialize metrics for each neighbor."""
-        neighbors_str = self._config.participant["network_args"]["neighbors"]
-        for neighbor in neighbors_str.split():
+        neighbors = self._config.participant["network_args"]["neighbors"]
+        for neighbor in neighbors:
             self.connection_metrics[neighbor] = Metrics()
 
     def _configure_metric_weights(self):
         """Configure weights for different metrics based on weighting factor."""
         default_weight = 0.25
         metric_names = ["model_arrival_latency", "model_similarity", "num_messages", "fraction_parameters_changed"]
-        
+
         if self._weighting_factor == "static":
             self._weight_model_arrival_latency = float(
                 self._metrics.get("model_arrival_latency", {}).get("weight", default_weight)
@@ -209,7 +209,7 @@ class Reputation:
                 elif not isinstance(self._metrics[metric_name], dict):
                     self._metrics[metric_name] = {"enabled": bool(self._metrics[metric_name])}
                 self._metrics[metric_name]["weight"] = default_weight
-            
+
             self._weight_model_arrival_latency = default_weight
             self._weight_model_similarity = default_weight
             self._weight_num_messages = default_weight
@@ -229,24 +229,24 @@ class Reputation:
     def _is_metric_enabled(self, metric_name: str, metrics_config: dict = None) -> bool:
         """
         Check if a specific metric is enabled based on the provided configuration.
-        
+
         Args:
             metric_name (str): The name of the metric to check.
-            metrics_config (dict, optional): The configuration dictionary for metrics. 
+            metrics_config (dict, optional): The configuration dictionary for metrics.
                                            If None, uses the instance's _metrics.
-            
+
         Returns:
             bool: True if the metric is enabled, False otherwise.
         """
         config_to_use = metrics_config if metrics_config is not None else getattr(self, '_metrics', None)
-        
+
         if not isinstance(config_to_use, dict):
             if metrics_config is not None:
                 logging.warning(f"metrics_config is not a dictionary: {type(metrics_config)}")
             else:
                 logging.warning("_metrics is not properly initialized")
             return False
-            
+
         metric_config = config_to_use.get(metric_name)
         if metric_config is None:
             return False
@@ -269,7 +269,7 @@ class Reputation:
     ):
         """
         Save data between nodes and aggregated models.
-        
+
         Args:
             type_data: Type of data to save ('number_message', 'fraction_of_params_changed', 'model_arrival_latency')
             nei: Neighbor identifier
@@ -290,7 +290,7 @@ class Reputation:
 
         try:
             metrics_instance = self.connection_metrics[nei]
-            
+
             if type_data == "number_message":
                 message_data = {"time": time, "current_round": current_round}
                 if not isinstance(metrics_instance.messages, list):
@@ -345,19 +345,19 @@ class Reputation:
     ):
         """
         Initialize the reputation system.
-        
+
         Args:
             federation_nodes: List of federation node identifiers
-            round_num: Current round number  
+            round_num: Current round number
             last_feedback_round: Last round that received feedback
             init_reputation: Initial reputation value to assign
         """
         if not self._enabled:
             return
-            
+
         if not self._validate_init_parameters(federation_nodes, round_num, init_reputation):
             return
-            
+
         neighbors = self._validate_federation_nodes(federation_nodes)
         if not neighbors:
             logging.error("init_reputation | No valid neighbors found")
@@ -370,13 +370,13 @@ class Reputation:
         if not federation_nodes:
             logging.error("init_reputation | No federation nodes provided")
             return False
-            
+
         if round_num is None:
             logging.warning("init_reputation | Round number not provided")
-            
+
         if init_reputation is None:
             logging.warning("init_reputation | Initial reputation value not provided")
-            
+
         return True
 
     async def _initialize_neighbor_reputations(self, neighbors: list, round_num: int, last_feedback_round: int, init_reputation: float):
@@ -392,7 +392,7 @@ class Reputation:
             "round": round_num,
             "last_feedback_round": last_feedback_round,
         }
-        
+
         if nei not in self.reputation:
             self.reputation[nei] = reputation_data
         elif self.reputation[nei].get("reputation") is None:
@@ -401,21 +401,21 @@ class Reputation:
     def _validate_federation_nodes(self, federation_nodes) -> list:
         """
         Validate and filter federation nodes.
-        
+
         Args:
             federation_nodes: List of federation node identifiers
-            
+
         Returns:
             list: List of valid node identifiers
         """
         if not federation_nodes:
             return []
-            
+
         valid_nodes = [node for node in federation_nodes if node and str(node).strip()]
-        
+
         if not valid_nodes:
             logging.warning("No valid federation nodes found after filtering")
-            
+
         return valid_nodes
 
     async def _calculate_static_reputation(
@@ -429,7 +429,7 @@ class Reputation:
 
         Args:
             addr: The participant's address
-            nei: The neighbor's address  
+            nei: The neighbor's address
             metric_values: Dictionary with metric values
         """
         static_weights = {
@@ -440,10 +440,10 @@ class Reputation:
         }
 
         reputation_static = sum(
-            metric_values.get(metric_name, 0) * static_weights[metric_name] 
+            metric_values.get(metric_name, 0) * static_weights[metric_name]
             for metric_name in static_weights
         )
-        
+
         logging.info(f"Static reputation for node {nei} at round {await self.engine.get_round()}: {reputation_static}")
 
         avg_reputation = await self.save_reputation_history_in_memory(self.engine.addr, nei, reputation_static)
@@ -476,48 +476,48 @@ class Reputation:
     async def _calculate_average_weights(self):
         """Calculate average weights for all enabled metrics."""
         average_weights = {}
-        
+
         for metric_name in self.history_data.keys():
             if self._is_metric_enabled(metric_name):
                 average_weights[metric_name] = await self._get_metric_average_weight(metric_name)
-        
+
         return average_weights
-    
+
     async def _get_metric_average_weight(self, metric_name):
         """Get the average weight for a specific metric."""
         if metric_name not in self.history_data or not self.history_data[metric_name]:
             logging.debug(f"No history data available for metric: {metric_name}")
             return 0
-        
+
         valid_entries = [
             entry for entry in self.history_data[metric_name]
-            if (entry.get("round") is not None and 
-                entry["round"] >= await self._engine.get_round() and 
+            if (entry.get("round") is not None and
+                entry["round"] >= await self._engine.get_round() and
                 entry.get("weight") not in [None, -1])
         ]
-        
+
         if not valid_entries:
             return 0
-            
+
         try:
             weights = [entry["weight"] for entry in valid_entries if entry.get("weight") is not None]
             return sum(weights) / len(weights) if weights else 0
         except (TypeError, ZeroDivisionError) as e:
             logging.warning(f"Error calculating average weight for {metric_name}: {e}")
             return 0
-    
+
     async def _process_neighbors_reputation(self, addr, neighbors, average_weights):
         """Process reputation calculation for all neighbors."""
         for nei in neighbors:
             metric_values = await self._get_neighbor_metric_values(nei)
-            
+
             if all(metric_name in metric_values for metric_name in average_weights):
                 await self._update_neighbor_reputation(addr, nei, metric_values, average_weights)
-    
+
     async def _get_neighbor_metric_values(self, nei):
         """Get metric values for a specific neighbor in the current round."""
         metric_values = {}
-        
+
         for metric_name in self.history_data:
             if self._is_metric_enabled(metric_name):
                 for entry in self.history_data.get(metric_name, []):
@@ -526,16 +526,16 @@ class Reputation:
                         entry.get("nei") == nei):
                         metric_values[metric_name] = entry.get("metric_value", 0)
                         break
-        
+
         return metric_values
-    
+
     async def _update_neighbor_reputation(self, addr, nei, metric_values, average_weights):
         """Update reputation for a specific neighbor."""
         reputation_with_weights = sum(
-            metric_values.get(metric_name, 0) * average_weights[metric_name] 
+            metric_values.get(metric_name, 0) * average_weights[metric_name]
             for metric_name in average_weights
         )
-        
+
         logging.info(
             f"Dynamic reputation with weights for {nei} at round {await self._engine.get_round()}: {reputation_with_weights}"
         )
@@ -564,7 +564,7 @@ class Reputation:
             data: Additional data to update (currently unused)
         """
         current_round = await self._engine.get_round()
-        
+
         if nei not in self.reputation:
             self.reputation[nei] = {
                 "reputation": reputation,
@@ -576,7 +576,7 @@ class Reputation:
             self.reputation[nei]["round"] = current_round
 
         logging.info(f"Reputation of node {nei}: {self.reputation[nei]['reputation']}")
-        
+
         if self.reputation[nei]["reputation"] < self.REPUTATION_THRESHOLD and current_round > 0:
             self.rejected_nodes.add(nei)
             logging.info(f"Rejected node {nei} at round {current_round}")
@@ -608,23 +608,23 @@ class Reputation:
             reputation_metrics
         )
         self._add_current_metrics_to_history(active_metrics, history_data, current_round, addr, nei)
-        
+
         if current_round >= self.INITIAL_ROUND_FOR_REPUTATION and len(active_metrics) > 0:
             adjusted_weights = self._calculate_dynamic_weights(active_metrics, history_data)
         else:
             adjusted_weights = self._calculate_uniform_weights(active_metrics)
-        
+
         self._update_history_with_weights(active_metrics, history_data, adjusted_weights, current_round, nei)
 
     def _ensure_history_data_structure(self, history_data: dict):
         """Ensure all required keys exist in history data structure."""
         required_keys = [
             "num_messages",
-            "model_similarity", 
+            "model_similarity",
             "fraction_parameters_changed",
             "model_arrival_latency",
         ]
-        
+
         for key in required_keys:
             if key not in history_data:
                 history_data[key] = []
@@ -644,7 +644,7 @@ class Reputation:
             "fraction_parameters_changed": fraction_score_asign,
             "model_arrival_latency": avg_model_arrival_latency,
         }
-        
+
         return {k: v for k, v in all_metrics.items() if self._is_metric_enabled(k, reputation_metrics)}
 
     def _add_current_metrics_to_history(self, active_metrics: dict, history_data: dict, current_round: int, addr: str, nei: str):
@@ -662,7 +662,7 @@ class Reputation:
     def _calculate_dynamic_weights(self, active_metrics: dict, history_data: dict) -> dict:
         """Calculate dynamic weights based on metric deviations."""
         deviations = self._calculate_metric_deviations(active_metrics, history_data)
-        
+
         if all(deviation == 0.0 for deviation in deviations.values()):
             return self._generate_random_weights(active_metrics)
         else:
@@ -672,7 +672,7 @@ class Reputation:
     def _calculate_metric_deviations(self, active_metrics: dict, history_data: dict) -> dict:
         """Calculate deviations of current metrics from historical means."""
         deviations = {}
-        
+
         for metric_name, current_value in active_metrics.items():
             historical_values = history_data[metric_name]
             metric_values = [
@@ -680,11 +680,11 @@ class Reputation:
                 for entry in historical_values
                 if "metric_value" in entry and entry["metric_value"] != 0
             ]
-            
+
             mean_value = np.mean(metric_values) if metric_values else 0
             deviation = abs(current_value - mean_value)
             deviations[metric_name] = deviation
-            
+
         return deviations
 
     def _generate_random_weights(self, active_metrics: dict) -> dict:
@@ -692,7 +692,7 @@ class Reputation:
         num_metrics = len(active_metrics)
         random_weights = [random.random() for _ in range(num_metrics)]
         total_random_weight = sum(random_weights)
-        
+
         return {
             metric_name: weight / total_random_weight
             for metric_name, weight in zip(active_metrics, random_weights, strict=False)
@@ -702,14 +702,14 @@ class Reputation:
         """Normalize weights based on deviations."""
         max_deviation = max(deviations.values()) if deviations else 1
         normalized_weights = {
-            metric_name: (deviation / max_deviation) 
+            metric_name: (deviation / max_deviation)
             for metric_name, deviation in deviations.items()
         }
-        
+
         total_weight = sum(normalized_weights.values())
         if total_weight > 0:
             return {
-                metric_name: weight / total_weight 
+                metric_name: weight / total_weight
                 for metric_name, weight in normalized_weights.items()
             }
         else:
@@ -720,20 +720,20 @@ class Reputation:
         """Apply minimum weight constraints and renormalize."""
         mean_deviation = np.mean(list(deviations.values()))
         dynamic_min_weight = max(self.DYNAMIC_MIN_WEIGHT_THRESHOLD, mean_deviation / (mean_deviation + 1))
-        
+
         adjusted_weights = {}
         total_adjusted_weight = 0
-        
+
         for metric_name, weight in normalized_weights.items():
             adjusted_weight = max(weight, dynamic_min_weight)
             adjusted_weights[metric_name] = adjusted_weight
             total_adjusted_weight += adjusted_weight
-        
+
         # Renormalize if total weight exceeds 1
         if total_adjusted_weight > 1:
             for metric_name in adjusted_weights:
                 adjusted_weights[metric_name] /= total_adjusted_weight
-                
+
         return adjusted_weights
 
     def _calculate_uniform_weights(self, active_metrics: dict) -> dict:
@@ -748,8 +748,8 @@ class Reputation:
         for metric_name in active_metrics:
             weight = weights.get(metric_name, -1)
             for entry in history_data[metric_name]:
-                if (entry["metric_name"] == metric_name and 
-                    entry["round"] == current_round and 
+                if (entry["metric_name"] == metric_name and
+                    entry["round"] == current_round and
                     entry["nei"] == nei):
                     entry["weight"] = weight
 
@@ -765,7 +765,7 @@ class Reputation:
         try:
             current_round = await self._engine.get_round()
             metrics_instance = self.connection_metrics.get(nei)
-            
+
             if not metrics_instance:
                 logging.warning(f"No metrics found for neighbor {nei}")
                 return self._get_default_metric_values()
@@ -778,7 +778,7 @@ class Reputation:
             }
 
             self._log_metrics_graphics(metric_results, addr, nei, current_round)
-            
+
             return (
                 metric_results["messages"]["avg"],
                 metric_results["similarity"],
@@ -802,7 +802,7 @@ class Reputation:
         filtered_messages = [
             msg for msg in metrics_instance.messages if msg.get("current_round") == current_round
         ]
-        
+
         for msg in filtered_messages:
             self.messages_number_message.append({
                 "number_message": msg.get("time"),
@@ -813,9 +813,9 @@ class Reputation:
         normalized, count = self.manage_metric_number_message(
             self.messages_number_message, addr, nei, current_round, True
         )
-        
+
         avg = self.save_number_message_history(addr, nei, normalized, current_round)
-        
+
         if avg is None and current_round > self.HISTORY_ROUNDS_LOOKBACK:
             avg = self.number_message_history[(addr, nei)][current_round - 1]["avg_number_message"]
 
@@ -901,7 +901,7 @@ class Reputation:
             if avg_latency is None and current_round > 1:
                 avg_latency = self.model_arrival_latency_history[(addr, nei)][current_round - 1]["score"]
             return avg_latency or 0
-        
+
         return 0
 
     def _process_model_similarity_metric(self, nei: str, current_round: int, metrics_active) -> float:
@@ -938,7 +938,7 @@ class Reputation:
     ):
         """
         Create and log graphics for reputation metrics.
-        
+
         Args:
             number_message_count: Count of messages for logging
             number_message_norm: Normalized message metric
@@ -952,25 +952,25 @@ class Reputation:
         """
         if current_round is None or current_round >= total_rounds:
             return
-            
+
         self.engine.trainer._logger.log_data(
-            {f"R-Model_arrival_latency_reputation/{addr}": {nei: model_arrival_latency}}, 
+            {f"R-Model_arrival_latency_reputation/{addr}": {nei: model_arrival_latency}},
             step=current_round
         )
         self.engine.trainer._logger.log_data(
-            {f"R-Count_messages_number_message_reputation/{addr}": {nei: number_message_count}}, 
+            {f"R-Count_messages_number_message_reputation/{addr}": {nei: number_message_count}},
             step=current_round
         )
         self.engine.trainer._logger.log_data(
-            {f"R-number_message_reputation/{addr}": {nei: number_message_norm}}, 
+            {f"R-number_message_reputation/{addr}": {nei: number_message_norm}},
             step=current_round
         )
         self.engine.trainer._logger.log_data(
-            {f"R-Similarity_reputation/{addr}": {nei: similarity}}, 
+            {f"R-Similarity_reputation/{addr}": {nei: similarity}},
             step=current_round
         )
         self.engine.trainer._logger.log_data(
-            {f"R-Fraction_reputation/{addr}": {nei: fraction}}, 
+            {f"R-Fraction_reputation/{addr}": {nei: fraction}},
             step=current_round
         )
 
@@ -991,7 +991,7 @@ class Reputation:
         try:
             key = (addr, nei, current_round)
             self._initialize_fraction_history_entry(key, fraction_changed, threshold)
-            
+
             if current_round == 0:
                 return self._handle_initial_round_anomalies(key, fraction_changed, threshold)
             else:
@@ -1032,16 +1032,16 @@ class Reputation:
     ) -> float:
         """Handle anomaly analysis for subsequent rounds."""
         prev_stats = self._find_previous_valid_stats(addr, nei, current_round)
-        
+
         if prev_stats is None:
             logging.warning(f"No valid previous stats found for {addr}, {nei}, round {current_round}")
             return 1.0
-            
+
         anomalies = self._detect_anomalies(fraction_changed, threshold, prev_stats)
         values = self._calculate_anomaly_values(fraction_changed, threshold, prev_stats, anomalies)
         fraction_score = self._calculate_combined_score(values)
         self._update_fraction_statistics(key, fraction_changed, threshold, prev_stats, anomalies, fraction_score)
-        
+
         return max(fraction_score, 0)
 
     def _find_previous_valid_stats(self, addr: str, nei: str, current_round: int) -> dict:
@@ -1049,18 +1049,18 @@ class Reputation:
         for i in range(1, current_round + 1):
             candidate_key = (addr, nei, current_round - i)
             candidate_data = self.fraction_changed_history.get(candidate_key, {})
-            
+
             required_keys = ["mean_fraction", "std_dev_fraction", "mean_threshold", "std_dev_threshold"]
             if all(candidate_data.get(k) is not None for k in required_keys):
                 return candidate_data
-                
+
         return None
 
     def _detect_anomalies(self, current_fraction: float, current_threshold: float, prev_stats: dict) -> dict:
         """Detect if current values are anomalous compared to previous statistics."""
         upper_mean_fraction = (prev_stats["mean_fraction"] + prev_stats["std_dev_fraction"]) * self.FRACTION_ANOMALY_MULTIPLIER
         upper_mean_threshold = (prev_stats["mean_threshold"] + prev_stats["std_dev_threshold"]) * self.THRESHOLD_ANOMALY_MULTIPLIER
-        
+
         return {
             "fraction_anomaly": current_fraction > upper_mean_fraction,
             "threshold_anomaly": current_threshold > upper_mean_threshold,
@@ -1074,19 +1074,19 @@ class Reputation:
         """Calculate penalty values for fraction and threshold anomalies."""
         fraction_value = 1.0
         threshold_value = 1.0
-        
+
         if anomalies["fraction_anomaly"]:
             mean_fraction_prev = prev_stats["mean_fraction"]
             if mean_fraction_prev > 0:
                 penalization_factor = abs(current_fraction - mean_fraction_prev) / mean_fraction_prev
                 fraction_value = 1 - (1 / (1 + np.exp(-penalization_factor)))
-        
+
         if anomalies["threshold_anomaly"]:
             mean_threshold_prev = prev_stats["mean_threshold"]
             if mean_threshold_prev > 0:
                 penalization_factor = abs(current_threshold - mean_threshold_prev) / mean_threshold_prev
                 threshold_value = 1 - (1 / (1 + np.exp(-penalization_factor)))
-        
+
         return {
             "fraction_value": fraction_value,
             "threshold_value": threshold_value,
@@ -1099,19 +1099,19 @@ class Reputation:
         return fraction_weight * values["fraction_value"] + threshold_weight * values["threshold_value"]
 
     def _update_fraction_statistics(
-        self, key: tuple, current_fraction: float, current_threshold: float, 
+        self, key: tuple, current_fraction: float, current_threshold: float,
         prev_stats: dict, anomalies: dict, fraction_score: float
     ):
         """Update the fraction statistics for the current round."""
         self.fraction_changed_history[key]["fraction_anomaly"] = anomalies["fraction_anomaly"]
         self.fraction_changed_history[key]["threshold_anomaly"] = anomalies["threshold_anomaly"]
-        
+
         self.fraction_changed_history[key]["mean_fraction"] = (current_fraction + prev_stats["mean_fraction"]) / 2
         self.fraction_changed_history[key]["mean_threshold"] = (current_threshold + prev_stats["mean_threshold"]) / 2
-        
+
         fraction_variance = ((current_fraction - prev_stats["mean_fraction"]) ** 2 + prev_stats["std_dev_fraction"] ** 2) / 2
         threshold_variance = ((self.THRESHOLD_VARIANCE_MULTIPLIER * (current_threshold - prev_stats["mean_threshold"]) ** 2) + prev_stats["std_dev_threshold"] ** 2) / 2
-        
+
         self.fraction_changed_history[key]["std_dev_fraction"] = np.sqrt(fraction_variance)
         self.fraction_changed_history[key]["std_dev_threshold"] = np.sqrt(threshold_variance)
         self.fraction_changed_history[key]["fraction_score"] = fraction_score
@@ -1132,9 +1132,9 @@ class Reputation:
         """
         try:
             current_key = nei
-            
+
             self._initialize_latency_round_entry(current_round, current_key, latency)
-            
+
             if current_round >= 1:
                 score = self._calculate_latency_score(current_round, current_key, latency)
                 self._update_latency_entry_with_score(current_round, current_key, score)
@@ -1161,17 +1161,17 @@ class Reputation:
         """Calculate the latency score based on historical data."""
         target_round = self._get_target_round_for_latency(current_round)
         all_latencies = self._get_all_latencies_for_round(target_round)
-        
+
         if not all_latencies:
             return 0.0
-            
+
         mean_latency = np.mean(all_latencies)
         augment_mean = mean_latency * self.LATENCY_AUGMENT_FACTOR
-        
+
         if latency is None:
             logging.info(f"latency is None in round {current_round} for nei {current_key}")
             return -0.5
-            
+
         if latency <= augment_mean:
             return 1.0
         else:
@@ -1195,7 +1195,7 @@ class Reputation:
         target_round = self._get_target_round_for_latency(current_round)
         all_latencies = self._get_all_latencies_for_round(target_round)
         mean_latency = np.mean(all_latencies) if all_latencies else 0
-        
+
         self.model_arrival_latency_history[current_round][current_key].update({
             "mean_latency": mean_latency,
             "score": score,
@@ -1215,9 +1215,9 @@ class Reputation:
         """
         try:
             current_key = nei
-            
+
             self._initialize_latency_history_entry(round_num, current_key, model_arrival_latency)
-            
+
             if model_arrival_latency > 0 and round_num >= 1:
                 avg_model_arrival_latency = self._calculate_latency_weighted_average_positive(
                     round_num, current_key, model_arrival_latency
@@ -1236,7 +1236,7 @@ class Reputation:
             )
 
             return avg_model_arrival_latency
-            
+
         except Exception:
             logging.exception("Error saving model_arrival_latency history")
 
@@ -1284,14 +1284,14 @@ class Reputation:
     ) -> tuple[float, int]:
         """
         Manage the number of messages metric for a specific neighbor.
-        
+
         Args:
             messages_number_message: List of message data
             addr: Source address
             nei: Neighbor address
             current_round: Current round number
             metric_active: Whether the metric is active
-            
+
         Returns:
             Tuple of (normalized_messages, messages_count)
         """
@@ -1301,13 +1301,13 @@ class Reputation:
 
             messages_count = self._count_relevant_messages(messages_number_message, addr, nei, current_round)
             neighbor_stats = self._calculate_neighbor_statistics(messages_number_message, current_round)
-            
+
             normalized_messages = self._calculate_normalized_messages(messages_count, neighbor_stats)
-            
+
             normalized_messages = self._apply_historical_penalty(
                 normalized_messages, addr, nei, current_round
             )
-            
+
             self._store_message_history(addr, nei, current_round, normalized_messages)
             normalized_messages = max(0.001, normalized_messages)
 
@@ -1339,7 +1339,7 @@ class Reputation:
             neighbor_counts[key] = neighbor_counts.get(key, 0) + 1
 
         counts_all_neighbors = list(neighbor_counts.values())
-        
+
         if not counts_all_neighbors:
             return {
                 "percentile_reference": 0,
@@ -1349,7 +1349,7 @@ class Reputation:
             }
 
         mean_messages = np.mean(counts_all_neighbors)
-        
+
         return {
             "percentile_reference": np.percentile(counts_all_neighbors, 25),
             "std_dev": np.std(counts_all_neighbors),
@@ -1361,10 +1361,10 @@ class Reputation:
         """Calculate normalized message score with relative and extra penalties."""
         normalized_messages = 1.0
         penalties_applied = []
-        
+
         relative_increase = self._calculate_relative_increase(messages_count, neighbor_stats["percentile_reference"])
         dynamic_margin = self._calculate_dynamic_margin(neighbor_stats)
-        
+
         if relative_increase > dynamic_margin:
             penalty_ratio = self._calculate_penalty_ratio(relative_increase, dynamic_margin)
             normalized_messages *= np.exp(-(penalty_ratio**2))
@@ -1400,7 +1400,7 @@ class Reputation:
 
     def _should_apply_extra_penalty(self, messages_count: int, neighbor_stats: dict) -> bool:
         """Determine if extra penalty should be applied."""
-        return (neighbor_stats["mean_messages"] > 0 and 
+        return (neighbor_stats["mean_messages"] > 0 and
                 messages_count > neighbor_stats["augment_mean"])
 
     def _calculate_extra_penalty_factor(self, messages_count: int, neighbor_stats: dict) -> float:
@@ -1408,7 +1408,7 @@ class Reputation:
         epsilon = 1e-6
         mean_messages = neighbor_stats["mean_messages"]
         augment_mean = neighbor_stats["augment_mean"]
-        
+
         extra_penalty = (messages_count - mean_messages) / (mean_messages + epsilon)
         amplification = 1 + (augment_mean / (mean_messages + epsilon))
         return extra_penalty * amplification
@@ -1417,27 +1417,27 @@ class Reputation:
         """Apply historical penalty based on previous round's score."""
         if current_round <= 1:
             return normalized_messages
-            
+
         prev_data = (
             self.number_message_history.get((addr, nei), {})
             .get(current_round - 1, {})
         )
-        
+
         prev_score = prev_data.get("normalized_messages")
         was_previously_penalized = prev_data.get("was_penalized", False)
-        
+
         if prev_score is not None and prev_score < self.HISTORICAL_PENALTY_THRESHOLD:
             original_score = normalized_messages
-            
+
             if was_previously_penalized:
                 penalty_factor = self.HISTORICAL_PENALTY_THRESHOLD * 0.8
                 logging.debug(f"Repeated penalty applied to {nei}: stricter historical penalty")
             else:
                 penalty_factor = self.HISTORICAL_PENALTY_THRESHOLD
-            
+
             normalized_messages *= penalty_factor
             logging.debug(f"Historical penalty applied to {nei}: {original_score:.4f} -> {normalized_messages:.4f} (prev_score: {prev_score:.4f}, was_penalized: {was_previously_penalized})")
-            
+
         return normalized_messages
 
     def _store_message_history(self, addr: str, nei: str, current_round: int, normalized_messages: float):
@@ -1445,9 +1445,9 @@ class Reputation:
         key = (addr, nei)
         if key not in self.number_message_history:
             self.number_message_history[key] = {}
-        
+
         was_penalized = normalized_messages < 1.0
-        
+
         self.number_message_history[key][current_round] = {
             "normalized_messages": normalized_messages,
             "was_penalized": was_penalized,
@@ -1464,9 +1464,9 @@ class Reputation:
         """
         try:
             key = (addr, nei)
-            
+
             self._initialize_message_history_entry(key, current_round, messages_number_message_normalized)
-            
+
             if messages_number_message_normalized > 0 and current_round >= 1:
                 avg_number_message = self._calculate_weighted_average_positive(key, current_round, messages_number_message_normalized)
             elif messages_number_message_normalized == 0 and current_round >= 1:
@@ -1478,7 +1478,7 @@ class Reputation:
 
             self.number_message_history[key][current_round]["avg_number_message"] = avg_number_message
             return avg_number_message
-            
+
         except Exception:
             logging.exception("Error saving number_message history")
             return -1
@@ -1524,7 +1524,7 @@ class Reputation:
 
         Args:
             addr: The node's identifier
-            nei: The neighboring node identifier  
+            nei: The neighboring node identifier
             reputation: The reputation value to save
 
         Returns:
@@ -1533,27 +1533,27 @@ class Reputation:
         try:
             key = (addr, nei)
             current_round = await self._engine.get_round()
-            
+
             if key not in self.reputation_history:
                 self.reputation_history[key] = {}
 
             self.reputation_history[key][current_round] = reputation
 
             rounds = sorted(self.reputation_history[key].keys(), reverse=True)[:2]
-            
+
             if len(rounds) >= 2:
                 current_rep = self.reputation_history[key][rounds[0]]
                 previous_rep = self.reputation_history[key][rounds[1]]
-                
+
                 current_weight = self.REPUTATION_CURRENT_WEIGHT
                 previous_weight = self.REPUTATION_FEEDBACK_WEIGHT
                 avg_reputation = (current_rep * current_weight) + (previous_rep * previous_weight)
-                
+
                 logging.info(f"Current reputation: {current_rep}, Previous reputation: {previous_rep}")
                 logging.info(f"Reputation ponderated: {avg_reputation}")
             else:
                 avg_reputation = reputation
-                
+
             return avg_reputation
 
         except Exception:
@@ -1577,23 +1577,23 @@ class Reputation:
                 return 0.0
 
             relevant_metrics = [
-                metric for metric in metrics_instance.similarity 
+                metric for metric in metrics_instance.similarity
                 if metric.get("nei") == nei and metric.get("current_round") == current_round
             ]
-            
+
             if not relevant_metrics:
                 relevant_metrics = [
-                    metric for metric in metrics_instance.similarity 
+                    metric for metric in metrics_instance.similarity
                     if metric.get("nei") == nei
                 ]
-                
+
             if not relevant_metrics:
                 return 0.0
             neighbor_metric = relevant_metrics[-1]
 
             similarity_weights = {
                 "cosine": 0.25,
-                "euclidean": 0.25, 
+                "euclidean": 0.25,
                 "manhattan": 0.25,
                 "pearson_correlation": 0.25,
             }
@@ -1604,7 +1604,7 @@ class Reputation:
             )
 
             return max(0.0, min(1.0, similarity_value))
-            
+
         except Exception:
             return 0.0
 
@@ -1620,9 +1620,9 @@ class Reputation:
 
         (updates, _, _) = await ae.get_event_data()
         await self._log_reputation_calculation_start()
-        
+
         neighbors = set(await self._engine._cm.get_addrs_current_connections(only_direct=True))
-        
+
         await self._process_neighbor_metrics(neighbors)
         await self._calculate_reputation_by_factor(neighbors)
         await self._handle_initial_reputation()
@@ -1644,7 +1644,7 @@ class Reputation:
             metrics = await self.calculate_value_metrics(
                 self._addr, nei, metrics_active=self._metrics
             )
-            
+
             if self._weighting_factor == "dynamic":
                 await self._process_dynamic_metrics(nei, metrics)
             elif self._weighting_factor == "static" and await self._engine.get_round() >= 1:
@@ -1653,7 +1653,7 @@ class Reputation:
     async def _process_dynamic_metrics(self, nei, metrics):
         """Process metrics for dynamic weighting factor."""
         (metric_messages_number, metric_similarity, metric_fraction, metric_model_arrival_latency) = metrics
-        
+
         self.calculate_weighted_values(
             metric_messages_number,
             metric_similarity,
@@ -1669,7 +1669,7 @@ class Reputation:
     async def _process_static_metrics(self, nei, metrics):
         """Process metrics for static weighting factor."""
         (metric_messages_number, metric_similarity, metric_fraction, metric_model_arrival_latency) = metrics
-        
+
         metric_values_dict = {
             "num_messages": metric_messages_number,
             "model_similarity": metric_similarity,
@@ -1686,7 +1686,7 @@ class Reputation:
     async def _handle_initial_reputation(self):
         """Handle reputation initialization for the first round."""
         if await self._engine.get_round() < 1 and self._enabled:
-            federation = self._engine.config.participant["network_args"]["neighbors"].split()
+            federation = self._engine.config.participant["network_args"]["neighbors"]
             await self.init_reputation(
                 federation_nodes=federation,
                 round_num=await self._engine.get_round(),
@@ -1698,7 +1698,7 @@ class Reputation:
         """Process and include feedback in reputation."""
         status = await self.include_feedback_in_reputation()
         current_round = await self._engine.get_round()
-        
+
         if status:
             logging.info(f"Feedback included in reputation at round {current_round}")
         else:
@@ -1735,7 +1735,7 @@ class Reputation:
     def create_graphic_reputation(self, addr: str, round_num: int):
         """
         Log reputation data for visualization.
-        
+
         Args:
             addr: The node address
             round_num: The round number for logging step
@@ -1746,7 +1746,7 @@ class Reputation:
                 for node_id, data in self.reputation.items()
                 if data.get("reputation") is not None
             }
-            
+
             if valid_reputations:
                 reputation_data = {f"Reputation/{addr}": valid_reputations}
                 self._engine.trainer._logger.log_data(reputation_data, step=round_num)
@@ -1954,26 +1954,26 @@ class Reputation:
     async def recollect_similarity(self, ure: UpdateReceivedEvent):
         """
         Collect and analyze model similarity metrics.
-        
+
         Args:
             ure: UpdateReceivedEvent containing model and metadata
         """
         (decoded_model, weight, nei, round_num, local) = await ure.get_event_data()
-        
+
         if not (self._enabled and self._is_metric_enabled("model_similarity")):
             return
-            
+
         if not self._engine.config.participant["adaptive_args"]["model_similarity"]:
             return
-            
+
         if nei == self._addr:
             return
-            
+
         logging.info("🤖  handle_model_message | Checking model similarity")
-        
+
         local_model = self._engine.trainer.get_model_parameters()
         similarity_values = self._calculate_all_similarity_metrics(local_model, decoded_model)
-        
+
         similarity_metrics = {
             "timestamp": datetime.now(),
             "nei": nei,
@@ -1996,7 +1996,7 @@ class Reputation:
                 "jaccard": 0.0,
                 "minkowski": 0.0,
             }
-        
+
         similarity_functions = [
             ("cosine", cosine_metric),
             ("euclidean", euclidean_metric),
@@ -2004,29 +2004,29 @@ class Reputation:
             ("pearson_correlation", pearson_correlation_metric),
             ("jaccard", jaccard_metric),
         ]
-        
+
         similarity_values = {}
-        
+
         for name, metric_func in similarity_functions:
             try:
                 similarity_values[name] = metric_func(local_model, received_model, similarity=True)
             except Exception:
                 similarity_values[name] = 0.0
-        
+
         try:
             similarity_values["minkowski"] = minkowski_metric(
                 local_model, received_model, p=2, similarity=True
             )
         except Exception:
             similarity_values["minkowski"] = 0.0
-        
+
         return similarity_values
 
     def _store_similarity_metrics(self, nei: str, similarity_metrics: dict):
         """Store similarity metrics for the given neighbor."""
         if nei not in self.connection_metrics:
             self.connection_metrics[nei] = Metrics()
-            
+
         self.connection_metrics[nei].similarity.append(similarity_metrics)
 
     def _check_similarity_threshold(self, nei: str, cosine_value: float):
@@ -2064,25 +2064,25 @@ class Reputation:
     async def recollect_fraction_of_parameters_changed(self, ure: UpdateReceivedEvent):
         """
         Collect and analyze the fraction of parameters that changed between models.
-        
+
         Args:
             ure: UpdateReceivedEvent containing model and metadata
         """
         (decoded_model, weight, source, round_num, local) = await ure.get_event_data()
-        
+
         current_round = await self._engine.get_round()
         parameters_local = self._engine.trainer.get_model_parameters()
-        
+
         prev_threshold = self._get_previous_threshold(source, current_round)
         differences = self._calculate_parameter_differences(parameters_local, decoded_model)
         current_threshold = self._calculate_threshold(differences, prev_threshold)
-        
+
         changed_params, total_params, changes_record = self._count_changed_parameters(
             parameters_local, decoded_model, current_threshold
         )
-        
+
         fraction_changed = changed_params / total_params if total_params > 0 else 0.0
-        
+
         self._store_fraction_data(source, current_round, {
             "fraction_changed": fraction_changed,
             "total_params": total_params,
@@ -2102,7 +2102,7 @@ class Reputation:
 
     def _get_previous_threshold(self, source: str, current_round: int) -> float:
         """Get the threshold from the previous round for the given source."""
-        if (source in self.fraction_of_params_changed and 
+        if (source in self.fraction_of_params_changed and
             current_round - 1 in self.fraction_of_params_changed[source]):
             return self.fraction_of_params_changed[source][current_round - 1][-1]["threshold"]
         return None
@@ -2122,7 +2122,7 @@ class Reputation:
         """Calculate the threshold for determining parameter changes."""
         if not differences:
             return 0
-            
+
         mean_threshold = torch.mean(torch.tensor(differences)).item()
         if prev_threshold is not None:
             return (prev_threshold + mean_threshold) / 2
@@ -2133,20 +2133,20 @@ class Reputation:
         total_params = 0
         changed_params = 0
         changes_record = {}
-        
+
         for key in local_params.keys():
             if key in received_params:
                 local_tensor = local_params[key].cpu()
                 received_tensor = received_params[key].cpu()
                 diff = torch.abs(local_tensor - received_tensor)
                 total_params += diff.numel()
-                
+
                 num_changed = torch.sum(diff > threshold).item()
                 changed_params += num_changed
-                
+
                 if num_changed > 0:
                     changes_record[key] = num_changed
-                    
+
         return changed_params, total_params, changes_record
 
     def _store_fraction_data(self, source: str, current_round: int, data: dict):
@@ -2155,5 +2155,5 @@ class Reputation:
             self.fraction_of_params_changed[source] = {}
         if current_round not in self.fraction_of_params_changed[source]:
             self.fraction_of_params_changed[source][current_round] = []
-            
+
         self.fraction_of_params_changed[source][current_round].append(data)

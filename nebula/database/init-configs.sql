@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS nodes (
   ip TEXT,
   port TEXT,
   role TEXT,
-  neighbors TEXT,
+  neighbors TEXT[],
   latitude TEXT,
   longitude TEXT,
   timestamp TEXT,
@@ -40,7 +40,7 @@ CREATE TABLE configs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_configs_config_gin ON configs USING GIN (config);
-  
+
 -- 4) Scenarios table as JSONB
 CREATE TABLE IF NOT EXISTS scenarios (
     name TEXT PRIMARY KEY,

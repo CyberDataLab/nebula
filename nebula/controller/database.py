@@ -204,7 +204,7 @@ async def update_node_record(
                                            timestamp, federation, round, scenario, hash, malicious)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
                         """,
-                        node_uid, idx, ip, port, role, json.dumps(neighbors), latitude, longitude,
+                        node_uid, idx, ip, port, role, neighbors, latitude, longitude,
                         timestamp, federation, federation_round, scenario, run_hash, malicious,
                     )
                 else:
@@ -216,7 +216,7 @@ async def update_node_record(
                         hash = $11, malicious = $12
                         WHERE uid = $13 AND scenario = $14;
                         """,
-                        idx, ip, port, role, json.dumps(neighbors), latitude, longitude,
+                        idx, ip, port, role, neighbors, latitude, longitude,
                         timestamp, federation, federation_round, run_hash, malicious,
                         node_uid, scenario,
                     )
@@ -710,42 +710,3 @@ if __name__ == "__main__":
     # os.environ['DB_PORT'] = '5432'
 
     logging.basicConfig(level=logging.INFO)
-
-    print("Listing users:")
-    users = list_users(all_info=True)
-    for user in users:
-        print(f"- User: {user['user']}, Role: {user['role']}")
-
-    # Example of adding/updating a user
-    # print("\nAdding/Updating test user:")
-    # add_user("TESTUSER", "testpassword123", "user")
-    # print(get_user_info("TESTUSER"))
-
-    # Example of scenario operations
-    # print("\nScenario operations:")
-    # current_time_str = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
-    # scenario_data = {
-    #     "title": "My Test Scenario",
-    #     "model": "NN",
-    #     "dataset": "MNIST",
-    #     "rounds": "10",
-    #     "description": "A test scenario for demonstration."
-    # }
-    # scenario_update_record("test_scenario_1", current_time_str, "", scenario_data, "running", "ADMIN")
-    # print("Running scenarios:")
-    # print(get_running_scenario(username="ADMIN", get_all=True))
-
-    # print("\nAll scenarios:")
-    # all_scenarios = get_all_scenarios_and_check_completed("ADMIN", "admin", sort_by="start_time")
-    # for s in all_scenarios:
-    #     print(f"Scenario: {s['name']}, Status: {s['status']}, Title: {s.get('title')}")
-
-    # print("\nSetting a scenario to finished:")
-    # scenario_set_status_to_finished("test_scenario_1")
-    # print(get_scenario_by_name("test_scenario_1"))
-
-    # print("\nTesting notes:")
-    # save_notes("test_scenario_1", "These are some notes for test scenario 1.")
-    # print(get_notes("test_scenario_1"))
-    # remove_note("test_scenario_1")
-    # print(get_notes("test_scenario_1"))
