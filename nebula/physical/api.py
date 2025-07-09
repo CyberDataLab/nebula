@@ -350,7 +350,7 @@ def run():
     if TRAINING_PROC and TRAINING_PROC.poll() is None:
         _json_abort(409, "Training already running")
 
-    cmd = ["python", "/home/dietpi/prueba/nebula/nebula/node.py", json_files[0]]
+    cmd = ["python", "/home/dietpi/test/nebula/nebula/node.py", json_files[0]]
     TRAINING_PROC = subprocess.Popen(cmd)
 
     return jsonify(pid=TRAINING_PROC.pid, state="running")
@@ -379,8 +379,8 @@ def setup_new_run():
 
     Expected multipart-form fields
     -------------------------------
-    * **config**     – JSON with scenario, network and security arguments  
-    * **global_test** – shared evaluation dataset (`*.h5`)  
+    * **config**     – JSON with scenario, network and security arguments
+    * **global_test** – shared evaluation dataset (`*.h5`)
     * **train_set**   – participant-specific training dataset (`*.h5`)
 
     The function rewrites paths inside *config*, validates neighbour IPs
