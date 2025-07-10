@@ -4,6 +4,9 @@ import socket
 
 import docker
 
+import re
+from typing import Optional
+
 
 class FileUtils:
     """
@@ -271,3 +274,60 @@ class DockerUtils:
             logging.exception("Error interacting with Docker")
         except Exception:
             logging.exception("Unexpected error")
+
+class LoggerUtils:
+    
+    @staticmethod
+    def configure_logger(
+        name: Optional[str] = None,
+        log_file: Optional[str] = None,
+        level: int = logging.INFO,
+        console: bool = True,
+        strip_ansi: bool = True,
+        file_mode: str = "a",
+        log_format: str = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s",
+        date_format: str = "%Y-%m-%d %H:%M:%S",
+    ) -> logging.Logger:
+        """
+        Configure and return a logger with optional console and file output.
+
+        Args:
+            name (str): Logger name. If None, the root logger is used.
+            log_file (str): Path to the log file.
+            level (int): Logging level (DEBUG, INFO, etc).
+            console (bool): If True, output is also printed to the console.
+            strip_ansi (bool): Placeholder for future ANSI stripping support.
+            file_mode (str): File mode for the log file ('a' for append, 'w' for overwrite).
+            log_format (str): Format for log messages.
+            date_format (str): Format for timestamps.
+
+        Returns:
+            logging.Logger: Configured logger instance.
+        """
+        logger = logging.getLogger(name)
+        logger.setLevel(level)
+
+        # Prevent duplicate handler setup
+        if getattr(logger, "_is_configured", False):
+            return logger
+
+        formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
+
+        if log_file:
+            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            fh = logging.FileHandler(log_file, mode=file_mode)
+            fh.setLevel(level)
+            fh.setFormatter(formatter)
+            logger.addHandler(fh)
+
+        if console:
+            ch = logging.StreamHandler()
+            ch.setLevel(level)
+            ch.setFormatter(formatter)
+            logger.addHandler(ch)
+
+        # Mark this logger as configured to avoid re-adding handlers
+        logger._is_configured = True
+        logger.propagate = False
+
+        return logger
