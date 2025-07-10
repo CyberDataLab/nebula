@@ -17,7 +17,7 @@ from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from nebula.addons.env import check_environment
-from nebula.controller.controller import TermEscapeCodeFormatter
+from nebula.controller.web_app_controller import TermEscapeCodeFormatter
 from nebula.controller.scenarios import ScenarioManagement
 from nebula.utils import DockerUtils, SocketUtils
 
@@ -502,6 +502,7 @@ class Deployer:
         self.credentialmanager = CredentialManager()
         self.credentialmanager.check_all_credentials()
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
+        self.federation_controller_port = int(args.federationcontrollerport) if hasattr(args, "federationcontrollerport") else 5051
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
@@ -667,6 +668,9 @@ class Deployer:
         # Check ports available
         if not SocketUtils.is_port_open(self.controller_port):
             self.controller_port = SocketUtils.find_free_port(start_port=self.controller_port)
+            
+        if not SocketUtils.is_port_open(self.federation_controller_port):
+            self.federation_controller_port = SocketUtils.find_free_port(start_port=self.federation_controller_port)
 
         if not SocketUtils.is_port_open(self.frontend_port):
             self.frontend_port = SocketUtils.find_free_port(start_port=self.frontend_port)
@@ -1033,11 +1037,13 @@ class Deployer:
             "NEBULA_ADVANCED_ANALYTICS": self.advanced_analytics,
             "NEBULA_DATABASES_DIR": "/nebula/app/databases",
             "NEBULA_CONTROLLER_LOG": "/nebula/app/logs/controller.log",
+            "NEBULA_FEDERATION_CONTROLLER_LOG": "/nebula/app/logs/federation.log",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
             "NEBULA_CERTS_DIR": "/nebula/app/certs/",
             "NEBULA_HOST_PLATFORM": self.host_platform,
             "NEBULA_CONTROLLER_PORT": self.controller_port,
+            "NEBULA_FEDERATION_CONTROLLER_PORT" : self.federation_controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
             "DB_HOST": f"{os.environ['USER']}_nebula-database",
@@ -1048,7 +1054,7 @@ class Deployer:
 
         volumes = ["/nebula", "/var/run/docker.sock"]
 
-        ports = [self.controller_port]
+        ports = [self.controller_port, self.federation_controller_port]
 
         host_config = client.api.create_host_config(
             binds=[
@@ -1057,7 +1063,10 @@ class Deployer:
                 f"{self.databases_dir}:/nebula/app/databases"
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
-            port_bindings={self.controller_port: self.controller_port},
+            port_bindings={
+                self.controller_port: self.controller_port,
+                self.federation_controller_port: self.federation_controller_port
+            },
             device_requests=[{
                 "Driver": "nvidia",
                 "Count": -1,

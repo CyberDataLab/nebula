@@ -14,10 +14,12 @@ NEBULA_SOCK=nebula.sock
 echo "NEBULA_PRODUCTION: $NEBULA_PRODUCTION"
 if [ "$NEBULA_PRODUCTION" = "False" ]; then
     echo "Starting Gunicorn in dev mode..."
-    uvicorn nebula.controller.controller:app --host 0.0.0.0 --port $NEBULA_CONTROLLER_PORT --log-level debug --proxy-headers --forwarded-allow-ips "*" &
+    uvicorn nebula.controller.web_app_controller:app --host 0.0.0.0 --port $NEBULA_CONTROLLER_PORT --log-level debug --proxy-headers --forwarded-allow-ips "*" &
+    uvicorn nebula.controller.federation.federation_controller:app --host 0.0.0.0 --port $NEBULA_FEDERATION_CONTROLLER_PORT --log-level debug --proxy-headers --forwarded-allow-ips "*" &
 else
     echo "Starting Gunicorn in production mode..."
-    uvicorn nebula.controller.controller:app --host 0.0.0.0 --port $NEBULA_CONTROLLER_PORT --log-level info --proxy-headers --forwarded-allow-ips "*" &
+    uvicorn nebula.controller.web_app_controller:app --host 0.0.0.0 --port $NEBULA_CONTROLLER_PORT --log-level info --proxy-headers --forwarded-allow-ips "*" &
+    uvicorn nebula.controller.federation.federation_controller:app --host 0.0.0.0 --port $NEBULA_FEDERATION_CONTROLLER_PORT --log-level debug --proxy-headers --forwarded-allow-ips "*" &
 fi
 
 tail -f /dev/null
