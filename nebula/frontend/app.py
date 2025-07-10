@@ -118,15 +118,6 @@ logging.info(f"🚀  Starting Nebula Frontend on port {settings.port}")
 
 logging.info(f"NEBULA_PRODUCTION: {settings.production}")
 
-if "SECRET_KEY" not in os.environ:
-    logging.info("Generating SECRET_KEY")
-    os.environ["SECRET_KEY"] = os.urandom(24).hex()
-    logging.info(f"Saving SECRET_KEY to {settings.env_file}")
-    with open(settings.env_file, "a") as f:
-        f.write(f"SECRET_KEY={os.environ['SECRET_KEY']}\n")
-else:
-    logging.info("SECRET_KEY already set")
-
 app = FastAPI()
 app.add_middleware(
     SessionMiddleware,

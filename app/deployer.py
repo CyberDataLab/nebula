@@ -1,7 +1,9 @@
 import json
 import logging
 import os
+import secrets
 import signal
+import string
 import subprocess
 import sys
 import threading
@@ -18,6 +20,92 @@ from nebula.addons.env import check_environment
 from nebula.controller.controller import TermEscapeCodeFormatter
 from nebula.controller.scenarios import ScenarioManagement
 from nebula.utils import DockerUtils, SocketUtils
+
+class CredentialManager:
+    """
+    CredentialManager handles the generation, storage, and validation of environment-based credentials.
+
+    This class is designed to manage credentials required for different system components like the frontend,
+    Grafana, and the database. It ensures that secure values are generated and persisted in a `.env` file if
+    they are not already defined in the environment.
+
+    Attributes:
+        env_path (Path): Absolute path to the environment file where credentials will be stored.
+
+    Typical usage example:
+        manager = CredentialManager()
+        manager.check_all_credentials()
+    """
+
+    def __init__(self, env_dir="app", env_filename=".env"):
+        """
+        Initializes the CredentialManager and loads existing environment variables from file.
+
+        Args:
+            env_dir (str): Directory where the .env file is located. Defaults to 'app'.
+            env_filename (str): Name of the environment file. Defaults to '.env'.
+
+        Behavior:
+            - Sets up the absolute path to the .env file.
+            - Loads any existing environment variables from the file using `load_dotenv`.
+        """
+        self.env_path = Path.cwd() / env_dir / env_filename
+        if os.path.exists(self.env_path):
+            logging.info(f"Loading environment variables from {self.env_path}")
+            load_dotenv(self.env_path, override=True)
+
+    def generate_secure_password(self, length=20):
+        """
+        Generates a cryptographically secure and readable password including symbols.
+
+        Args:
+            length (int): Length of the password. Defaults to 20.
+
+        Returns:
+            str: A randomly generated secure password, excluding confusing or problematic characters.
+        """
+        alphabet = string.ascii_letters + string.digits + string.punctuation
+        for char in ['"', "'", "\\", "`", "|", "(", ")", "{", "}", "[", "]", "#"]:
+            alphabet = alphabet.replace(char, "")
+        return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+    def check_credential(self, key, is_password=True):
+        """
+        Checks if a given credential key is present in the environment. If not, generates and saves it.
+
+        Args:
+            key (str): The environment variable key to check or create.
+            is_password (bool): If True, generates a secure password. If False, generates a hex token. Defaults to True.
+
+        Behavior:
+            - If the key is missing, a value is generated and stored both in the environment and the `.env` file.
+            - If the key exists, no action is taken.
+        """
+        if key not in os.environ:
+            logging.info(f"Generating value for {key}")
+            value = self.generate_secure_password(12) if is_password else secrets.token_hex(24)
+            os.environ[key] = value
+            logging.info(f"Saving {key} to {self.env_path}")
+            with self.env_path.open("a") as f:
+                f.write(f"{key}={value}\n")
+        else:
+            logging.info(f"{key} already set")
+
+    def check_all_credentials(self):
+        """
+        Checks and sets all required credentials for the application.
+
+        This method should be called at startup to ensure all necessary keys are initialized.
+
+        Includes:
+            - Frontend secret key
+            - Grafana admin password
+            - (Optional) Database password
+        """
+        self.check_credential("SECRET_KEY", is_password=False)
+        self.check_credential("GF_SECURITY_ADMIN_PASSWORD")
+        self.check_credential("POSTGRES_PASSWORD")
+        self.check_credential("HTTP_PASSWORD")
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -289,17 +377,17 @@ class NebulaEventHandler(PatternMatchingEventHandler):
     def kill_script_processes(self, pids_file):
         """
         Forcefully terminates processes listed in a given PID file, including their child processes.
-    
+
         Args:
             pids_file (str): Path to the file containing PIDs, one per line.
-    
+
         Behavior:
             - Reads the PIDs from the file.
             - For each PID, checks if the process exists.
             - If it exists, kills all child processes recursively before killing the main process.
             - Handles and logs exceptions such as missing processes or invalid PID entries.
             - Logs warnings and errors appropriately.
-    
+
         Typical use case:
             Used to clean up running processes related to a scenario or script that has been deleted or stopped.
         """
@@ -344,7 +432,7 @@ def run_observer():
     """
     Starts a watchdog observer to monitor the configuration directory for changes.
 
-    This function is typically used to execute additional scripts or trigger events 
+    This function is typically used to execute additional scripts or trigger events
     during the execution of a federated learning session by monitoring file system changes.
 
     Main functionalities:
@@ -357,7 +445,7 @@ def run_observer():
         - Trigger specific actions during a federation lifecycle.
 
     Note:
-        The observer runs in a blocking mode and will keep the process alive 
+        The observer runs in a blocking mode and will keep the process alive
         until manually stopped or interrupted.
     """
     # Watchdog for running additional scripts in the host machine (i.e. during the execution of a federation)
@@ -373,7 +461,7 @@ class Deployer:
     """
     Handles the configuration and initialization of deployment parameters for the NEBULA system.
 
-    This class reads and stores various deployment-related settings such as port assignments, 
+    This class reads and stores various deployment-related settings such as port assignments,
     environment paths, logging configuration, and system mode (production, development, or simulation).
 
     Main functionalities:
@@ -410,6 +498,9 @@ class Deployer:
         This class does not launch any services directly; it only prepares and stores configuration.
     """
     def __init__(self, args):
+        self.configure_logger()
+        self.credentialmanager = CredentialManager()
+        self.credentialmanager.check_all_credentials()
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
@@ -432,13 +523,12 @@ class Deployer:
         self.host_platform = "windows" if sys.platform == "win32" else "unix"
         self.controller_host = f"{os.environ['USER']}_nebula-controller"
         self.gpu_available = False
-        self.configure_logger()
 
     def configure_logger(self):
         """
         Configures the logging system for the deployment controller.
 
-        This method sets up both console and file logging with a consistent format and appropriate log levels. 
+        This method sets up both console and file logging with a consistent format and appropriate log levels.
         It also ensures that Uvicorn loggers are properly configured to avoid duplicate log outputs.
 
         Main functionalities:
@@ -452,7 +542,7 @@ class Deployer:
             - Ensures clean and consistent logging output during deployment.
 
         Note:
-            This method does not set up file logging directly, but prepares the base configuration 
+            This method does not set up file logging directly, but prepares the base configuration
             and Uvicorn logger behavior for further logging use.
         """
         log_console_format = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
@@ -475,7 +565,7 @@ class Deployer:
         """
         Ensures that the specified directory exists and is writable.
 
-        This method attempts to create the directory if it does not exist and verifies 
+        This method attempts to create the directory if it does not exist and verifies
         write access by writing and deleting a temporary metadata file.
 
         Args:
@@ -521,8 +611,8 @@ class Deployer:
         """
         Starts the NEBULA deployment process and all associated services.
 
-        This method initializes the NEBULA platform by setting up the environment, 
-        checking port availability, starting key services (controller, frontend, WAF), 
+        This method initializes the NEBULA platform by setting up the environment,
+        checking port availability, starting key services (controller, frontend, WAF),
         and launching a filesystem observer to react to configuration changes.
 
         Main functionalities:
@@ -539,7 +629,7 @@ class Deployer:
             - Central entry point for managing NEBULA components during deployment.
 
         Note:
-            The method blocks indefinitely until manually interrupted, 
+            The method blocks indefinitely until manually interrupted,
             and ensures graceful shutdown upon receiving SIGINT or SIGTERM.
         """
         banner = """
@@ -617,8 +707,8 @@ class Deployer:
         """
         Handles system termination signals to ensure a clean shutdown.
 
-        This method is triggered when the application receives SIGTERM or SIGINT signals 
-        (e.g., via Ctrl+C or `kill`). It logs the event, performs cleanup actions, and 
+        This method is triggered when the application receives SIGTERM or SIGINT signals
+        (e.g., via Ctrl+C or `kill`). It logs the event, performs cleanup actions, and
         terminates the process gracefully.
 
         Args:
@@ -678,6 +768,7 @@ class Deployer:
 
         environment = {
             "NEBULA_CONTROLLER_NAME": os.environ["USER"],
+            "SECRET_KEY": os.environ.get("SECRET_KEY"),
             "NEBULA_PRODUCTION": self.production,
             "NEBULA_ADVANCED_ANALYTICS": self.advanced_analytics,
             "NEBULA_FRONTEND_LOG": "/nebula/app/logs/frontend.log",
@@ -753,11 +844,11 @@ class Deployer:
                 )
 
         network_name = f"{os.environ['USER']}_nebula-net-base"
-        
+
         ###############
         # POSTGRES DB #
         ###############
-        
+
         host_port = 54312
 
         # Create the Docker network
@@ -767,7 +858,7 @@ class Deployer:
 
         environment = {
             "POSTGRES_USER": "nebula",
-            "POSTGRES_PASSWORD": "nebula",
+            "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
             "POSTGRES_DB": "nebula",
             "NEBULA_DATABASES_PORT": self.controller_host,
         }
@@ -797,14 +888,14 @@ class Deployer:
         )
 
         client.api.start(container_id)
-        
+
         ################
         # POSTGRES WEB #
         ################
-        
+
         pgweb_host_port = 8085
-        pgweb_container_port = 8081 
-        
+        pgweb_container_port = 8081
+
         pgweb_host_config = client.api.create_host_config(
             port_bindings={pgweb_container_port: pgweb_host_port},
             device_requests=[{
@@ -813,13 +904,13 @@ class Deployer:
                 "Capabilities": [["gpu"]],
             }] if self.gpu_available else None,
         )
-        
+
         pgweb_networking_config = client.api.create_networking_config({
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.135")
         })
-        
+
         pgweb_container_name = f"{os.environ.get('USER')}_nebula-pgweb"
-        
+
         pgweb_container_id = client.api.create_container(
             image="nebula-pgweb",
             name=pgweb_container_name,
@@ -827,7 +918,7 @@ class Deployer:
             host_config=pgweb_host_config,
             networking_config=pgweb_networking_config,
         )
-        
+
         client.api.start(pgweb_container_id)
 
         #########
@@ -871,7 +962,7 @@ class Deployer:
         environment_commander = {
             "REDIS_HOSTS": "local:redis:6379",
             "HTTP_USER": "root",
-            "HTTP_PASSWORD": "root",
+            "HTTP_PASSWORD": os.environ.get("HTTP_PASSWORD"),
         }
 
         host_config_commander = client.api.create_host_config(
@@ -923,7 +1014,7 @@ class Deployer:
                 )
 
         network_name = f"{os.environ['USER']}_nebula-net-base"
-        
+
         try:
             subprocess.check_call(["nvidia-smi"])
             self.gpu_available = True
@@ -1054,7 +1145,7 @@ class Deployer:
         client.api.start(container_id_waf)
 
         environment = {
-            "GF_SECURITY_ADMIN_PASSWORD": "admin",
+            "GF_SECURITY_ADMIN_PASSWORD": os.environ.get("GF_SECURITY_ADMIN_PASSWORD"),
             "GF_USERS_ALLOW_SIGN_UP": "false",
             "GF_SERVER_HTTP_PORT": "3000",
             "GF_SERVER_PROTOCOL": "http",
