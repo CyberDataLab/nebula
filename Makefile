@@ -77,6 +77,7 @@ update-dockers:				## Update docker images
 	@echo "🐳 Building nebula-database docker image. Do you want to continue (overrides existing image)? (y/n)"
 	@read ans; if [ "$${ans:-N}" = y ]; then \
 		docker build -t nebula-database -f nebula/database/Dockerfile .; \
+		docker build -t nebula-pgweb -f nebula/database/pgweb/Dockerfile .; \
 	else \
 		echo "Skipping nebula-database docker build."; \
 	fi
