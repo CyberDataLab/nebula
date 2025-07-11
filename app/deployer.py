@@ -105,7 +105,6 @@ class CredentialManager:
         self.check_credential("SECRET_KEY", is_password=False)
         self.check_credential("GF_SECURITY_ADMIN_PASSWORD")
         self.check_credential("POSTGRES_PASSWORD")
-        self.check_credential("HTTP_PASSWORD")
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -1076,50 +1075,6 @@ class Deployer:
         client.api.start(pgweb_container)
         Deployer._add_container_to_metadata(pgweb_container_name)
 
-        # --- Redis ---
-        redis_container_name = self.get_container_name("redis")
-        redis_host_config = client.api.create_host_config(
-            binds=[f"{self.get_container_name('redis_data')}:/var/lib/redis"],
-            port_bindings={6379: 6379},
-        )
-        redis_networking_config = client.api.create_networking_config(
-            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.126")}
-        )
-
-        redis_container = client.api.create_container(
-            image="nebula-redis",
-            name=redis_container_name,
-            detach=True,
-            command="redis-server",
-            host_config=redis_host_config,
-            networking_config=redis_networking_config,
-        )
-        client.api.start(redis_container)
-        Deployer._add_container_to_metadata(redis_container_name)
-
-        # --- Redis Commander ---
-        commander_container_name = self.get_container_name("redis_commander")
-        commander_environment = {
-            "REDIS_HOSTS": f"local:{redis_container_name}:6379",
-            "HTTP_USER": "root",
-            "HTTP_PASSWORD": os.environ.get("HTTP_PASSWORD"),
-        }
-        commander_host_config = client.api.create_host_config(port_bindings={8081: 8081})
-        commander_networking_config = client.api.create_networking_config(
-            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.127")}
-        )
-
-        commander_container = client.api.create_container(
-            image="nebula-rediscommander",
-            name=commander_container_name,
-            detach=True,
-            environment=commander_environment,
-            host_config=commander_host_config,
-            networking_config=commander_networking_config,
-        )
-        client.api.start(commander_container)
-        Deployer._add_container_to_metadata(commander_container_name)
-
     def run_controller(self):
         if sys.platform == "win32":
             if not os.path.exists("//./pipe/docker_Engine"):
@@ -1165,8 +1120,6 @@ class Deployer:
             "DB_PORT": 5432,
             "DB_USER": "nebula",
             "DB_PASSWORD": "nebula",
-            "REDIS_HOST": self.get_container_name("redis"),
-            "REDIS_PORT": 6379,
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]

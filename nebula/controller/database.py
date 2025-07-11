@@ -4,15 +4,12 @@ import datetime
 import json
 import asyncpg
 import asyncio
-import redis.asyncio as aioredis
 
 from passlib.context import CryptContext
-from nebula.controller.scenarios import Scenario
 
 # --- Configuration ---
 # Use environment variables for database credentials from the Docker Compose file
 DATABASE_URL = f"postgresql://{os.environ.get('DB_USER')}:{os.environ.get('DB_PASSWORD')}@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/nebula"
-REDIS_URL = f"redis://{os.environ.get('REDIS_HOST', 'localhost')}:{os.environ.get('REDIS_PORT', 6379)}"
 
 # Password hashing context (using Argon2)
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -23,29 +20,6 @@ _node_lock = asyncio.Lock()
 # --- Connection Pool Management ---
 # Global pool variable, should be initialized at application startup
 POOL = None
-REDIS_POOL = None
-
-async def init_redis_pool():
-    """
-    Initializes the asynchronous Redis connection pool.
-    """
-    global REDIS_POOL
-    if REDIS_POOL is None:
-        try:
-            REDIS_POOL = await aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
-            logging.info("Redis connection pool successfully created.")
-        except Exception as e:
-            logging.critical(f"Failed to create Redis connection pool: {e}", exc_info=True)
-            raise
-
-async def close_redis_pool():
-    """
-    Closes the asynchronous Redis connection pool.
-    """
-    global REDIS_POOL
-    if REDIS_POOL:
-        await REDIS_POOL.close()
-        logging.info("Redis connection pool closed.")
 
 async def init_db_pool():
     """
@@ -75,7 +49,6 @@ async def close_db_pool():
     if POOL:
         await POOL.close()
         logging.info("Database connection pool closed.")
-    await close_redis_pool()
 
 
 # --- User Management Functions ---
