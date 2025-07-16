@@ -53,6 +53,27 @@ async def close_db_pool():
 
 # --- User Management Functions ---
 
+async def insert_default_admin():
+    """
+    Inserts a default 'ADMIN' user into the database with a hashed password.
+    The password must be provided via the ADMIN_PASSWORD environment variable.
+    """
+    admin_password = os.environ.get("NEBULA_ADMIN_PASSWORD")
+
+    hashed_password = pwd_context.hash(admin_password)
+
+    query = """
+    INSERT INTO users ("user", password, role)
+    VALUES ($1, $2, $3)
+    ON CONFLICT ("user") DO NOTHING;
+    """
+    try:
+        async with POOL.acquire() as conn:
+            await conn.execute(query, "ADMIN", hashed_password, "admin")
+            logging.info("Default admin user inserted (or already exists).")
+    except Exception as e:
+        logging.error(f"Failed to insert default admin user: {e}", exc_info=True)
+
 async def list_users(all_info=False):
     """
     Retrieves a list of users from the users database.

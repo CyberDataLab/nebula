@@ -19,6 +19,7 @@ from fastapi.concurrency import asynccontextmanager
 from nebula.controller.database import (
     init_db_pool,
     close_db_pool,
+    insert_default_admin,
     scenario_set_all_status_to_finished,
     scenario_set_status_to_finished,
 )
@@ -120,6 +121,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize the database connection pool
     await init_db_pool()
+    await insert_default_admin()
 
     yield
 

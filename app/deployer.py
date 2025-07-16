@@ -105,6 +105,7 @@ class CredentialManager:
         self.check_credential("SECRET_KEY", is_password=False)
         self.check_credential("GF_SECURITY_ADMIN_PASSWORD")
         self.check_credential("POSTGRES_PASSWORD")
+        self.check_credential("NEBULA_ADMIN_PASSWORD")
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -1119,7 +1120,8 @@ class Deployer:
             "DB_HOST": self.get_container_name("nebula-database"),
             "DB_PORT": 5432,
             "DB_USER": "nebula",
-            "DB_PASSWORD": "nebula",
+            "DB_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+            "NEBULA_ADMIN_PASSWORD": os.environ.get("NEBULA_ADMIN_PASSWORD")
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]
