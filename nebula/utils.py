@@ -2,10 +2,15 @@ import logging
 import os
 import socket
 
+import aiohttp
 import docker
 
 import re
 from typing import Optional
+
+from fastapi import HTTPException
+
+from nebula.frontend.app import retry_with_backoff
 
 
 class FileUtils:
@@ -35,7 +40,6 @@ class FileUtils:
         if not full_path.startswith(base_path):
             raise Exception("Not allowed")
         return full_path
-
 
 class SocketUtils:
     """
@@ -77,7 +81,6 @@ class SocketUtils:
             if cls.is_port_open(port):
                 return port
         return None
-
 
 class DockerUtils:
     """
@@ -331,3 +334,57 @@ class LoggerUtils:
         logger.propagate = False
 
         return logger
+    
+class APIUtils():
+    
+    @staticmethod
+    async def get(url):
+        """
+        Fetch JSON data from a remote controller endpoint via asynchronous HTTP GET.
+
+        Parameters:
+            url (str): The full URL of the controller API endpoint.
+
+        Returns:
+            Any: Parsed JSON response when the HTTP status code is 200.
+
+        Raises:
+            HTTPException: If the response status is not 200, raises with the response status code and an error detail.
+        """
+
+        async def _get():
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    else:
+                        raise HTTPException(status_code=response.status, detail="Error fetching data")
+
+        return await retry_with_backoff(_get)
+
+    @staticmethod
+    async def post(url, data=None):
+        """
+        Asynchronously send a JSON payload via HTTP POST to a controller endpoint and parse the response.
+
+        Parameters:
+            url (str): The full URL of the controller API endpoint.
+            data (Any, optional): JSON-serializable payload to include in the POST request (default: None).
+
+        Returns:
+            Any: Parsed JSON response when the HTTP status code is 200.
+
+        Raises:
+            HTTPException: If the response status is not 200, with the status code and an error detail.
+        """
+
+        async def _post():
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=data) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    else:
+                        detail = await response.text()
+                        raise HTTPException(status_code=response.status, detail=detail)
+
+        return await retry_with_backoff(_post)

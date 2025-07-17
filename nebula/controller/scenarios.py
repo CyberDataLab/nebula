@@ -970,6 +970,8 @@ class ScenarioManagement:
 
                 with open(additional_participant_file) as f:
                     participant_config = json.load(f)
+                    
+                    
 
                 logging.info(f"Configuration | additional nodes |  participant: {self.n_nodes + i + 1}")
                 last_ip = participant_config["network_args"]["ip"]
