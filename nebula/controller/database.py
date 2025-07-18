@@ -632,30 +632,3 @@ async def remove_note(scenario):
     """
     async with POOL.acquire() as conn:
         await conn.execute("DELETE FROM notes WHERE scenario = $1;", scenario)
-
-
-if __name__ == "__main__":
-    # This is an example of how to use the new pool-based functions.
-    # In a real application, init_db_pool() would be called at startup,
-    # and close_db_pool() at shutdown.
-
-    async def main():
-        # Set environment variables for local testing if not already set
-        os.environ.setdefault('DB_USER', 'your_user')
-        os.environ.setdefault('DB_PASSWORD', 'your_password')
-        os.environ.setdefault('DB_HOST', 'localhost')
-        os.environ.setdefault('DB_PORT', '5432')
-
-        logging.basicConfig(level=logging.INFO)
-
-        await init_db_pool()
-        try:
-            # Example: list all users
-            users = await list_users()
-            logging.info(f"Found users: {users}")
-        finally:
-            await close_db_pool()
-
-    # To run this example:
-    # asyncio.run(main())
-    pass
