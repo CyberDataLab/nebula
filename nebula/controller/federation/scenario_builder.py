@@ -6,8 +6,6 @@ from nebula.config.config import Config
 from nebula.core.utils.certificate import generate_certificate
 from nebula.core.datasets.nebuladataset import NebulaDataset, factory_nebuladataset, factory_dataset_setup
 
-#TODO set_scenario_data -> set_config_setup -> build_scenario_config_for_node -> build_preload_configuration
-
 class ScenarioBuilder():
     def __init__(self, ):
         self._scenario_data = None
@@ -44,6 +42,7 @@ class ScenarioBuilder():
     
     def get_dataset_name(self) -> str:
          return self.sd["dataset"]
+    
         
     """                                                     ###############################
                                                             #     SCENARIO CONFIG NODE    #
@@ -742,18 +741,20 @@ class ScenarioBuilder():
         dataset_name = self.get_dataset_name()    
         dataset = factory_nebuladataset(
             dataset_name,
-            self._configure_dataset_config(dataset_name, config_dir)                              
+            **self._configure_dataset_config(dataset_name, config_dir)                              
         )
         return dataset
         
     def _configure_dataset_config(self, dataset_name, config_dir):
         num_classes = factory_dataset_setup(dataset_name)
+        n_nodes = len(self.sd["nodes"].keys())
+        n_nodes += len(self.sd["additional_participants"])
         return {
             "num_classes": num_classes,
             "partitions_number": n_nodes,
-            "iid": scenario.iid,
-            "partition": scenario.partition_selection,
-            "partition_parameter": scenario.partition_parameter,
+            "iid": self.sd["iid"],
+            "partition": self.sd["partition_selection"],
+            "partition_parameter": self.sd["partition_parameter"],
             "seed": 42,
             "config_dir": config_dir,
         }

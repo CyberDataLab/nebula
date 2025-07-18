@@ -19,7 +19,7 @@ from fastapi.concurrency import asynccontextmanager
 # from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
 from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
 from nebula.controller.http_helpers import remote_get, remote_post_form
-from nebula.utils import DockerUtils
+from nebula.utils import DockerUtils, APIUtils
 
 
 # Setup controller logger
@@ -308,6 +308,14 @@ async def run_scenario(
     import subprocess
 
     from nebula.controller.scenarios import ScenarioManagement
+
+    fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT")
+    fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
+    url = f"http://{fed_controller_host}:{fed_controller_port}/init"
+    data = {"type": "docker"}
+    data2 = {"scenario_data": scenario_data, "role": role, "user": user}
+    APIUtils.post(url, data)
+    APIUtils.post(url, data2)
 
     validate_physical_fields(scenario_data)
 
