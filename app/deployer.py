@@ -1,7 +1,9 @@
 import json
 import logging
 import os
+import secrets
 import signal
+import string
 import subprocess
 import sys
 import threading
@@ -18,6 +20,92 @@ from nebula.addons.env import check_environment
 from nebula.controller.controller import TermEscapeCodeFormatter
 from nebula.controller.scenarios import ScenarioManagement
 from nebula.utils import DockerUtils, FileUtils, SocketUtils
+
+class CredentialManager:
+    """
+    CredentialManager handles the generation, storage, and validation of environment-based credentials.
+
+    This class is designed to manage credentials required for different system components like the frontend,
+    Grafana, and the database. It ensures that secure values are generated and persisted in a `.env` file if
+    they are not already defined in the environment.
+
+    Attributes:
+        env_path (Path): Absolute path to the environment file where credentials will be stored.
+
+    Typical usage example:
+        manager = CredentialManager()
+        manager.check_all_credentials()
+    """
+
+    def __init__(self, env_dir="app", env_filename=".env"):
+        """
+        Initializes the CredentialManager and loads existing environment variables from file.
+
+        Args:
+            env_dir (str): Directory where the .env file is located. Defaults to 'app'.
+            env_filename (str): Name of the environment file. Defaults to '.env'.
+
+        Behavior:
+            - Sets up the absolute path to the .env file.
+            - Loads any existing environment variables from the file using `load_dotenv`.
+        """
+        self.env_path = Path.cwd() / env_dir / env_filename
+        if os.path.exists(self.env_path):
+            logging.info(f"Loading environment variables from {self.env_path}")
+            load_dotenv(self.env_path, override=True)
+
+    def generate_secure_password(self, length=20):
+        """
+        Generates a cryptographically secure and readable password including symbols.
+
+        Args:
+            length (int): Length of the password. Defaults to 20.
+
+        Returns:
+            str: A randomly generated secure password, excluding confusing or problematic characters.
+        """
+        alphabet = string.ascii_letters + string.digits + string.punctuation
+        for char in ['"', "'", "\\", "`", "|", "(", ")", "{", "}", "[", "]", "#"]:
+            alphabet = alphabet.replace(char, "")
+        return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+    def check_credential(self, key, is_password=True):
+        """
+        Checks if a given credential key is present in the environment. If not, generates and saves it.
+
+        Args:
+            key (str): The environment variable key to check or create.
+            is_password (bool): If True, generates a secure password. If False, generates a hex token. Defaults to True.
+
+        Behavior:
+            - If the key is missing, a value is generated and stored both in the environment and the `.env` file.
+            - If the key exists, no action is taken.
+        """
+        if key not in os.environ:
+            logging.info(f"Generating value for {key}")
+            value = self.generate_secure_password(12) if is_password else secrets.token_hex(24)
+            os.environ[key] = value
+            logging.info(f"Saving {key} to {self.env_path}")
+            with self.env_path.open("a") as f:
+                f.write(f"{key}={value}\n")
+        else:
+            logging.info(f"{key} already set")
+
+    def check_all_credentials(self):
+        """
+        Checks and sets all required credentials for the application.
+
+        This method should be called at startup to ensure all necessary keys are initialized.
+
+        Includes:
+            - Frontend secret key
+            - Grafana admin password
+            - (Optional) Database password
+        """
+        self.check_credential("SECRET_KEY", is_password=False)
+        self.check_credential("GF_SECURITY_ADMIN_PASSWORD")
+        self.check_credential("POSTGRES_PASSWORD")
+        self.check_credential("NEBULA_ADMIN_PASSWORD")
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -514,6 +602,10 @@ class Deployer:
                 logging.exception(warning_msg)
                 sys.exit(1)
 
+        self.configure_logger()
+        self.credentialmanager = CredentialManager()
+        self.credentialmanager.check_all_credentials()
+
         # --- Tag logic: CLI args > environment > fallback ---
         arg_production = getattr(args, "production", False)
         arg_prefix = getattr(args, "prefix", "dev")
@@ -565,7 +657,6 @@ class Deployer:
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
 
-        self.configure_logger()
 
     def get_container_name(self, role_tag: str) -> str:
         """
@@ -761,7 +852,8 @@ class Deployer:
 
         self.run_controller()
         logging.info("NEBULA Controller is running")
-        logging.info(f"NEBULA Databases created in {self.databases_dir}")
+        self.run_database()
+        logging.info(f"NEBULA Databases docker is running")
         self.run_frontend()
         logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
         if self.production and self.prefix == "production":
@@ -853,6 +945,7 @@ class Deployer:
         client = docker.from_env()
 
         environment = {
+            "SECRET_KEY": os.environ.get("SECRET_KEY"),
             "NEBULA_PRODUCTION": self.production,
             "NEBULA_ENV_TAG": self.env_tag,
             "NEBULA_PREFIX_TAG": self.prefix_tag,
@@ -912,6 +1005,77 @@ class Deployer:
         # Add to metadata
         Deployer._add_container_to_metadata(frontend_container_name)
 
+    def run_database(self):
+        """
+        Runs the Nebula database within a Docker container, ensuring the required Docker environment is available.
+        """
+        if sys.platform == "win32":
+            if not os.path.exists("//./pipe/docker_Engine"):
+                raise Exception(
+                    "Docker is not running, please check if Docker is running and Docker Compose is installed."
+                )
+        else:
+            if not os.path.exists("/var/run/docker.sock"):
+                raise Exception(
+                    "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
+                )
+
+        network_name = self.get_network_name("net-base")
+        base = DockerUtils.create_docker_network(network_name)
+        Deployer._add_network_to_metadata(network_name)
+
+        client = docker.from_env()
+
+        # --- PostgreSQL ---
+        pg_container_name = self.get_container_name("nebula-database")
+        pg_environment = {
+            "POSTGRES_USER": "nebula",
+            "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+            "POSTGRES_DB": "nebula",
+        }
+        host_sql_path = os.path.join(self.root_path, "nebula/database/init-configs.sql")
+        db_data_path = os.path.join(self.databases_dir, "postgres-data")
+        os.makedirs(db_data_path, exist_ok=True)
+
+        pg_host_config = client.api.create_host_config(
+            binds=[
+                f"{host_sql_path}:/docker-entrypoint-initdb.d/init-configs.sql",
+                f"{db_data_path}:/var/lib/postgresql/data",
+            ],
+            port_bindings={5432: 5432},
+        )
+        pg_networking_config = client.api.create_networking_config(
+            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.125")}
+        )
+
+        pg_container = client.api.create_container(
+            image="nebula-database",
+            name=pg_container_name,
+            detach=True,
+            environment=pg_environment,
+            host_config=pg_host_config,
+            networking_config=pg_networking_config,
+        )
+        client.api.start(pg_container)
+        Deployer._add_container_to_metadata(pg_container_name)
+
+        # --- PGWeb ---
+        pgweb_container_name = self.get_container_name("nebula-pgweb")
+        pgweb_host_config = client.api.create_host_config(port_bindings={8081: 8085})
+        pgweb_networking_config = client.api.create_networking_config(
+            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.135")}
+        )
+
+        pgweb_container = client.api.create_container(
+            image="nebula-pgweb",
+            name=pgweb_container_name,
+            detach=True,
+            host_config=pgweb_host_config,
+            networking_config=pgweb_networking_config,
+        )
+        client.api.start(pgweb_container)
+        Deployer._add_container_to_metadata(pgweb_container_name)
+
     def run_controller(self):
         if sys.platform == "win32":
             if not os.path.exists("//./pipe/docker_Engine"):
@@ -953,6 +1117,11 @@ class Deployer:
             "NEBULA_CONTROLLER_PORT": self.controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
+            "DB_HOST": self.get_container_name("nebula-database"),
+            "DB_PORT": 5432,
+            "DB_USER": "nebula",
+            "DB_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+            "NEBULA_ADMIN_PASSWORD": os.environ.get("NEBULA_ADMIN_PASSWORD")
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]
@@ -1065,7 +1234,7 @@ class Deployer:
         Deployer._add_container_to_metadata(waf_container_name)
 
         environment = {
-            "GF_SECURITY_ADMIN_PASSWORD": "admin",
+            "GF_SECURITY_ADMIN_PASSWORD": os.environ.get("GF_SECURITY_ADMIN_PASSWORD"),
             "GF_USERS_ALLOW_SIGN_UP": "false",
             "GF_SERVER_HTTP_PORT": "3000",
             "GF_SERVER_PROTOCOL": "http",

@@ -549,6 +549,26 @@ class Scenario:
 
         return scenario
 
+    @staticmethod
+    def to_json(scenario_obj):
+        """
+        Converts a Scenario object to a JSON string.
+
+        Args:
+            scenario_obj (Scenario): An instance of the Scenario class.
+
+        Returns:
+            str: A JSON string representation of the Scenario object.
+        """
+        if not isinstance(scenario_obj, Scenario):
+            raise TypeError("Input must be an instance of the Scenario class.")
+
+        # Get all attributes of the Scenario object
+        scenario_dict = scenario_obj.__dict__
+
+        # Convert the dictionary to a JSON string
+        return json.dumps(scenario_dict, indent=2) # Using indent for pretty-printing
+
 
 # Class to manage the current scenario
 class ScenarioManagement:

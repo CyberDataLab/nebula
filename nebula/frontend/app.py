@@ -121,15 +121,6 @@ logging.info(f"🚀  Starting Nebula Frontend on port {settings.port}")
 logging.info(f"NEBULA_PRODUCTION: {settings.env_tag == 'prod'}")
 logging.info(f"NEBULA_DEPLOYMENT_PREFIX: {settings.prefix_tag}")
 
-if "SECRET_KEY" not in os.environ:
-    logging.info("Generating SECRET_KEY")
-    os.environ["SECRET_KEY"] = os.urandom(24).hex()
-    logging.info(f"Saving SECRET_KEY to {settings.env_file}")
-    with open(settings.env_file, "a") as f:
-        f.write(f"SECRET_KEY={os.environ['SECRET_KEY']}\n")
-else:
-    logging.info("SECRET_KEY already set")
-
 app = FastAPI()
 app.add_middleware(
     SessionMiddleware,
@@ -1611,7 +1602,7 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                     "ip": node["ip"],
                     "port": node["port"],
                     "role": node["role"],
-                    "neighbors": node["neighbors"],
+                    "neighbors": " ".join(node["neighbors"]),
                     "latitude": node["latitude"],
                     "longitude": node["longitude"],
                     "timestamp": node["timestamp"],
@@ -1715,8 +1706,7 @@ async def nebula_update_node(scenario_name: str, request: Request):
                 "ip": config["network_args"]["ip"],
                 "port": str(config["network_args"]["port"]),
                 "role": config["device_args"]["role"],
-                "malicious": config["device_args"]["malicious"],
-                "neighbors": config["network_args"]["neighbors"],
+                "neighbors": " ".join(config["network_args"]["neighbors"]),
                 "latitude": config["mobility_args"]["latitude"],
                 "longitude": config["mobility_args"]["longitude"],
                 "timestamp": config["timestamp"],
@@ -2163,7 +2153,8 @@ async def assign_available_gpu(scenario_data, role):
             running_gpus = []
             # Obtain associated gpus of the running scenarios
             for scenario in running_scenarios:
-                scenario_gpus = json.loads(scenario["gpu_id"])
+                config = json.loads(scenario["config"])
+                scenario_gpus = config.get("gpu_id", [])
                 # Obtain the list of gpus in use without duplicates
                 for gpu in scenario_gpus:
                     if gpu not in running_gpus:
