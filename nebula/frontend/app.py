@@ -687,7 +687,7 @@ async def remove_scenario_by_name(scenario_name):
     await controller_post(url, data)
 
 
-async def check_scenario_with_role(role, scenario_name):
+async def check_scenario_with_role(role, scenario_name, user):
     """
     Check if a specific scenario is allowed for the session's role.
 
@@ -701,7 +701,7 @@ async def check_scenario_with_role(role, scenario_name):
     Raises:
         HTTPException: If the underlying HTTP GET request fails.
     """
-    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/check/{role}/{scenario_name}"
+    url = f"http://{settings.controller_host}:{settings.controller_port}/scenarios/check/{user}/{role}/{scenario_name}"
     check_data = await controller_get(url)
     return check_data.get("allowed", False)
 
@@ -1883,7 +1883,7 @@ async def nebula_relaunch_scenario(
         if session["role"] == "demo":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         elif session["role"] == "user":
-            if not await check_scenario_with_role(session["role"], scenario_name):
+            if not await check_scenario_with_role(session["role"], scenario_name, session["user"]):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
         scenario_path = FileUtils.check_path(settings.config_dir, os.path.join(scenario_name, "scenario.json"))
@@ -1924,7 +1924,7 @@ async def nebula_remove_scenario(scenario_name: str, session: dict = Depends(get
         if session["role"] == "demo":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         elif session["role"] == "user":
-            if not await check_scenario_with_role(session["role"], scenario_name):
+            if not await check_scenario_with_role(session["role"], scenario_name, session["user"]):
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         await remove_scenario(scenario_name, session["user"])
         return RedirectResponse(url="/platform/dashboard")

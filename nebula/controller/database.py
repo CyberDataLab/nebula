@@ -592,6 +592,7 @@ async def check_scenario_with_role(role, scenario_name, current_username=None):
         return True  # Admins can access any existing scenario
 
     if current_username is None:
+        logging.info(f"[FER] db username {scenario_info.get('username')} current_username {current_username}")
         logging.warning(
             "check_scenario_with_role called for non-admin role without current_username."
         )

@@ -533,8 +533,9 @@ async def get_running_scenario(get_all: bool = False):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get("/scenarios/check/{role}/{scenario_name}")
+@app.get("/scenarios/check/{user}/{role}/{scenario_name}")
 async def check_scenario(
+    user: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid username")],
     role: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid role")],
     scenario_name: Annotated[
         str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
@@ -553,7 +554,7 @@ async def check_scenario(
     from nebula.controller.database import check_scenario_with_role
 
     try:
-        allowed = await check_scenario_with_role(role, scenario_name)
+        allowed = await check_scenario_with_role(role, scenario_name, user)
         return {"allowed": allowed}
     except Exception as e:
         logging.exception(f"Error checking scenario with role: {e}")
