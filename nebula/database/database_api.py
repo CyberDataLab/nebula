@@ -343,6 +343,9 @@ async def verify_user_controller(payload: UserVerifyRequest):
         if auth:
             return auth
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    except HTTPException as e:
+    # Propagate intended HTTP errors (e.g., 401) without wrapping
+        raise e
     except Exception as e:
         logging.exception(f"Error verifying user: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error verifying user: {e}")

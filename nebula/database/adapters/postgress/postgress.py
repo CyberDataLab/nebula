@@ -598,7 +598,7 @@ class PostgresDB(DatabaseAdapter):
         """
         Compose scenarios list and running scenario respecting role.
         """
-        scenarios = await self._get_all_scenarios_and_check_completed(username=user, role=role)
+        scenarios = await self._get_all_scenarios_and_check_completed(user=user, role=role)
         scenario_running = await self._get_running_scenario(None if role == "admin" else user)
         return {"scenarios": scenarios, "scenario_running": scenario_running}
 
