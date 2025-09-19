@@ -1593,6 +1593,7 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                 # Calculate initial status based on timestamp
                 timestamp = datetime.datetime.strptime(node["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
                 is_online = (datetime.datetime.now() - timestamp) <= datetime.timedelta(seconds=25)
+                mobility_args = json.loads(node["extras"])
 
                 formatted_nodes.append({
                     "uid": node["uid"],
@@ -1601,8 +1602,8 @@ async def nebula_dashboard_monitor(scenario_name: str, request: Request, session
                     "port": node["port"],
                     "role": node["role"],
                     "neighbors": " ".join(node["neighbors"]),
-                    "latitude": node["latitude"],
-                    "longitude": node["longitude"],
+                    "latitude": mobility_args["latitude"],
+                    "longitude": mobility_args["longitude"],
                     "timestamp": node["timestamp"],
                     "federation": node["federation"],
                     "round": str(node["round"]),
