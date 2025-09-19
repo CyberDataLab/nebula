@@ -18,7 +18,7 @@ from fastapi.concurrency import asynccontextmanager
 
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.utils import APIUtils, DockerUtils
-from nebula.database.utils_requests import (
+from nebula.controller.utils_requests import (
     NodesUpdateRequest,
     factory_requests_path,
     ScenarioUpdateRequest,
@@ -530,6 +530,7 @@ async def get_running_scenario_endpoint(get_all: bool = False):
 
 @app.get(Routes.CHECK_SCENARIO)
 async def check_scenario(
+    user: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid username")],
     role: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid role")],
     scenario_name: Annotated[
         str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
@@ -546,7 +547,7 @@ async def check_scenario(
         dict: Whether the scenario is allowed for the role.
     """
     try:
-        path = factory_requests_path("check_scenario", role=role, scenario_name=scenario_name)
+        path = factory_requests_path("check_scenario", user=user, role=role, scenario_name=scenario_name)
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error checking scenario with role: {e}")

@@ -27,7 +27,7 @@ class PostgresDB(DatabaseAdapter):
     def __init__(self):
         self.pool = None
 
-    async def init_db_pool(self):
+    async def _init_db_pool(self):
         """
         Initializes the asynchronous PostgreSQL connection pool.
         This should be called once when the application starts.
@@ -62,7 +62,7 @@ class PostgresDB(DatabaseAdapter):
                     )
                     raise
 
-    async def close_db_pool(self):
+    async def _close_db_pool(self):
         """
         Closes the asynchronous PostgreSQL connection pool.
         This should be called once when the application shuts down gracefully.
@@ -71,10 +71,9 @@ class PostgresDB(DatabaseAdapter):
             await self.pool.close()
             logging.info("Database connection pool closed.")
 
-
     # --- User Management Functions ---
 
-    async def insert_default_admin(self):
+    async def _insert_default_admin(self):
         """
         Inserts a default 'ADMIN' user into the database with a hashed password.
         The password must be provided via the ADMIN_PASSWORD environment variable.
@@ -95,20 +94,22 @@ class PostgresDB(DatabaseAdapter):
         except Exception as e:
             logging.error(f"Failed to insert default admin user: {e}", exc_info=True)
 
-    async def list_users(self, all_info: bool = False):
+    async def _list_users(self, all_info: bool = False):
         """
         Retrieves a list of users from the users database.
         """
         async with self.pool.acquire() as conn:
             result = await conn.fetch("SELECT * FROM users")
 
-        if not all_info:
-            result = [user["user"] for user in result]
+        if all_info:
+            # Return JSON-serializable dicts with full info
+            return [dict(row) for row in result]
+        else:
+            # Return just the list of usernames (strings)
+            return [row["user"] for row in result]
 
-        return result
 
-
-    async def get_user_info(self, user):
+    async def _get_user_info(self, user: str):
         """
         Fetches detailed information for a specific user from the users database.
         """
@@ -116,23 +117,29 @@ class PostgresDB(DatabaseAdapter):
             return await conn.fetchrow('SELECT * FROM users WHERE "user" = $1', user)
 
 
-    async def verify(self, user, password):
+    async def _verify(self, user: str, password: str):
         """
-        Verifies whether the provided password matches the stored hashed password for a user.
+        Verifies credentials and returns user info when valid.
+
+        Returns
+        -------
+        dict | None
+            {"user": USER, "role": ROLE} if valid, otherwise None.
         """
+        user_up = user.upper()
         async with self.pool.acquire() as conn:
-            result = await conn.fetchrow('SELECT password FROM users WHERE "user" = $1', user)
-        if result:
-            try:
-                return pwd_context.verify(password, result[0])
-            except Exception:
-                # Catch more general exceptions during verification to be safe
-                logging.error(f"Error during password verification for user {user}", exc_info=True)
-                return False
-        return False
+            row = await conn.fetchrow('SELECT password, role FROM users WHERE "user" = $1', user_up)
+        if not row:
+            return None
+        try:
+            if pwd_context.verify(password, row["password"]):
+                return {"user": user_up, "role": row["role"]}
+        except Exception:
+            logging.error(f"Error during password verification for user {user_up}", exc_info=True)
+        return None
 
 
-    async def verify_hash_algorithm(self, user):
+    async def _verify_hash_algorithm(self, user: str):
         """
         Checks if the stored password hash for a user uses a supported Argon2 algorithm.
         """
@@ -146,7 +153,7 @@ class PostgresDB(DatabaseAdapter):
         return False
 
 
-    async def delete_user_from_db(self, user):
+    async def _delete_user_from_db(self, user: str):
         """
         Deletes a user record from the users database.
         """
@@ -154,7 +161,7 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute('DELETE FROM users WHERE "user" = $1', user)
 
 
-    async def add_user(self, user, password, role):
+    async def _add_user(self, user:str, password:str, role:str):
         """
         Adds a new user to the users database with a hashed password.
         """
@@ -166,7 +173,7 @@ class PostgresDB(DatabaseAdapter):
             )
 
 
-    async def update_user(self, user, password, role):
+    async def _update_user(self, user:str, password:str, role:str):
         """
         Updates the password and role of an existing user in the users database.
         """
@@ -179,7 +186,7 @@ class PostgresDB(DatabaseAdapter):
 
     # --- Node Management Functions ---
 
-    async def list_nodes(self, scenario_name=None, sort_by="idx"):
+    async def _list_nodes(self, scenario_name:str=None, sort_by:str="idx"):
         """
         Retrieves a list of nodes from the nodes database, optionally filtered by scenario and sorted.
         """
@@ -220,7 +227,7 @@ class PostgresDB(DatabaseAdapter):
             return None
 
 
-    async def list_nodes_by_scenario_name(self, scenario_name):
+    async def _list_nodes_by_scenario_name(self, scenario_name:str):
         """
         Fetches all nodes associated with a specific scenario, ordered by their index as integers.
         """
@@ -249,7 +256,7 @@ class PostgresDB(DatabaseAdapter):
             return None
 
 
-    async def update_node_record(
+    async def _update_node_record(
         self,
         node_uid,
         idx,
@@ -284,6 +291,9 @@ class PostgresDB(DatabaseAdapter):
                                 logging.warning("Unable to serialize extras to JSON, storing as empty object.")
                                 extras_payload = json.dumps({})
 
+                    # Ensure malicious is stored as text if the column expects text
+                    malicious_payload = malicious if isinstance(malicious, str) else str(malicious)
+
                     async with conn.transaction():
                         result = await conn.fetchrow(
                             "SELECT * FROM nodes WHERE uid = $1 AND scenario = $2 FOR UPDATE;",
@@ -300,7 +310,7 @@ class PostgresDB(DatabaseAdapter):
                                         $7, $8, $9, $10, $11, $12::jsonb, $13);
                                 """,
                                 node_uid, idx, ip, port, role, neighbors,
-                                timestamp, federation, federation_round, scenario, run_hash, extras_payload, malicious,
+                                timestamp, federation, federation_round, scenario, run_hash, extras_payload, malicious_payload,
                             )
                         else:
                             # Update existing node
@@ -313,7 +323,7 @@ class PostgresDB(DatabaseAdapter):
                                 """,
                                 idx, ip, port, role, neighbors,
                                 timestamp, federation, federation_round,
-                                run_hash, extras_payload, malicious,
+                                run_hash, extras_payload, malicious_payload,
                                 node_uid, scenario,
                             )
 
@@ -324,7 +334,7 @@ class PostgresDB(DatabaseAdapter):
                     return None
 
 
-    async def remove_all_nodes(self):
+    async def _remove_all_nodes(self):
         """
         Deletes all node records from the nodes database.
         """
@@ -332,7 +342,7 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute("TRUNCATE nodes CASCADE;") # Use CASCADE if there are foreign key dependencies
 
 
-    async def remove_nodes_by_scenario_name(self, scenario_name):
+    async def _remove_nodes_by_scenario_name(self, scenario_name:str):
         """
         Deletes all nodes associated with a specific scenario from the database.
         """
@@ -341,7 +351,7 @@ class PostgresDB(DatabaseAdapter):
 
     # --- Scenario Management Functions ---
 
-    async def get_all_scenarios(self, username, role, sort_by="start_time"):
+    async def _get_all_scenarios(self, username:str, role:str, sort_by:str="start_time"):
         """
         Retrieves all scenarios from the database, accessing fields from the 'config' (JSONB) column
         and direct columns. Filters by user role and sorts by the specified field.
@@ -391,7 +401,7 @@ class PostgresDB(DatabaseAdapter):
             return await conn.fetch(full_command, *params)
 
 
-    async def get_all_scenarios_and_check_completed(self, username, role, sort_by="start_time"):
+    async def _get_all_scenarios_and_check_completed(self, user:str, role:str, sort_by:str="start_time"):
         """
         Retrieves all scenarios, sorts them, and updates the status if necessary.
         Returns a list of dictionaries, where each dictionary represents a scenario.
@@ -435,7 +445,7 @@ class PostgresDB(DatabaseAdapter):
             params = []
             if role != "admin":
                 command += " WHERE username = $1" # username is a direct column
-                params.append(username)
+                params.append(user)
 
             command += f" {order_by_clause};"
 
@@ -446,30 +456,30 @@ class PostgresDB(DatabaseAdapter):
         re_fetch_required = False
         for scenario in scenarios_to_return:
             if scenario["status"] == "running":
-                if await self.check_scenario_federation_completed(scenario["name"]):
-                    await self.scenario_set_status_to_completed(scenario["name"])
+                if await self._check_scenario_federation_completed(scenario["name"]):
+                    await self._scenario_set_status_to_completed(scenario["name"])
                     re_fetch_required = True
                     break
 
         if re_fetch_required:
             # Recursively call to get fresh data after status update
-            return await self.get_all_scenarios_and_check_completed(username, role, sort_by)
+            return await self._get_all_scenarios_and_check_completed(user, role, sort_by)
 
         return scenarios_to_return
 
 
-    async def scenario_update_record(self, name, start_time, end_time, scenario_config, status, username):
+    async def _scenario_update_record(self, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str):
         """
         Inserts or updates a scenario record using the PostgreSQL "UPSERT" pattern.
         All configuration is saved in the 'config' column of type JSONB.
         Direct columns (name, start_time, end_time, username, status) are also handled.
         """
-        # Ensure scenario_config is a dictionary before dumping to JSON
-        if not isinstance(scenario_config, dict):
+        # Ensure scenario is a dictionary before dumping to JSON
+        if not isinstance(scenario, dict):
             try:
-                scenario_config = json.loads(scenario_config)
+                scenario = json.loads(scenario)
             except (json.JSONDecodeError, TypeError):
-                logging.error("scenario_config is not a valid JSON string or dict.")
+                logging.error("scenario is not a valid JSON string or dict.")
                 return
 
         command = """
@@ -483,10 +493,10 @@ class PostgresDB(DatabaseAdapter):
                 config = scenarios.config || EXCLUDED.config; -- Merge JSONB
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(command, name, start_time, end_time, username, status, json.dumps(scenario_config))
+            await conn.execute(command, scenario_name, start_time, end_time, username, status, json.dumps(scenario))
 
 
-    async def scenario_set_all_status_to_finished(self):
+    async def _scenario_set_all_status_to_finished(self):
         """
         Sets the status of all 'running' scenarios to 'finished'
         and updates their 'end_time' (both in the direct column and within JSONB).
@@ -505,7 +515,7 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute(command, current_time, json.dumps(current_time))
 
 
-    async def scenario_set_status_to_finished(self, scenario_name):
+    async def _scenario_set_status_to_finished(self, scenario_name:str):
         """
         Sets the status of a specific scenario to 'finished' and updates its 'end_time'.
         Updates both the direct columns and the JSONB 'config'.
@@ -526,7 +536,7 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute(command, current_time, json.dumps(current_time), scenario_name)
 
 
-    async def scenario_set_status_to_completed(self, scenario_name):
+    async def _scenario_set_status_to_completed(self, scenario_name:str):
         """
         Sets the status of a specific scenario to 'completed'.
         Updates both the direct column and the JSONB 'config'.
@@ -542,7 +552,17 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute(command, scenario_name)
 
 
-    async def get_running_scenario(self, username=None, get_all=False):
+    async def _finish_scenario(self, scenario_name: str, all: bool = False):
+        """
+        Consolidated method to set scenarios to finished.
+        """
+        if all:
+            await self._scenario_set_all_status_to_finished()
+        else:
+            await self._scenario_set_status_to_finished(scenario_name)
+
+
+    async def _get_running_scenario(self, username:str=None, get_all:bool=False):
         """
         Retrieves scenarios with a 'running' status, optionally filtered by user.
         Returns full scenario record (including direct columns and config JSONB).
@@ -564,7 +584,7 @@ class PostgresDB(DatabaseAdapter):
         return result
 
 
-    async def get_completed_scenario(self):
+    async def _get_completed_scenario(self):
         """
         Retrieves a single scenario with a 'completed' status.
         Returns full scenario record (including direct columns and config JSONB).
@@ -574,8 +594,16 @@ class PostgresDB(DatabaseAdapter):
             result_row = await conn.fetchrow(command, "completed")
             return dict(result_row) if result_row else None
 
+    async def _get_scenarios(self, user: str, role: str):
+        """
+        Compose scenarios list and running scenario respecting role.
+        """
+        scenarios = await self._get_all_scenarios_and_check_completed(username=user, role=role)
+        scenario_running = await self._get_running_scenario(None if role == "admin" else user)
+        return {"scenarios": scenarios, "scenario_running": scenario_running}
 
-    async def get_scenario_by_name(self, scenario_name):
+
+    async def _get_scenario_by_name(self, scenario_name:str):
         """
         Retrieves the complete record of a scenario by its name.
         """
@@ -601,7 +629,7 @@ class PostgresDB(DatabaseAdapter):
         return result
 
 
-    async def get_user_by_scenario_name(self, scenario_name):
+    async def _get_user_by_scenario_name(self, scenario_name:str):
         """
         Retrieves the username associated with a scenario (from the direct 'username' column).
         """
@@ -609,7 +637,7 @@ class PostgresDB(DatabaseAdapter):
             return await conn.fetchval("SELECT username FROM scenarios WHERE name = $1;", scenario_name)
 
 
-    async def remove_scenario_by_name(self, scenario_name):
+    async def _remove_scenario_by_name(self, scenario_name:str):
         """
         Delete a scenario from the database by its unique name.
         """
@@ -621,7 +649,7 @@ class PostgresDB(DatabaseAdapter):
             logging.error(f"Error occurred while deleting scenario '{scenario_name}': {e}")
 
 
-    async def check_scenario_federation_completed(self, scenario_name):
+    async def _check_scenario_federation_completed(self, scenario_name:str):
         """
         Check if all nodes in a given scenario have completed the required federation rounds.
         """
@@ -659,11 +687,11 @@ class PostgresDB(DatabaseAdapter):
             return False
 
 
-    async def check_scenario_with_role(self, role, scenario_name, current_username=None):
+    async def _check_scenario_with_role(self, role:str, scenario_name:str, user:str=None):
         """
         Verify if a scenario exists that the user with the given role and username can access.
         """
-        scenario_info = await self.get_scenario_by_name(scenario_name)
+        scenario_info = await self._get_scenario_by_name(scenario_name)
 
         if not scenario_info:
             return False  # Scenario does not exist
@@ -671,17 +699,17 @@ class PostgresDB(DatabaseAdapter):
         if role == "admin":
             return True  # Admins can access any existing scenario
 
-        if current_username is None:
+        if user is None:
             logging.warning(
-                "check_scenario_with_role called for non-admin role without current_username."
+                "check_scenario_with_role called for non-admin role without user."
             )
             return False
 
-        return scenario_info.get("username") == current_username
+        return scenario_info.get("username") == user
 
     # --- Notes Management Functions ---
 
-    async def save_notes(self, scenario, notes):
+    async def _save_notes(self, scenario: str, notes: str):
         """
         Save or update notes associated with a specific scenario.
         """
@@ -698,15 +726,19 @@ class PostgresDB(DatabaseAdapter):
             logging.error(f"PostgreSQL error during save_notes: {e}")
 
 
-    async def get_notes(self, scenario):
+    async def _get_notes(self, scenario: str):
         """
         Retrieve notes associated with a specific scenario.
         """
         async with self.pool.acquire() as conn:
-            return await conn.fetchrow("SELECT * FROM notes WHERE scenario = $1;", scenario)
+            row = await conn.fetchrow("SELECT * FROM notes WHERE scenario = $1;", scenario)
+            if row is None:
+                # No notes stored for this scenario yet
+                return None
+            return dict(row)
 
 
-    async def remove_note(self, scenario):
+    async def _remove_note(self, scenario: str):
         """
         Delete the note associated with a specific scenario.
         """

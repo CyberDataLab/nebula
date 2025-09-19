@@ -1,11 +1,18 @@
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, confloat, conint
+from pydantic import BaseModel, conint, confloat
 
 
 class Routes:
-    # Scenarios
+    # General
     INIT = "/"
+    STATUS = "/status"
+    RESOURCES = "/resources"
+    LEAST_MEMORY_GPU = "/least_memory_gpu"
+    AVAILABLE_GPUS = "/available_gpus/"
+
+    # Scenarios (Controller + DB API routing)
+    RUN = "/scenarios/run"
     UPDATE = "/scenarios/update"
     STOP = "/scenarios/stop"
     REMOVE = "/scenarios/remove"
@@ -18,6 +25,8 @@ class Routes:
     # Nodes
     NODES_BY_SCENARIO_NAME = "/nodes/{scenario_name}"
     NODES_UPDATE = "/nodes/update"
+    NODES_UPDATE_BY_SCENARIO = "/nodes/{scenario_name}/update"
+    NODES_DONE_BY_SCENARIO = "/nodes/{scenario_name}/done"
     NODES_REMOVE = "/nodes/remove"
 
     # Notes
@@ -32,6 +41,24 @@ class Routes:
     USER_DELETE = "/user/delete"
     USER_UPDATE = "/user/update"
     USER_VERIFY = "/user/verify"
+
+    # Discovery / Physical management
+    DISCOVER_VPN = "/discover-vpn"
+    PHYSICAL_RUN = "/physical/run"
+    PHYSICAL_STOP = "/physical/stop"
+    PHYSICAL_SETUP = "/physical/setup"
+    PHYSICAL_STATE = "/physical/state"
+    PHYSICAL_SCENARIO_STATE = "/physical/{scenario_name}/state"
+
+
+class RunScenarioRequest(BaseModel):
+    """Request model to trigger a scenario run on the controller.
+
+    - Only requires scenario_data and user.
+    - Extra fields (e.g., role, federation_id) are ignored.
+    """
+    scenario_data: Dict[str, Any]
+    user: str
 
 
 class ScenarioUpdateRequest(BaseModel):
@@ -132,42 +159,12 @@ class NodesUpdateRequest(BaseModel):
     scenario_args: ScenarioArgs
     timestamp: str
 
-class GetScenariosRequest(BaseModel):
-    user: str
-    role: str
-
-
-class GetRunningScenarioRequest(BaseModel):
-    get_all: bool = False
-
-
-class CheckScenarioRequest(BaseModel):
-    user: str
-    role: str
-    scenario_name: str
-
-
-class GetScenarioByNameRequest(BaseModel):
-    scenario_name: str
-
-
-class ListNodesByScenarioNameRequest(BaseModel):
-    scenario_name: str
-
-
-class GetNotesByScenarioNameRequest(BaseModel):
-    scenario_name: str
-
-
-class ListUsersRequest(BaseModel):
-    all_info: bool = False
-
-
-class GetUserByScenarioNameRequest(BaseModel):
-    scenario_name: str
-
 
 def factory_requests_path(resource: str, user: str = "", role: str = "", scenario_name: str = "") -> str:
+    """Build paths for requests to the Database API from the Controller.
+
+    This factory only maps DB API resources; controller endpoints do not require mapping here.
+    """
     if resource == "init":
         return Routes.INIT
     elif resource == "update":
