@@ -96,54 +96,54 @@ async def read_root():
 # Scenarios
 @app.post(Routes.UPDATE)
 async def update_scenario(
-    payload: ScenarioUpdateRequest,
+    request: ScenarioUpdateRequest,
 ):
     try:
         await db._scenario_update_record(
-            **payload.model_dump()
+            **request.model_dump()
         )
-        return {"message": f"Scenario {payload.scenario_name} updated successfully"}
+        return {"message": f"Scenario {request.scenario_name} updated successfully"}
     except Exception as e:
         logging.exception(
-            f"Error updating scenario {payload.scenario_name}: {e}"
+            f"Error updating scenario {request.scenario_name}: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.STOP)
 async def stop_scenario(
-    payload: ScenarioStopRequest,
+    request: ScenarioStopRequest,
 ):
     try:
-        await db._finish_scenario(payload.scenario_name, payload.all)
+        await db._finish_scenario(request.scenario_name, request.all)
         return {"message": "Finished status set successfully"}
     except Exception as e:
         logging.exception(
-            f"Error stopping scenario {payload.scenario_name}: {e}"
+            f"Error stopping scenario {request.scenario_name}: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.REMOVE)
 async def remove_scenario(
-    payload: ScenarioRemoveRequest,
+    request: ScenarioRemoveRequest,
 ):
     try:
-        await db._remove_scenario_by_name(payload.scenario_name)
-        return {"message": f"Scenario {payload.scenario_name} removed successfully"}
+        await db._remove_scenario_by_name(request.scenario_name)
+        return {"message": f"Scenario {request.scenario_name} removed successfully"}
     except Exception as e:
         logging.exception(
-            f"Error removing scenario {payload.scenario_name}: {e}"
+            f"Error removing scenario {request.scenario_name}: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get(Routes.GET_SCENARIOS_BY_USER)
 async def get_scenarios(
-    payload: GetScenariosRequest = Depends()
+    request: GetScenariosRequest = Depends()
 ):
     try:
-        return await db._get_scenarios(payload.user, payload.role)
+        return await db._get_scenarios(request.user, request.role)
     except Exception as e:
         logging.exception(f"Error obtaining scenarios: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -151,24 +151,24 @@ async def get_scenarios(
 
 @app.post(Routes.FINISH)
 async def set_scenario_status_to_finished(
-    payload: ScenarioFinishRequest,
+    request: ScenarioFinishRequest,
 ):
     try:
         await db._finish_scenario(
-            payload.scenario_name, payload.all
+            request.scenario_name, request.all
         )
         return {"message": "Finished status set successfully"}
     except Exception as e:
         logging.exception(
-            f"Error setting scenario {payload.scenario_name} to finished: {e}"
+            f"Error setting scenario {request.scenario_name} to finished: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get(Routes.RUNNING)
-async def get_running_scenario_endpoint(payload: GetRunningScenarioRequest = Depends()):
+async def get_running_scenario_endpoint(request: GetRunningScenarioRequest = Depends()):
     try:
-        return await db._get_running_scenario(get_all=payload.get_all)
+        return await db._get_running_scenario(get_all=request.get_all)
     except Exception as e:
         logging.exception(f"Error obtaining running scenario: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -176,11 +176,10 @@ async def get_running_scenario_endpoint(payload: GetRunningScenarioRequest = Dep
 
 @app.get(Routes.CHECK_SCENARIO)
 async def check_scenario(
-    payload: CheckScenarioRequest = Depends()
+    request: CheckScenarioRequest = Depends()
 ):
     try:
-        params = CheckScenarioRequest(**payload.model_dump())
-        allowed = await db._check_scenario_with_role(params.role, params.scenario_name, params.user)
+        allowed = await db._check_scenario_with_role(**request.model_dump())
         return {"allowed": allowed}
     except Exception as e:
         logging.exception(f"Error checking scenario with role: {e}")
@@ -189,23 +188,23 @@ async def check_scenario(
 
 @app.get(Routes.GET_SCENARIOS_BY_SCENARIO_NAME)
 async def get_scenario_by_name_endpoint(
-    payload: GetScenarioByNameRequest = Depends(),
+    request: GetScenarioByNameRequest = Depends(),
 ):
     try:
-        scenario = await db._get_scenario_by_name(payload.scenario_name)
+        scenario = await db._get_scenario_by_name(request.scenario_name)
         return scenario
     except Exception as e:
-        logging.exception(f"Error obtaining scenario {payload.scenario_name}: {e}")
+        logging.exception(f"Error obtaining scenario {request.scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Nodes
 @app.get(Routes.NODES_BY_SCENARIO_NAME)
 async def list_nodes_by_scenario_name_endpoint(
-    payload: ListNodesByScenarioNameRequest = Depends()
+    request: ListNodesByScenarioNameRequest = Depends()
 ):
     try:
-        nodes = await db._list_nodes_by_scenario_name(payload.scenario_name)
+        nodes = await db._list_nodes_by_scenario_name(request.scenario_name)
         return nodes
     except Exception as e:
         logging.exception(f"Error obtaining nodes: {e}")
@@ -213,27 +212,27 @@ async def list_nodes_by_scenario_name_endpoint(
 
 
 @app.post(Routes.NODES_UPDATE)
-async def update_node_record(payload: NodesUpdateRequest):
+async def update_node_record(request: NodesUpdateRequest):
     try:
         # Build extras from mobility_args
         extras = {
-            "latitude": payload.mobility_args.latitude,
-            "longitude": payload.mobility_args.longitude,
+            "latitude": request.mobility_args.latitude,
+            "longitude": request.mobility_args.longitude,
         }
         await db._update_node_record(
-            str(payload.device_args.uid),
-            str(payload.device_args.idx),
-            str(payload.network_args.ip),
-            str(payload.network_args.port),
-            str(payload.device_args.role),
-            payload.network_args.neighbors,
+            str(request.device_args.uid),
+            str(request.device_args.idx),
+            str(request.network_args.ip),
+            str(request.network_args.port),
+            str(request.device_args.role),
+            request.network_args.neighbors,
             extras,
-            str(payload.timestamp),
-            str(payload.scenario_args.federation),
-            str(payload.federation_args.round),
-            str(payload.scenario_args.name),
-            str(payload.tracking_args.run_hash),
-            bool(payload.device_args.malicious),
+            str(request.timestamp),
+            str(request.scenario_args.federation),
+            str(request.federation_args.round),
+            str(request.scenario_args.name),
+            str(request.tracking_args.run_hash),
+            bool(request.device_args.malicious),
         )
         return {"message": "Node updated successfully"}
     except Exception as e:
@@ -242,10 +241,10 @@ async def update_node_record(payload: NodesUpdateRequest):
 
 
 @app.post(Routes.NODES_REMOVE)
-async def remove_nodes_by_scenario_name_endpoint(payload: NodesRemoveRequest):
+async def remove_nodes_by_scenario_name_endpoint(request: NodesRemoveRequest):
     try:
-        await db._remove_nodes_by_scenario_name(payload.scenario_name)
-        return {"message": f"Nodes for scenario {payload.scenario_name} removed successfully"}
+        await db._remove_nodes_by_scenario_name(request.scenario_name)
+        return {"message": f"Nodes for scenario {request.scenario_name} removed successfully"}
     except Exception as e:
         logging.exception(f"Error removing nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -254,31 +253,31 @@ async def remove_nodes_by_scenario_name_endpoint(payload: NodesRemoveRequest):
 # Notes
 @app.get(Routes.NOTES_BY_SCENARIO_NAME)
 async def get_notes_by_scenario_name(
-    payload: GetNotesByScenarioNameRequest = Depends()
+    request: GetNotesByScenarioNameRequest = Depends()
 ):
     try:
-        notes_record = await db._get_notes(payload.scenario_name)
+        notes_record = await db._get_notes(request.scenario_name)
         return notes_record
     except Exception as e:
-        logging.exception(f"Error obtaining notes for scenario {payload.scenario_name}: {e}")
+        logging.exception(f"Error obtaining notes for scenario {request.scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.NOTES_UPDATE)
-async def update_notes_by_scenario_name(payload: NotesUpdateRequest):
+async def update_notes_by_scenario_name(request: NotesUpdateRequest):
     try:
-        await db._save_notes(payload.scenario_name, payload.notes)
-        return {"message": f"Notes for scenario {payload.scenario_name} updated successfully"}
+        await db._save_notes(**request.model_dump())
+        return {"message": f"Notes for scenario {request.scenario_name} updated successfully"}
     except Exception as e:
         logging.exception(f"Error updating notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.NOTES_REMOVE)
-async def remove_notes_by_scenario_name_endpoint(payload: NotesRemoveRequest):
+async def remove_notes_by_scenario_name_endpoint(request: NotesRemoveRequest):
     try:
-        await db._remove_note(payload.scenario_name)
-        return {"message": f"Notes for scenario {payload.scenario_name} removed successfully"}
+        await db._remove_note(request.scenario_name)
+        return {"message": f"Notes for scenario {request.scenario_name} removed successfully"}
     except Exception as e:
         logging.exception(f"Error removing notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -286,9 +285,9 @@ async def remove_notes_by_scenario_name_endpoint(payload: NotesRemoveRequest):
 
 # Users
 @app.get(Routes.USER_LIST)
-async def list_users_controller(payload: ListUsersRequest = Depends()):
+async def list_users_controller(request: ListUsersRequest = Depends()):
     try:
-        return {"users": await db._list_users(payload.all_info)}
+        return {"users": await db._list_users(request.all_info)}
     except Exception as e:
         logging.exception(f"Error retrieving users: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {e}")
@@ -296,20 +295,20 @@ async def list_users_controller(payload: ListUsersRequest = Depends()):
 
 @app.get(Routes.USER_BY_SCENARIO_NAME)
 async def get_user_by_scenario_name_endpoint(
-    payload: GetUserByScenarioNameRequest = Depends()
+    request: GetUserByScenarioNameRequest = Depends()
 ):
     try:
-        user = await db._get_user_by_scenario_name(payload.scenario_name)
+        user = await db._get_user_by_scenario_name(request.scenario_name)
         return user
     except Exception as e:
-        logging.exception(f"Error obtaining user for scenario {payload.scenario_name}: {e}")
+        logging.exception(f"Error obtaining user for scenario {request.scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.USER_ADD)
-async def add_user_controller(payload: UserAddRequest):
+async def add_user_controller(request: UserAddRequest):
     try:
-        await db._add_user(payload.user, payload.password, payload.role)
+        await db._add_user(**request.model_dump())
         return {"detail": "User added successfully"}
     except Exception as e:
         logging.exception(f"Error adding user: {e}")
@@ -317,9 +316,9 @@ async def add_user_controller(payload: UserAddRequest):
 
 
 @app.post(Routes.USER_DELETE)
-async def remove_user_controller(payload: UserDeleteRequest):
+async def remove_user_controller(request: UserDeleteRequest):
     try:
-        await db._delete_user_from_db(payload.user)
+        await db._delete_user_from_db(request.user)
         return {"detail": "User deleted successfully"}
     except Exception as e:
         logging.exception(f"Error deleting user: {e}")
@@ -327,9 +326,9 @@ async def remove_user_controller(payload: UserDeleteRequest):
 
 
 @app.post(Routes.USER_UPDATE)
-async def update_user_controller(payload: UserUpdateRequest):
+async def update_user_controller(request: UserUpdateRequest):
     try:
-        await db._update_user(payload.user, payload.password, payload.role)
+        await db._update_user(**request.model_dump())
         return {"detail": "User updated successfully"}
     except Exception as e:
         logging.exception(f"Error updating user: {e}")
@@ -337,9 +336,9 @@ async def update_user_controller(payload: UserUpdateRequest):
 
 
 @app.post(Routes.USER_VERIFY)
-async def verify_user_controller(payload: UserVerifyRequest):
+async def verify_user_controller(request: UserVerifyRequest):
     try:
-        auth = await db._verify(payload.user, payload.password)
+        auth = await db._verify(**request.model_dump())
         if auth:
             return auth
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
