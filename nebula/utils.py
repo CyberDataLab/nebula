@@ -3,8 +3,16 @@ import os
 import socket
 
 import aiohttp
+import aiohttp
 import docker
 
+import re
+from typing import Optional
+
+from fastapi import HTTPException
+from aiohttp import ClientConnectorError
+from aiohttp.client_exceptions import ClientError
+import asyncio
 import re
 from typing import Optional
 
@@ -209,10 +217,10 @@ class DockerUtils:
             logging.exception("Error interacting with Docker")
         except Exception:
             logging.exception("Unexpected error")
-            
+
 
 class LoggerUtils:
-    
+
     @staticmethod
     def configure_logger(
         name: Optional[str] = None,
@@ -267,9 +275,9 @@ class LoggerUtils:
         logger.propagate = False
 
         return logger
-    
+
 class APIUtils():
-    
+
     @staticmethod
     async def retry_with_backoff(func, *args, max_retries=5, initial_delay=1):
         """
@@ -304,12 +312,13 @@ class APIUtils():
                     raise last_exception
 
     @staticmethod
-    async def get(url):
+    async def get(url, params=None):
         """
         Fetch JSON data from a remote controller endpoint via asynchronous HTTP GET.
 
         Parameters:
             url (str): The full URL of the controller API endpoint.
+            params (dict, optional): A dictionary of query parameters to be sent with the request.
 
         Returns:
             Any: Parsed JSON response when the HTTP status code is 200.
@@ -320,11 +329,12 @@ class APIUtils():
 
         async def _get():
             async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
+                async with session.get(url, params=params) as response:
                     if response.status == 200:
                         return await response.json()
                     else:
-                        raise HTTPException(status_code=response.status, detail="Error fetching data")
+                        detail = await response.text()
+                        raise HTTPException(status_code=response.status, detail=detail)
 
         return await APIUtils.retry_with_backoff(_get)
 
@@ -354,5 +364,3 @@ class APIUtils():
                         raise HTTPException(status_code=response.status, detail=detail)
 
         return await APIUtils.retry_with_backoff(_post)
-
-    

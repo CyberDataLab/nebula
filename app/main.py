@@ -21,8 +21,8 @@ argparser.add_argument(
     "-fcp",
     "--federationcontrollerport",
     dest="federationcontrollerport",
-    default=5051,
-    help="federation controller port port (default: 5051)",
+    default=5052,
+    help="federation controller port port (default: 5052)",
 )
 
 argparser.add_argument(
