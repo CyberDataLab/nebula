@@ -85,9 +85,10 @@ class SAReasoner(ISAReasoner):
             title="SA Reasoner",
         )
         logging.info("🌐  Initializing SAReasoner")
-        self._config = copy.deepcopy(config.participant)
+        self._is_additional_node = config.participant["deployment_args"]["additional"]
+        self._config = copy.deepcopy(config.participant["addons"])
         self._addr = config.participant["network_args"]["addr"]
-        self._topology = config.participant["mobility_args"]["topology_type"]
+        self._topology = config.participant["addons"]["mobility"]["topology_type"]
         self._situational_awareness_network: SANetwork | None = None
         self._situational_awareness_training = None
         self._restructure_process_lock = Locker(name="restructure_process_lock", async_lock=True)
@@ -96,11 +97,11 @@ class SAReasoner(ISAReasoner):
         self._suggestion_buffer = SuggestionBuffer(self._arbitrator_notification, verbose=True)
         self._communciation_manager = CommunicationsManager.get_instance()
         self._sys_monitor = SystemMonitor()
-        arb_pol = config.participant["situational_awareness"]["sa_reasoner"]["arbitration_policy"]
+        arb_pol = config.participant["addons"]["situational_awareness"]["sa_reasoner"]["arbitration_policy"]
         self._arbitatrion_policy = factory_arbitration_policy(arb_pol, True)
         self._sa_components: dict[str, SAMComponent] = {}
         self._sa_discovery: ISADiscovery | None = None
-        self._verbose = config.participant["situational_awareness"]["sa_reasoner"]["verbose"]
+        self._verbose = config.participant["addons"]["situational_awareness"]["sa_reasoner"]["verbose"]
 
     @property
     def san(self) -> SANetwork | None:
@@ -146,7 +147,8 @@ class SAReasoner(ISAReasoner):
         Returns:
             bool: True if the node is marked as an additional participant, False otherwise.
         """
-        return self._config["mobility_args"]["additional_node"]["status"]
+        return self._is_additional_node
+    
 
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #

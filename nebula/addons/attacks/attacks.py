@@ -129,7 +129,7 @@ def create_attack(engine) -> Attack:
     }
 
     # Get attack name and parameters from the engine configuration
-    attack_params = engine.config.participant["adversarial_args"].get("attack_params", {})
+    attack_params = engine.config.participant["addons"]["adversarial_args"].get("attack_params", {})
     attack_name = attack_params.get("attacks", None)
     if attack_name is None:
         raise AttackException("No attack specified")

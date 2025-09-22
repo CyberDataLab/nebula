@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+from nebula.controller.federation.utils_requests import NodeUpdateRequest, NodeDoneRequest
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -54,7 +55,7 @@ class Reporter:
         self.frequency = self.config.participant["reporter_args"]["report_frequency"]
         self.grace_time = self.config.participant["reporter_args"]["grace_time_reporter"]
         self.data_queue = asyncio.Queue()
-        self.url = f"http://{self.config.participant['scenario_args']['controller']}/nodes/{self.config.participant['scenario_args']['name']}/update"
+        self.url = f"http://{self.config.participant['scenario_args']['controller']}/nodes/{self.config.participant['scenario_args']['federation_id']}/update"
         self.counter = 0
 
         self.first_net_metrics = True
@@ -170,8 +171,18 @@ class Reporter:
               might be temporarily overloaded.
             - Logs exceptions if the connection attempt to the controller fails.
         """
-        url = f"http://{self.config.participant['scenario_args']['controller']}/nodes/{self.config.participant['scenario_args']['name']}/done"
-        data = json.dumps({"idx": self.config.participant["device_args"]["idx"]})
+        url = f"http://{self.config.participant['scenario_args']['controller']}/nodes/{self.config.participant['scenario_args']['federation_id']}/done"
+        node_done_req = NodeDoneRequest(idx=self.config.participant["device_args"]["idx"],
+                                        deployment=self.config.participant["scenario_args"]["deployment"],
+                                        name=self.config.participant["scenario_args"]["name"],
+                                        federation_id=self.config.participant["scenario_args"]["federation_id"]
+                        )
+        payload = node_done_req.model_dump()
+        data = json.dumps(payload)
+        # data = json.dumps({"idx": self.config.participant["device_args"]["idx"],
+        #                    "deployment": self.config.participant["scenario_args"]["deployment"],
+        #                    "name": self.config.participant["scenario_args"]["name"],
+        #                    "federation_id": self.config.participant["scenario_args"]["federation_id"]})
         headers = {
             "Content-Type": "application/json",
             "User-Agent": f"NEBULA Participant {self.config.participant['device_args']['idx']}",
@@ -263,11 +274,13 @@ class Reporter:
             - Delays for 5 seconds upon general exceptions to avoid rapid retry loops.
         """
         try:
+            node_updt_req = NodeUpdateRequest(config=self.config.participant)
+            payload = node_updt_req.model_dump()
             async with (
                 aiohttp.ClientSession() as session,
                 session.post(
                     self.url,
-                    data=json.dumps(self.config.participant),
+                    data=json.dumps(payload),
                     headers={
                         "Content-Type": "application/json",
                         "User-Agent": f"NEBULA Participant {self.config.participant['device_args']['idx']}",

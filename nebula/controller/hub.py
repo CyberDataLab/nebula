@@ -15,26 +15,10 @@ import psutil
 import uvicorn
 from fastapi import Body, FastAPI, Request, status, HTTPException, Path, File, UploadFile
 from fastapi.concurrency import asynccontextmanager
-
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.utils import APIUtils, DockerUtils
-from nebula.controller.utils_requests import (
-    NodesUpdateRequest,
-    factory_requests_path,
-    ScenarioUpdateRequest,
-    ScenarioStopRequest,
-    ScenarioRemoveRequest,
-    ScenarioFinishRequest,
-    NotesUpdateRequest,
-    NotesRemoveRequest,
-    NodesRemoveRequest,
-    UserAddRequest,
-    UserDeleteRequest,
-    UserUpdateRequest,
-    UserVerifyRequest,
-    Routes,
-    RunScenarioRequest,
-)
+import nebula.controller.federation.utils_requests as federation_requests
+import nebula.controller.utils_requests as controller_requests
 
 # URL for the database API
 DATABASE_API_URL = os.environ.get("NEBULA_DATABASE_API_URL", "http://nebula-database:5051")
@@ -119,7 +103,6 @@ def configure_logger(controller_log):
         handler.setFormatter(logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"))
         logger.addHandler(handler)
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -141,7 +124,7 @@ app = FastAPI(lifespan=lifespan)
 
 
 # Define endpoints outside the Controller class
-@app.get(Routes.INIT)
+@app.get(controller_requests.Routes.INIT)
 async def read_root():
     """
     Root endpoint of the NEBULA Controller API.
@@ -152,7 +135,7 @@ async def read_root():
     return {"message": "Welcome to the NEBULA Controller API"}
 
 
-@app.get(Routes.STATUS)
+@app.get(controller_requests.Routes.STATUS)
 async def get_status():
     """
     Check the status of the NEBULA Controller API.
@@ -163,7 +146,7 @@ async def get_status():
     return {"status": "NEBULA Controller API is running"}
 
 
-@app.get(Routes.RESOURCES)
+@app.get(controller_requests.Routes.RESOURCES)
 async def get_resources():
     """
     Get system resource usage including RAM and GPU memory usage.
@@ -205,7 +188,7 @@ async def get_resources():
     }
 
 
-@app.get(Routes.LEAST_MEMORY_GPU)
+@app.get(controller_requests.Routes.LEAST_MEMORY_GPU)
 async def get_least_memory_gpu():
     """
     Identify the GPU with the highest memory usage above a threshold (50%).
@@ -247,7 +230,7 @@ async def get_least_memory_gpu():
     }
 
 
-@app.get(Routes.AVAILABLE_GPUS)
+@app.get(controller_requests.Routes.AVAILABLE_GPUS)
 async def get_available_gpu():
     """
     Get the list of GPUs with memory usage below 5%.
@@ -306,8 +289,8 @@ def validate_physical_fields(data: dict):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post(Routes.RUN)
-async def run_scenario(run_scenario_request: RunScenarioRequest):
+@app.post(controller_requests.Routes.RUN)
+async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequest):
     """
     Launches a new scenario based on the provided configuration.
 
@@ -319,47 +302,40 @@ async def run_scenario(run_scenario_request: RunScenarioRequest):
     Returns:
         str: The name of the scenario that was started.
     """
-
-    import subprocess
-
-    from nebula.controller.scenarios import ScenarioManagement
+    try:
+        fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT")
+        fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
+        url_init_fed_controller = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("init")
+        url_run_scenario = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("run")
+        #init_fed_req = InitFederationRequest(experiment_type="docker")
+        run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=f"id_nebula_{1}", user=run_scenario_request.user) #TODO ID per experiment
+        #await APIUtils.post(url_init_fed_controller, init_fed_req.model_dump())
+        await APIUtils.post(url_run_scenario, run_scenario_req.model_dump())
+    except Exception as e:
+        logging.info(e)
 
     # Unpack request data (role is intentionally ignored for now)
     scenario_data = run_scenario_request.scenario_data
     user = run_scenario_request.user
 
-    validate_physical_fields(scenario_data)
+    # validate_physical_fields(scenario_data)
 
     # Manager for the actual scenario
-    scenarioManagement = ScenarioManagement(scenario_data, user)
+    #scenarioManagement = ScenarioManagement(scenario_data, user)
 
-    await update_scenario(
-        scenario_name=scenarioManagement.scenario_name,
-        start_time=scenarioManagement.start_date_scenario,
-        end_time="",
-        scenario=scenario_data,
-        status="running",
-        username=user,
-    )
+    # await update_scenario(
+    #     scenario_name="", #TODO scenario_name
+    #     start_time="", #TODO start_time
+    #     end_time="",
+    #     scenario=scenario_data,
+    #     status="running",
+    #     username=user,
+    # )
 
-    # Run the actual scenario
-    try:
-        if scenarioManagement.scenario.mobility:
-            additional_participants = scenario_data["additional_participants"]
-            schema_additional_participants = scenario_data["schema_additional_participants"]
-            await scenarioManagement.load_configurations_and_start_nodes(
-                additional_participants, schema_additional_participants
-            )
-        else:
-            await scenarioManagement.load_configurations_and_start_nodes()
-    except subprocess.CalledProcessError as e:
-        logging.exception(f"Error docker-compose up: {e}")
-        return
-
-    return scenarioManagement.scenario_name
+    return ""#scenarioManagement.scenario_name #TODO return
 
 
-@app.post(Routes.STOP)
+@app.post(controller_requests.Routes.STOP) #TODO redo method
 async def stop_scenario(
     scenario_name: str = Body(..., embed=True),
     all: bool = Body(False, embed=True),
@@ -384,19 +360,32 @@ async def stop_scenario(
     Note:
         This function does not currently trigger statistics generation.
     """
-    from nebula.controller.scenarios import ScenarioManagement
-
-    ScenarioManagement.cleanup_scenario_containers()
+    fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT")
+    fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
+    url_stop_scenario = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("stop")
+    stop_scenario_req = federation_requests.StopScenarioRequest(federation_id="id_nebula")
     try:
-        path = factory_requests_path("stop")
-        payload = ScenarioStopRequest(scenario_name=scenario_name, all=all).model_dump()
+        path = federation_requests.factory_requests_path("stop")
+        payload = federation_requests.StopScenarioRequest(scenario_name=scenario_name, all=all).model_dump()
         await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
+        await APIUtils.post(url_stop_scenario, stop_scenario_req.model_dump())
     except Exception as e:
-        logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logging.info(f"ERROR: sending stop scenario to federation Controller: {e}")
+
+    # from nebula.controller.scenarios import ScenarioManagement
+
+    # ScenarioManagement.cleanup_scenario_containers()
+    # try:
+    #     if all:
+    #         await scenario_set_all_status_to_finished()
+    #     else:
+    #         await scenario_set_status_to_finished(scenario_name)
+    # except Exception as e:
+    #     logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
+    #     raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post(Routes.REMOVE)
+@app.post(controller_requests.Routes.REMOVE)
 async def remove_scenario(
     scenario_name: str = Body(..., embed=True),
 ):
@@ -412,8 +401,8 @@ async def remove_scenario(
     from nebula.controller.scenarios import ScenarioManagement
 
     try:
-        path = factory_requests_path("remove")
-        payload = ScenarioRemoveRequest(scenario_name=scenario_name).model_dump()
+        path = controller_requests.factory_requests_path("remove")
+        payload = controller_requests.ScenarioRemoveRequest(scenario_name=scenario_name).model_dump()
         await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
         ScenarioManagement.remove_files_by_scenario(scenario_name)
 
@@ -424,7 +413,7 @@ async def remove_scenario(
     return {"message": f"Scenario {scenario_name} removed successfully"}
 
 
-@app.get(Routes.GET_SCENARIOS_BY_USER)
+@app.get(controller_requests.Routes.GET_SCENARIOS_BY_USER)
 async def get_scenarios(
     user: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid username")],
     role: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid role")],
@@ -440,14 +429,14 @@ async def get_scenarios(
         dict: A list of scenarios and the currently running scenario.
     """
     try:
-        path = factory_requests_path("get_scenarios_by_user", user=user, role=role)
+        path = controller_requests.factory_requests_path("get_scenarios_by_user", user=user, role=role)
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error obtaining scenarios: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post(Routes.UPDATE)
+@app.post(controller_requests.Routes.UPDATE)
 async def update_scenario(
     scenario_name: str = Body(..., embed=True),
     start_time: str = Body(..., embed=True),
@@ -471,7 +460,7 @@ async def update_scenario(
         dict: A message confirming the update.
     """
     try:
-        payload = ScenarioUpdateRequest(
+        payload = controller_requests.ScenarioUpdateRequest(
             scenario_name=scenario_name,
             start_time=start_time,
             end_time=end_time,
@@ -479,14 +468,14 @@ async def update_scenario(
             status=status,
             username=username,
         ).model_dump()
-        path = factory_requests_path("update")
+        path = controller_requests.factory_requests_path("update")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error updating scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post(Routes.FINISH)
+@app.post(controller_requests.Routes.FINISH)
 async def set_scenario_status_to_finished(
     scenario_name: str = Body(..., embed=True), all: bool = Body(False, embed=True)
 ):
@@ -501,15 +490,15 @@ async def set_scenario_status_to_finished(
         dict: A message confirming the operation.
     """
     try:
-        payload = ScenarioFinishRequest(scenario_name=scenario_name, all=all).model_dump()
-        path = factory_requests_path("finish")
+        payload = controller_requests.ScenarioFinishRequest(scenario_name=scenario_name, all=all).model_dump()
+        path = controller_requests.factory_requests_path("finish")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(Routes.RUNNING)
+@app.get(controller_requests.Routes.RUNNING)
 async def get_running_scenario_endpoint(get_all: bool = False):
     """
     Retrieves the currently running scenario(s).
@@ -521,14 +510,14 @@ async def get_running_scenario_endpoint(get_all: bool = False):
         dict or list: Running scenario(s) information.
     """
     try:
-        path = factory_requests_path("running")
+        path = controller_requests.factory_requests_path("running")
         return await APIUtils.get(f"{DATABASE_API_URL}{path}", params={"get_all": str(get_all)})
     except Exception as e:
         logging.exception(f"Error obtaining running scenario: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(Routes.CHECK_SCENARIO)
+@app.get(controller_requests.Routes.CHECK_SCENARIO)
 async def check_scenario(
     user: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid username")],
     role: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid role")],
@@ -547,14 +536,14 @@ async def check_scenario(
         dict: Whether the scenario is allowed for the role.
     """
     try:
-        path = factory_requests_path("check_scenario", user=user, role=role, scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path("check_scenario", user=user, role=role, scenario_name=scenario_name)
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error checking scenario with role: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(Routes.GET_SCENARIOS_BY_SCENARIO_NAME)
+@app.get(controller_requests.Routes.GET_SCENARIOS_BY_SCENARIO_NAME)
 async def get_scenario_by_name_endpoint(
     scenario_name: Annotated[
         str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
@@ -570,14 +559,14 @@ async def get_scenario_by_name_endpoint(
         dict: The scenario data.
     """
     try:
-        path = factory_requests_path("get_scenarios_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path("get_scenarios_by_scenario_name", scenario_name=scenario_name)
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error obtaining scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(Routes.NODES_BY_SCENARIO_NAME)
+@app.get(controller_requests.Routes.NODES_BY_SCENARIO_NAME)
 async def list_nodes_by_scenario_name_endpoint(
     scenario_name: Annotated[
         str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
@@ -593,14 +582,14 @@ async def list_nodes_by_scenario_name_endpoint(
         list: List of nodes.
     """
     try:
-        path = factory_requests_path("get_nodes_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path("get_nodes_by_scenario_name", scenario_name=scenario_name)
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error obtaining nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post(Routes.NODES_UPDATE_BY_SCENARIO)
+@app.post(controller_requests.Routes.NODES_UPDATE_BY_SCENARIO)
 async def update_nodes(
     scenario_name: Annotated[
         str,
@@ -627,16 +616,15 @@ async def update_nodes(
             # default Murcia coordinates if none provided
             config["mobility_args"] = {"latitude": "38.0235", "longitude": "-1.1744"}
         # Validate and normalize payload
-        validated = NodesUpdateRequest(**config)
+        validated = controller_requests.NodesUpdateRequest(**config)
 
         # Build payload and include extras with mobility data
         payload = validated.model_dump()
         payload["extras"] = payload.get("mobility_args", {})
 
         # Update the node in database with validated data and extras
-        path = factory_requests_path("update_nodes")
+        path = controller_requests.factory_requests_path("update_nodes")
         await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
-
     except Exception as e:
         logging.exception(f"Error updating nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -648,7 +636,7 @@ async def update_nodes(
     return await APIUtils.post(url, data=config)
 
 
-@app.post(Routes.NODES_DONE_BY_SCENARIO)
+@app.post(controller_requests.Routes.NODES_DONE_BY_SCENARIO)
 async def node_done(
     scenario_name: Annotated[
         str,
@@ -675,7 +663,7 @@ async def node_done(
     return await APIUtils.post(url, data=data)
 
 
-@app.post(Routes.NODES_REMOVE)
+@app.post(controller_requests.Routes.NODES_REMOVE)
 async def remove_nodes_by_scenario_name_endpoint(scenario_name: str = Body(..., embed=True)):
     """
     Endpoint to remove all nodes associated with a scenario.
@@ -686,8 +674,8 @@ async def remove_nodes_by_scenario_name_endpoint(scenario_name: str = Body(..., 
     Returns a success message or an error if something goes wrong.
     """
     try:
-        path = factory_requests_path("remove_nodes")
-        payload = NodesRemoveRequest(scenario_name=scenario_name).model_dump()
+        path = controller_requests.factory_requests_path("remove_nodes")
+        payload = controller_requests.NodesRemoveRequest(scenario_name=scenario_name).model_dump()
         await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error removing nodes: {e}")
@@ -696,7 +684,7 @@ async def remove_nodes_by_scenario_name_endpoint(scenario_name: str = Body(..., 
     return {"message": f"Nodes for scenario {scenario_name} removed successfully"}
 
 
-@app.get(Routes.NOTES_BY_SCENARIO_NAME)
+@app.get(controller_requests.Routes.NOTES_BY_SCENARIO_NAME)
 async def get_notes_by_scenario_name(
     scenario_name: Annotated[
         str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
@@ -706,14 +694,14 @@ async def get_notes_by_scenario_name(
     Endpoint to retrieve notes associated with a scenario.
     """
     try:
-        path = factory_requests_path("get_notes_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path("get_notes_by_scenario_name", scenario_name=scenario_name)
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error obtaining notes for scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post(Routes.NOTES_UPDATE)
+@app.post(controller_requests.Routes.NOTES_UPDATE)
 async def update_notes_by_scenario_name(scenario_name: str = Body(..., embed=True), notes: str = Body(..., embed=True)):
     """
     Endpoint to update notes for a given scenario.
@@ -725,15 +713,15 @@ async def update_notes_by_scenario_name(scenario_name: str = Body(..., embed=Tru
     Returns a success message or an error if something goes wrong.
     """
     try:
-        payload = NotesUpdateRequest(scenario_name=scenario_name, notes=notes).model_dump()
-        path = factory_requests_path("update_notes")
+        payload = controller_requests.NotesUpdateRequest(scenario_name=scenario_name, notes=notes).model_dump()
+        path = controller_requests.factory_requests_path("update_notes")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error updating notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post(Routes.NOTES_REMOVE)
+@app.post(controller_requests.Routes.NOTES_REMOVE)
 async def remove_notes_by_scenario_name_endpoint(scenario_name: str = Body(..., embed=True)):
     """
     Endpoint to remove notes associated with a scenario.
@@ -744,8 +732,8 @@ async def remove_notes_by_scenario_name_endpoint(scenario_name: str = Body(..., 
     Returns a success message or an error if something goes wrong.
     """
     try:
-        path = factory_requests_path("remove_notes")
-        payload = NotesRemoveRequest(scenario_name=scenario_name).model_dump()
+        path = controller_requests.factory_requests_path("remove_notes")
+        payload = controller_requests.NotesRemoveRequest(scenario_name=scenario_name).model_dump()
         await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error removing notes: {e}")
@@ -754,7 +742,7 @@ async def remove_notes_by_scenario_name_endpoint(scenario_name: str = Body(..., 
     return {"message": f"Notes for scenario {scenario_name} removed successfully"}
 
 
-@app.get(Routes.USER_LIST)
+@app.get(controller_requests.Routes.USER_LIST)
 async def list_users_controller(all_info: bool = False):
     """
     Endpoint to list all users in the database.
@@ -765,14 +753,14 @@ async def list_users_controller(all_info: bool = False):
     Returns a list of users or raises an HTTPException on error.
     """
     try:
-        path = factory_requests_path("list_users")
+        path = controller_requests.factory_requests_path("list_users")
         return await APIUtils.get(f"{DATABASE_API_URL}{path}", params={"all_info": str(all_info)})
     except Exception as e:
         logging.exception(f"Error retrieving users: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {e}")
 
 
-@app.get(Routes.USER_BY_SCENARIO_NAME)
+@app.get(controller_requests.Routes.USER_BY_SCENARIO_NAME)
 async def get_user_by_scenario_name_endpoint(
     scenario_name: Annotated[
         str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
@@ -787,14 +775,14 @@ async def get_user_by_scenario_name_endpoint(
     Returns user info or raises an HTTPException on error.
     """
     try:
-        path = factory_requests_path("get_user_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path("get_user_by_scenario_name", scenario_name=scenario_name)
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error obtaining user for scenario {scenario_name}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(Routes.DISCOVER_VPN)
+@app.get(controller_requests.Routes.DISCOVER_VPN)
 async def discover_vpn():
     """
     Calls the Tailscale CLI to fetch the current status in JSON format,
@@ -835,7 +823,7 @@ async def discover_vpn():
         raise HTTPException(status_code=500, detail="No devices discovered")
 
 
-@app.get(Routes.PHYSICAL_RUN, tags=["physical"])
+@app.get(controller_requests.Routes.PHYSICAL_RUN, tags=["physical"])
 async def physical_run(ip: str):
     status, data = await remote_get(ip, "/run/")
 
@@ -846,7 +834,7 @@ async def physical_run(ip: str):
     raise HTTPException(status_code=status, detail=data)
 
 
-@app.get(Routes.PHYSICAL_STOP, tags=["physical"])
+@app.get(controller_requests.Routes.PHYSICAL_STOP, tags=["physical"])
 async def physical_stop(ip: str):
     status, data = await remote_get(ip, "/stop/")
     if status == 200:
@@ -856,7 +844,7 @@ async def physical_stop(ip: str):
     raise HTTPException(status_code=status, detail=data)
 
 
-@app.put(Routes.PHYSICAL_SETUP, tags=["physical"],
+@app.put(controller_requests.Routes.PHYSICAL_SETUP, tags=["physical"],
          status_code=status.HTTP_201_CREATED)
 async def physical_setup(
     ip: str,
@@ -889,7 +877,7 @@ async def physical_setup(
 # ──────────────────────────────────────────────────────────────
 # Physical · single-node state
 # ──────────────────────────────────────────────────────────────
-@app.get(Routes.PHYSICAL_STATE, tags=["physical"])
+@app.get(controller_requests.Routes.PHYSICAL_STATE, tags=["physical"])
 async def get_physical_node_state(ip: str):
     """
     Query a single Raspberry Pi (or other node) for its training state.
@@ -926,7 +914,7 @@ async def get_physical_node_state(ip: str):
 # ──────────────────────────────────────────────────────────────
 # Physical · aggregate state for an entire scenario
 # ──────────────────────────────────────────────────────────────
-@app.get(Routes.PHYSICAL_SCENARIO_STATE, tags=["physical"])
+@app.get(controller_requests.Routes.PHYSICAL_SCENARIO_STATE, tags=["physical"])
 async def get_physical_scenario_state(scenario_name: str):
     """
     Check the training state of *every* physical node assigned to a scenario.
@@ -976,7 +964,7 @@ async def get_physical_scenario_state(scenario_name: str):
     }
 
 
-@app.post(Routes.USER_ADD)
+@app.post(controller_requests.Routes.USER_ADD)
 async def add_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
     """
     Endpoint to add a new user to the database.
@@ -989,15 +977,15 @@ async def add_user_controller(user: str = Body(...), password: str = Body(...), 
     Returns a success message or an error if the user could not be added.
     """
     try:
-        payload = UserAddRequest(user=user, password=password, role=role).model_dump()
-        path = factory_requests_path("add_user")
+        payload = controller_requests.UserAddRequest(user=user, password=password, role=role).model_dump()
+        path = controller_requests.factory_requests_path("add_user")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error adding user: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error adding user: {e}")
 
 
-@app.post(Routes.USER_DELETE)
+@app.post(controller_requests.Routes.USER_DELETE)
 async def remove_user_controller(user: str = Body(..., embed=True)):
     """
     Controller endpoint that inserts a new user into the database.
@@ -1008,15 +996,15 @@ async def remove_user_controller(user: str = Body(..., embed=True)):
     Returns a success message if the user is deleted, or an HTTP error if an exception occurs.
     """
     try:
-        path = factory_requests_path("delete_user")
-        payload = UserDeleteRequest(user=user).model_dump()
+        path = controller_requests.factory_requests_path("delete_user")
+        payload = controller_requests.UserDeleteRequest(user=user).model_dump()
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error deleting user: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting user: {e}")
 
 
-@app.post(Routes.USER_UPDATE)
+@app.post(controller_requests.Routes.USER_UPDATE)
 async def update_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
     """
     Controller endpoint that modifies a user of the database.
@@ -1029,15 +1017,15 @@ async def update_user_controller(user: str = Body(...), password: str = Body(...
     Returns a success message if the user is updated, or an HTTP error if an exception occurs.
     """
     try:
-        payload = UserUpdateRequest(user=user, password=password, role=role).model_dump()
-        path = factory_requests_path("update_user")
+        payload = controller_requests.UserUpdateRequest(user=user, password=password, role=role).model_dump()
+        path = controller_requests.factory_requests_path("update_user")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error updating user: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating user: {e}")
 
 
-@app.post(Routes.USER_VERIFY)
+@app.post(controller_requests.Routes.USER_VERIFY)
 async def verify_user_controller(user: str = Body(...), password: str = Body(...)):
     """
     Endpoint to verify user credentials.
@@ -1049,8 +1037,8 @@ async def verify_user_controller(user: str = Body(...), password: str = Body(...
     Returns the user role on success or raises an error on failure.
     """
     try:
-        payload = UserVerifyRequest(user=user, password=password).model_dump()
-        path = factory_requests_path("verify_user")
+        payload = controller_requests.UserVerifyRequest(user=user, password=password).model_dump()
+        path = controller_requests.factory_requests_path("verify_user")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except HTTPException as e:
         if e.status_code == 401:

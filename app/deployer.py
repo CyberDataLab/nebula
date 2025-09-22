@@ -637,6 +637,16 @@ class Deployer:
             logging.exception(warning_msg)
             sys.exit(1)
 
+        self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
+        self.federation_controller_port = int(args.federationcontrollerport) if hasattr(args, "federationcontrollerport") else 5052
+        self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
+        self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
+        self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
+        self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
+        self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
+        self.production = args.production if hasattr(args, "production") else False
+        self.dev = args.developement if hasattr(args, "developement") else False
+        self.advanced_analytics = args.advanced_analytics if hasattr(args, "advanced_analytics") else False
         self.databases_dir = args.databases if hasattr(args, "databases") else "/nebula/app/databases"
         self.config_dir = args.config
         self.log_dir = args.logs
@@ -843,6 +853,9 @@ class Deployer:
         # Check ports available
         if not SocketUtils.is_port_open(self.controller_port):
             self.controller_port = SocketUtils.find_free_port(start_port=self.controller_port)
+
+        if not SocketUtils.is_port_open(self.federation_controller_port):
+            self.federation_controller_port = SocketUtils.find_free_port(start_port=self.federation_controller_port)
 
         if not SocketUtils.is_port_open(self.frontend_port):
             self.frontend_port = SocketUtils.find_free_port(start_port=self.frontend_port)
@@ -1118,11 +1131,13 @@ class Deployer:
             "NEBULA_ROOT_HOST": self.root_path,
             "NEBULA_DATABASES_DIR": "/nebula/app/databases",
             "NEBULA_CONTROLLER_LOG": "/nebula/app/logs/controller.log",
+            "NEBULA_FEDERATION_CONTROLLER_LOG": "/nebula/app/logs/federation.log",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
             "NEBULA_CERTS_DIR": "/nebula/app/certs/",
             "NEBULA_HOST_PLATFORM": self.host_platform,
             "NEBULA_CONTROLLER_PORT": self.controller_port,
+            "NEBULA_FEDERATION_CONTROLLER_PORT" : self.federation_controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
             "NEBULA_DATABASE_API_URL": f"http://{self.get_container_name('nebula-database')}:5051"
@@ -1130,7 +1145,7 @@ class Deployer:
 
         volumes = ["/nebula", "/var/run/docker.sock"]
 
-        ports = [self.controller_port]
+        ports = [self.controller_port, self.federation_controller_port]
 
         host_config = client.api.create_host_config(
             binds=[
@@ -1139,16 +1154,15 @@ class Deployer:
                 f"{self.databases_dir}:/nebula/app/databases",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
-            port_bindings={self.controller_port: self.controller_port},
-            device_requests=[
-                {
-                    "Driver": "nvidia",
-                    "Count": -1,
-                    "Capabilities": [["gpu"]],
-                }
-            ]
-            if self.gpu_available
-            else None,
+            port_bindings={
+                self.controller_port: self.controller_port,
+                self.federation_controller_port: self.federation_controller_port
+            },
+            device_requests=[{
+                "Driver": "nvidia",
+                "Count": -1,
+                "Capabilities": [["gpu"]],
+            }] if self.gpu_available else None,
         )
 
         networking_config = client.api.create_networking_config({

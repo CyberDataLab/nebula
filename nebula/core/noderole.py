@@ -190,7 +190,7 @@ class MaliciousRoleBehavior(RoleBehavior):
         self.attack = create_attack(self._engine)
         logging.info("Attack behavior created")
         self.aggregator_bening = self._engine._aggregator
-        benign_role = self._config.participant["adversarial_args"]["fake_behavior"]
+        benign_role = self._config.participant["addons"]["adversarial_args"]["fake_behavior"]
         self._fake_role_behavior = factory_role_behavior(benign_role, self._engine, self._config)
         self._role = factory_node_role("malicious")
     
@@ -206,7 +206,7 @@ class MaliciousRoleBehavior(RoleBehavior):
         try:
             await self.attack.attack()
         except Exception:
-            attack_name = self._config.participant["adversarial_args"]["attacks"]
+            attack_name = self._config.participant["addons"]["adversarial_args"]["attacks"]
             logging.exception(f"Attack {attack_name} failed")
             
         await self._fake_role_behavior.extended_learning_cycle()

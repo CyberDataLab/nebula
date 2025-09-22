@@ -5,7 +5,7 @@ from nebula.core.nebulaevents import NodeEvent
 from nebula.core.situationalawareness.awareness.sautils.sacommand import SACommand
 from nebula.core.situationalawareness.awareness.sautils.samoduleagent import SAModuleAgent
 from nebula.core.utils.locker import Locker
-from nebula.utils import logging
+import logging
 
 
 class SuggestionBuffer:

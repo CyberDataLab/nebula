@@ -74,8 +74,8 @@ class NebulaGPS(GPSModule):
         return self._running.is_set()
 
     async def get_geoloc(self):
-        latitude = self._config.participant["mobility_args"]["latitude"]
-        longitude = self._config.participant["mobility_args"]["longitude"]
+        latitude = self._config.participant["addons"]["mobility"]["latitude"]
+        longitude = self._config.participant["addons"]["mobility"]["longitude"]
         return (latitude, longitude)
 
     async def calculate_distance(self, self_lat, self_long, other_lat, other_long):

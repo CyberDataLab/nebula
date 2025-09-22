@@ -3,7 +3,7 @@ import random
 import time
 import numpy as np
 import torch
-
+from nebula.core.addonmanager import NebulaAddon
 from datetime import datetime
 from typing import TYPE_CHECKING
 from nebula.addons.functions import print_msg_box
@@ -54,7 +54,7 @@ class Metrics:
         self.similarity = []
 
 
-class Reputation:
+class Reputation(NebulaAddon):
     """
     Class to define and manage the reputation of a participant in the network.
 
@@ -114,7 +114,7 @@ class Reputation:
 
     def _configure_constants(self):
         """Configure system constants from config or use defaults."""
-        reputation_config = self._config.participant.get("defense_args", {}).get("reputation", {})
+        reputation_config = self._config.participant.get("addons", {}).get("reputation", {})
         constants_config = reputation_config.get("constants", {})
 
         self.REPUTATION_THRESHOLD = constants_config.get("reputation_threshold", self.REPUTATION_THRESHOLD)
@@ -168,7 +168,7 @@ class Reputation:
 
     def _load_configuration(self):
         """Load and validate reputation configuration."""
-        reputation_config = self._config.participant["defense_args"]["reputation"]
+        reputation_config = self._config.participant["addons"]["reputation"]
         self._enabled = reputation_config["enabled"]
         self._metrics = reputation_config["metrics"]
         self._initial_reputation = float(reputation_config["initial_reputation"])
@@ -316,7 +316,7 @@ class Reputation:
         except Exception:
             logging.exception(f"Error saving data for type {type_data} and neighbor {nei}")
 
-    async def setup(self):
+    async def start(self):
         """Set up the reputation system by subscribing to relevant events."""
         if self._enabled:
             await EventManager.get_instance().subscribe_node_event(RoundStartEvent, self.on_round_start)
@@ -339,6 +339,9 @@ class Reputation:
                     ("federation", "federation_models_included"), self.recollect_number_message
                 )
                 await EventManager.get_instance().subscribe_node_event(DuplicatedMessageEvent, self.recollect_duplicated_number_message)
+
+    async def stop():
+        pass
 
     async def init_reputation(
         self, federation_nodes=None, round_num=None, last_feedback_round=None, init_reputation=None
@@ -1963,7 +1966,7 @@ class Reputation:
         if not (self._enabled and self._is_metric_enabled("model_similarity")):
             return
 
-        if not self._engine.config.participant["adaptive_args"]["model_similarity"]:
+        if not self._engine.config.participant["addons"]["reputation"]["adaptive_args"] and not self._engine.config.participant["addons"]["reputation"]["adaptive_args"]["model_similarity"]:
             return
 
         if nei == self._addr:

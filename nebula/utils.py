@@ -3,8 +3,16 @@ import os
 import socket
 
 import aiohttp
+import aiohttp
 import docker
 
+import re
+from typing import Optional
+
+from fastapi import HTTPException
+from aiohttp import ClientConnectorError
+from aiohttp.client_exceptions import ClientError
+import asyncio
 import re
 from typing import Optional
 
@@ -103,7 +111,6 @@ class SocketUtils:
             if cls.is_port_open(port):
                 return port
         return None
-
 
 class DockerUtils:
     """

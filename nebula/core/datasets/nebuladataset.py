@@ -1299,3 +1299,17 @@ def factory_nebuladataset(dataset, **config) -> NebulaDataset:
     if not cs:
         raise ValueError(f"Dataset {dataset} not supported")
     return cs(**config)
+
+def factory_dataset_setup(dataset) -> dict:
+    options = {
+        "MNIST": 10,
+        "FashionMNIST": 10,
+        "EMNIST": 47,
+        "CIFAR10": 10,
+        "CIFAR100": 100,
+    }
+
+    num_classes = options.get(dataset, None)
+    if not num_classes:
+        raise ValueError(f"Dataset {dataset} not supported")
+    return num_classes

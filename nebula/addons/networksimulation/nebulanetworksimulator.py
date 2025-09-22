@@ -35,7 +35,7 @@ class NebulaNS(NetworkSimulator):
     async def start(self):
         logging.info("🌐  Nebula Network Simulator starting...")
         self._running.set()
-        grace_time = self.cm.config.participant["mobility_args"]["grace_time_mobility"]
+        grace_time = self.cm.config.participant["addons"]["mobility"]["grace_time_mobility"]
         # if self._verbose: logging.info(f"Waiting {grace_time}s to start applying network conditions based on distances between devices")
         # await asyncio.sleep(grace_time)
         await EventManager.get_instance().subscribe_addonevent(

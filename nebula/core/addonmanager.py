@@ -1,5 +1,6 @@
 import logging
 from typing import TYPE_CHECKING
+from abc import ABC, abstractmethod
 
 from nebula.addons.functions import print_msg_box
 from nebula.addons.gps.gpsmodule import factory_gpsmodule
@@ -10,6 +11,15 @@ from nebula.config.config import Config
 if TYPE_CHECKING:
     from nebula.core.engine import Engine
 
+class NebulaAddon(ABC):
+    @abstractmethod
+    async def start():
+        raise NotImplementedError
+    
+    @abstractmethod
+    async def stop():
+        raise NotImplementedError
+    
 
 class AddondManager:
     """
@@ -51,24 +61,43 @@ class AddondManager:
             - Services are only launched if the corresponding configuration flags are set.
         """
         print_msg_box(msg="Deploying Additional Services", indent=2, title="Addons Manager")
-        if self._config.participant["trustworthiness"]:
-            from nebula.addons.trustworthiness.trustworthiness import Trustworthiness
+        for addon, addon_config in self._config.participant["addons"].items():
+            if addon == "mobility":
+                mobility = Mobility(self._config, verbose=False)
+                self._addons.append(mobility)
+                update_interval = 5
+                gps = factory_gpsmodule("nebula", self._config, self._engine.addr, update_interval, verbose=False)
+                self._addons.append(gps)
+            elif addon == "trustworthiness":
+                from nebula.addons.trustworthiness.trustworthiness import Trustworthiness
+                trustworthiness = Trustworthiness(self._engine, self._config)
+                self._addons.append(trustworthiness)
+            elif addon == "network_simulation":
+        #TODO review parameters for network simulation
+                type_of_network = self._config.participant["network_args"]["network_simulation"]["type"]
+                network_config = self._config.participant["network_args"]["network_simulation"]["network_config"]
+                network_simulation = factory_network_simulator(type_of_network, network_config)
+                self._addons.append(network_simulation)
+        #TODO update config access
 
-            trustworthiness = Trustworthiness(self._engine, self._config)
-            self._addons.append(trustworthiness)
+        # if self._config.participant["trustworthiness"]:
+        #     from nebula.addons.trustworthiness.trustworthiness import Trustworthiness
 
-        if self._config.participant["mobility_args"]["mobility"]:
-            mobility = Mobility(self._config, verbose=False)
-            self._addons.append(mobility)
+        #     trustworthiness = Trustworthiness(self._engine, self._config)
+        #     self._addons.append(trustworthiness)
 
-            update_interval = 5
-            gps = factory_gpsmodule("nebula", self._config, self._engine.addr, update_interval, verbose=False)
-            self._addons.append(gps)
+        # if self._config.participant["mobility_args"]["mobility"]:
+        #     mobility = Mobility(self._config, verbose=False)
+        #     self._addons.append(mobility)
 
-        if self._config.participant["network_args"]["simulation"]:
-            refresh_conditions_interval = 5
-            network_simulation = factory_network_simulator("nebula", refresh_conditions_interval, "eth0", verbose=False)
-            self._addons.append(network_simulation)
+        #     update_interval = 5
+        #     gps = factory_gpsmodule("nebula", self._config, self._engine.addr, update_interval, verbose=False)
+        #     self._addons.append(gps)
+
+        # if self._config.participant["network_args"]["simulation"]:
+        #     refresh_conditions_interval = 5
+        #     network_simulation = factory_network_simulator("nebula", refresh_conditions_interval, "eth0", verbose=False)
+        #     self._addons.append(network_simulation)
 
         for add in self._addons:
             await add.start()

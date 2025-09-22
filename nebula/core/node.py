@@ -77,7 +77,7 @@ async def main(config: Config):
     model_name = config.participant["model_args"]["model"]
     idx = config.participant["device_args"]["idx"]
 
-    additional_node_status = config.participant["mobility_args"]["additional_node"]["status"]
+    additional_node_status = config.participant["deployment_args"]["additional"]
 
     # Adjust the total number of nodes and the index of the current node for CFL, as it doesn't require a specific partition for the server (not used for training)
     if config.participant["scenario_args"]["federation"] == "CFL":
@@ -179,11 +179,6 @@ async def main(config: Config):
 
     config_keys = [
         ["reporter_args", "report_frequency"],
-        ["discoverer_args", "discovery_frequency"],
-        ["health_args", "health_interval"],
-        ["health_args", "grace_time_health"],
-        ["health_args", "check_alive_interval"],
-        ["health_args", "send_alive_interval"],
         ["forwarder_args", "forwarder_interval"],
         ["forwarder_args", "forward_messages_interval"],
     ]
@@ -209,9 +204,10 @@ async def main(config: Config):
     await node.deploy_federation()
 
     if additional_node_status:
-        time = config.participant["mobility_args"]["additional_node"]["time_start"]
-        logging.info(f"Waiting time to start finding federation: {time}")
-        await asyncio.sleep(int(config.participant["mobility_args"]["additional_node"]["time_start"]))
+        # time = config.participant["addons"]["mobility"]["additional_node"]["time_start"]
+        # logging.info(f"Waiting time to start finding federation: {time}")
+        # await asyncio.sleep(int(config.participant["addons"]["mobility"]["additional_node"]["time_start"]))
+        #await asyncio.sleep(120) #TODO REMOVE
         await node._aditional_node_start()
 
     if node.cm is not None:

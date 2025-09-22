@@ -1,6 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
-
+from nebula.core.addonmanager import NebulaAddon
 from nebula.addons.functions import print_msg_box
 
 
@@ -156,7 +156,7 @@ def factory_sa_reasoner(sa_reasoner, config) -> ISAReasoner:
         raise Exception(f"SA Reasoner service {sa_reasoner} not found.")
 
 
-class SituationalAwareness:
+class SituationalAwareness(NebulaAddon):
     """
     High-level coordinator for Situational Awareness in the DFL federation.
 
@@ -178,16 +178,16 @@ class SituationalAwareness:
             title="Situational Awareness module",
         )
         self._config = config
-        selector = self._config.participant["situational_awareness"]["sa_discovery"]["candidate_selector"]
+        selector = self._config.participant["addons"]["situational_awareness"]["sa_discovery"]["candidate_selector"]
         selector = selector.lower()
-        model_handler = config.participant["situational_awareness"]["sa_discovery"]["model_handler"]
+        model_handler = config.participant["addons"]["situational_awareness"]["sa_discovery"]["model_handler"]
         self._sad = factory_sa_discovery(
             "nebula",
-            self._config.participant["mobility_args"]["additional_node"]["status"],
+            self._config.participant["deployment_args"]["additional"],
             selector,
             model_handler,
             engine=engine,
-            verbose=config.participant["situational_awareness"]["sa_discovery"]["verbose"],
+            verbose=config.participant["addons"]["situational_awareness"]["sa_discovery"]["verbose"],
         )
         self._sareasoner = factory_sa_reasoner(
             "nebula",
@@ -214,7 +214,7 @@ class SituationalAwareness:
         """
         return self._sareasoner
 
-    async def init(self):
+    async def start(self):
         """
         Initialize both discovery and reasoner components, linking them together.
         """
