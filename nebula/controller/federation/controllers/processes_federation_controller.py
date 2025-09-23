@@ -35,30 +35,30 @@ class NebulaFederationProcesses():
         async with self.federation_deployment_lock:
             if not self.additionals_participants:
                 return False
-            
+
             participant_idx = int(config["device_args"]["idx"])
             participant_round = int(config["federation_args"]["round"])
             self.round_per_participant[participant_idx] = participant_round
             self.federation_round = min(self.round_per_participant.values())
-            
+
             self.additionals_deployables = [
                 idx
-                for idx, round in self.additionals_participants.items() 
+                for idx, round in self.additionals_participants.items()
                 if self.federation_round >= round
             ]
-            
+
             additionals_deployables = self.additionals_deployables.copy()
             for idx in additionals_deployables:
                 self.additionals_participants.pop(idx)
             return additionals_deployables
-        
+
     async def is_experiment_finish(self):
         async with self.participants_alive_lock:
             self.participants_alive -= 1
-        if self.participants_alive <= 0: 
-            return True 
-        else: 
-            return False 
+        if self.participants_alive <= 0:
+            return True
+        else:
+            return False
 
 class ProcessesFederationController(FederationController):
     def __init__(self, hub_url, logger):
@@ -70,10 +70,10 @@ class ProcessesFederationController(FederationController):
         self.cert_dir = ""
         self.advanced_analytics = ""
         self.url = ""
-         
+
         self._nebula_federations_pool: dict[tuple[str,str], NebulaFederationProcesses] = {}
         self._federations_dict_lock = Locker("federations_dict_lock", async_lock=True)
-        
+
     @property
     def nfp(self):
         """Nebula Federations Pool"""
@@ -87,24 +87,24 @@ class ProcessesFederationController(FederationController):
     async def run_scenario(self, federation_id: str, scenario_data: Dict, user: str):
         #TODO maintain files on memory, not read them again
         federation = await self._add_nebula_federation_to_pool(federation_id, user)
-        id = ""
+        scenario_info = {}
         if federation:
             scenario_builder = ScenarioBuilder(federation_id)
             await self._initialize_scenario(scenario_builder, scenario_data, federation)
             generate_ca_certificate(dir_path=self.cert_dir)
             await self._load_configuration_and_start_nodes(scenario_builder, federation)
             self._start_initial_nodes(scenario_builder, federation)
-            id = scenario_builder.get_scenario_name()
+            scenario_info = scenario_builder.get_scenario_info()
             try:
                  nebula_federation = self.nfp[federation_id]
-                 nebula_federation.scenario_name = id
+                 nebula_federation.scenario_name = scenario_builder.get_scenario_name()
             except Exception as e:
                 self.logger.info(f"ERROR: federation ID: ({federation_id}) not found on pool..")
                 return None
         else:
             self.logger.info(f"ERROR: federation ID: ({federation_id}) already exists..")
-        return id
-         
+        return scenario_info
+
     async def stop_scenario(self, federation_id: str = ""):
         """
         Stop running participant nodes by removing the scenario command files.
@@ -126,7 +126,7 @@ class ProcessesFederationController(FederationController):
         federation_name = await self._remove_nebula_federation_from_pool(federation_id)
         if not federation_name:
             return False
-        
+
         # When stopping the nodes, we need to remove the current_scenario_commands.sh file -> it will cause the nodes to stop using PIDs
         try:
             nebula_config_dir = os.environ.get("NEBULA_CONFIG_DIR")
@@ -180,7 +180,7 @@ class ProcessesFederationController(FederationController):
                     for index in additionals:
                         if index in adds_deployed:
                             continue
-                        
+
                         for idx, node in enumerate(nebula_federation.config.participants):
                             if index == idx:
                                 if index in additionals:
@@ -215,7 +215,7 @@ class ProcessesFederationController(FederationController):
                                                     #       FUNCTIONALITIES       #
                                                     ###############################
     """
-    
+
     async def _add_nebula_federation_to_pool(self, federation_id: str, user: str):
         fed = None
         async with self._federations_dict_lock:
@@ -225,8 +225,8 @@ class ProcessesFederationController(FederationController):
                 self.logger.info(f"SUCCESS: new ID: ({federation_id}) added to the pool")
             else:
                self.logger.info(f"ERROR: trying to add ({federation_id}) to federations pool..")
-        return fed 
-    
+        return fed
+
     async def _remove_nebula_federation_from_pool(self, federation_id: str):
         async with self._federations_dict_lock:
             if federation_id in self.nfp:
@@ -236,7 +236,7 @@ class ProcessesFederationController(FederationController):
             else:
                 self.logger.info(f"ERROR: trying to remove ({federation_id}) from federations pool..")
                 return ""
-    
+
     async def _send_to_hub(self, path, payload, scenario_name="",  federation_id="" ):
         try:
             url_request = self._hub_url + factory_requests_path(path, scenario_name, federation_id)
@@ -251,7 +251,7 @@ class ProcessesFederationController(FederationController):
         self.logger.info("🔧  Initializing Scenario Builder using scenario data")
         sb.set_scenario_data(scenario_data)
         scenario_name = sb.get_scenario_name()
-        
+
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
         self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
@@ -262,9 +262,9 @@ class ProcessesFederationController(FederationController):
         self.env_tag = os.environ.get("NEBULA_ENV_TAG", "dev")
         self.prefix_tag = os.environ.get("NEBULA_PREFIX_TAG", "dev")
         self.user_tag = os.environ.get("NEBULA_USER_TAG", os.environ.get("USER", "unknown"))
-        
+
         self.url = f"127.0.0.1:{os.environ.get('NEBULA_FEDERATION_CONTROLLER_PORT')}"
-        
+
         # Create Scenario management dirs
         os.makedirs(self.config_dir, exist_ok=True)
         os.makedirs(os.path.join(self.log_dir, scenario_name), exist_ok=True)
@@ -297,12 +297,12 @@ class ProcessesFederationController(FederationController):
             json.dump(settings, f, sort_keys=False, indent=2)
 
         os.chmod(settings_file, 0o777)
-        
+
         # Attacks assigment and mobility
         self.logger.info("🔧  Building general configuration")
         sb.build_general_configuration()
         self.logger.info("✅  Building general configuration done")
-        
+
         # Create participant configs and .json
         for index, (_, node) in enumerate(sb.get_federation_nodes().items()):
             self.logger.info(f"Creating .json file for participant: {index}, Configuration: {node}")
@@ -313,8 +313,8 @@ class ProcessesFederationController(FederationController):
                 os.makedirs(os.path.dirname(participant_file), exist_ok=True)
             except Exception as e:
                  self.logger.info(f"ERROR while creating files: {e}")
-                 
-            try:         
+
+            try:
                 participant_config = sb.build_scenario_config_for_node(index, node)
                 #self.logger.info(f"dictionary: {participant_config}")
             except Exception as e:
@@ -328,7 +328,7 @@ class ProcessesFederationController(FederationController):
                  self.logger.info(f"ERROR while dumping configuration into files: {e}")
 
         self.logger.info("✅  Initializing Scenario Builder done")
-                
+
     async def _load_configuration_and_start_nodes(self, sb: ScenarioBuilder, federation: NebulaFederationProcesses):
         self.logger.info("🔧  Loading Scenario configuration...")
         # Get participants configurations
@@ -340,18 +340,18 @@ class ProcessesFederationController(FederationController):
         federation.config.set_participants_config(participant_files)
         n_nodes = len(participant_files)
         self.logger.info(f"Number of nodes: {n_nodes}")
-        
+
         sb.create_topology_manager(federation.config)
-        
+
         # Update participants configuration
         is_start_node = False
         config_participants = []
-        
+
         additional_participants = sb.get_additional_nodes()
         additional_nodes = len(additional_participants) if additional_participants else 0
-        
+
         participant_files.sort(key=lambda x: int(x.split("_")[-1].split(".")[0]))
-        
+
         # Initial participants
         self.logger.info("🔧  Building preload configuration for initial nodes...")
         for i in range(n_nodes):
@@ -385,12 +385,12 @@ class ProcessesFederationController(FederationController):
                     raise ValueError("Only one node can be start node")
 
         self.logger.info("✅  Building preload configuration for initial nodes done")
-            
+
         federation.config.set_participants_config(participant_files)
-        
+
         # Add role to the topology (visualization purposes)
         sb.visualize_topology(config_participants, path=f"{self.config_dir}/topology.png", plot=False)
-        
+
         # Additional participants
         self.logger.info("🔧  Building preload configuration for additional nodes...")
         additional_participants_files = []
@@ -407,7 +407,7 @@ class ProcessesFederationController(FederationController):
 
                 self.logger.info(f"Configuration | additional nodes |  participant: {n_nodes + i}")
                 sb.build_preload_additional_node_configuration(last_participant_index, i, participant_config)
-            
+
                 with open(additional_participant_file, "w") as f:
                     json.dump(participant_config, f, sort_keys=False, indent=2)
 
@@ -421,8 +421,8 @@ class ProcessesFederationController(FederationController):
 
         self.logger.info("✅  Building preload configuration for additional nodes done")
         self.logger.info("✅  Loading Scenario configuration done")
-        
-        # Build dataset    
+
+        # Build dataset
         dataset = sb.configure_dataset(self.config_dir)
         self.logger.info(f"🔧  Splitting {sb.get_dataset_name()} dataset...")
         dataset.initialize_dataset()
@@ -433,14 +433,14 @@ class ProcessesFederationController(FederationController):
         self.logger.info(f"Number of participants: {len(federation.config.participants)}")
         federation.config.participants.sort(key=lambda x: x["device_args"]["idx"])
         federation.last_index_deployed = 2
-        
+
         commands = ""
         commands = self._build_initial_commands()
         if not commands:
             self.logger.info("ERROR: Cannot create commands file, abort..")
             return
-        
-        for idx, node in enumerate(federation.config.participants):    
+
+        for idx, node in enumerate(federation.config.participants):
             if node["deployment_args"]["additional"]:
                 federation.additionals_participants[idx] = int(node["deployment_args"]["deployment_round"])
                 federation.participants_alive += 1
@@ -454,12 +454,12 @@ class ProcessesFederationController(FederationController):
                 if node_command:
                     federation.last_index_deployed += 1
                     federation.participants_alive += 1
-                    
+
         if federation.config.participants and commands:
             self._write_commands_on_file(commands)
         else:
             self.logger.info("ERROR: No commands on a proccesses deployment..")
-                      
+
     def _start_node(self, sb: ScenarioBuilder, node, network_name, base_network_name, base, i, federation: NebulaFederationProcesses, additional=False):
         self.processes_root_path = os.path.join(os.path.dirname(__file__), "..", "..")
         node_idx = node['device_args']['idx']
@@ -505,9 +505,9 @@ class ProcessesFederationController(FederationController):
                 commands += "echo $! >> $PID_FILE\n\n"
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
-        
+
         return commands
-       
+
     def _build_initial_commands(self):
         commands = ""
         try:
@@ -522,8 +522,8 @@ class ProcessesFederationController(FederationController):
                 commands = '#!/bin/bash\n\nPID_FILE="$(dirname "$0")/current_scenario_pids.txt"\n\n> $PID_FILE\n\n'
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
-        return commands       
-        
+        return commands
+
     def _write_commands_on_file(self, commands: str):
         try:
             if self.host_platform == "windows":

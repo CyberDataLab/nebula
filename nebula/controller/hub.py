@@ -310,7 +310,7 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
         #init_fed_req = InitFederationRequest(experiment_type="docker")
         run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=f"id_nebula_{1}", user=run_scenario_request.user) #TODO ID per experiment
         #await APIUtils.post(url_init_fed_controller, init_fed_req.model_dump())
-        await APIUtils.post(url_run_scenario, run_scenario_req.model_dump())
+        response = await APIUtils.post(url_run_scenario, run_scenario_req.model_dump())
     except Exception as e:
         logging.info(e)
 
@@ -323,17 +323,22 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
     # Manager for the actual scenario
     #scenarioManagement = ScenarioManagement(scenario_data, user)
 
-    # await update_scenario(
-    #     scenario_name="", #TODO scenario_name
-    #     start_time="", #TODO start_time
-    #     end_time="",
-    #     scenario=scenario_data,
-    #     status="running",
-    #     username=user,
-    # )
+    if response:
+        try:
+            await update_scenario(
+                scenario_name=response["federation_id"],
+                start_time=response["start_time"],
+                end_time="",
+                scenario=run_scenario_request.scenario_data,
+                status="running",
+                username=run_scenario_request.user,
+            )
 
-    return ""#scenarioManagement.scenario_name #TODO return
-
+            return response["federation_id"]
+        except Exception as e:
+            logging.info(e)
+    else:
+        raise HTTPException(500, detail={"failed running scenario"})
 
 @app.post(controller_requests.Routes.STOP) #TODO redo method
 async def stop_scenario(
