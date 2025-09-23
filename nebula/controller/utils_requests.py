@@ -62,6 +62,7 @@ class RunScenarioRequest(BaseModel):
 
 
 class ScenarioUpdateRequest(BaseModel):
+    federation_id: str
     scenario_name: str
     start_time: str
     end_time: str

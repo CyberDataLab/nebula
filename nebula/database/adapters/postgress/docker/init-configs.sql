@@ -35,10 +35,16 @@ ALTER TABLE IF EXISTS nodes
   ADD COLUMN IF NOT EXISTS extras JSONB;
 
 -- Drop legacy columns for latitude/longitude if present
-ALTER TABLE IF EXISTS nodes
-  DROP COLUMN IF EXISTS latitude;
-ALTER TABLE IF EXISTS nodes
-  DROP COLUMN IF EXISTS longitude;
+-- ALTER TABLE IF EXISTS nodes
+--   DROP COLUMN IF EXISTS latitude;
+-- ALTER TABLE IF EXISTS nodes
+--   DROP COLUMN IF EXISTS longitude;
+-- AlTER TABLE IF EXISTS scenarios
+--   ADD COLUMN IF NOT EXISTS federation_id TEXT;
+-- ALTER TABLE IF EXISTS scenarios
+--   DROP CONSTRAINT scenarios_pkey;
+-- ALTER TABLE IF EXISTS scenarios
+--   ADD CONSTRAINT scenarios_pkey PRIMARY KEY (federation_id);
 
 -- 3) Configs as JSONB
 DROP INDEX IF EXISTS idx_configs_config_gin;
@@ -52,7 +58,8 @@ CREATE INDEX idx_configs_config_gin ON configs USING GIN (config);
 
 -- 4) Scenarios table as JSONB
 CREATE TABLE IF NOT EXISTS scenarios (
-    name TEXT PRIMARY KEY,
+    federation_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
     username TEXT NOT NULL,
     status TEXT,
     start_time TEXT,

@@ -29,7 +29,7 @@ class ScenarioBuilder():
         return self._topology_manager
 
     def get_scenario_name(self, user_to=False):
-        scenario_path = self._user+"_"+self._scenario_name if user_to else self._scenario_name 
+        scenario_path = self._user+"_"+self._scenario_name if user_to else self._scenario_name
         return scenario_path
 
     def set_scenario_data(self, scenario_data: dict):
@@ -53,7 +53,7 @@ class ScenarioBuilder():
         return self.sd["deployment"]
 
     def get_scenario_info(self) -> dict:
-        return {"federation_id": self._federation_id, "start_time": datetime.now(), "scenario_name": self._scenario_name}
+        return {"federation_id": self._federation_id, "start_time": datetime.now().strftime('%d/%m/%Y %H:%M:%S'), "alias": self.sd["scenario_title"] , "scenario_name": self._scenario_name}
 
     """                                                     ###############################
                                                             #     SCENARIO CONFIG NODE    #

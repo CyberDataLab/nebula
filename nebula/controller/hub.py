@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-import datetime
+from datetime import datetime
 import importlib
 import ipaddress
 import json
@@ -305,15 +305,16 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
     import hashlib
     def generate_id(value: str) -> str:
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
-    
+
+    response = None
+
     try:
         fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT")
         fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
-        url_init_fed_controller = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("init")
         url_run_scenario = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("run")
         #init_fed_req = InitFederationRequest(experiment_type="docker")
-        fedID = generate_id(run_scenario_request.user+run_scenario_request.scenario_data["scenario_name"])
-        run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=fedID, user=run_scenario_request.user) #TODO ID per experiment
+        federation_id = generate_id(f"nebula_{run_scenario_request.user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}")
+        run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=federation_id, user=run_scenario_request.user) #TODO ID per experiment
         #await APIUtils.post(url_init_fed_controller, init_fed_req.model_dump())
         response = await APIUtils.post(url_run_scenario, run_scenario_req.model_dump())
     except Exception as e:
@@ -330,8 +331,10 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
 
     if response:
         try:
+            logging.info("[FER] entro response")
             await update_scenario(
-                scenario_name=response["federation_id"],
+                federation_id=federation_id,
+                scenario_name=response["scenario_name"],
                 start_time=response["start_time"],
                 end_time="",
                 scenario=run_scenario_request.scenario_data,
@@ -448,6 +451,7 @@ async def get_scenarios(
 
 @app.post(controller_requests.Routes.UPDATE)
 async def update_scenario(
+    federation_id: str = Body(..., embed=True),
     scenario_name: str = Body(..., embed=True),
     start_time: str = Body(..., embed=True),
     end_time: str = Body(..., embed=True),
@@ -471,6 +475,7 @@ async def update_scenario(
     """
     try:
         payload = controller_requests.ScenarioUpdateRequest(
+            federation_id=federation_id,
             scenario_name=scenario_name,
             start_time=start_time,
             end_time=end_time,
@@ -479,6 +484,7 @@ async def update_scenario(
             username=username,
         ).model_dump()
         path = controller_requests.factory_requests_path("update")
+        logging.info(f"[FER] route {DATABASE_API_URL}{path}")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error updating scenario {scenario_name}: {e}")
@@ -619,7 +625,7 @@ async def update_nodes(
     """
     try:
         config:dict = await request.json()
-        config["timestamp"] = str(datetime.datetime.now())
+        config["timestamp"] = str(datetime.now())
 
         mobility_args = config.get("mobility_args", None)
         if not mobility_args:

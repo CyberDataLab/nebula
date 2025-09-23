@@ -468,7 +468,7 @@ class PostgresDB(DatabaseAdapter):
         return scenarios_to_return
 
 
-    async def _scenario_update_record(self, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str):
+    async def _scenario_update_record(self, federation_id:str, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str):
         """
         Inserts or updates a scenario record using the PostgreSQL "UPSERT" pattern.
         All configuration is saved in the 'config' column of type JSONB.
@@ -483,9 +483,10 @@ class PostgresDB(DatabaseAdapter):
                 return
 
         command = """
-            INSERT INTO scenarios (name, start_time, end_time, username, status, config)
-            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-            ON CONFLICT (name) DO UPDATE SET
+            INSERT INTO scenarios (federation_id, name, start_time, end_time, username, status, config)
+            VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+            ON CONFLICT (federation_id) DO UPDATE SET
+                name = EXCLUDED.name,
                 start_time = EXCLUDED.start_time,
                 end_time = EXCLUDED.end_time,
                 username = EXCLUDED.username,
@@ -493,7 +494,7 @@ class PostgresDB(DatabaseAdapter):
                 config = scenarios.config || EXCLUDED.config; -- Merge JSONB
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(command, scenario_name, start_time, end_time, username, status, json.dumps(scenario))
+            await conn.execute(command, federation_id, scenario_name, start_time, end_time, username, status, json.dumps(scenario))
 
 
     async def _scenario_set_all_status_to_finished(self):
