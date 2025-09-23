@@ -89,7 +89,7 @@ class ProcessesFederationController(FederationController):
         federation = await self._add_nebula_federation_to_pool(federation_id, user)
         scenario_info = {}
         if federation:
-            scenario_builder = ScenarioBuilder(federation_id)
+            scenario_builder = ScenarioBuilder(federation_id, user=user)
             await self._initialize_scenario(scenario_builder, scenario_data, federation)
             generate_ca_certificate(dir_path=self.cert_dir)
             await self._load_configuration_and_start_nodes(scenario_builder, federation)
@@ -250,12 +250,12 @@ class ProcessesFederationController(FederationController):
         # Initialize Scenario builder using scenario_data from user
         self.logger.info("🔧  Initializing Scenario Builder using scenario data")
         sb.set_scenario_data(scenario_data)
-        scenario_name = sb.get_scenario_name()
+        scenario_name = sb.get_scenario_name(user_to=True)
 
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
         self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
-        self.log_dir = os.environ.get("NEBULA_LOGS_DIR")
+        self.log_dir = os.environ.get("NEBULA_LOGS_DIR", scenario_name)
         self.cert_dir = os.environ.get("NEBULA_CERTS_DIR")
         self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
         # self.config = Config(entity="scenarioManagement")
@@ -267,12 +267,12 @@ class ProcessesFederationController(FederationController):
 
         # Create Scenario management dirs
         os.makedirs(self.config_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.log_dir, scenario_name), exist_ok=True)
+        os.makedirs(self.log_dir, exist_ok=True)
         os.makedirs(self.cert_dir, exist_ok=True)
 
         # Give permissions to the directories
         os.chmod(self.config_dir, 0o777)
-        os.chmod(os.path.join(self.log_dir, scenario_name), 0o777)
+        os.chmod(self.log_dir, 0o777)
         os.chmod(self.cert_dir, 0o777)
 
         # Save the scenario configuration
@@ -465,7 +465,7 @@ class ProcessesFederationController(FederationController):
         node_idx = node['device_args']['idx']
         # Include additional config to the participants
         node["tracking_args"]["log_dir"] = os.path.join(self.root_path, "app", "logs")
-        node["tracking_args"]["config_dir"] = os.path.join(self.root_path, "app", "config", sb.get_scenario_name())
+        node["tracking_args"]["config_dir"] = os.path.join(self.root_path, "app", "config", sb.get_scenario_name(user_to=True))
         node["scenario_args"]["controller"] = self.url
         node["scenario_args"]["deployment"] = sb.get_deployment()
         node["security_args"]["certfile"] = os.path.join(
@@ -488,10 +488,10 @@ class ProcessesFederationController(FederationController):
                 else:
                     commands += "Start-Sleep -Seconds 2\n"
                 commands += f'Write-Host "Running node {node["device_args"]["idx"]}..."\n'
-                commands += f'$OUT_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name()}\\participant_{node["device_args"]["idx"]}.out"\n'
-                commands += f'$ERROR_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name()}\\participant_{node["device_args"]["idx"]}.err"\n'
+                commands += f'$OUT_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name(user_to=True)}\\participant_{node["device_args"]["idx"]}.out"\n'
+                commands += f'$ERROR_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name(user_to=True)}\\participant_{node["device_args"]["idx"]}.err"\n'
                 # Use Start-Process for executing Python in background and capture PID
-                commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\core\\node.py {self.root_path}\\app\\config\\{sb.get_scenario_name()}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
+                commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\core\\node.py {self.root_path}\\app\\config\\{sb.get_scenario_name(user_to=True)}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
                 Add-Content -Path $PID_FILE -Value $process.Id
                 """
             else:
@@ -500,8 +500,8 @@ class ProcessesFederationController(FederationController):
                 else:
                     commands += "sleep 2\n"
                 commands += f'echo "Running node {node["device_args"]["idx"]}..."\n'
-                commands += f"OUT_FILE={self.root_path}/app/logs/{sb.get_scenario_name()}/participant_{node['device_args']['idx']}.out\n"
-                commands += f"python {self.root_path}/nebula/core/node.py {self.root_path}/app/config/{sb.get_scenario_name()}/participant_{node['device_args']['idx']}.json &\n"
+                commands += f"OUT_FILE={self.root_path}/app/logs/{sb.get_scenario_name(user_to=True)}/participant_{node['device_args']['idx']}.out\n"
+                commands += f"python {self.root_path}/nebula/core/node.py {self.root_path}/app/config/{sb.get_scenario_name(user_to=True)}/participant_{node['device_args']['idx']}.json &\n"
                 commands += "echo $! >> $PID_FILE\n\n"
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")

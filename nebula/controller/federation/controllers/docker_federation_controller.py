@@ -89,7 +89,7 @@ class DockerFederationController(FederationController):
         federation = await self._add_nebula_federation_to_pool(federation_id, user)
         scenario_info = {}
         if federation:
-            scenario_builder = ScenarioBuilder(federation_id)
+            scenario_builder = ScenarioBuilder(federation_id, user=user)
             await self._initialize_scenario(scenario_builder, scenario_data, federation)
             generate_ca_certificate(dir_path=self.cert_dir)
             await self._load_configuration_and_start_nodes(scenario_builder, federation)
@@ -301,12 +301,12 @@ class DockerFederationController(FederationController):
         # Initialize Scenario builder using scenario_data from user
         self.logger.info("🔧  Initializing Scenario Builder using scenario data")
         sb.set_scenario_data(scenario_data)
-        scenario_name = sb.get_scenario_name()
+        scenario_name = sb.get_scenario_name(user_to=True)
 
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
         self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
-        self.log_dir = os.environ.get("NEBULA_LOGS_DIR")
+        self.log_dir = os.environ.get("NEBULA_LOGS_DIR", scenario_name)
         self.cert_dir = os.environ.get("NEBULA_CERTS_DIR")
         self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
         #self.config = Config(entity="FederationController")
@@ -318,12 +318,12 @@ class DockerFederationController(FederationController):
 
         # Create Scenario management dirs
         os.makedirs(self.config_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.log_dir, scenario_name), exist_ok=True)
+        os.makedirs(self.log_dir, exist_ok=True)
         os.makedirs(self.cert_dir, exist_ok=True)
 
         # Give permissions to the directories
         os.chmod(self.config_dir, 0o777)
-        os.chmod(os.path.join(self.log_dir, scenario_name), 0o777)
+        os.chmod(self.log_dir, 0o777)
         os.chmod(self.cert_dir, 0o777)
 
         # Save the scenario configuration
@@ -502,7 +502,7 @@ class DockerFederationController(FederationController):
 
     def _start_initial_nodes(self, sb: ScenarioBuilder, federation: NebulaFederationDocker):
         self.logger.info("Starting nodes using Docker Compose...")
-        federation.network_name = self._get_network_name(f"{sb.get_scenario_name()}-net-scenario")
+        federation.network_name = self._get_network_name(f"{sb.get_scenario_name(user_to=True)}-net-scenario")
         federation.base_network_name = self._get_network_name("net-base")
 
         # Create the Docker network
@@ -520,7 +520,7 @@ class DockerFederationController(FederationController):
                 # deploy initial nodes
                 self.logger.info(f"Deployment starting for participant {idx}")
                 federation.round_per_participant[idx] = 0
-                deployed_successfully = self._start_node(sb.get_scenario_name(), node, federation.network_name, federation.base_network_name, federation.base, federation.last_index_deployed, federation)
+                deployed_successfully = self._start_node(sb.get_scenario_name(user_to=True), node, federation.network_name, federation.base_network_name, federation.base, federation.last_index_deployed, federation)
                 if deployed_successfully:
                     federation.last_index_deployed += 1
                     federation.participants_alive += 1
