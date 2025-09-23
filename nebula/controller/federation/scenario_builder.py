@@ -53,7 +53,7 @@ class ScenarioBuilder():
         return self.sd["deployment"]
 
     def get_scenario_info(self) -> dict:
-        return {"federation_id": self._federation_id, "start_time": datetime.now()}
+        return {"federation_id": self._federation_id, "start_time": datetime.now(), "scenario_name": self._scenario_name}
 
     """                                                     ###############################
                                                             #     SCENARIO CONFIG NODE    #
