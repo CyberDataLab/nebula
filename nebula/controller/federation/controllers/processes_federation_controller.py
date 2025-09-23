@@ -255,7 +255,7 @@ class ProcessesFederationController(FederationController):
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
         self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
-        self.log_dir = os.environ.get("NEBULA_LOGS_DIR", scenario_name)
+        self.log_dir = os.path.join(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
         self.cert_dir = os.environ.get("NEBULA_CERTS_DIR")
         self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
         # self.config = Config(entity="scenarioManagement")
