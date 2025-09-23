@@ -302,13 +302,18 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
     Returns:
         str: The name of the scenario that was started.
     """
+    import hashlib
+    def generate_id(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    
     try:
         fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT")
         fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
         url_init_fed_controller = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("init")
         url_run_scenario = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("run")
         #init_fed_req = InitFederationRequest(experiment_type="docker")
-        run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=f"id_nebula_{1}", user=run_scenario_request.user) #TODO ID per experiment
+        fedID = generate_id(run_scenario_request.user+run_scenario_request.scenario_data["scenario_name"])
+        run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=fedID, user=run_scenario_request.user) #TODO ID per experiment
         #await APIUtils.post(url_init_fed_controller, init_fed_req.model_dump())
         response = await APIUtils.post(url_run_scenario, run_scenario_req.model_dump())
     except Exception as e:
