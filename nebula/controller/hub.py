@@ -331,9 +331,9 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
 
     if response:
         try:
-            logging.info("[FER] entro response")
             await update_scenario(
                 federation_id=federation_id,
+                alias=response["alias"],
                 scenario_name=response["scenario_name"],
                 start_time=response["start_time"],
                 end_time="",
@@ -452,6 +452,7 @@ async def get_scenarios(
 @app.post(controller_requests.Routes.UPDATE)
 async def update_scenario(
     federation_id: str = Body(..., embed=True),
+    alias:str = Body(..., embed=True),
     scenario_name: str = Body(..., embed=True),
     start_time: str = Body(..., embed=True),
     end_time: str = Body(..., embed=True),
@@ -476,6 +477,7 @@ async def update_scenario(
     try:
         payload = controller_requests.ScenarioUpdateRequest(
             federation_id=federation_id,
+            alias=alias,
             scenario_name=scenario_name,
             start_time=start_time,
             end_time=end_time,
@@ -484,7 +486,6 @@ async def update_scenario(
             username=username,
         ).model_dump()
         path = controller_requests.factory_requests_path("update")
-        logging.info(f"[FER] route {DATABASE_API_URL}{path}")
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
         logging.exception(f"Error updating scenario {scenario_name}: {e}")

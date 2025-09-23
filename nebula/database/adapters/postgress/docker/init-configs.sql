@@ -59,6 +59,7 @@ CREATE INDEX idx_configs_config_gin ON configs USING GIN (config);
 -- 4) Scenarios table as JSONB
 CREATE TABLE IF NOT EXISTS scenarios (
     federation_id TEXT PRIMARY KEY,
+    alias TEXT NOT NULL,
     name TEXT NOT NULL,
     username TEXT NOT NULL,
     status TEXT,
