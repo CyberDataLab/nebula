@@ -13,11 +13,8 @@ from nebula.database.utils_requests import (
     Routes,
     ScenarioUpdateRequest,
     ScenarioStopRequest,
-    ScenarioRemoveRequest,
     ScenarioFinishRequest,
     NotesUpdateRequest,
-    NotesRemoveRequest,
-    NodesRemoveRequest,
     UserAddRequest,
     UserDeleteRequest,
     UserUpdateRequest,
@@ -26,11 +23,7 @@ from nebula.database.utils_requests import (
     GetScenariosRequest,
     GetRunningScenarioRequest,
     CheckScenarioRequest,
-    GetScenarioByNameRequest,
-    ListNodesByScenarioNameRequest,
-    GetNotesByScenarioNameRequest,
     ListUsersRequest,
-    GetUserByScenarioNameRequest,
 )
 
 # Get a database instance
@@ -96,10 +89,12 @@ async def read_root():
 # Scenarios
 @app.post(Routes.UPDATE)
 async def update_scenario(
+    federation_id: str,
     request: ScenarioUpdateRequest,
 ):
     try:
         await db._scenario_update_record(
+            federation_id = federation_id,
             **request.model_dump()
         )
         return {"message": f"Scenario {request.scenario_name} updated successfully"}
@@ -112,28 +107,29 @@ async def update_scenario(
 
 @app.post(Routes.STOP)
 async def stop_scenario(
+    federation_id: str,
     request: ScenarioStopRequest,
 ):
     try:
-        await db._finish_scenario(request.scenario_name, request.all)
+        await db._finish_scenario(federation_id, request.all)
         return {"message": "Finished status set successfully"}
     except Exception as e:
         logging.exception(
-            f"Error stopping scenario {request.scenario_name}: {e}"
+            f"Error stopping scenario {federation_id}: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.REMOVE)
 async def remove_scenario(
-    request: ScenarioRemoveRequest,
+    federation_id: str
 ):
     try:
-        await db._remove_scenario_by_name(request.scenario_name)
-        return {"message": f"Scenario {request.scenario_name} removed successfully"}
+        await db._remove_scenario_by_federation_id(federation_id)
+        return {"message": f"Scenario {federation_id} removed successfully"}
     except Exception as e:
         logging.exception(
-            f"Error removing scenario {request.scenario_name}: {e}"
+            f"Error removing scenario {federation_id}: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -151,16 +147,17 @@ async def get_scenarios(
 
 @app.post(Routes.FINISH)
 async def set_scenario_status_to_finished(
+    federation_id: str,
     request: ScenarioFinishRequest,
 ):
     try:
         await db._finish_scenario(
-            request.scenario_name, request.all
+            federation_id, request.all
         )
         return {"message": "Finished status set successfully"}
     except Exception as e:
         logging.exception(
-            f"Error setting scenario {request.scenario_name} to finished: {e}"
+            f"Error setting scenario {federation_id} to finished: {e}"
         )
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -188,23 +185,23 @@ async def check_scenario(
 
 @app.get(Routes.GET_SCENARIOS_BY_SCENARIO_NAME)
 async def get_scenario_by_name_endpoint(
-    request: GetScenarioByNameRequest = Depends(),
+    federation_id: str
 ):
     try:
-        scenario = await db._get_scenario_by_name(request.scenario_name)
+        scenario = await db._get_scenario_by_federation_id(federation_id)
         return scenario
     except Exception as e:
-        logging.exception(f"Error obtaining scenario {request.scenario_name}: {e}")
+        logging.exception(f"Error obtaining scenario {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Nodes
-@app.get(Routes.NODES_BY_SCENARIO_NAME)
-async def list_nodes_by_scenario_name_endpoint(
-    request: ListNodesByScenarioNameRequest = Depends()
+@app.get(Routes.NODES_BY_FEDERATION_ID)
+async def list_nodes_by_federation_id_endpoint(
+    federation_id: str
 ):
     try:
-        nodes = await db._list_nodes_by_scenario_name(request.scenario_name)
+        nodes = await db._list_nodes_by_federation_id(federation_id)
         return nodes
     except Exception as e:
         logging.exception(f"Error obtaining nodes: {e}")
@@ -241,43 +238,43 @@ async def update_node_record(request: NodesUpdateRequest):
 
 
 @app.post(Routes.NODES_REMOVE)
-async def remove_nodes_by_scenario_name_endpoint(request: NodesRemoveRequest):
+async def remove_nodes_by_federation_id_endpoint(federation_id: str):
     try:
-        await db._remove_nodes_by_scenario_name(request.scenario_name)
-        return {"message": f"Nodes for scenario {request.scenario_name} removed successfully"}
+        await db._remove_nodes_by_federation_id(federation_id)
+        return {"message": f"Nodes for federation {federation_id} removed successfully"}
     except Exception as e:
         logging.exception(f"Error removing nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Notes
-@app.get(Routes.NOTES_BY_SCENARIO_NAME)
-async def get_notes_by_scenario_name(
-    request: GetNotesByScenarioNameRequest = Depends()
+@app.get(Routes.NOTES_BY_FEDERATION_ID)
+async def get_notes_by_federation_id(
+    federation_id: str
 ):
     try:
-        notes_record = await db._get_notes(request.scenario_name)
+        notes_record = await db._get_notes(federation_id)
         return notes_record
     except Exception as e:
-        logging.exception(f"Error obtaining notes for scenario {request.scenario_name}: {e}")
+        logging.exception(f"Error obtaining notes for federation {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.NOTES_UPDATE)
-async def update_notes_by_scenario_name(request: NotesUpdateRequest):
+async def update_notes_by_scenario_name(federation_id: str, request: NotesUpdateRequest):
     try:
-        await db._save_notes(**request.model_dump())
-        return {"message": f"Notes for scenario {request.scenario_name} updated successfully"}
+        await db._save_notes(federation_id ,**request.model_dump())
+        return {"message": f"Notes for federation {federation_id} updated successfully"}
     except Exception as e:
         logging.exception(f"Error updating notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(Routes.NOTES_REMOVE)
-async def remove_notes_by_scenario_name_endpoint(request: NotesRemoveRequest):
+async def remove_notes_by_federation_id_endpoint(federation_id: str):
     try:
-        await db._remove_note(request.scenario_name)
-        return {"message": f"Notes for scenario {request.scenario_name} removed successfully"}
+        await db._remove_note(federation_id)
+        return {"message": f"Notes for federation {federation_id} removed successfully"}
     except Exception as e:
         logging.exception(f"Error removing notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -293,15 +290,15 @@ async def list_users_controller(request: ListUsersRequest = Depends()):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {e}")
 
 
-@app.get(Routes.USER_BY_SCENARIO_NAME)
-async def get_user_by_scenario_name_endpoint(
-    request: GetUserByScenarioNameRequest = Depends()
+@app.get(Routes.USER_BY_FEDERATION_ID)
+async def get_user_by_federation_id_endpoint(
+    federation_id: str
 ):
     try:
-        user = await db._get_user_by_scenario_name(request.scenario_name)
+        user = await db._get_user_by_federation_id(federation_id)
         return user
     except Exception as e:
-        logging.exception(f"Error obtaining user for scenario {request.scenario_name}: {e}")
+        logging.exception(f"Error obtaining user for federation {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

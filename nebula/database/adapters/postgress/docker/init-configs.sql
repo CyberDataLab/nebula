@@ -75,6 +75,6 @@ CREATE INDEX IF NOT EXISTS idx_scenarios_config_gin
 
 -- 5) Notes table
 CREATE TABLE IF NOT EXISTS notes (
-    scenario TEXT PRIMARY KEY,
+    federation_id TEXT PRIMARY KEY,
     scenario_notes TEXT
 );
