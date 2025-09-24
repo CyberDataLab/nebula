@@ -104,8 +104,6 @@ class DockerFederationController(FederationController):
                 return None
         else:
              self.logger.info(f"ERROR: federation ID: ({federation_id}) already exists..")
-        asyncio.create_task(self.stop_scenario(federation_id))
-        asyncio.create_task(self.remove_scenario(federation_id, RemoveScenarioRequest(experiment_type="docker", user=user, scenario_name=nebula_federation.scenario_name)))
         return scenario_info
 
     async def stop_scenario(self, federation_id: str):
@@ -114,7 +112,6 @@ class DockerFederationController(FederationController):
         Reads ALL scenario.metadata and removes all listed containers and the network, then deletes the metadata file.
         Also forcibly stops and removes any containers still attached to the network before removing it.
         """
-        await asyncio.sleep(20)
         federation = await self._remove_nebula_federation_from_pool(federation_id)
         if not federation:
             return False
@@ -213,7 +210,6 @@ class DockerFederationController(FederationController):
         return {"message": "Nodes done received successfully"}
 
     async def remove_scenario(self, federation_id: str, remove_scenario_request: RemoveScenarioRequest):
-        await asyncio.sleep(40)
         if(await self._check_active_federation(federation_id)):
             self.logger.info(f"WARNING: Cannot remove files from active federation: ({federation_id})")
             return False
