@@ -22,7 +22,7 @@ class NodeDoneRequest(BaseModel):
 class Routes:
     INIT = "/init"
     RUN = "/scenarios/run"
-    STOP = "/scenarios/stop"
+    STOP = "/scenarios/{federation_id}/stop"
     UPDATE = "/nodes/{federation_id}/update"
     DONE = "/nodes/{federation_id}/done"
     FINISH = "/scenarios/{federation_id}/finish"
@@ -33,7 +33,7 @@ def factory_requests_path(resource: str, scenario_name: str = "", federation_id:
     elif resource == "run":
         return Routes.RUN
     elif resource == "stop":
-        return Routes.STOP
+        return Routes.STOP.format(federation_id=federation_id)
     elif resource == "update":
         return Routes.UPDATE.format(federation_id=federation_id)
     elif resource == "done":

@@ -64,14 +64,17 @@ async def run_scenario(run_scenario_request: RunScenarioRequest):
         return {"message": "Experiment type not allowed"}
     
 @app.post(Routes.STOP)
-async def stop_scenario(stop_scenario_request: StopScenarioRequest):
+async def stop_scenario(
+    federation_id: str, 
+    stop_scenario_request: StopScenarioRequest
+):
     global fed_controllers
     experiment_type = stop_scenario_request.experiment_type
     controller = fed_controllers.get(experiment_type, None)
     logger = logging.getLogger("Federation-Controller")
     logger.info(f"[API]: stop experiment request for federation ID: {stop_scenario_request.federation_id}")
     if controller:
-        return await controller.stop_scenario(stop_scenario_request.federation_id)
+        return await controller.stop_scenario(federation_id)
     else:
         return {"message": "Experiment type not allowed"}
 
