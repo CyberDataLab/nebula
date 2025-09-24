@@ -10,7 +10,6 @@ from nebula.controller.federation.scenario_builder import ScenarioBuilder
 from nebula.controller.federation.utils_requests import factory_requests_path
 from nebula.controller.federation.utils_requests import NodeUpdateRequest, NodeDoneRequest
 from typing import Dict
-from fastapi import Request
 from nebula.config.config import Config
 from nebula.core.utils.certificate import generate_ca_certificate
 from nebula.core.utils.locker import Locker
@@ -113,93 +112,50 @@ class DockerFederationController(FederationController):
         Reads ALL scenario.metadata and removes all listed containers and the network, then deletes the metadata file.
         Also forcibly stops and removes any containers still attached to the network before removing it.
         """
-        federation_scenario_name = await self._remove_nebula_federation_from_pool(federation_id)
-        if not federation_scenario_name:
+        federation = await self._remove_nebula_federation_from_pool(federation_id)
+        if not federation:
             return False
 
-        # Try multiple possible config directory locations. This depends on where the user called the function from.
-        possible_config_dirs = [
-            os.environ.get("NEBULA_CONFIG_DIR"),
-            "/nebula/app/config",
-            "./app/config",
-            os.path.join(os.getcwd(), "app", "config"),
-            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "app", "config"),
-        ]
-
-        config_dir = None
-        for dir_path in possible_config_dirs:
-            if dir_path and os.path.exists(dir_path):
-                config_dir = dir_path
-                break
-
-        if not config_dir:
-            self.logger.info("No valid config directory found, skipping cleanup")
-            return
-
-        scenario_dirs = []
-        self.logger.info(f"Config directory: {config_dir}")
-        if os.path.exists(config_dir):
-            for item in os.listdir(config_dir):
-                scenario_path = os.path.join(config_dir, item)
-                if os.path.isdir(scenario_path):
-                    metadata_file = os.path.join(scenario_path, "scenario.metadata")
-                    if os.path.exists(metadata_file):
-                        scenario_dirs.append(scenario_path)
-
-        self.logger.info(f"Removing scenario containers for {scenario_dirs}")
-        if not scenario_dirs:
-            self.logger.info("No active scenarios found to clean up")
-            return
-
         client = docker.from_env()
-
-        for scenario_dir in scenario_dirs:
-            if scenario_dir != federation_scenario_name:
-                continue
-
-            metadata_path = os.path.join(scenario_dir, "scenario.metadata")
-            if not os.path.exists(metadata_path):
-                self.logger.info(f"Skipping {scenario_dir} - no scenario.metadata found")
-                continue
-
-            with open(metadata_path) as f:
-                meta = json.load(f)
-
-            # Remove containers listed in metadata
-            for name in meta.get("containers", []):
-                try:
-                    container = client.containers.get(name)
-                    container.remove(force=True)
-                    self.logger.info(f"Removed scenario container {name}")
-                except Exception as e:
-                    self.logger.info(f"Could not remove scenario container {name}: {e}")
-
-            # Remove network, but first forcibly remove any containers still attached
-            network_name = meta.get("network")
-            if network_name:
-                try:
-                    network = client.networks.get(network_name)
-                    attached_containers = network.attrs.get("Containers") or {}
-                    for container_id in attached_containers:
-                        try:
-                            c = client.containers.get(container_id)
-                            c.remove(force=True)
-                            self.logger.info(f"Force-removed container {c.name} attached to {network_name}")
-                        except Exception as e:
-                            self.logger.info(f"Could not force-remove container {container_id}: {e}")
-                    network.remove()
-                    self.logger.info(f"Removed scenario network {network_name}")
-                except Exception as e:
-                    self.logger.info(f"Could not remove scenario network {network_name}: {e}")
-
-            # Remove metadata file
+        metadata_path = os.path.join(federation.config_dir, "scenario.metadata")
+        
+        if not os.path.exists(metadata_path):
+            self.logger.info(f"ERROR {metadata_path} - no 'scenario.metadata' found")
+            return False
+            
+        with open(metadata_path) as f:
+            meta = json.load(f)
+        # Remove containers listed in metadata
+        for name in meta.get("containers", []):
             try:
-                os.remove(metadata_path)
+                container = client.containers.get(name)
+                container.remove(force=True)
+                self.logger.info(f"Removed scenario container {name}")
             except Exception as e:
-                self.logger.info(f"Could not remove scenario.metadata: {e}")
-
-            if scenario_dir == federation_scenario_name:
-                break
+                self.logger.info(f"Could not remove scenario container {name}: {e}")
+        # Remove network, but first forcibly remove any containers still attached
+        network_name = meta.get("network")
+        if network_name:
+            try:
+                network = client.networks.get(network_name)
+                attached_containers = network.attrs.get("Containers") or {}
+                for container_id in attached_containers:
+                    try:
+                        c = client.containers.get(container_id)
+                        c.remove(force=True)
+                        self.logger.info(f"Force-removed container {c.name} attached to {network_name}")
+                    except Exception as e:
+                        self.logger.info(f"Could not force-remove container {container_id}: {e}")
+                network.remove()
+                self.logger.info(f"Removed scenario network {network_name}")
+            except Exception as e:
+                self.logger.info(f"Could not remove scenario network {network_name}: {e}")
+        # Remove metadata file
+        try:
+            os.remove(metadata_path)
+        except Exception as e:
+            self.logger.info(f"Could not remove scenario.metadata: {e}")
+            return False
 
         return True #TODO care about cases
 
@@ -269,15 +225,15 @@ class DockerFederationController(FederationController):
                self.logger.info(f"ERROR: trying to add ({federation_id}) to federations pool..")
         return fed
 
-    async def _remove_nebula_federation_from_pool(self, federation_id: str):
+    async def _remove_nebula_federation_from_pool(self, federation_id: str) -> NebulaFederationDocker | None:
         async with self._federations_dict_lock:
             if federation_id in self.nfp:
                 federation = self.nfp.pop(federation_id)
                 self.logger.info(f"SUCCESS: Federation ID: ({federation_id}) removed from pool")
-                return federation.scenario_name
+                return federation
             else:
                 self.logger.info(f"ERROR: trying to remove ({federation_id}) from federations pool..")
-                return ""
+                return None
 
     async def _update_federation_on_pool(self, federation_id: str, user: str, nf: NebulaFederationDocker):
         updated = False

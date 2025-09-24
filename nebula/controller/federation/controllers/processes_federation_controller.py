@@ -125,44 +125,26 @@ class ProcessesFederationController(FederationController):
             - Supports both Linux/macOS ('.sh') and Windows ('.ps1') script files.
             - Any errors during file removal are logged with the traceback.
         """
-        federation_name = await self._remove_nebula_federation_from_pool(federation_id)
-        if not federation_name:
+        federation = await self._remove_nebula_federation_from_pool(federation_id)
+        if not federation:
             return False
 
-        # When stopping the nodes, we need to remove the current_scenario_commands.sh file -> it will cause the nodes to stop using PIDs
         try:
-            nebula_config_dir = os.environ.get("NEBULA_CONFIG_DIR")
-            if not nebula_config_dir:
-                current_dir = os.path.dirname(__file__)
-                nebula_base_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
-                nebula_config_dir = os.path.join(nebula_base_dir, "app", "config")
-                self.logger.info(f"NEBULA_CONFIG_DIR not found. Using default path: {nebula_config_dir}")
-            if federation_id:
-                if os.environ.get("NEBULA_HOST_PLATFORM") == "windows":
-                    scenario_commands_file = os.path.join(
-                        nebula_config_dir, federation_name, "current_scenario_commands.ps1"
-                    )
-                else:
-                    scenario_commands_file = os.path.join(
-                        nebula_config_dir, federation_name, "current_scenario_commands.sh"
-                    )
-                if os.path.exists(scenario_commands_file):
-                    os.remove(scenario_commands_file)
+            if os.environ.get("NEBULA_HOST_PLATFORM") == "windows":
+                scenario_commands_file = os.path.join(
+                    federation.config_dir, "current_scenario_commands.ps1"
+                )
             else:
-                if os.environ.get("NEBULA_HOST_PLATFORM") == "windows":
-                    files = glob.glob(
-                        os.path.join(nebula_config_dir, "**/current_scenario_commands.ps1"), recursive=True
-                    )
-                else:
-                    files = glob.glob(
-                        os.path.join(nebula_config_dir, "**/current_scenario_commands.sh"), recursive=True
-                    )
-                for file in files:
-                    os.remove(file)
-            return True
+                scenario_commands_file = os.path.join(
+                    federation.config_dir, "current_scenario_commands.sh"
+                )
+            if os.path.exists(scenario_commands_file):
+                os.remove(scenario_commands_file)
+                self.logger.info(f"Scenario commands file removed: {scenario_commands_file}")
+            else:
+                self.logger.info(f"Scenario commands file not found: {scenario_commands_file}")
         except Exception as e:
-            self.logger.exception(f"Error while removing current_scenario_commands.sh file: {e}")
-        return False
+            self.logger.exception(f"Error while removing current_scenario_commands file: {e}")
 
     async def update_nodes(self, federation_id: str, node_update_request: NodeUpdateRequest):
         config = node_update_request.config
@@ -229,15 +211,15 @@ class ProcessesFederationController(FederationController):
                self.logger.info(f"ERROR: trying to add ({federation_id}) to federations pool..")
         return fed
 
-    async def _remove_nebula_federation_from_pool(self, federation_id: str):
+    async def _remove_nebula_federation_from_pool(self, federation_id: str) -> NebulaFederationProcesses | None:
         async with self._federations_dict_lock:
             if federation_id in self.nfp:
                 federation = self.nfp.pop(federation_id)
                 self.logger.info(f"SUCCESS: Federation ID: ({federation_id}) removed from pool")
-                return federation.scenario_name
+                return federation
             else:
                 self.logger.info(f"ERROR: trying to remove ({federation_id}) from federations pool..")
-                return ""
+                return None
 
     async def _send_to_hub(self, path, payload, scenario_name="",  federation_id="" ):
         try:
