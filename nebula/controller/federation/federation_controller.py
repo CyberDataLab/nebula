@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from fastapi import Request
 from typing import Dict
 from nebula.controller.federation.scenario_builder import ScenarioBuilder
-from nebula.controller.federation.utils_requests import NodeUpdateRequest, NodeDoneRequest
+from nebula.controller.federation.utils_requests import NodeUpdateRequest, NodeDoneRequest, RemoveScenarioRequest
 import logging 
 
 class NebulaFederation(ABC):
@@ -32,4 +32,8 @@ class FederationController(ABC):
     
     abstractmethod
     async def node_done(self, federation_id: str, node_done_request: NodeDoneRequest):
+        pass
+    
+    abstractmethod
+    async def remove_scenario(self, federation_id: str, remove_scenario_request: RemoveScenarioRequest):
         pass

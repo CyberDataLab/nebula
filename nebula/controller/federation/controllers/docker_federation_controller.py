@@ -7,8 +7,8 @@ from nebula.utils import DockerUtils, APIUtils
 import docker
 from nebula.controller.federation.federation_controller import FederationController
 from nebula.controller.federation.scenario_builder import ScenarioBuilder
-from nebula.controller.federation.utils_requests import factory_requests_path
-from nebula.controller.federation.utils_requests import NodeUpdateRequest, NodeDoneRequest
+from nebula.controller.federation.utils_requests import factory_requests
+from nebula.controller.federation.utils_requests import RemoveScenarioRequest, NodeUpdateRequest, NodeDoneRequest
 from typing import Dict
 from nebula.config.config import Config
 from nebula.core.utils.certificate import generate_ca_certificate
@@ -104,6 +104,8 @@ class DockerFederationController(FederationController):
                 return None
         else:
              self.logger.info(f"ERROR: federation ID: ({federation_id}) already exists..")
+        asyncio.create_task(self.stop_scenario(federation_id))
+        asyncio.create_task(self.remove_scenario(federation_id, RemoveScenarioRequest(experiment_type="docker", user=user, scenario_name=nebula_federation.scenario_name)))
         return scenario_info
 
     async def stop_scenario(self, federation_id: str):
@@ -112,6 +114,7 @@ class DockerFederationController(FederationController):
         Reads ALL scenario.metadata and removes all listed containers and the network, then deletes the metadata file.
         Also forcibly stops and removes any containers still attached to the network before removing it.
         """
+        await asyncio.sleep(20)
         federation = await self._remove_nebula_federation_from_pool(federation_id)
         if not federation:
             return False
@@ -209,6 +212,37 @@ class DockerFederationController(FederationController):
         asyncio.create_task(self._send_to_hub("done", payload, federation_id=federation_id))
         return {"message": "Nodes done received successfully"}
 
+    async def remove_scenario(self, federation_id: str, remove_scenario_request: RemoveScenarioRequest):
+        await asyncio.sleep(40)
+        if(await self._check_active_federation(federation_id)):
+            self.logger.info(f"WARNING: Cannot remove files from active federation: ({federation_id})")
+            return False
+        
+        folder_name = remove_scenario_request.user+"_"+remove_scenario_request.scenario_name
+        scenario_config_path = os.path.join(self.config_dir, folder_name)
+        scenario_log_path = os.path.join(self.log_dir, folder_name)
+        
+        if not os.path.exists(scenario_config_path):
+            self.logger.info(f"ERROR {scenario_config_path} - no config folder found")
+        if not os.path.exists(scenario_log_path):
+            self.logger.info(f"ERROR {scenario_log_path} - no log folder found")
+            
+        try:
+            shutil.rmtree(scenario_config_path)
+            self.logger.info(f"Removed config folder {scenario_config_path}")
+        except Exception as e:
+            self.logger.info(f"Could not remove config folder {scenario_config_path}: {e}")
+            return False
+        
+        try:
+            shutil.rmtree(scenario_log_path)
+            self.logger.info(f"Removed log folder {scenario_log_path}")
+        except Exception as e:
+            self.logger.info(f"Could not remove log folder {scenario_log_path}: {e}")
+            return False
+        
+        return True
+        
     """                                             ###############################
                                                     #       FUNCTIONALITIES       #
                                                     ###############################
@@ -235,6 +269,13 @@ class DockerFederationController(FederationController):
                 self.logger.info(f"ERROR: trying to remove ({federation_id}) from federations pool..")
                 return None
 
+    async def _check_active_federation(self, federation_id: str) -> bool:
+        async with self._federations_dict_lock:
+            if federation_id in self.nfp:
+                return True
+            else:
+                return False
+
     async def _update_federation_on_pool(self, federation_id: str, user: str, nf: NebulaFederationDocker):
         updated = False
         async with self._federations_dict_lock:
@@ -246,11 +287,9 @@ class DockerFederationController(FederationController):
                self.logger.info(f"ERROR: trying to update ({federation_id}) on federations pool..")
         return updated
 
-    async def _send_to_hub(self, path, payload, scenario_name="",  federation_id="" ):
+    async def _send_to_hub(self, operation, payload, **kwargs):
         try:
-            url_request = self._hub_url + factory_requests_path(path, scenario_name, federation_id)
-            # self.logger.info(f"Sending to hub, url: {url_request}")
-            # self.logger.info(f"payload sent to hub, data: {payload}")
+            url_request = self._hub_url + factory_requests(operation, **kwargs)
             await APIUtils.post(url_request, payload)
         except Exception as e:
             self.logger.info(f"Failed to send update to Hub: {e}")
@@ -263,13 +302,12 @@ class DockerFederationController(FederationController):
 
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
-        # self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
-        # self.log_dir = os.path.join(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
+        self.config_dir = os.environ.get("NEBULA_CONFIG_DIR")
+        self.log_dir = os.environ.get("NEBULA_LOGS_DIR")
         federation.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
         federation.log_dir = os.path.join(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
         self.cert_dir = os.environ.get("NEBULA_CERTS_DIR")
         self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
-        #self.config = Config(entity="FederationController")
         self.env_tag = os.environ.get("NEBULA_ENV_TAG", "dev")
         self.prefix_tag = os.environ.get("NEBULA_PREFIX_TAG", "dev")
         self.user_tag = os.environ.get("NEBULA_USER_TAG", os.environ.get("USER", "unknown"))
