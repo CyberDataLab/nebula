@@ -6,28 +6,28 @@ from pydantic import BaseModel, confloat, conint
 class Routes:
     # Scenarios
     INIT = "/"
-    UPDATE = "/scenarios/update"
-    STOP = "/scenarios/stop"
-    REMOVE = "/scenarios/remove"
-    FINISH = "/scenarios/set_status_to_finished"
+    UPDATE = "/scenarios/{federation_id}/update"
+    STOP = "/scenarios/{federation_id}/stop"
+    REMOVE = "/scenarios/{federation_id}/remove"
+    FINISH = "/scenarios/{federation_id}/set_status_to_finished"
     RUNNING = "/scenarios/running"
-    CHECK_SCENARIO = "/scenarios/check/{user}/{role}/{scenario_name}"
+    CHECK_SCENARIO = "/scenarios/check/{user}/{role}/{federation_id}"
     GET_SCENARIOS_BY_USER = "/scenarios/{user}/{role}"
-    GET_SCENARIOS_BY_SCENARIO_NAME = "/scenarios/{scenario_name}"
+    GET_SCENARIOS_BY_SCENARIO_NAME = "/scenarios/{federation_id}"
 
     # Nodes
-    NODES_BY_SCENARIO_NAME = "/nodes/{scenario_name}"
+    NODES_BY_FEDERATION_ID = "/nodes/{federation_id}"
     NODES_UPDATE = "/nodes/update"
-    NODES_REMOVE = "/nodes/remove"
+    NODES_REMOVE = "/nodes/{federation_id}/remove"
 
     # Notes
-    NOTES_BY_SCENARIO_NAME = "/notes/{scenario_name}"
-    NOTES_UPDATE = "/notes/update"
-    NOTES_REMOVE = "/notes/remove"
+    NOTES_BY_FEDERATION_ID = "/notes/{federation_id}"
+    NOTES_UPDATE = "/notes/{federation_id}/update"
+    NOTES_REMOVE = "/notes/{federation_id}/remove"
 
     # Users
     USER_LIST = "/user/list"
-    USER_BY_SCENARIO_NAME = "/user/{scenario_name}"
+    USER_BY_FEDERATION_ID = "/user/{federation_id}"
     USER_ADD = "/user/add"
     USER_DELETE = "/user/delete"
     USER_UPDATE = "/user/update"
@@ -35,6 +35,7 @@ class Routes:
 
 
 class ScenarioUpdateRequest(BaseModel):
+    alias: str
     scenario_name: str
     start_time: str
     end_time: str
@@ -44,30 +45,18 @@ class ScenarioUpdateRequest(BaseModel):
 
 
 class ScenarioStopRequest(BaseModel):
-    scenario_name: str
     all: bool = False
 
 
-class ScenarioRemoveRequest(BaseModel):
-    scenario_name: str
-
-
 class ScenarioFinishRequest(BaseModel):
-    scenario_name: str
     all: bool = False
 
 
 class NotesUpdateRequest(BaseModel):
-    scenario_name: str
     notes: str
 
 
-class NotesRemoveRequest(BaseModel):
-    scenario_name: str
 
-
-class NodesRemoveRequest(BaseModel):
-    scenario_name: str
 
 
 class UserAddRequest(BaseModel):
@@ -144,30 +133,16 @@ class GetRunningScenarioRequest(BaseModel):
 class CheckScenarioRequest(BaseModel):
     user: str
     role: str
-    scenario_name: str
-
-
-class GetScenarioByNameRequest(BaseModel):
-    scenario_name: str
-
-
-class ListNodesByScenarioNameRequest(BaseModel):
-    scenario_name: str
-
-
-class GetNotesByScenarioNameRequest(BaseModel):
-    scenario_name: str
+    federation_id: str
 
 
 class ListUsersRequest(BaseModel):
     all_info: bool = False
 
 
-class GetUserByScenarioNameRequest(BaseModel):
-    scenario_name: str
 
 
-def factory_requests_path(resource: str, user: str = "", role: str = "", scenario_name: str = "") -> str:
+def factory_requests_path(resource: str, user: str = "", role: str = "", federation_id: str = "") -> str:
     if resource == "init":
         return Routes.INIT
     elif resource == "update":
@@ -181,30 +156,30 @@ def factory_requests_path(resource: str, user: str = "", role: str = "", scenari
     elif resource == "running":
         return Routes.RUNNING
     elif resource == "check_scenario":
-        return Routes.CHECK_SCENARIO.format(user=user, role=role, scenario_name=scenario_name)
+        return Routes.CHECK_SCENARIO.format(user=user, role=role, federation_id=federation_id)
     elif resource == "get_scenarios_by_user":
         return Routes.GET_SCENARIOS_BY_USER.format(user=user, role=role)
     elif resource == "get_scenarios_by_scenario_name":
-        return Routes.GET_SCENARIOS_BY_SCENARIO_NAME.format(scenario_name=scenario_name)
+        return Routes.GET_SCENARIOS_BY_SCENARIO_NAME.format(federation_id=federation_id)
     # Nodes
     elif resource == "get_nodes_by_scenario_name":
-        return Routes.NODES_BY_SCENARIO_NAME.format(scenario_name=scenario_name)
+        return Routes.NODES_BY_FEDERATION_ID.format(federation_id=federation_id)
     elif resource == "update_nodes":
         return Routes.NODES_UPDATE
     elif resource == "remove_nodes":
-        return Routes.NODES_REMOVE
+        return Routes.NODES_REMOVE.format(federation_id=federation_id)
     # Notes
     elif resource == "get_notes_by_scenario_name":
-        return Routes.NOTES_BY_SCENARIO_NAME.format(scenario_name=scenario_name)
+        return Routes.NOTES_BY_FEDERATION_ID.format(federation_id=federation_id)
     elif resource == "update_notes":
         return Routes.NOTES_UPDATE
     elif resource == "remove_notes":
-        return Routes.NOTES_REMOVE
+        return Routes.NOTES_REMOVE.format(federation_id=federation_id)
     # Users
     elif resource == "list_users":
         return Routes.USER_LIST
     elif resource == "get_user_by_scenario_name":
-        return Routes.USER_BY_SCENARIO_NAME.format(scenario_name=scenario_name)
+        return Routes.USER_BY_FEDERATION_ID.format(federation_id=federation_id)
     elif resource == "add_user":
         return Routes.USER_ADD
     elif resource == "delete_user":

@@ -9,13 +9,14 @@ from nebula.core.utils.certificate import generate_certificate
 from nebula.core.datasets.nebuladataset import NebulaDataset, factory_nebuladataset, factory_dataset_setup
 
 class ScenarioBuilder():
-    def __init__(self, federation_id):
+    def __init__(self, federation_id, user):
         self._scenario_data = None
         self._config_setup = None
         self.logger = logging.getLogger("Federation-Controller")
         self._topology_manager: TopologyManager = None
         self._scenario_name = ""
         self._federation_id = federation_id
+        self._user = user
 
     @property
     def sd(self):
@@ -27,8 +28,9 @@ class ScenarioBuilder():
         """Topology Manager"""
         return self._topology_manager
 
-    def get_scenario_name(self):
-        return self._scenario_name
+    def get_scenario_name(self, user_to=False):
+        scenario_path = self._user+"_"+self._scenario_name if user_to else self._scenario_name
+        return scenario_path
 
     def set_scenario_data(self, scenario_data: dict):
         self._scenario_data = scenario_data
@@ -51,7 +53,7 @@ class ScenarioBuilder():
         return self.sd["deployment"]
 
     def get_scenario_info(self) -> dict:
-        return {"federation_id": self._federation_id, "start_time": datetime.now()}
+        return {"federation_id": self._federation_id, "start_time": datetime.now().strftime('%d/%m/%Y %H:%M:%S'), "alias": self.sd["scenario_title"] , "scenario_name": self._scenario_name}
 
     """                                                     ###############################
                                                             #     SCENARIO CONFIG NODE    #

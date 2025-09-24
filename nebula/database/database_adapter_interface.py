@@ -62,13 +62,13 @@ class DatabaseAdapter(ABC):
     # --- Node Management Functions ---
 
     @abstractmethod
-    async def _list_nodes(self, scenario_name=None, sort_by="idx"):
+    async def _list_nodes(self, federation_id=None, sort_by="idx"):
         """Retrieves a list of nodes."""
         raise NotImplementedError
 
     @abstractmethod
-    async def _list_nodes_by_scenario_name(self, scenario_name):
-        """Fetches all nodes for a specific scenario."""
+    async def _list_nodes_by_federation_id(self, federation_id):
+        """Fetches all nodes for a specific federation."""
         raise NotImplementedError
 
     @abstractmethod
@@ -97,8 +97,8 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def _remove_nodes_by_scenario_name(self, scenario_name):
-        """Deletes all nodes for a specific scenario."""
+    async def _remove_nodes_by_federation_id(self, federation_id):
+        """Deletes all nodes for a specific federation."""
         raise NotImplementedError
 
     # --- Scenario Management Functions ---
@@ -114,7 +114,7 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def _scenario_update_record(self, name, start_time, end_time, scenario_config, status, username):
+    async def _scenario_update_record(self, federation_id, name, start_time, end_time, scenario_config, status, username):
         """Inserts or updates a scenario record."""
         raise NotImplementedError
 
@@ -124,13 +124,13 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def _scenario_set_status_to_finished(self, scenario_name):
-        """Sets the status of a specific scenario to 'finished'."""
+    async def _scenario_set_status_to_finished(self, federation_id):
+        """Sets the status of a specific scenario (by federation_id) to 'finished'."""
         raise NotImplementedError
 
     @abstractmethod
-    async def _scenario_set_status_to_completed(self, scenario_name):
-        """Sets the status of a specific scenario to 'completed'."""
+    async def _scenario_set_status_to_completed(self, federation_id):
+        """Sets the status of a specific scenario (by federation_id) to 'completed'."""
         raise NotImplementedError
 
     @abstractmethod
@@ -144,28 +144,28 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def _get_scenario_by_name(self, scenario_name):
-        """Retrieves a scenario by its name."""
+    async def _get_scenario_by_federation_id(self, federation_id):
+        """Retrieves a scenario by its federation_id."""
         raise NotImplementedError
 
     @abstractmethod
-    async def _get_user_by_scenario_name(self, scenario_name):
-        """Retrieves the user associated with a scenario."""
+    async def _get_user_by_federation_id(self, federation_id):
+        """Retrieves the user associated with a scenario by federation_id."""
         raise NotImplementedError
 
     @abstractmethod
-    async def _remove_scenario_by_name(self, scenario_name):
-        """Deletes a scenario by its name."""
+    async def _remove_scenario_by_federation_id(self, federation_id):
+        """Deletes a scenario by its federation_id."""
         raise NotImplementedError
 
     @abstractmethod
-    async def _check_scenario_federation_completed(self, scenario_name):
+    async def _check_scenario_federation_completed(self, federation_id):
         """Checks if a scenario's federation is complete."""
         raise NotImplementedError
 
     @abstractmethod
-    async def _check_scenario_with_role(self, role, scenario_name, current_username=None):
-        """Verifies if a user can access a scenario."""
+    async def _check_scenario_with_role(self, role, federation_id, user=None):
+        """Verifies if a user can access a scenario by federation_id."""
         raise NotImplementedError
 
     # --- Notes Management Functions ---
@@ -188,8 +188,8 @@ class DatabaseAdapter(ABC):
     # --- Scenario Finish (no API logic) ---
 
     @abstractmethod
-    async def _finish_scenario(self, scenario_name, all: bool = False):
-        """Sets status to finished for one scenario or all running scenarios."""
+    async def _finish_scenario(self, federation_id, all: bool = False):
+        """Sets status to finished for one scenario (by federation_id) or all running scenarios."""
         raise NotImplementedError
 
     @abstractmethod

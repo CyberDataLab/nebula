@@ -186,7 +186,7 @@ class PostgresDB(DatabaseAdapter):
 
     # --- Node Management Functions ---
 
-    async def _list_nodes(self, scenario_name:str=None, sort_by:str="idx"):
+    async def _list_nodes(self, federation_id:str=None, sort_by:str="idx"):
         """
         Retrieves a list of nodes from the nodes database, optionally filtered by scenario and sorted.
         """
@@ -197,10 +197,10 @@ class PostgresDB(DatabaseAdapter):
 
         try:
             async with self.pool.acquire() as conn:
-                if scenario_name:
+                if federation_id:
                     # Using f-string for column names is generally safe if validated as above
-                    command = f"SELECT * FROM nodes WHERE scenario = $1 ORDER BY {sort_by};"
-                    result = await conn.fetch(command, scenario_name)
+                    command = f"SELECT * FROM nodes WHERE federation = $1 ORDER BY {sort_by};"
+                    result = await conn.fetch(command, federation_id)
                 else:
                     command = f"SELECT * FROM nodes ORDER BY {sort_by};"
                     result = await conn.fetch(command)
@@ -227,14 +227,14 @@ class PostgresDB(DatabaseAdapter):
             return None
 
 
-    async def _list_nodes_by_scenario_name(self, scenario_name:str):
+    async def _list_nodes_by_federation_id(self, federation_id:str):
         """
         Fetches all nodes associated with a specific scenario, ordered by their index as integers.
         """
         try:
             async with self.pool.acquire() as conn:
-                command = "SELECT * FROM nodes WHERE scenario = $1 ORDER BY CAST(idx AS INTEGER) ASC;"
-                result = await conn.fetch(command, scenario_name)
+                command = "SELECT * FROM nodes WHERE federation = $1 ORDER BY CAST(idx AS INTEGER) ASC;"
+                result = await conn.fetch(command, federation_id)
                 rows = []
                 for record in result:
                     row = dict(record)
@@ -342,12 +342,12 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute("TRUNCATE nodes CASCADE;") # Use CASCADE if there are foreign key dependencies
 
 
-    async def _remove_nodes_by_scenario_name(self, scenario_name:str):
+    async def _remove_nodes_by_federation_id(self, federation_id:str):
         """
         Deletes all nodes associated with a specific scenario from the database.
         """
         async with self.pool.acquire() as conn:
-            await conn.execute("DELETE FROM nodes WHERE scenario = $1;", scenario_name)
+            await conn.execute("DELETE FROM nodes WHERE federation = $1;", federation_id)
 
     # --- Scenario Management Functions ---
 
@@ -379,6 +379,7 @@ class PostgresDB(DatabaseAdapter):
             # Select direct columns and relevant fields from config JSONB
             command = """
                 SELECT
+                    federation_id,
                     name,
                     username,
                     status,
@@ -430,6 +431,7 @@ class PostgresDB(DatabaseAdapter):
             # Base query that extracts fields from the JSONB using the ->> operator
             command = f"""
                 SELECT
+                    federation_id,
                     name,
                     username,
                     status,
@@ -456,8 +458,8 @@ class PostgresDB(DatabaseAdapter):
         re_fetch_required = False
         for scenario in scenarios_to_return:
             if scenario["status"] == "running":
-                if await self._check_scenario_federation_completed(scenario["name"]):
-                    await self._scenario_set_status_to_completed(scenario["name"])
+                if await self._check_scenario_federation_completed(scenario["federation_id"]):
+                    await self._scenario_set_status_to_completed(scenario["federation_id"])
                     re_fetch_required = True
                     break
 
@@ -468,7 +470,7 @@ class PostgresDB(DatabaseAdapter):
         return scenarios_to_return
 
 
-    async def _scenario_update_record(self, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str):
+    async def _scenario_update_record(self, federation_id:str, alias:str, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str):
         """
         Inserts or updates a scenario record using the PostgreSQL "UPSERT" pattern.
         All configuration is saved in the 'config' column of type JSONB.
@@ -483,9 +485,11 @@ class PostgresDB(DatabaseAdapter):
                 return
 
         command = """
-            INSERT INTO scenarios (name, start_time, end_time, username, status, config)
-            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-            ON CONFLICT (name) DO UPDATE SET
+            INSERT INTO scenarios (federation_id, alias, name, start_time, end_time, username, status, config)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+            ON CONFLICT (federation_id) DO UPDATE SET
+                alias = EXCLUDED.alias,
+                name = EXCLUDED.name,
                 start_time = EXCLUDED.start_time,
                 end_time = EXCLUDED.end_time,
                 username = EXCLUDED.username,
@@ -493,7 +497,7 @@ class PostgresDB(DatabaseAdapter):
                 config = scenarios.config || EXCLUDED.config; -- Merge JSONB
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(command, scenario_name, start_time, end_time, username, status, json.dumps(scenario))
+            await conn.execute(command, federation_id, alias, scenario_name, start_time, end_time, username, status, json.dumps(scenario))
 
 
     async def _scenario_set_all_status_to_finished(self):
@@ -515,7 +519,7 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute(command, current_time, json.dumps(current_time))
 
 
-    async def _scenario_set_status_to_finished(self, scenario_name:str):
+    async def _scenario_set_status_to_finished(self, federation_id:str):
         """
         Sets the status of a specific scenario to 'finished' and updates its 'end_time'.
         Updates both the direct columns and the JSONB 'config'.
@@ -530,13 +534,13 @@ class PostgresDB(DatabaseAdapter):
                              jsonb_set(config, '{status}', '"finished"'),
                              '{end_time}', $2::jsonb
                            )
-            WHERE name = $3;
+            WHERE federation_id = $3;
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(command, current_time, json.dumps(current_time), scenario_name)
+            await conn.execute(command, current_time, json.dumps(current_time), federation_id)
 
 
-    async def _scenario_set_status_to_completed(self, scenario_name:str):
+    async def _scenario_set_status_to_completed(self, federation_id:str):
         """
         Sets the status of a specific scenario to 'completed'.
         Updates both the direct column and the JSONB 'config'.
@@ -546,20 +550,20 @@ class PostgresDB(DatabaseAdapter):
             SET
                 status = 'completed',
                 config = jsonb_set(config, '{status}', '"completed"')
-            WHERE name = $1;
+            WHERE federation_id = $1;
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(command, scenario_name)
+            await conn.execute(command, federation_id)
 
 
-    async def _finish_scenario(self, scenario_name: str, all: bool = False):
+    async def _finish_scenario(self, federation_id: str, all: bool = False):
         """
         Consolidated method to set scenarios to finished.
         """
         if all:
             await self._scenario_set_all_status_to_finished()
         else:
-            await self._scenario_set_status_to_finished(scenario_name)
+            await self._scenario_set_status_to_finished(federation_id)
 
 
     async def _get_running_scenario(self, username:str=None, get_all:bool=False):
@@ -570,7 +574,7 @@ class PostgresDB(DatabaseAdapter):
         async with self.pool.acquire() as conn:
             params = ["running"]
             # Select all columns to get both direct and config data
-            command = "SELECT name, username, status, start_time, end_time, config FROM scenarios WHERE status = $1"
+            command = "SELECT federation_id, name, username, status, start_time, end_time, config FROM scenarios WHERE status = $1"
 
             if username:
                 command += " AND username = $2"
@@ -603,12 +607,12 @@ class PostgresDB(DatabaseAdapter):
         return {"scenarios": scenarios, "scenario_running": scenario_running}
 
 
-    async def _get_scenario_by_name(self, scenario_name:str):
+    async def _get_scenario_by_federation_id(self, federation_id:str):
         """
         Retrieves the complete record of a scenario by its name.
         """
         async with self.pool.acquire() as conn:
-            result_row = await conn.fetchrow("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE name = $1;", scenario_name)
+            result_row = await conn.fetchrow("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE federation_id = $1;", federation_id)
 
         result = dict(result_row) if result_row else None
 
@@ -629,69 +633,69 @@ class PostgresDB(DatabaseAdapter):
         return result
 
 
-    async def _get_user_by_scenario_name(self, scenario_name:str):
+    async def _get_user_by_federation_id(self, federation_id:str):
         """
         Retrieves the username associated with a scenario (from the direct 'username' column).
         """
         async with self.pool.acquire() as conn:
-            return await conn.fetchval("SELECT username FROM scenarios WHERE name = $1;", scenario_name)
+            return await conn.fetchval("SELECT username FROM scenarios WHERE federation_id = $1;", federation_id)
 
 
-    async def _remove_scenario_by_name(self, scenario_name:str):
+    async def _remove_scenario_by_federation_id(self, federation_id:str):
         """
         Delete a scenario from the database by its unique name.
         """
         try:
             async with self.pool.acquire() as conn:
-                await conn.execute("DELETE FROM scenarios WHERE name = $1;", scenario_name)
-            logging.info(f"Scenario '{scenario_name}' successfully removed.")
+                await conn.execute("DELETE FROM scenarios WHERE federation_id = $1;", federation_id)
+            logging.info(f"Scenario '{federation_id}' successfully removed.")
         except asyncpg.PostgresError as e:
-            logging.error(f"Error occurred while deleting scenario '{scenario_name}': {e}")
+            logging.error(f"Error occurred while deleting scenario '{federation_id}': {e}")
 
 
-    async def _check_scenario_federation_completed(self, scenario_name:str):
+    async def _check_scenario_federation_completed(self, federation_id:str):
         """
         Check if all nodes in a given scenario have completed the required federation rounds.
         """
         try:
             async with self.pool.acquire() as conn:
                 # Retrieve the total rounds for the scenario from the 'config' JSONB column
-                scenario_rounds_str = await conn.fetchval("SELECT config->>'rounds' AS rounds FROM scenarios WHERE name = $1;", scenario_name)
+                scenario_rounds_str = await conn.fetchval("SELECT config->>'rounds' AS rounds FROM scenarios WHERE federation_id = $1;", federation_id)
 
                 if not scenario_rounds_str:
-                    logging.warning(f"Scenario '{scenario_name}' not found or 'rounds' not defined.")
+                    logging.warning(f"Scenario '{federation_id}' not found or 'rounds' not defined.")
                     return False
 
                 # Ensure total_rounds is an integer for comparison
                 try:
                     total_rounds = int(scenario_rounds_str)
                 except (ValueError, TypeError):
-                    logging.error(f"Invalid 'rounds' value for scenario '{scenario_name}': {scenario_rounds_str}")
+                    logging.error(f"Invalid 'rounds' value for scenario '{federation_id}': {scenario_rounds_str}")
                     return False
 
                 # Fetch the current round progress of all nodes in that scenario
-                nodes = await conn.fetch("SELECT round FROM nodes WHERE scenario = $1;", scenario_name)
+                nodes = await conn.fetch("SELECT round FROM nodes WHERE federation = $1;", federation_id)
 
                 if not nodes:
-                    logging.info(f"No nodes found for scenario '{scenario_name}'. Federation not considered completed.")
+                    logging.info(f"No nodes found for federation '{federation_id}'. Federation not considered completed.")
                     return False
 
                 # Check if all nodes have completed the total rounds
                 return all(int(node["round"]) >= total_rounds for node in nodes)
 
         except asyncpg.PostgresError as e:
-            logging.error(f"PostgreSQL error during check_scenario_federation_completed for '{scenario_name}': {e}")
+            logging.error(f"PostgreSQL error during check_scenario_federation_completed for '{federation_id}': {e}")
             return False
         except ValueError as e:
-            logging.error(f"Data error during check_scenario_federation_completed for '{scenario_name}': {e}")
+            logging.error(f"Data error during check_scenario_federation_completed for '{federation_id}': {e}")
             return False
 
 
-    async def _check_scenario_with_role(self, role:str, scenario_name:str, user:str=None):
+    async def _check_scenario_with_role(self, role:str, federation_id:str, user:str=None):
         """
         Verify if a scenario exists that the user with the given role and username can access.
         """
-        scenario_info = await self._get_scenario_by_name(scenario_name)
+        scenario_info = await self._get_scenario_by_federation_id(federation_id)
 
         if not scenario_info:
             return False  # Scenario does not exist
@@ -709,7 +713,7 @@ class PostgresDB(DatabaseAdapter):
 
     # --- Notes Management Functions ---
 
-    async def _save_notes(self, scenario: str, notes: str):
+    async def _save_notes(self, federation_id: str, notes: str):
         """
         Save or update notes associated with a specific scenario.
         """
@@ -717,30 +721,30 @@ class PostgresDB(DatabaseAdapter):
             async with self.pool.acquire() as conn:
                 await conn.execute(
                     """
-                    INSERT INTO notes (scenario, scenario_notes) VALUES ($1, $2)
-                    ON CONFLICT(scenario) DO UPDATE SET scenario_notes = EXCLUDED.scenario_notes;
+                    INSERT INTO notes (federation_id, scenario_notes) VALUES ($1, $2)
+                    ON CONFLICT(federation_id) DO UPDATE SET scenario_notes = EXCLUDED.scenario_notes;
                     """,
-                    scenario, notes,
+                    federation_id, notes,
                 )
         except asyncpg.PostgresError as e:
             logging.error(f"PostgreSQL error during save_notes: {e}")
 
 
-    async def _get_notes(self, scenario: str):
+    async def _get_notes(self, federation_id: str):
         """
         Retrieve notes associated with a specific scenario.
         """
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT * FROM notes WHERE scenario = $1;", scenario)
+            row = await conn.fetchrow("SELECT * FROM notes WHERE federation_id = $1;", federation_id)
             if row is None:
                 # No notes stored for this scenario yet
                 return None
             return dict(row)
 
 
-    async def _remove_note(self, scenario: str):
+    async def _remove_note(self, federation_id: str):
         """
         Delete the note associated with a specific scenario.
         """
         async with self.pool.acquire() as conn:
-            await conn.execute("DELETE FROM notes WHERE scenario = $1;", scenario)
+            await conn.execute("DELETE FROM notes WHERE federation_id = $1;", federation_id)

@@ -30,6 +30,8 @@ class NebulaFederationProcesses():
         self.federation_round: int = 0
         self.federation_deployment_lock = Locker("federation_deployment_lock", async_lock=True)
         self.participants_alive_lock = Locker("participants_alive_lock", async_lock=True)
+        self.config_dir = ""
+        self.log_dir = ""
 
     async def get_additionals_to_be_deployed(self, config) -> list:
         async with self.federation_deployment_lock:
@@ -89,7 +91,7 @@ class ProcessesFederationController(FederationController):
         federation = await self._add_nebula_federation_to_pool(federation_id, user)
         scenario_info = {}
         if federation:
-            scenario_builder = ScenarioBuilder(federation_id)
+            scenario_builder = ScenarioBuilder(federation_id, user=user)
             await self._initialize_scenario(scenario_builder, scenario_data, federation)
             generate_ca_certificate(dir_path=self.cert_dir)
             await self._load_configuration_and_start_nodes(scenario_builder, federation)
@@ -250,12 +252,14 @@ class ProcessesFederationController(FederationController):
         # Initialize Scenario builder using scenario_data from user
         self.logger.info("🔧  Initializing Scenario Builder using scenario data")
         sb.set_scenario_data(scenario_data)
-        scenario_name = sb.get_scenario_name()
+        scenario_name = sb.get_scenario_name(user_to=True)
 
         self.root_path = os.environ.get("NEBULA_ROOT_HOST")
         self.host_platform = os.environ.get("NEBULA_HOST_PLATFORM")
-        self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
-        self.log_dir = os.environ.get("NEBULA_LOGS_DIR")
+        # self.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
+        # self.log_dir = os.path.join(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
+        federation.config_dir = os.path.join(os.environ.get("NEBULA_CONFIG_DIR"), scenario_name)
+        federation.log_dir = os.path.join(os.environ.get("NEBULA_LOGS_DIR"), scenario_name)
         self.cert_dir = os.environ.get("NEBULA_CERTS_DIR")
         self.advanced_analytics = os.environ.get("NEBULA_ADVANCED_ANALYTICS", "False") == "True"
         # self.config = Config(entity="scenarioManagement")
@@ -266,17 +270,17 @@ class ProcessesFederationController(FederationController):
         self.url = f"127.0.0.1:{os.environ.get('NEBULA_FEDERATION_CONTROLLER_PORT')}"
 
         # Create Scenario management dirs
-        os.makedirs(self.config_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.log_dir, scenario_name), exist_ok=True)
+        os.makedirs(federation.config_dir, exist_ok=True)
+        os.makedirs(federation.log_dir, exist_ok=True)
         os.makedirs(self.cert_dir, exist_ok=True)
 
         # Give permissions to the directories
-        os.chmod(self.config_dir, 0o777)
-        os.chmod(os.path.join(self.log_dir, scenario_name), 0o777)
+        os.chmod(federation.config_dir, 0o777)
+        os.chmod(federation.log_dir, 0o777)
         os.chmod(self.cert_dir, 0o777)
 
         # Save the scenario configuration
-        scenario_file = os.path.join(self.config_dir, "scenario.json")
+        scenario_file = os.path.join(federation.config_dir, "scenario.json")
         with open(scenario_file, "w") as f:
             json.dump(scenario_data, f, sort_keys=False, indent=2)
 
@@ -286,13 +290,13 @@ class ProcessesFederationController(FederationController):
         settings = {
             "scenario_name": scenario_name,
             "root_path": self.root_path,
-            "config_dir": self.config_dir,
-            "log_dir": self.log_dir,
+            "config_dir": federation.config_dir,
+            "log_dir": federation.log_dir,
             "cert_dir": self.cert_dir,
             "env": None,
         }
 
-        settings_file = os.path.join(self.config_dir, "settings.json")
+        settings_file = os.path.join(federation.config_dir, "settings.json")
         with open(settings_file, "w") as f:
             json.dump(settings, f, sort_keys=False, indent=2)
 
@@ -308,7 +312,7 @@ class ProcessesFederationController(FederationController):
             self.logger.info(f"Creating .json file for participant: {index}, Configuration: {node}")
             node_config = node
             try:
-                participant_file = os.path.join(self.config_dir, f"participant_{node_config['id']}.json")
+                participant_file = os.path.join(federation.config_dir, f"participant_{node_config['id']}.json")
                 self.logger.info(f"Filename: {participant_file}")
                 os.makedirs(os.path.dirname(participant_file), exist_ok=True)
             except Exception as e:
@@ -332,7 +336,7 @@ class ProcessesFederationController(FederationController):
     async def _load_configuration_and_start_nodes(self, sb: ScenarioBuilder, federation: NebulaFederationProcesses):
         self.logger.info("🔧  Loading Scenario configuration...")
         # Get participants configurations
-        participant_files = glob.glob(f"{self.config_dir}/participant_*.json")
+        participant_files = glob.glob(f"{federation.config_dir}/participant_*.json")
         participant_files.sort()
         if len(participant_files) == 0:
             raise ValueError("No participant files found in config folder")
@@ -356,19 +360,19 @@ class ProcessesFederationController(FederationController):
         self.logger.info("🔧  Building preload configuration for initial nodes...")
         for i in range(n_nodes):
             try:
-                with open(f"{self.config_dir}/participant_" + str(i) + ".json") as f:
+                with open(f"{federation.config_dir}/participant_" + str(i) + ".json") as f:
                     participant_config = json.load(f)
             except Exception as e:
                 self.logger.info(f"ERROR: open/load participant .json")
 
             self.logger.info(f"Building preload conf for participant {i}")
             try:
-                sb.build_preload_initial_node_configuration(i, participant_config, self.log_dir, self.config_dir, self.cert_dir, self.advanced_analytics)
+                sb.build_preload_initial_node_configuration(i, participant_config, federation.log_dir, federation.config_dir, self.cert_dir, self.advanced_analytics)
             except Exception as e:
                 self.logger.info(f"ERROR: cannot build preload configuration")
 
             try:
-                with open(f"{self.config_dir}/participant_" + str(i) + ".json", "w") as f:
+                with open(f"{federation.config_dir}/participant_" + str(i) + ".json", "w") as f:
                     json.dump(participant_config, f, sort_keys=False, indent=2)
             except Exception as e:
                 self.logger.info(f"ERROR: cannot dump preload configuration into participant .json file")
@@ -389,7 +393,7 @@ class ProcessesFederationController(FederationController):
         federation.config.set_participants_config(participant_files)
 
         # Add role to the topology (visualization purposes)
-        sb.visualize_topology(config_participants, path=f"{self.config_dir}/topology.png", plot=False)
+        sb.visualize_topology(config_participants, path=f"{federation.config_dir}/topology.png", plot=False)
 
         # Additional participants
         self.logger.info("🔧  Building preload configuration for additional nodes...")
@@ -399,7 +403,7 @@ class ProcessesFederationController(FederationController):
             last_participant_index = len(participant_files)
 
             for i, _ in enumerate(additional_participants):
-                additional_participant_file = f"{self.config_dir}/participant_{last_participant_index + i}.json"
+                additional_participant_file = f"{federation.config_dir}/participant_{last_participant_index + i}.json"
                 shutil.copy(last_participant_file, additional_participant_file)
 
                 with open(additional_participant_file) as f:
@@ -423,7 +427,7 @@ class ProcessesFederationController(FederationController):
         self.logger.info("✅  Loading Scenario configuration done")
 
         # Build dataset
-        dataset = sb.configure_dataset(self.config_dir)
+        dataset = sb.configure_dataset(federation.config_dir)
         self.logger.info(f"🔧  Splitting {sb.get_dataset_name()} dataset...")
         dataset.initialize_dataset()
         self.logger.info(f"✅  Splitting {sb.get_dataset_name()} dataset... Done")
@@ -456,7 +460,7 @@ class ProcessesFederationController(FederationController):
                     federation.participants_alive += 1
 
         if federation.config.participants and commands:
-            self._write_commands_on_file(commands)
+            self._write_commands_on_file(commands, federation)
         else:
             self.logger.info("ERROR: No commands on a proccesses deployment..")
 
@@ -464,8 +468,8 @@ class ProcessesFederationController(FederationController):
         self.processes_root_path = os.path.join(os.path.dirname(__file__), "..", "..")
         node_idx = node['device_args']['idx']
         # Include additional config to the participants
-        node["tracking_args"]["log_dir"] = os.path.join(self.root_path, "app", "logs")
-        node["tracking_args"]["config_dir"] = os.path.join(self.root_path, "app", "config", sb.get_scenario_name())
+        node["tracking_args"]["log_dir"] = os.path.join(self.root_path, "app", "logs", sb.get_scenario_name(user_to=True))
+        node["tracking_args"]["config_dir"] = os.path.join(self.root_path, "app", "config", sb.get_scenario_name(user_to=True))
         node["scenario_args"]["controller"] = self.url
         node["scenario_args"]["deployment"] = sb.get_deployment()
         node["security_args"]["certfile"] = os.path.join(
@@ -476,7 +480,7 @@ class ProcessesFederationController(FederationController):
         )
         node["security_args"]["cafile"] = os.path.join(self.root_path, "app", "certs", "ca_cert.pem")
         # Write the config file in config directory
-        with open(f"{self.config_dir}/participant_{node['device_args']['idx']}.json", "w") as f:
+        with open(f"{federation.config_dir}/participant_{node['device_args']['idx']}.json", "w") as f:
             json.dump(node, f, indent=4)
 
         self.logger.info(f"Configuration file created successfully: {node_idx}")
@@ -488,10 +492,10 @@ class ProcessesFederationController(FederationController):
                 else:
                     commands += "Start-Sleep -Seconds 2\n"
                 commands += f'Write-Host "Running node {node["device_args"]["idx"]}..."\n'
-                commands += f'$OUT_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name()}\\participant_{node["device_args"]["idx"]}.out"\n'
-                commands += f'$ERROR_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name()}\\participant_{node["device_args"]["idx"]}.err"\n'
+                commands += f'$OUT_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name(user_to=True)}\\participant_{node["device_args"]["idx"]}.out"\n'
+                commands += f'$ERROR_FILE = "{self.root_path}\\app\\logs\\{sb.get_scenario_name(user_to=True)}\\participant_{node["device_args"]["idx"]}.err"\n'
                 # Use Start-Process for executing Python in background and capture PID
-                commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\core\\node.py {self.root_path}\\app\\config\\{sb.get_scenario_name()}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
+                commands += f"""$process = Start-Process -FilePath "python" -ArgumentList "{self.root_path}\\nebula\\core\\node.py {self.root_path}\\app\\config\\{sb.get_scenario_name(user_to=True)}\\participant_{node["device_args"]["idx"]}.json" -PassThru -NoNewWindow -RedirectStandardOutput $OUT_FILE -RedirectStandardError $ERROR_FILE
                 Add-Content -Path $PID_FILE -Value $process.Id
                 """
             else:
@@ -500,8 +504,8 @@ class ProcessesFederationController(FederationController):
                 else:
                     commands += "sleep 2\n"
                 commands += f'echo "Running node {node["device_args"]["idx"]}..."\n'
-                commands += f"OUT_FILE={self.root_path}/app/logs/{sb.get_scenario_name()}/participant_{node['device_args']['idx']}.out\n"
-                commands += f"python {self.root_path}/nebula/core/node.py {self.root_path}/app/config/{sb.get_scenario_name()}/participant_{node['device_args']['idx']}.json &\n"
+                commands += f"OUT_FILE={self.root_path}/app/logs/{sb.get_scenario_name(user_to=True)}/participant_{node['device_args']['idx']}.out\n"
+                commands += f"python {self.root_path}/nebula/core/node.py {self.root_path}/app/config/{sb.get_scenario_name(user_to=True)}/participant_{node['device_args']['idx']}.json &\n"
                 commands += "echo $! >> $PID_FILE\n\n"
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
@@ -524,19 +528,19 @@ class ProcessesFederationController(FederationController):
             raise Exception(f"Error starting nodes as processes: {e}")
         return commands
 
-    def _write_commands_on_file(self, commands: str):
+    def _write_commands_on_file(self, commands: str, federation: NebulaFederationProcesses):
         try:
             if self.host_platform == "windows":
                 commands += 'Write-Host "All nodes started. PIDs stored in $PID_FILE"\n'
-                with open(f"{self.config_dir}/current_scenario_commands.ps1", "w") as f:
+                with open(f"{federation.config_dir}/current_scenario_commands.ps1", "w") as f:
                     #self.logger.info(f"Process commands: {commands}")
                     f.write(commands)
-                os.chmod(f"{self.config_dir}/current_scenario_commands.ps1", 0o755)
+                os.chmod(f"{federation.config_dir}/current_scenario_commands.ps1", 0o755)
             else:
                 commands += 'echo "All nodes started. PIDs stored in $PID_FILE"\n'
-                with open(f"{self.config_dir}/current_scenario_commands.sh", "w") as f:
+                with open(f"{federation.config_dir}/current_scenario_commands.sh", "w") as f:
                     #self.logger.info(f"Process commands: {commands}")
                     f.write(commands)
-                os.chmod(f"{self.config_dir}/current_scenario_commands.sh", 0o755)
+                os.chmod(f"{federation.config_dir}/current_scenario_commands.sh", 0o755)
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")

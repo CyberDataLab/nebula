@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-import datetime
+from datetime import datetime
 import importlib
 import ipaddress
 import json
@@ -302,13 +302,19 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
     Returns:
         str: The name of the scenario that was started.
     """
+    import hashlib
+    def generate_id(value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    response = None
+
     try:
         fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT")
         fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
-        url_init_fed_controller = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("init")
         url_run_scenario = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("run")
         #init_fed_req = InitFederationRequest(experiment_type="docker")
-        run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=f"id_nebula_{1}", user=run_scenario_request.user) #TODO ID per experiment
+        federation_id = generate_id(f"nebula_{run_scenario_request.user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}")
+        run_scenario_req = federation_requests.RunScenarioRequest(scenario_data=run_scenario_request.scenario_data, federation_id=federation_id, user=run_scenario_request.user) #TODO ID per experiment
         #await APIUtils.post(url_init_fed_controller, init_fed_req.model_dump())
         response = await APIUtils.post(url_run_scenario, run_scenario_req.model_dump())
     except Exception as e:
@@ -325,24 +331,36 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
 
     if response:
         try:
-            await update_scenario(
-                scenario_name=response["federation_id"],
+            payload = controller_requests.ScenarioUpdateRequest(
+                alias=response["alias"],
+                scenario_name=response["scenario_name"],
                 start_time=response["start_time"],
                 end_time="",
                 scenario=run_scenario_request.scenario_data,
                 status="running",
                 username=run_scenario_request.user,
+            ).model_dump()
+            path = controller_requests.factory_requests_path(
+                "update", federation_id=federation_id
             )
-
+            await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
             return response["federation_id"]
         except Exception as e:
             logging.info(e)
     else:
         raise HTTPException(500, detail={"failed running scenario"})
 
-@app.post(controller_requests.Routes.STOP) #TODO redo method
+@app.post(controller_requests.Routes.STOP)  # TODO redo method
 async def stop_scenario(
-    scenario_name: str = Body(..., embed=True),
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Federation identifier",
+        ),
+    ],
     all: bool = Body(False, embed=True),
 ):
     """
@@ -355,8 +373,7 @@ async def stop_scenario(
         - Optionally finalizes all active scenarios if the 'all' flag is set.
 
     Args:
-        scenario_name (str): Name of the scenario to stop.
-        username (str): User who initiated the stop operation.
+        federation_id (str): Identifier of the scenario to stop.
         all (bool): Whether to stop all running scenarios instead of just one (default: False).
 
     Raises:
@@ -367,55 +384,56 @@ async def stop_scenario(
     """
     fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT")
     fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
-    url_stop_scenario = f"http://{fed_controller_host}:{fed_controller_port}" + federation_requests.factory_requests_path("stop")
-    stop_scenario_req = federation_requests.StopScenarioRequest(federation_id="id_nebula")
+    url_stop_scenario = (
+        f"http://{fed_controller_host}:{fed_controller_port}"
+        + federation_requests.factory_requests_path("stop")
+    )
+    stop_scenario_req = federation_requests.StopScenarioRequest(
+        experiment_type="docker", federation_id=federation_id
+    )
     try:
-        path = federation_requests.factory_requests_path("stop")
-        payload = federation_requests.StopScenarioRequest(scenario_name=scenario_name, all=all).model_dump()
+        path = controller_requests.factory_requests_path(
+            "stop", federation_id=federation_id
+        )
+        payload = controller_requests.ScenarioStopRequest(all=all).model_dump()
         await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
         await APIUtils.post(url_stop_scenario, stop_scenario_req.model_dump())
     except Exception as e:
         logging.info(f"ERROR: sending stop scenario to federation Controller: {e}")
 
-    # from nebula.controller.scenarios import ScenarioManagement
-
-    # ScenarioManagement.cleanup_scenario_containers()
-    # try:
-    #     if all:
-    #         await scenario_set_all_status_to_finished()
-    #     else:
-    #         await scenario_set_status_to_finished(scenario_name)
-    # except Exception as e:
-    #     logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
-    #     raise HTTPException(status_code=500, detail="Internal server error")
-
 
 @app.post(controller_requests.Routes.REMOVE)
 async def remove_scenario(
-    scenario_name: str = Body(..., embed=True),
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Federation identifier",
+        ),
+    ],
+    request: controller_requests.ScenarioRemoveRequest,
 ):
     """
-    Removes a scenario from the database by its name.
-
-    Args:
-        scenario_name (str): Name of the scenario to remove.
-
-    Returns:
-        dict: A message indicating successful removal.
+    Removes a scenario from the database by its federation identifier.
     """
     from nebula.controller.scenarios import ScenarioManagement
 
     try:
-        path = controller_requests.factory_requests_path("remove")
-        payload = controller_requests.ScenarioRemoveRequest(scenario_name=scenario_name).model_dump()
-        await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
-        ScenarioManagement.remove_files_by_scenario(scenario_name)
+        path = controller_requests.factory_requests_path(
+            "remove", federation_id=federation_id
+        )
+        await APIUtils.post(f"{DATABASE_API_URL}{path}")
+        ScenarioManagement.remove_files_by_scenario(request.scenario_name)
 
     except Exception as e:
-        logging.exception(f"Error removing scenario {scenario_name}: {e}")
+        logging.exception(
+            f"Error removing scenario {request.scenario_name} ({federation_id}): {e}"
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {"message": f"Scenario {scenario_name} removed successfully"}
+    return {"message": f"Scenario {request.scenario_name} removed successfully"}
 
 
 @app.get(controller_requests.Routes.GET_SCENARIOS_BY_USER)
@@ -443,63 +461,73 @@ async def get_scenarios(
 
 @app.post(controller_requests.Routes.UPDATE)
 async def update_scenario(
-    scenario_name: str = Body(..., embed=True),
-    start_time: str = Body(..., embed=True),
-    end_time: str = Body(..., embed=True),
-    scenario: dict = Body(..., embed=True),
-    status: str = Body(..., embed=True),
-    username: str = Body(..., embed=True),
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Federation identifier",
+        ),
+    ],
+    request: controller_requests.ScenarioUpdateRequest,
 ):
     """
-    Updates the status and metadata of a scenario.
+    Updates the status and metadata of a scenario identified by its federation ID.
 
     Args:
-        scenario_name (str): Name of the scenario.
-        start_time (str): Start time of the scenario.
-        end_time (str): End time of the scenario.
-        scenario (dict): Scenario configuration.
-        status (str): New status of the scenario (e.g., "running", "finished").
-        username (str): User performing the update.
+        federation_id (str): Identifier of the scenario to update.
+        request (ScenarioUpdateRequest): Payload containing alias, scenario name, timing, configuration, status and username.
 
     Returns:
         dict: A message confirming the update.
     """
     try:
-        payload = controller_requests.ScenarioUpdateRequest(
-            scenario_name=scenario_name,
-            start_time=start_time,
-            end_time=end_time,
-            scenario=scenario,
-            status=status,
-            username=username,
-        ).model_dump()
-        path = controller_requests.factory_requests_path("update")
+        payload = request.model_dump()
+        path = controller_requests.factory_requests_path(
+            "update", federation_id=federation_id
+        )
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
-        logging.exception(f"Error updating scenario {scenario_name}: {e}")
+        logging.exception(
+            f"Error updating scenario {request.scenario_name} ({federation_id}): {e}"
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(controller_requests.Routes.FINISH)
 async def set_scenario_status_to_finished(
-    scenario_name: str = Body(..., embed=True), all: bool = Body(False, embed=True)
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Federation identifier",
+        ),
+    ],
+    all: bool = Body(False, embed=True),
 ):
     """
     Sets the status of a scenario (or all scenarios) to 'finished'.
 
     Args:
-        scenario_name (str): Name of the scenario to mark as finished.
+        federation_id (str): Identifier of the scenario to mark as finished.
         all (bool): If True, sets all scenarios to finished.
 
     Returns:
         dict: A message confirming the operation.
     """
     try:
-        payload = controller_requests.ScenarioFinishRequest(scenario_name=scenario_name, all=all).model_dump()
-        path = controller_requests.factory_requests_path("finish")
+        payload = controller_requests.ScenarioFinishRequest(all=all).model_dump()
+        path = controller_requests.factory_requests_path(
+            "finish", federation_id=federation_id
+        )
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
-        logging.exception(f"Error setting scenario {scenario_name} to finished: {e}")
+        logging.exception(
+            f"Error setting scenario {federation_id} to finished: {e}"
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -526,8 +554,8 @@ async def get_running_scenario_endpoint(get_all: bool = False):
 async def check_scenario(
     user: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid username")],
     role: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid role")],
-    scenario_name: Annotated[
-        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+    federation_id: Annotated[
+        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=64, description="Valid federation identifier")
     ],
 ):
     """
@@ -541,64 +569,90 @@ async def check_scenario(
         dict: Whether the scenario is allowed for the role.
     """
     try:
-        path = controller_requests.factory_requests_path("check_scenario", user=user, role=role, scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path(
+            "check_scenario",
+            user=user,
+            role=role,
+            federation_id=federation_id,
+        )
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error checking scenario with role: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(controller_requests.Routes.GET_SCENARIOS_BY_SCENARIO_NAME)
-async def get_scenario_by_name_endpoint(
-    scenario_name: Annotated[
-        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+@app.get(controller_requests.Routes.GET_SCENARIO_BY_FEDERATION_ID)
+async def get_scenario_by_federation_id(
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
     ],
 ):
     """
-    Fetches a scenario by its name.
+    Fetches a scenario by its federation identifier.
 
     Args:
-        scenario_name (str): The name of the scenario.
+        federation_id (str): The identifier of the scenario.
 
     Returns:
-        dict: The scenario data.
+        dict: The scenario data returned by the database API.
     """
     try:
-        path = controller_requests.factory_requests_path("get_scenarios_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path(
+            "get_scenarios_by_scenario_name", federation_id=federation_id
+        )
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
-        logging.exception(f"Error obtaining scenario {scenario_name}: {e}")
+        logging.exception(f"Error obtaining scenario {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.get(controller_requests.Routes.NODES_BY_SCENARIO_NAME)
-async def list_nodes_by_scenario_name_endpoint(
-    scenario_name: Annotated[
-        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+@app.get(controller_requests.Routes.NODES_BY_FEDERATION_ID)
+async def list_nodes_by_federation_id_endpoint(
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
     ],
 ):
     """
-    Lists all nodes associated with a specific scenario.
+    Lists all nodes associated with a specific federation identifier.
 
     Args:
-        scenario_name (str): Name of the scenario.
+        federation_id (str): Identifier of the scenario whose nodes should be listed.
 
     Returns:
         list: List of nodes.
     """
     try:
-        path = controller_requests.factory_requests_path("get_nodes_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path(
+            "get_nodes_by_scenario_name", federation_id=federation_id
+        )
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
-        logging.exception(f"Error obtaining nodes: {e}")
+        logging.exception(f"Error obtaining nodes for {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post(controller_requests.Routes.NODES_UPDATE_BY_SCENARIO)
+@app.post(controller_requests.Routes.NODES_UPDATE_BY_FEDERATION)
 async def update_nodes(
-    scenario_name: Annotated[
+    federation_id: Annotated[
         str,
-        Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name"),
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
     ],
     request: Request,
 ):
@@ -606,7 +660,7 @@ async def update_nodes(
     Updates the configuration of a node in the database and notifies the frontend.
 
     Args:
-        scenario_name (str): The scenario to which the node belongs.
+        federation_id (str): Identifier of the scenario to update.
         request (Request): The HTTP request containing the node data.
 
     Returns:
@@ -614,7 +668,7 @@ async def update_nodes(
     """
     try:
         config:dict = await request.json()
-        config["timestamp"] = str(datetime.datetime.now())
+        config["timestamp"] = str(datetime.now())
 
         mobility_args = config.get("mobility_args", None)
         if not mobility_args:
@@ -626,6 +680,8 @@ async def update_nodes(
         # Build payload and include extras with mobility data
         payload = validated.model_dump()
         payload["extras"] = payload.get("mobility_args", {})
+        payload.setdefault("scenario_args", {})
+        payload["scenario_args"]["federation"] = federation_id
 
         # Update the node in database with validated data and extras
         path = controller_requests.factory_requests_path("update_nodes")
@@ -634,6 +690,7 @@ async def update_nodes(
         logging.exception(f"Error updating nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+    scenario_name = validated.scenario_args.name
     url = (
         f"http://{os.environ['NEBULA_ENV_TAG']}_{os.environ['NEBULA_PREFIX_TAG']}_{os.environ['NEBULA_USER_TAG']}_nebula-frontend/platform/dashboard/{scenario_name}/node/update"
     )
@@ -669,82 +726,118 @@ async def node_done(
 
 
 @app.post(controller_requests.Routes.NODES_REMOVE)
-async def remove_nodes_by_scenario_name_endpoint(scenario_name: str = Body(..., embed=True)):
+async def remove_nodes_by_federation_id_endpoint(
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
+    ]
+):
     """
-    Endpoint to remove all nodes associated with a scenario.
-
-    Body Parameters:
-    - scenario_name: Name of the scenario whose nodes should be removed.
+    Endpoint to remove all nodes associated with a scenario identified by federation ID.
 
     Returns a success message or an error if something goes wrong.
     """
     try:
-        path = controller_requests.factory_requests_path("remove_nodes")
-        payload = controller_requests.NodesRemoveRequest(scenario_name=scenario_name).model_dump()
-        await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
+        path = controller_requests.factory_requests_path(
+            "remove_nodes", federation_id=federation_id
+        )
+        await APIUtils.post(f"{DATABASE_API_URL}{path}")
     except Exception as e:
         logging.exception(f"Error removing nodes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {"message": f"Nodes for scenario {scenario_name} removed successfully"}
+    return {"message": f"Nodes for federation {federation_id} removed successfully"}
 
 
-@app.get(controller_requests.Routes.NOTES_BY_SCENARIO_NAME)
-async def get_notes_by_scenario_name(
-    scenario_name: Annotated[
-        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+@app.get(controller_requests.Routes.NOTES_BY_FEDERATION_ID)
+async def get_notes_by_federation_id(
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
     ],
 ):
     """
     Endpoint to retrieve notes associated with a scenario.
     """
     try:
-        path = controller_requests.factory_requests_path("get_notes_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path(
+            "get_notes_by_scenario_name", federation_id=federation_id
+        )
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
-        logging.exception(f"Error obtaining notes for scenario {scenario_name}: {e}")
+        logging.exception(f"Error obtaining notes for federation {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(controller_requests.Routes.NOTES_UPDATE)
-async def update_notes_by_scenario_name(scenario_name: str = Body(..., embed=True), notes: str = Body(..., embed=True)):
+async def update_notes_by_federation_id(
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
+    ],
+    notes: str = Body(..., embed=True),
+):
     """
     Endpoint to update notes for a given scenario.
 
     Body Parameters:
-    - scenario_name: Name of the scenario.
     - notes: Text content to store as notes.
 
     Returns a success message or an error if something goes wrong.
     """
     try:
-        payload = controller_requests.NotesUpdateRequest(scenario_name=scenario_name, notes=notes).model_dump()
-        path = controller_requests.factory_requests_path("update_notes")
+        payload = controller_requests.NotesUpdateRequest(notes=notes).model_dump()
+        path = controller_requests.factory_requests_path(
+            "update_notes", federation_id=federation_id
+        )
         return await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
     except Exception as e:
-        logging.exception(f"Error updating notes: {e}")
+        logging.exception(f"Error updating notes for federation {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post(controller_requests.Routes.NOTES_REMOVE)
-async def remove_notes_by_scenario_name_endpoint(scenario_name: str = Body(..., embed=True)):
+async def remove_notes_by_federation_id_endpoint(
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
+    ]
+):
     """
-    Endpoint to remove notes associated with a scenario.
-
-    Body Parameters:
-    - scenario_name: Name of the scenario.
+    Endpoint to remove notes associated with a scenario identified by federation ID.
 
     Returns a success message or an error if something goes wrong.
     """
     try:
-        path = controller_requests.factory_requests_path("remove_notes")
-        payload = controller_requests.NotesRemoveRequest(scenario_name=scenario_name).model_dump()
-        await APIUtils.post(f"{DATABASE_API_URL}{path}", data=payload)
+        path = controller_requests.factory_requests_path(
+            "remove_notes", federation_id=federation_id
+        )
+        await APIUtils.post(f"{DATABASE_API_URL}{path}")
     except Exception as e:
-        logging.exception(f"Error removing notes: {e}")
+        logging.exception(f"Error removing notes for federation {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    return {"message": f"Notes for scenario {scenario_name} removed successfully"}
+    return {"message": f"Notes for federation {federation_id} removed successfully"}
 
 
 @app.get(controller_requests.Routes.USER_LIST)
@@ -765,25 +858,33 @@ async def list_users_controller(all_info: bool = False):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {e}")
 
 
-@app.get(controller_requests.Routes.USER_BY_SCENARIO_NAME)
-async def get_user_by_scenario_name_endpoint(
-    scenario_name: Annotated[
-        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50, description="Valid scenario name")
+@app.get(controller_requests.Routes.USER_BY_FEDERATION_ID)
+async def get_user_by_federation_id_endpoint(
+    federation_id: Annotated[
+        str,
+        Path(
+            regex="^[a-zA-Z0-9_-]+$",
+            min_length=1,
+            max_length=64,
+            description="Valid federation identifier",
+        ),
     ],
 ):
     """
-    Endpoint to retrieve the user assigned to a scenario.
+    Endpoint to retrieve the user assigned to a scenario identified by federation ID.
 
     Path Parameters:
-    - scenario_name: Name of the scenario.
+    - federation_id: Identifier of the scenario.
 
     Returns user info or raises an HTTPException on error.
     """
     try:
-        path = controller_requests.factory_requests_path("get_user_by_scenario_name", scenario_name=scenario_name)
+        path = controller_requests.factory_requests_path(
+            "get_user_by_scenario_name", federation_id=federation_id
+        )
         return await APIUtils.get(f"{DATABASE_API_URL}{path}")
     except Exception as e:
-        logging.exception(f"Error obtaining user for scenario {scenario_name}: {e}")
+        logging.exception(f"Error obtaining user for federation {federation_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -920,13 +1021,13 @@ async def get_physical_node_state(ip: str):
 # Physical · aggregate state for an entire scenario
 # ──────────────────────────────────────────────────────────────
 @app.get(controller_requests.Routes.PHYSICAL_SCENARIO_STATE, tags=["physical"])
-async def get_physical_scenario_state(scenario_name: str):
+async def get_physical_scenario_state(federation_id: str):
     """
     Check the training state of *every* physical node assigned to a scenario.
 
     Parameters
     ----------
-    scenario_name : str
+    federation_id : str
         Scenario identifier.
 
     Returns
@@ -940,11 +1041,11 @@ async def get_physical_scenario_state(scenario_name: str):
         }
     """
     # 1) Retrieve scenario metadata and node list from the DB
-    scenario = await get_scenario_by_name_endpoint(scenario_name)
+    scenario = await get_scenario_by_federation_id(federation_id)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
-    nodes = await list_nodes_by_scenario_name_endpoint(scenario_name)
+    nodes = await list_nodes_by_federation_id_endpoint(federation_id)
     if not nodes:
         raise HTTPException(status_code=404, detail="No nodes found for scenario")
 

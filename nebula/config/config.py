@@ -87,7 +87,7 @@ class Config:
 
     def __set_default_logging(self, mode="w"):
         experiment_name = self.participant["scenario_args"]["name"]
-        self.log_dir = os.path.join(self.participant["tracking_args"]["log_dir"], experiment_name)
+        self.log_dir =self.participant["tracking_args"]["log_dir"]
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
         self.log_filename = f"{self.log_dir}/participant_{self.participant['device_args']['idx']}"
