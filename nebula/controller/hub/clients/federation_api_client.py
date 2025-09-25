@@ -25,7 +25,7 @@ class FederationAPIClient():
         return response
 
     async def stop_scenario(self, experiment_type: str, federation_id: str):
-        request_url = self._fed_api_url + FedReq.factory_requests("stop")
+        request_url = self._fed_api_url + FedReq.factory_requests("stop", federation_id=federation_id)
         request = FedReq.StopScenarioRequest(experiment_type=experiment_type, federation_id=federation_id)
         response = None
         try:
