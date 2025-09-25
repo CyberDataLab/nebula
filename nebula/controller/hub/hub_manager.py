@@ -11,27 +11,28 @@ from fastapi import HTTPException, Request, UploadFile, status
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.controller.hub.clients.db_api_client import DatabaseAPIClient
 from nebula.controller.hub.clients.federation_api_client import FederationAPIClient
-from nebula.utils import APIUtils, HashUtils
+from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
 import nebula.controller.hub.utils_requests as controller_requests
 
 class HubManager:
     """Encapsulates the controller business logic so the API layer stays thin."""
 
-    def __init__(self, logger: logging.Logger = None):
-        self.database_api_url = os.environ.get(
-            "NEBULA_DATABASE_API_URL", "http://nebula-database:5051"
-        )
+    def __init__(self):
+        manager_log = os.environ.get("NEBULA_HUB_LOG")
+        TermEscapeCodeFormatter.configure_logger(manager_log)
+        self.logger = logging.getLogger("Hub-Manager")
+        self.logger.setLevel(logging.INFO)
+
         self.database_client = DatabaseAPIClient(
-            db_port=os.environ.get("NEBULA_DATABASE_API_PORT", 5051),
-            db_host=os.environ.get("NEBULA_DATABASE_API_HOST", "nebula-database"),
-            logger=logger
+            db_port=os.environ.get("NEBULA_DATABASE_PORT"),
+            db_host=os.environ.get("NEBULA_DATABASE_HOST"),
+            logger=self.logger
         )
         self.federation_client = FederationAPIClient(
             fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT"),
             fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST"),
-            logger=logger
+            logger=self.logger
         )
-        self.logger = logger
 
     # ------------------------------------------------------------------
     # Scenarios
@@ -71,8 +72,8 @@ class HubManager:
                 return {"federation_id": federation_id}
             else:
                 raise HTTPException(status_code=500, detail="Error starting scenario")
-        except Exception as e:
-            logging.info(e)
+        except Exception:
+            self.logger.exception("Error running scenario for user %s", run_scenario_request.user)
 
     async def stop_scenario(self, federation_id: str, stop_all: bool = False) -> None: #TODO stop_all with queues
         try:
@@ -195,7 +196,7 @@ class HubManager:
             payload.setdefault("scenario_args", {})
             payload["scenario_args"]["federation"] = federation_id
 
-            return await self.database_client.update_node(federation_id, payload)
+            return await self.database_client.update_node(payload)
         except Exception as exc:
             self.logger.exception("Error updating nodes: %s", exc)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -230,7 +231,7 @@ class HubManager:
 
     async def update_note_by_federation_id(self, federation_id: str, notes: str) -> Any:
         try:
-            return await self.database_client.update_notes_by_federation_id(federation_id, notes)
+            return await self.database_client.update_notes_by_federation_id(federation_id, {"notes": notes})
         except Exception as exc:
             self.logger.exception(
                 "Error updating notes for %s: %s", federation_id, exc
@@ -270,7 +271,11 @@ class HubManager:
 
     async def add_user(self, user: str, password: str, role: str) -> Any:
         try:
-            return await self.database_client.add_user(user, password, role)
+            return await self.database_client.add_user({
+                "user": user,
+                "password": password,
+                "role": role
+                })
         except Exception as exc:
             self.logger.exception("Error adding user: %s", exc)
             raise HTTPException(
@@ -290,7 +295,11 @@ class HubManager:
 
     async def update_user(self, user: str, password: str, role: str) -> Any:
         try:
-            return await self.database_client.update_user(user, password, role)
+            return await self.database_client.update_user({
+                "user": user,
+                "password": password,
+                "role": role
+                })
         except Exception as exc:
             self.logger.exception("Error updating user: %s", exc)
             raise HTTPException(
@@ -300,7 +309,9 @@ class HubManager:
 
     async def verify_user(self, user: str, password: str) -> Any:
         try:
-            return await self.database_client.verify_user(user, password)
+            return await self.database_client.verify_user({
+                "user": user,
+                "password": password})
         except HTTPException as exc:
             if exc.status_code == 401:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED) from exc
@@ -436,7 +447,3 @@ class HubManager:
             "nodes_state": nodes_state,
             "all_available": all_available,
         }
-
-
-# Singleton used by the API layer
-hub_manager = HubManager()

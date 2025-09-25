@@ -7,7 +7,13 @@ from nebula.utils import APIUtils
 
 class DatabaseAPIClient:
     """Async HTTP client used to interact with the Database API."""
-    def __init__(self, db_port: str | int, db_host: str, logger: logging.Logger) -> None:
+
+    def __init__(
+        self,
+        db_port: str | int,
+        db_host: str,
+        logger: logging.Logger | None,
+    ) -> None:
         """Configure the database API endpoint."""
         self._db_port = str(db_port)
         self._db_host = db_host
@@ -205,11 +211,11 @@ class DatabaseAPIClient:
             self._logger.info(exc)
             return None
 
-    async def delete_user(self, payload: Dict[str, Any]) -> Any:
+    async def delete_user(self, user: str) -> Any:
         path = DBReq.factory_requests_path("delete_user")
         url = self._build_url(path)
         try:
-            request = DBReq.DeleteUserRequest(**payload)
+            request = DBReq.DeleteUserRequest(user=user)
             return await APIUtils.post(url, request.model_dump())
         except Exception as exc:
             self._logger.info(exc)

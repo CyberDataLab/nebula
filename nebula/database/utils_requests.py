@@ -105,7 +105,7 @@ class FederationArgs(BaseModel):
 
 class ScenarioArgs(BaseModel):
     federation: str
-    name: str
+    federation_id: str
 
 
 class UpdateNodesRequest(BaseModel):

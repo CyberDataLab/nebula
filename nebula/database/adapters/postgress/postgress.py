@@ -268,7 +268,7 @@ class PostgresDB(DatabaseAdapter):
         timestamp,
         federation,
         federation_round,
-        scenario,
+        federation_id,
         run_hash,
         malicious,
     ):
@@ -297,7 +297,7 @@ class PostgresDB(DatabaseAdapter):
                     async with conn.transaction():
                         result = await conn.fetchrow(
                             "SELECT * FROM nodes WHERE uid = $1 AND scenario = $2 FOR UPDATE;",
-                            node_uid, scenario
+                            node_uid, federation_id
                         )
 
                         if result is None:
@@ -310,7 +310,7 @@ class PostgresDB(DatabaseAdapter):
                                         $7, $8, $9, $10, $11, $12::jsonb, $13);
                                 """,
                                 node_uid, idx, ip, port, role, neighbors,
-                                timestamp, federation, federation_round, scenario, run_hash, extras_payload, malicious_payload,
+                                timestamp, federation, federation_round, federation_id, run_hash, extras_payload, malicious_payload,
                             )
                         else:
                             # Update existing node
@@ -324,10 +324,10 @@ class PostgresDB(DatabaseAdapter):
                                 idx, ip, port, role, neighbors,
                                 timestamp, federation, federation_round,
                                 run_hash, extras_payload, malicious_payload,
-                                node_uid, scenario,
+                                node_uid, federation_id,
                             )
 
-                        updated_row = await conn.fetchrow("SELECT * from nodes WHERE uid = $1 AND scenario = $2;", node_uid, scenario)
+                        updated_row = await conn.fetchrow("SELECT * from nodes WHERE uid = $1 AND scenario = $2;", node_uid, federation_id)
                         return dict(updated_row) if updated_row else None
                 except asyncpg.PostgresError as e:
                     logging.error(f"Database error during node record update: {e}", exc_info=True)

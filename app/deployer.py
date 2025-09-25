@@ -17,9 +17,8 @@ from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from nebula.addons.env import check_environment
-from nebula.controller.hub.hub_api import TermEscapeCodeFormatter
 from nebula.controller.scenarios import ScenarioManagement
-from nebula.utils import DockerUtils, FileUtils, SocketUtils
+from nebula.utils import DockerUtils, FileUtils, SocketUtils, TermEscapeCodeFormatter
 
 class CredentialManager:
     """
@@ -661,6 +660,8 @@ class Deployer:
 
         self.controller_host = self.get_container_name("nebula-controller")
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
+        self.database_host = self.get_container_name("nebula-database")
+        self.database_port = int(args.databaseport) if hasattr(args, "databaseport") else 5051
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
@@ -856,6 +857,9 @@ class Deployer:
 
         if not SocketUtils.is_port_open(self.federation_controller_port):
             self.federation_controller_port = SocketUtils.find_free_port(start_port=self.federation_controller_port)
+
+        if not SocketUtils.is_port_open(self.database_port):
+            self.database_port = SocketUtils.find_free_port(start_port=self.database_port)
 
         if not SocketUtils.is_port_open(self.frontend_port):
             self.frontend_port = SocketUtils.find_free_port(start_port=self.frontend_port)
@@ -1130,7 +1134,10 @@ class Deployer:
             "NEBULA_USER_TAG": self.user_tag,
             "NEBULA_ROOT_HOST": self.root_path,
             "NEBULA_DATABASES_DIR": "/nebula/app/databases",
-            "NEBULA_CONTROLLER_LOG": "/nebula/app/logs/controller.log",
+            "NEBULA_DATABASE_HOST": self.database_host,
+            "NEBULA_DATABASE_PORT": self.database_port,
+            "NEBULA_HUB_API_LOG": "/nebula/app/logs/hub_api.log",
+            "NEBULA_HUB_LOG" : "/nebula/app/logs/hub.log",
             "NEBULA_FEDERATION_CONTROLLER_LOG": "/nebula/app/logs/federation.log",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
@@ -1140,7 +1147,6 @@ class Deployer:
             "NEBULA_FEDERATION_CONTROLLER_PORT" : self.federation_controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
-            "NEBULA_DATABASE_API_URL": f"http://{self.get_container_name('nebula-database')}:5051"
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]

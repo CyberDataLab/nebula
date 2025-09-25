@@ -18,6 +18,14 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    "-dbp",
+    "--databaseport",
+    dest="databaseport",
+    default=5051,
+    help="Database port (default: 5051)",
+)
+
+argparser.add_argument(
     "-fcp",
     "--federationcontrollerport",
     dest="federationcontrollerport",

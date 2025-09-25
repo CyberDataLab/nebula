@@ -230,6 +230,86 @@ class HashUtils:
         import hashlib
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
+# Setup controller logger
+class TermEscapeCodeFormatter(logging.Formatter):
+    """
+    Custom logging formatter that removes ANSI terminal escape codes from log messages.
+
+    This formatter is useful when you want to clean up log outputs by stripping out
+    any terminal color codes or formatting sequences before logging them to a file
+    or other non-terminal output.
+
+    Attributes:
+        fmt (str): Format string for the log message.
+        datefmt (str): Format string for the date in the log message.
+        style (str): Formatting style (default is '%').
+        validate (bool): Whether to validate the format string.
+
+    Methods:
+        format(record): Strips ANSI escape codes from the log message and formats it.
+    """
+
+    def __init__(self, fmt=None, datefmt=None, style="%", validate=True):
+        """
+        Initializes the TermEscapeCodeFormatter.
+
+        Args:
+            fmt (str, optional): The format string for the log message.
+            datefmt (str, optional): The format string for the date.
+            style (str, optional): The formatting style. Defaults to '%'.
+            validate (bool, optional): Whether to validate the format string. Defaults to True.
+        """
+        super().__init__(fmt, datefmt, style, validate)
+
+    def format(self, record):
+        """
+        Formats the specified log record, stripping out any ANSI escape codes.
+
+        Args:
+            record (logging.LogRecord): The log record to be formatted.
+
+        Returns:
+            str: The formatted log message with escape codes removed.
+        """
+        escape_re = re.compile(r"\x1b\[[0-9;]*m")
+        record.msg = re.sub(escape_re, "", str(record.msg))
+        return super().format(record)
+
+    @staticmethod
+    def configure_logger(controller_log):
+        """
+        Configures the logging system for the controller.
+
+        - Sets a format for console and file logging.
+        - Creates a console handler with INFO level.
+        - Creates a file handler for 'controller.log' with INFO level.
+        - Configures specific Uvicorn loggers to use the file handler
+          without duplicating log messages.
+        """
+        log_console_format = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(TermEscapeCodeFormatter(log_console_format))
+        console_handler_file = logging.FileHandler(os.path.join(controller_log), mode="w")
+        console_handler_file.setLevel(logging.INFO)
+        console_handler_file.setFormatter(logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"))
+        logging.basicConfig(
+            level=logging.DEBUG,
+            handlers=[
+                console_handler,
+                console_handler_file,
+            ],
+        )
+        uvicorn_loggers = ["uvicorn", "uvicorn.error", "uvicorn.access"]
+        for logger_name in uvicorn_loggers:
+            logger = logging.getLogger(logger_name)
+            logger.handlers = []  # Remove existing handlers
+            logger.propagate = False  # Prevent duplicate logs
+            handler = logging.FileHandler(os.path.join(controller_log), mode="a")
+            handler.setFormatter(logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"))
+            logger.addHandler(handler)
+
+
 class LoggerUtils:
 
     @staticmethod
