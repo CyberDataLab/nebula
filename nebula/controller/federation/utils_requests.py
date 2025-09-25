@@ -19,6 +19,11 @@ class NodeDoneRequest(BaseModel):
     name: str
     federation_id: str
     
+class RemoveScenarioRequest(BaseModel):
+    experiment_type: str
+    user: str
+    scenario_name: str
+    
 class Routes:
     INIT = "/init"
     RUN = "/scenarios/run"
@@ -26,21 +31,18 @@ class Routes:
     UPDATE = "/nodes/{federation_id}/update"
     DONE = "/nodes/{federation_id}/done"
     FINISH = "/scenarios/{federation_id}/finish"
+    REMOVE = "scenario/{federation_id}/remove"
     
-def factory_requests_path(resource: str, scenario_name: str = "", federation_id: str = "") -> str:
-    if resource == "init":
-        return "/init"
-    elif resource == "run":
-        return Routes.RUN
-    elif resource == "stop":
-        return Routes.STOP.format(federation_id=federation_id)
-    elif resource == "update":
-        return Routes.UPDATE.format(federation_id=federation_id)
-    elif resource == "done":
-        return Routes.DONE.format(federation_id=federation_id)
-    elif resource == "finish":
-        return Routes.FINISH.format(federation_id=federation_id)
-    else:
-        raise Exception(f"resource not found: {resource}")
+    @classmethod 
+    def format(cls, route: str, **kwargs) -> str: 
+        return getattr(cls, route).format(**kwargs)
+    
+def factory_requests(resource: str, **kwargs) -> str:
+    try:
+        return Routes.format(resource.upper(), **kwargs)
+    except AttributeError:
+        raise ValueError(f"Resource not found: {resource}")
+    except KeyError as e:
+        raise ValueError(f"Missing parameter for route '{resource}': {e}")
     
     

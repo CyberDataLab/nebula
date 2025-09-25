@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from nebula.utils import LoggerUtils
 from nebula.controller.federation.federation_controller import FederationController 
 from nebula.controller.federation.factory_federation_controller import federation_controller_factory
-from nebula.controller.federation.utils_requests import RunScenarioRequest, StopScenarioRequest, NodeUpdateRequest, NodeDoneRequest, Routes
+from nebula.controller.federation.utils_requests import RemoveScenarioRequest, RunScenarioRequest, StopScenarioRequest, NodeUpdateRequest, NodeDoneRequest, Routes
 
 fed_controllers: Dict[str, FederationController] = {}
 
@@ -103,6 +103,19 @@ async def node_done(
         return await controller.node_done(federation_id, node_done_request)
     else:
         return {"message": "Experiment type not allowed on responde for Node done message.."}
+    
+@app.post(Routes.REMOVE)
+async def scenario_remove(
+    federation_id: str,
+    remove_scenario_request: RemoveScenarioRequest,
+):
+    global fed_controllers
+    experiment_type = remove_scenario_request.experiment_type
+    controller = fed_controllers.get(experiment_type, None)
+    if controller:
+        return await controller.remove_scenario(federation_id, remove_scenario_request)
+    else:
+        return {"message": "Experiment type not allowed on responde for scenario remove message.."}
 
 if __name__ == "__main__":
     # Parse args from command line
