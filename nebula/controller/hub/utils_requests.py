@@ -61,7 +61,7 @@ class RunScenarioRequest(BaseModel):
     user: str
 
 
-class ScenarioUpdateRequest(BaseModel):
+class UpdateScenarioRequest(BaseModel):
     alias: str
     scenario_name: str
     start_time: str
@@ -71,39 +71,39 @@ class ScenarioUpdateRequest(BaseModel):
     username: str
 
 
-class ScenarioStopRequest(BaseModel):
+class StopScenarioRequest(BaseModel):
     all: bool = False
 
 
-class ScenarioRemoveRequest(BaseModel):
+class RemoveScenarioRequest(BaseModel):
     scenario_name: str
 
 
-class ScenarioFinishRequest(BaseModel):
+class FinishScenarioRequest(BaseModel):
     all: bool = False
 
 
-class NotesUpdateRequest(BaseModel):
+class UpdateNotesRequest(BaseModel):
     notes: str
 
 
-class UserAddRequest(BaseModel):
+class AddUserRequest(BaseModel):
     user: str
     password: str
     role: str
 
 
-class UserDeleteRequest(BaseModel):
+class DeleteUserRequest(BaseModel):
     user: str
 
 
-class UserUpdateRequest(BaseModel):
+class UpdateUserRequest(BaseModel):
     user: str
     password: str
     role: str
 
 
-class UserVerifyRequest(BaseModel):
+class VerifyUserRequest(BaseModel):
     user: str
     password: str
 
@@ -140,7 +140,7 @@ class ScenarioArgs(BaseModel):
     name: str
 
 
-class NodesUpdateRequest(BaseModel):
+class UpdateNodesRequest(BaseModel):
     device_args: DeviceArgs
     network_args: NetworkArgs
     mobility_args: MobilityArgs

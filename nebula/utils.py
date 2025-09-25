@@ -218,6 +218,17 @@ class DockerUtils:
         except Exception:
             logging.exception("Unexpected error")
 
+class HashUtils:
+
+    @staticmethod
+    def generate_md5(value: str) -> str:
+        import hashlib
+        return hashlib.md5(value.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def generate_sha256(value: str) -> str:
+        import hashlib
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 class LoggerUtils:
 

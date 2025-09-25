@@ -17,7 +17,7 @@ from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from nebula.addons.env import check_environment
-from nebula.controller.hub import TermEscapeCodeFormatter
+from nebula.controller.hub.hub_api import TermEscapeCodeFormatter
 from nebula.controller.scenarios import ScenarioManagement
 from nebula.utils import DockerUtils, FileUtils, SocketUtils
 

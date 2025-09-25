@@ -11,15 +11,15 @@ from fastapi.concurrency import asynccontextmanager
 from nebula.database.database_adapter_factory import factory_database_adapter
 from nebula.database.utils_requests import (
     Routes,
-    ScenarioUpdateRequest,
-    ScenarioStopRequest,
-    ScenarioFinishRequest,
-    NotesUpdateRequest,
-    UserAddRequest,
-    UserDeleteRequest,
-    UserUpdateRequest,
-    UserVerifyRequest,
-    NodesUpdateRequest,
+    UpdateScenarioRequest,
+    StopScenarioRequest,
+    FinishScenarioRequest,
+    UpdateNodesRequest,
+    AddUserRequest,
+    DeleteUserRequest,
+    UpdateUserRequest,
+    VerifyUserRequest,
+    UpdateNotesRequest,
     GetScenariosRequest,
     GetRunningScenarioRequest,
     CheckScenarioRequest,
@@ -90,7 +90,7 @@ async def read_root():
 @app.post(Routes.UPDATE)
 async def update_scenario(
     federation_id: str,
-    request: ScenarioUpdateRequest,
+    request: UpdateScenarioRequest,
 ):
     try:
         await db._scenario_update_record(
@@ -108,7 +108,7 @@ async def update_scenario(
 @app.post(Routes.STOP)
 async def stop_scenario(
     federation_id: str,
-    request: ScenarioStopRequest,
+    request: StopScenarioRequest,
 ):
     try:
         await db._finish_scenario(federation_id, request.all)
@@ -148,7 +148,7 @@ async def get_scenarios(
 @app.post(Routes.FINISH)
 async def set_scenario_status_to_finished(
     federation_id: str,
-    request: ScenarioFinishRequest,
+    request: FinishScenarioRequest,
 ):
     try:
         await db._finish_scenario(
@@ -163,7 +163,7 @@ async def set_scenario_status_to_finished(
 
 
 @app.get(Routes.RUNNING)
-async def get_running_scenario_endpoint(request: GetRunningScenarioRequest = Depends()):
+async def get_running_scenario(request: GetRunningScenarioRequest = Depends()):
     try:
         return await db._get_running_scenario(get_all=request.get_all)
     except Exception as e:
@@ -184,7 +184,7 @@ async def check_scenario(
 
 
 @app.get(Routes.GET_SCENARIOS_BY_SCENARIO_NAME)
-async def get_scenario_by_name_endpoint(
+async def get_scenario_by_name(
     federation_id: str
 ):
     try:
@@ -197,7 +197,7 @@ async def get_scenario_by_name_endpoint(
 
 # Nodes
 @app.get(Routes.NODES_BY_FEDERATION_ID)
-async def list_nodes_by_federation_id_endpoint(
+async def list_nodes_by_federation_id(
     federation_id: str
 ):
     try:
@@ -209,7 +209,7 @@ async def list_nodes_by_federation_id_endpoint(
 
 
 @app.post(Routes.NODES_UPDATE)
-async def update_node_record(request: NodesUpdateRequest):
+async def update_node_record(request: UpdateNodesRequest):
     try:
         # Build extras from mobility_args
         extras = {
@@ -238,7 +238,7 @@ async def update_node_record(request: NodesUpdateRequest):
 
 
 @app.post(Routes.NODES_REMOVE)
-async def remove_nodes_by_federation_id_endpoint(federation_id: str):
+async def remove_nodes_by_federation_id(federation_id: str):
     try:
         await db._remove_nodes_by_federation_id(federation_id)
         return {"message": f"Nodes for federation {federation_id} removed successfully"}
@@ -261,7 +261,7 @@ async def get_notes_by_federation_id(
 
 
 @app.post(Routes.NOTES_UPDATE)
-async def update_notes_by_scenario_name(federation_id: str, request: NotesUpdateRequest):
+async def update_notes_by_scenario_name(federation_id: str, request: UpdateNotesRequest):
     try:
         await db._save_notes(federation_id ,**request.model_dump())
         return {"message": f"Notes for federation {federation_id} updated successfully"}
@@ -271,7 +271,7 @@ async def update_notes_by_scenario_name(federation_id: str, request: NotesUpdate
 
 
 @app.post(Routes.NOTES_REMOVE)
-async def remove_notes_by_federation_id_endpoint(federation_id: str):
+async def remove_notes_by_federation_id(federation_id: str):
     try:
         await db._remove_note(federation_id)
         return {"message": f"Notes for federation {federation_id} removed successfully"}
@@ -291,7 +291,7 @@ async def list_users_controller(request: ListUsersRequest = Depends()):
 
 
 @app.get(Routes.USER_BY_FEDERATION_ID)
-async def get_user_by_federation_id_endpoint(
+async def get_user_by_federation_id(
     federation_id: str
 ):
     try:
@@ -303,7 +303,7 @@ async def get_user_by_federation_id_endpoint(
 
 
 @app.post(Routes.USER_ADD)
-async def add_user_controller(request: UserAddRequest):
+async def add_user_controller(request: AddUserRequest):
     try:
         await db._add_user(**request.model_dump())
         return {"detail": "User added successfully"}
@@ -313,7 +313,7 @@ async def add_user_controller(request: UserAddRequest):
 
 
 @app.post(Routes.USER_DELETE)
-async def remove_user_controller(request: UserDeleteRequest):
+async def remove_user_controller(request: DeleteUserRequest):
     try:
         await db._delete_user_from_db(request.user)
         return {"detail": "User deleted successfully"}
@@ -323,7 +323,7 @@ async def remove_user_controller(request: UserDeleteRequest):
 
 
 @app.post(Routes.USER_UPDATE)
-async def update_user_controller(request: UserUpdateRequest):
+async def update_user_controller(request: UpdateUserRequest):
     try:
         await db._update_user(**request.model_dump())
         return {"detail": "User updated successfully"}
@@ -333,7 +333,7 @@ async def update_user_controller(request: UserUpdateRequest):
 
 
 @app.post(Routes.USER_VERIFY)
-async def verify_user_controller(request: UserVerifyRequest):
+async def verify_user_controller(request: VerifyUserRequest):
     try:
         auth = await db._verify(**request.model_dump())
         if auth:
