@@ -15,7 +15,7 @@ class FederationAPIClient():
         self._logger = logger
 
     async def run_scenario(self, user: str, federation_id: str, scenario_data: Dict[str, Any]):
-        request_url = self._fed_api_url + FedReq.factory_requests_path("run")
+        request_url = self._fed_api_url + FedReq.factory_requests("run")
         request = FedReq.RunScenarioRequest(scenario_data=scenario_data, user=user, federation_id=federation_id)
         response = None
         try:
@@ -25,7 +25,7 @@ class FederationAPIClient():
         return response
 
     async def stop_scenario(self, experiment_type: str, federation_id: str):
-        request_url = self._fed_api_url + FedReq.factory_requests_path("stop")
+        request_url = self._fed_api_url + FedReq.factory_requests("stop")
         request = FedReq.StopScenarioRequest(experiment_type=experiment_type, federation_id=federation_id)
         response = None
         try:
