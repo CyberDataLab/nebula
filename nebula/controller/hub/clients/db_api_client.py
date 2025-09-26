@@ -1,8 +1,9 @@
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Type
 
 import nebula.database.utils_requests as DBReq
 from nebula.utils import APIUtils
+from pydantic import BaseModel
 
 
 class DatabaseAPIClient:
@@ -28,6 +29,36 @@ class DatabaseAPIClient:
         self._ensure_initialized()
         return f"{self._db_api_url}{path}"
 
+    async def _post(
+        self,
+        url: str,
+        payload: Optional[Dict[str, Any]] = None,
+        model_cls: Type[BaseModel] | None = None,
+    ) -> Any:
+        try:
+            data = payload
+            if model_cls is not None:
+                data = model_cls(**(payload or {})).model_dump()
+            return await APIUtils.post(url, data)
+        except Exception as exc:
+            self._logger.info(exc)
+            return None
+
+    async def _get(
+        self,
+        url: str,
+        payload: Optional[Dict[str, Any]] = None,
+        model_cls: Type[BaseModel] | None = None,
+    ) -> Any:
+        try:
+            params = payload
+            if model_cls is not None:
+                params = model_cls(**(payload or {})).model_dump()
+            return await APIUtils.get(url, params)
+        except Exception as exc:
+            self._logger.info(exc)
+            return None
+
     async def read_root(self) -> Any:
         url = self._build_url(DBReq.factory_requests_path("init"))
         try:
@@ -39,204 +70,116 @@ class DatabaseAPIClient:
     async def update_scenario(self, federation_id: str, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("update", federation_id=federation_id)
         url = self._build_url(path)
-        try:
-            request = DBReq.UpdateScenarioRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.UpdateScenarioRequest)
 
     async def stop_scenario(self, federation_id: str, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("stop", federation_id=federation_id)
         url = self._build_url(path)
-        try:
-            request = DBReq.StopScenarioRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.StopScenarioRequest)
 
     async def remove_scenario(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path("remove", federation_id=federation_id)
         url = self._build_url(path)
-        try:
-            return await APIUtils.post(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url)
 
     async def get_scenarios_by_user(self, user: str, role: str) -> Any:
         path = DBReq.factory_requests_path("get_scenarios_by_user", user=user, role=role)
         url = self._build_url(path)
-        try:
-            return await APIUtils.get(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._get(url)
 
     async def finish_scenario(self, federation_id: str, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("finish", federation_id=federation_id)
         url = self._build_url(path)
-        try:
-            request = DBReq.FinishScenarioRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.FinishScenarioRequest)
 
     async def get_running_scenarios(self, get_all: bool = False) -> Any:
         path = DBReq.factory_requests_path("running")
         url = self._build_url(path)
-        try:
-            request = DBReq.GetRunningScenarioRequest(get_all=get_all)
-            return await APIUtils.get(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        payload = {"get_all": get_all}
+        return await self._get(url, payload, DBReq.GetRunningScenarioRequest)
 
     async def check_scenario(self, user: str, role: str, federation_id: str) -> Any:
         path = DBReq.factory_requests_path(
             "check_scenario", user=user, role=role, federation_id=federation_id
         )
         url = self._build_url(path)
-        try:
-            return await APIUtils.get(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._get(url)
 
     async def get_scenario_by_federation_id(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path(
             "get_scenarios_by_scenario_name", federation_id=federation_id
         )
         url = self._build_url(path)
-        try:
-            return await APIUtils.get(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._get(url)
 
     async def list_nodes_by_federation_id(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path(
             "get_nodes_by_scenario_name", federation_id=federation_id
         )
         url = self._build_url(path)
-        try:
-            return await APIUtils.get(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._get(url)
 
     async def update_node(self, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("update_nodes")
         url = self._build_url(path)
-        try:
-            request = DBReq.UpdateNodesRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.UpdateNodesRequest)
 
     async def remove_nodes_by_federation_id(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path("remove_nodes", federation_id=federation_id)
         url = self._build_url(path)
-        try:
-            return await APIUtils.post(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url)
 
     async def get_notes_by_federation_id(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path(
             "get_notes_by_scenario_name", federation_id=federation_id
         )
         url = self._build_url(path)
-        try:
-            return await APIUtils.get(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._get(url)
 
     async def update_notes_by_federation_id(self, federation_id: str, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path(
             "update_notes", federation_id=federation_id
         )
         url = self._build_url(path)
-        try:
-            request = DBReq.UpdateNotesRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.UpdateNotesRequest)
 
     async def remove_notes_by_federation_id(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path(
             "remove_notes", federation_id=federation_id
         )
         url = self._build_url(path)
-        try:
-            return await APIUtils.post(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url)
 
     async def list_users(self, all_info: bool = False) -> Any:
         path = DBReq.factory_requests_path("list_users")
         url = self._build_url(path)
-        try:
-            request = DBReq.ListUsersRequest(all_info=all_info)
-            return await APIUtils.get(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        payload = {"all_info": all_info}
+        return await self._get(url, payload, DBReq.ListUsersRequest)
 
     async def get_user_by_federation_id(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path(
             "get_user_by_scenario_name", federation_id=federation_id
         )
         url = self._build_url(path)
-        try:
-            return await APIUtils.get(url)
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._get(url)
 
     async def add_user(self, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("add_user")
         url = self._build_url(path)
-        try:
-            request = DBReq.AddUserRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.AddUserRequest)
 
     async def delete_user(self, user: str) -> Any:
         path = DBReq.factory_requests_path("delete_user")
         url = self._build_url(path)
-        try:
-            request = DBReq.DeleteUserRequest(user=user)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        payload = {"user": user}
+        return await self._post(url, payload, DBReq.DeleteUserRequest)
 
     async def update_user(self, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("update_user")
         url = self._build_url(path)
-        try:
-            request = DBReq.UpdateUserRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.UpdateUserRequest)
 
     async def verify_user(self, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("verify_user")
         url = self._build_url(path)
-        try:
-            request = DBReq.VerifyUserRequest(**payload)
-            return await APIUtils.post(url, request.model_dump())
-        except Exception as exc:
-            self._logger.info(exc)
-            return None
+        return await self._post(url, payload, DBReq.VerifyUserRequest)
