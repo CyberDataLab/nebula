@@ -142,13 +142,13 @@ def factory_requests_path(resource: str, user: str = "", role: str = "", federat
     if resource == "init":
         return Routes.INIT
     elif resource == "update":
-        return Routes.UPDATE
+        return Routes.UPDATE.format(federation_id=federation_id)
     elif resource == "stop":
-        return Routes.STOP
+        return Routes.STOP.format(federation_id=federation_id)
     elif resource == "remove":
-        return Routes.REMOVE
+        return Routes.REMOVE.format(federation_id=federation_id)
     elif resource == "finish":
-        return Routes.FINISH
+        return Routes.FINISH.format(federation_id=federation_id)
     elif resource == "running":
         return Routes.RUNNING
     elif resource == "check_scenario":
@@ -168,7 +168,7 @@ def factory_requests_path(resource: str, user: str = "", role: str = "", federat
     elif resource == "get_notes_by_scenario_name":
         return Routes.NOTES_BY_FEDERATION_ID.format(federation_id=federation_id)
     elif resource == "update_notes":
-        return Routes.NOTES_UPDATE
+        return Routes.NOTES_UPDATE.format(federation_id=federation_id)
     elif resource == "remove_notes":
         return Routes.NOTES_REMOVE.format(federation_id=federation_id)
     # Users

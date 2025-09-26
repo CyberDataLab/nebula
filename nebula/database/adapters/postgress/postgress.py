@@ -351,29 +351,39 @@ class PostgresDB(DatabaseAdapter):
 
     # --- Scenario Management Functions ---
 
-    async def _get_all_scenarios(self, username:str, role:str, sort_by:str="start_time"):
-        """
-        Retrieves all scenarios from the database, accessing fields from the 'config' (JSONB) column
-        and direct columns. Filters by user role and sorts by the specified field.
-        """
-        allowed_sort_fields = ["start_time", "title", "username", "status", "name"]
+    def _build_order_by_clause(self, sort_by: str) -> str:
+        """Build a safe ORDER BY clause supporting legacy and ISO timestamps."""
+        allowed_sort_fields = ["start_time", "title", "username", "status", "name", "model", "dataset", "rounds"]
         if sort_by not in allowed_sort_fields:
             sort_by = "start_time"
 
-        # Determine the ORDER BY clause based on sort_by
         if sort_by == "start_time":
-            order_by_clause = """
+            return """
                 ORDER BY
                     CASE
                         WHEN start_time IS NULL OR start_time = '' THEN 1
                         ELSE 0
                     END,
-                    to_timestamp(start_time, 'DD/MM/YYYY HH24:MI:SS') DESC
+                    CASE
+                        WHEN start_time IS NULL OR start_time = '' THEN NULL
+                        WHEN start_time LIKE '%T%'
+                            THEN to_timestamp(split_part(start_time, '.', 1), 'YYYY-MM-DD"T"HH24:MI:SS')
+                        ELSE to_timestamp(start_time, 'DD/MM/YYYY HH24:MI:SS')
+                    END DESC
             """
-        elif sort_by in ["title", "model", "dataset", "rounds"]: # These are inside config JSONB
-            order_by_clause = f"ORDER BY config->>'{sort_by}'"
-        else: # For direct table columns like name, username, status
-            order_by_clause = f"ORDER BY {sort_by}"
+
+        if sort_by in {"title", "model", "dataset", "rounds"}:  # Fields in JSONB config
+            return f"ORDER BY config->>'{sort_by}'"
+
+        return f"ORDER BY {sort_by}"
+
+
+    async def _get_all_scenarios(self, username:str, role:str, sort_by:str="start_time"):
+        """
+        Retrieves all scenarios from the database, accessing fields from the 'config' (JSONB) column
+        and direct columns. Filters by user role and sorts by the specified field.
+        """
+        order_by_clause = self._build_order_by_clause(sort_by)
 
         async with self.pool.acquire() as conn:
             # Select direct columns and relevant fields from config JSONB
@@ -408,24 +418,7 @@ class PostgresDB(DatabaseAdapter):
         Returns a list of dictionaries, where each dictionary represents a scenario.
         """
         # Safe list of allowed sorting fields to prevent SQL injection.
-        allowed_sort_fields = ["start_time", "title", "username", "status", "name"]
-        if sort_by not in allowed_sort_fields:
-            sort_by = "start_time"  # Safe default value
-
-        # Building the ORDER BY clause
-        if sort_by == "start_time":
-            order_by_clause = """
-                ORDER BY
-                    CASE
-                        WHEN start_time IS NULL OR start_time = '' THEN 1
-                        ELSE 0
-                    END,
-                    to_timestamp(start_time, 'DD/MM/YYYY HH24:MI:SS') DESC
-            """
-        elif sort_by in ["title", "model", "dataset", "rounds"]: # These are inside config JSONB
-            order_by_clause = f"ORDER BY config->>'{sort_by}'"
-        else: # For direct table columns like name, username, status
-            order_by_clause = f"ORDER BY {sort_by}"
+        order_by_clause = self._build_order_by_clause(sort_by)
 
         async with self.pool.acquire() as conn:
             # Base query that extracts fields from the JSONB using the ->> operator
@@ -505,7 +498,7 @@ class PostgresDB(DatabaseAdapter):
         Sets the status of all 'running' scenarios to 'finished'
         and updates their 'end_time' (both in the direct column and within JSONB).
         """
-        current_time = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') # Consistent format
+        current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
         command = """
             UPDATE scenarios
             SET
@@ -524,7 +517,7 @@ class PostgresDB(DatabaseAdapter):
         Sets the status of a specific scenario to 'finished' and updates its 'end_time'.
         Updates both the direct columns and the JSONB 'config'.
         """
-        current_time = datetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S') # Consistent format
+        current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
         command = """
             UPDATE scenarios
             SET

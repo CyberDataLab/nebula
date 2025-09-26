@@ -51,8 +51,7 @@ DROP INDEX IF EXISTS idx_configs_config_gin;
 DROP TABLE IF EXISTS configs;
 CREATE TABLE configs (
   id SERIAL PRIMARY KEY,
-  config JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  config JSONB NOT NULL
 );
 CREATE INDEX idx_configs_config_gin ON configs USING GIN (config);
 
@@ -65,8 +64,7 @@ CREATE TABLE IF NOT EXISTS scenarios (
     status TEXT,
     start_time TEXT,
     end_time TEXT,
-    config JSONB NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    config JSONB NOT NULL
 );
 
 -- Index for fast JSONB queries on scenarios.config
