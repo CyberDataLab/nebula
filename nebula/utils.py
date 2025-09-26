@@ -7,7 +7,7 @@ import aiohttp
 import docker
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import HTTPException
 from aiohttp import ClientConnectorError
@@ -370,6 +370,19 @@ class LoggerUtils:
 class APIUtils():
 
     @staticmethod
+    def _normalize_params(params: dict | None) -> dict | None:
+        if not params:
+            return params
+
+        normalized: dict[str, str | Any] = {}
+        for key, value in params.items():
+            if isinstance(value, bool):
+                normalized[key] = str(value).lower()
+            else:
+                normalized[key] = value
+        return normalized
+
+    @staticmethod
     async def retry_with_backoff(func, *args, max_retries=5, initial_delay=1):
         """
         Retry a function with exponential backoff.
@@ -417,6 +430,8 @@ class APIUtils():
         Raises:
             HTTPException: If the response status is not 200, raises with the response status code and an error detail.
         """
+
+        params = APIUtils._normalize_params(params)
 
         async def _get():
             async with aiohttp.ClientSession() as session:
