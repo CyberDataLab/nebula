@@ -1,4 +1,6 @@
 import argparse
+import asyncio
+import importlib
 import logging
 import os
 import re
@@ -198,8 +200,8 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.post(controller_requests.Routes.RUN)
-async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequest):
-    return await hub_manager.run_scenario(run_scenario_request)
+async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequest, request: Request):
+    return await hub_manager.run_scenario(run_scenario_request, request)
 
 @app.post(controller_requests.Routes.STOP)
 async def stop_scenario(

@@ -37,7 +37,7 @@ class HubManager:
     # ------------------------------------------------------------------
     # Scenarios
     # ------------------------------------------------------------------
-    async def run_scenario(self, run_scenario_request: controller_requests.RunScenarioRequest):
+    async def run_scenario(self, run_scenario_request: controller_requests.RunScenarioRequest, request: Request):
         """
         Launches a new scenario based on the provided configuration.
 

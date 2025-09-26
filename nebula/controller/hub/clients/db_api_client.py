@@ -88,7 +88,7 @@ class DatabaseAPIClient:
         path = DBReq.factory_requests_path("running")
         url = self._build_url(path)
         try:
-            request = DBReq.UpdateScenarioRequest(get_all=get_all)
+            request = DBReq.GetRunningScenarioRequest(get_all=get_all)
             return await APIUtils.get(url, request.model_dump())
         except Exception as exc:
             self._logger.info(exc)
