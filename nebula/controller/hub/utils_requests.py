@@ -1,6 +1,6 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, conint, confloat
+from pydantic import BaseModel, ConfigDict, conint, confloat
 
 
 class Routes:
@@ -109,38 +109,42 @@ class VerifyUserRequest(BaseModel):
 
 
 # Nodes update payload
-class DeviceArgs(BaseModel):
+class _Base(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+class DeviceArgs(_Base):
     uid: str
     idx: int
     role: str
     malicious: bool
 
 
-class NetworkArgs(BaseModel):
+class NetworkArgs(_Base):
     ip: str
     port: conint(ge=1, le=65535)  # type: ignore[valid-type]
     neighbors: List[Any]
 
 
-class MobilityArgs(BaseModel):
+class MobilityArgs(_Base):
     latitude: confloat(ge=-90, le=90)  # type: ignore[valid-type]
     longitude: confloat(ge=-180, le=180)  # type: ignore[valid-type]
 
 
-class TrackingArgs(BaseModel):
-    run_hash: str
+class TrackingArgs(_Base):
+    run_hash: Optional[str] = None
 
 
-class FederationArgs(BaseModel):
+class FederationArgs(_Base):
     round: int
 
 
-class ScenarioArgs(BaseModel):
+class ScenarioArgs(_Base):
     federation: str
+    federation_id: str
     name: str
 
 
-class UpdateNodesRequest(BaseModel):
+class UpdateNodesRequest(_Base):
     device_args: DeviceArgs
     network_args: NetworkArgs
     mobility_args: MobilityArgs

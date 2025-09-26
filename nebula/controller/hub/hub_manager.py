@@ -98,7 +98,7 @@ class HubManager:
         self,
         federation_id: str,
         request: controller_requests.RemoveScenarioRequest,
-    ) -> Dict[str, Any]: #TODO remove_scenario with fed_client
+    ) -> Dict[str, Any]:
         try:
             await self.database_client.remove_scenario(federation_id)
             # ScenarioManagement.remove_files_by_scenario(request.scenario_name)
@@ -182,21 +182,53 @@ class HubManager:
 
     async def update_node(self, federation_id: str, request: Request) -> Any:
         try:
-            config: Dict[str, Any] = await request.json()
-            config["timestamp"] = str(datetime.now())
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise HTTPException(status_code=422, detail="Body must be a JSON object")
 
-            mobility_args = config.get("mobility_args")
-            if not mobility_args:
-                config["mobility_args"] = {"latitude": "38.0235", "longitude": "-1.1744"}
+            # Accept both formats: {config:{...}} or flat
+            cfg = body.get("config", body)
 
-            validated = controller_requests.UpdateNodesRequest(**config)
+            # --- mobility_args: default + cast to float ---
+            mob = cfg.get("mobility_args") or {"latitude": 38.0235, "longitude": -1.1744}
+            try:
+                mob = {"latitude": float(mob["latitude"]), "longitude": float(mob["longitude"])}
+            except Exception:
+                mob = {"latitude": 38.0235, "longitude": -1.1744}
 
-            payload = validated.model_dump()
+            # --- tracking_args: ensure run_hash --- # TODO remove run_hash?
+            tr = dict(cfg.get("tracking_args") or {})
+            if not tr.get("run_hash"):
+                # use the scenario name or a simple timestamp
+                scen_name = (cfg.get("scenario_args") or {}).get("name")
+                tr["run_hash"] = scen_name
+
+            scen = dict(cfg.get("scenario_args") or {})
+            scen.setdefault("federation_id", federation_id)
+            scen.setdefault("federation", scen.get("federation"))
+
+            # Build the EXACT input expected by Pydantic (without the `config` wrapper)
+            data = {
+                "device_args": cfg["device_args"],
+                "network_args": cfg["network_args"],
+                "mobility_args": mob,
+                "tracking_args": tr,
+                "federation_args": cfg["federation_args"],
+                "scenario_args": cfg.get("scenario_args", {}),
+                # if your model has `timestamp: datetime`, keep datetime; if it's `str`, use .isoformat()
+                "timestamp": str(datetime.now())
+            }
+
+            validated = controller_requests.UpdateNodesRequest(**data)
+
+            payload = validated.model_dump()  # Python objects: good for DB/driver
             payload["extras"] = payload.get("mobility_args", {})
-            payload.setdefault("scenario_args", {})
-            payload["scenario_args"]["federation"] = federation_id
 
             return await self.database_client.update_node(payload)
+
+        except KeyError as e:
+            # Missing critical keys in the JSON
+            raise HTTPException(status_code=422, detail=f"Missing required key in config: {e}") from e
         except Exception as exc:
             self.logger.exception("Error updating nodes: %s", exc)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
