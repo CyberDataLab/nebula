@@ -8,7 +8,6 @@ class RunScenarioRequest(BaseModel):
     
 class StopScenarioRequest(BaseModel):
     experiment_type: str
-    federation_id: str
     
 class NodeUpdateRequest(BaseModel):
     config: Dict[str, Any] = {}    
