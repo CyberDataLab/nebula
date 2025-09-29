@@ -17,7 +17,6 @@ from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from nebula.addons.env import check_environment
-from nebula.controller.scenarios import ScenarioManagement
 from nebula.utils import DockerUtils, FileUtils, SocketUtils, TermEscapeCodeFormatter
 
 class CredentialManager:
@@ -1406,12 +1405,13 @@ class Deployer:
         print("Closing NEBULA (exiting from components)... Please wait")
         errors = []
 
-        try:
-            # Remove all scenario containers
-            ScenarioManagement.cleanup_scenario_containers()
-        except Exception as e:
-            errors.append(f"Scenario cleanup error: {e}")
-            logging.warning(f"Error during scenario cleanup: {e}")
+        #TODO call federation_controller to remove all scenarios instead of deployer
+        # try:
+        #     # Remove all scenario containers
+        #     ScenarioManagement.cleanup_scenario_containers()
+        # except Exception as e:
+        #     errors.append(f"Scenario cleanup error: {e}")
+        #     logging.warning(f"Error during scenario cleanup: {e}")
 
         try:
             Deployer._remove_all_containers_from_metadata()

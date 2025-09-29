@@ -5,7 +5,6 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))  # Parent directory where is the NEBULA module
 import nebula
 from app.deployer import Deployer
-from nebula.controller.scenarios import ScenarioManagement
 
 argparser = argparse.ArgumentParser(description="Controller of NEBULA platform", add_help=False)
 
@@ -164,6 +163,7 @@ if __name__ == "__main__":
     if args.stop == "all":
         Deployer.stop_all()
     elif args.stop == "nodes":
-        ScenarioManagement.stop_nodes()
+        #TODO stop_nodes from federation_controller
+        pass
 
     Deployer(args).start()
