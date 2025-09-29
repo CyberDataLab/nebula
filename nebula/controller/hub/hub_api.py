@@ -140,38 +140,38 @@ app = FastAPI(lifespan=lifespan)
 #     }
 
 
-# @app.get(controller_requests.Routes.AVAILABLE_GPUS)
-# async def get_available_gpu():
-#     """
-#     Get the list of GPUs with memory usage below 5%.
+@app.get(controller_requests.Routes.AVAILABLE_GPUS)
+async def get_available_gpu():
+    """
+    Get the list of GPUs with memory usage below 5%.
 
-#     Returns:
-#         dict: A dictionary with a list of GPU indices that are mostly free (usage < 5%).
-#     """
-#     available_gpus = []
+    Returns:
+        dict: A dictionary with a list of GPU indices that are mostly free (usage < 5%).
+    """
+    available_gpus = []
 
-#     if importlib.util.find_spec("pynvml") is not None:
-#         try:
-#             import pynvml
+    if importlib.util.find_spec("pynvml") is not None:
+        try:
+            import pynvml
 
-#             await asyncio.to_thread(pynvml.nvmlInit)
-#             devices = await asyncio.to_thread(pynvml.nvmlDeviceGetCount)
+            await asyncio.to_thread(pynvml.nvmlInit)
+            devices = await asyncio.to_thread(pynvml.nvmlDeviceGetCount)
 
-#             # Obtain GPU info
-#             for i in range(devices):
-#                 handle = await asyncio.to_thread(pynvml.nvmlDeviceGetHandleByIndex, i)
-#                 memory_info = await asyncio.to_thread(pynvml.nvmlDeviceGetMemoryInfo, handle)
-#                 memory_used_percent = (memory_info.used / memory_info.total) * 100
+            # Obtain GPU info
+            for i in range(devices):
+                handle = await asyncio.to_thread(pynvml.nvmlDeviceGetHandleByIndex, i)
+                memory_info = await asyncio.to_thread(pynvml.nvmlDeviceGetMemoryInfo, handle)
+                memory_used_percent = (memory_info.used / memory_info.total) * 100
 
-#                 # Obtain available GPUs
-#                 if memory_used_percent < 5:
-#                     available_gpus.append(i)
+                # Obtain available GPUs
+                if memory_used_percent < 5:
+                    available_gpus.append(i)
 
-#             return {
-#                 "available_gpus": available_gpus,
-#             }
-#         except Exception:  # noqa: S110
-#             pass
+            return {
+                "available_gpus": available_gpus,
+            }
+        except Exception:  # noqa: S110
+            pass
 
 
 # def validate_physical_fields(data: dict):
@@ -206,9 +206,10 @@ async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequ
 @app.post(controller_requests.Routes.STOP)
 async def stop_scenario(
     federation_id: str,
+    experiment_type: str,
     all: bool = Body(False, embed=True),
 ):
-    await hub_manager.stop_scenario(federation_id, stop_all=all)
+    await hub_manager.stop_scenario(federation_id, experiment_type=experiment_type, stop_all=all)
 
 
 @app.post(controller_requests.Routes.REMOVE)

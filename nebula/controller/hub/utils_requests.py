@@ -72,10 +72,13 @@ class UpdateScenarioRequest(BaseModel):
 
 
 class StopScenarioRequest(BaseModel):
+    experiment_type: str
     all: bool = False
 
 
 class RemoveScenarioRequest(BaseModel):
+    user: str
+    experiment_type: str
     scenario_name: str
 
 

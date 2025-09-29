@@ -33,3 +33,13 @@ class FederationAPIClient():
         except Exception as e:
             logging.info(e)
         return response
+
+    async def remove_scenario(self, federation_id: str, experiment_type: str, user: str, scenario_name: str):
+        request_url = self._fed_api_url + FedReq.factory_requests("remove", federation_id=federation_id)
+        request = FedReq.RemoveScenarioRequest(experiment_type=experiment_type, user=user, scenario_name=scenario_name)
+        response = None
+        try:
+            response = await APIUtils.post(request_url, request.model_dump())
+        except Exception as e:
+            logging.info(e)
+        return response

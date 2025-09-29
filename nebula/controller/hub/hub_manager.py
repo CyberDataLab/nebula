@@ -100,8 +100,8 @@ class HubManager:
         request: controller_requests.RemoveScenarioRequest,
     ) -> Dict[str, Any]:
         try:
+            await self.federation_client.remove_scenario(federation_id, request.experiment_type, request.user, request.scenario_name)
             await self.database_client.remove_scenario(federation_id)
-            # ScenarioManagement.remove_files_by_scenario(request.scenario_name)
         except Exception as exc:
             self.logger.exception(
                 "Error removing scenario %s (%s): %s",
