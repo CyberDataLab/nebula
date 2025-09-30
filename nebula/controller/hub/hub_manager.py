@@ -53,6 +53,7 @@ class HubManager:
             federation_id = HashUtils.generate_md5(f"nebula_{run_scenario_request.user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}")
             response = await self.federation_client.run_scenario(
                 user=run_scenario_request.user,
+                role=run_scenario_request.role,
                 federation_id=federation_id,
                 scenario_data=run_scenario_request.scenario_data,
             )
@@ -91,6 +92,19 @@ class HubManager:
         except Exception as exc:
             self.logger.exception(
                 "Error stopping scenario %s: %s", federation_id, exc
+            )
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+    async def resources_stop_scenario(self, federation_id: str) -> None:
+        try:
+            await self.database_client.stop_scenario(
+                federation_id,
+                {"all": False},
+            )
+            #TODO notify frontend
+        except Exception as exc:
+            self.logger.exception(
+                f"Error stopping scenario {federation_id}"
             )
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 

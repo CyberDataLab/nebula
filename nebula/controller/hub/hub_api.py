@@ -212,6 +212,13 @@ async def stop_scenario(
     await hub_manager.stop_scenario(federation_id, experiment_type=experiment_type, stop_all=all)
 
 
+@app.post(controller_requests.Routes.RESOURCES_STOP)
+async def resources_stop_scenario(
+    federation_id: str,
+):
+    return await hub_manager.resources_stop_scenario(federation_id)
+
+
 @app.post(controller_requests.Routes.REMOVE)
 async def remove_scenario(
     federation_id: str,

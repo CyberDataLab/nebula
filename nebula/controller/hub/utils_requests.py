@@ -11,6 +11,7 @@ class RunScenarioRequest(BaseModel):
     """
     scenario_data: Dict[str, Any]
     user: str
+    role: str
 
 
 class UpdateScenarioRequest(BaseModel):
@@ -115,6 +116,7 @@ class Routes:
     RUN = "/scenarios/run"
     UPDATE = "/scenarios/{federation_id}/update"
     STOP = "/scenarios/{federation_id}/stop"
+    RESOURCES_STOP = "/scenarios/{federation_id}/resources_stop"
     REMOVE = "/scenarios/{federation_id}/remove"
     FINISH = "/scenarios/{federation_id}/set_status_to_finished"
     RUNNING = "/scenarios/running"
