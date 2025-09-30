@@ -11,6 +11,7 @@ from fastapi import HTTPException, Request, UploadFile, status
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.controller.hub.clients.db_api_client import DatabaseAPIClient
 from nebula.controller.hub.clients.federation_api_client import FederationAPIClient
+from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
 from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
 import nebula.controller.hub.utils_requests as controller_requests
 
@@ -33,6 +34,13 @@ class HubManager:
             fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST"),
             logger=self.logger
         )
+        
+        self._scenario_qeue_manager = ScenarioQueueManager()
+        
+    @property
+    def sqm(self):
+        """Scenario Qeue Manager instance"""
+        return self._scenario_qeue_manager
 
     # ------------------------------------------------------------------
     # Scenarios
@@ -49,8 +57,19 @@ class HubManager:
         Returns:
             str: The name of the scenario that was started.
         """
+        user_host = request.client.host
+        user_port = request.client.port
+        user_dest = f"{user_host}:{user_port}"
         try:
+            #TODO crear todas las IDs en lista
             federation_id = HashUtils.generate_md5(f"nebula_{run_scenario_request.user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}")
+            
+            #guardar cola de escenarios
+            #await self.sqm.add_scenarios()
+            
+            #obtener primero escenario
+            #federation_id, scenario_data = await self.sqm.get_next_scenario(run_scenario_request.user)
+            
             response = await self.federation_client.run_scenario(
                 user=run_scenario_request.user,
                 role=run_scenario_request.role,
@@ -194,7 +213,11 @@ class HubManager:
             )
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
+    #TODO CORE -> FEderationController -> HUB -> USUARIO CONCRETO
     async def update_node(self, federation_id: str, request: Request) -> Any:
+        #TODO obtener user_dest a partir de federation ID para saber a que usuario mandar las updates/done/finish
+        #TODO command para decidir si queires recibir o no las updates de los nodos (pensando en el uso por terminal)
+        # await self.sqm.get_user_destination(federation_id)
         try:
             body = await request.json()
             if not isinstance(body, dict):
@@ -240,6 +263,7 @@ class HubManager:
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def node_done(self, scenario_name: str, request: Request) -> Any: # TODO redo for the frontend
+        
         url = (
             f"http://{os.environ['NEBULA_ENV_TAG']}_{os.environ['NEBULA_PREFIX_TAG']}_{os.environ['NEBULA_USER_TAG']}_"
             f"nebula-frontend/platform/dashboard/{scenario_name}/node/done"

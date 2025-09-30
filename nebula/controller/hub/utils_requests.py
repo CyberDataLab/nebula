@@ -9,6 +9,7 @@ class RunScenarioRequest(BaseModel):
     - Only requires scenario_data and user.
     - Extra fields (e.g., role, federation_id) are ignored.
     """
+    #TODO Dict[Dict]
     scenario_data: Dict[str, Any]
     user: str
     role: str
