@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS nodes (
   federation TEXT,
   round TEXT,
   scenario TEXT,
-  hash TEXT,
   extras JSONB,
   malicious TEXT
 );

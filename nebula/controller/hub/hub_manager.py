@@ -196,13 +196,6 @@ class HubManager:
             except Exception:
                 mob = {"latitude": 38.0235, "longitude": -1.1744}
 
-            # --- tracking_args: ensure run_hash --- # TODO remove run_hash?
-            tr = dict(cfg.get("tracking_args") or {})
-            if not tr.get("run_hash"):
-                # use the scenario name or a simple timestamp
-                scen_name = (cfg.get("scenario_args") or {}).get("name")
-                tr["run_hash"] = scen_name
-
             scen = dict(cfg.get("scenario_args") or {})
             scen.setdefault("federation_id", federation_id)
             scen.setdefault("federation", scen.get("federation"))
@@ -212,7 +205,6 @@ class HubManager:
                 "device_args": cfg["device_args"],
                 "network_args": cfg["network_args"],
                 "mobility_args": mob,
-                "tracking_args": tr,
                 "federation_args": cfg["federation_args"],
                 "scenario_args": cfg.get("scenario_args", {}),
                 # if your model has `timestamp: datetime`, keep datetime; if it's `str`, use .isoformat()

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, confloat, conint
+from pydantic import BaseModel
 
 
 class Routes:
@@ -86,17 +86,13 @@ class DeviceArgs(BaseModel):
 
 class NetworkArgs(BaseModel):
     ip: str
-    port: conint(ge=1, le=65535)  # type: ignore[valid-type]
+    port: int
     neighbors: List[Any]
 
 
 class MobilityArgs(BaseModel):
-    latitude: confloat(ge=-90, le=90)  # type: ignore[valid-type]
-    longitude: confloat(ge=-180, le=180)  # type: ignore[valid-type]
-
-
-class TrackingArgs(BaseModel):
-    run_hash: str
+    latitude: float
+    longitude: float
 
 
 class FederationArgs(BaseModel):
@@ -112,7 +108,6 @@ class UpdateNodesRequest(BaseModel):
     device_args: DeviceArgs
     network_args: NetworkArgs
     mobility_args: MobilityArgs
-    tracking_args: TrackingArgs
     federation_args: FederationArgs
     scenario_args: ScenarioArgs
     timestamp: str
@@ -134,8 +129,6 @@ class CheckScenarioRequest(BaseModel):
 
 class ListUsersRequest(BaseModel):
     all_info: bool = False
-
-
 
 
 def factory_requests_path(resource: str, user: str = "", role: str = "", federation_id: str = "") -> str:

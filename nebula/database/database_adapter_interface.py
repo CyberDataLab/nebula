@@ -85,7 +85,6 @@ class DatabaseAdapter(ABC):
         federation,
         federation_round,
         scenario,
-        run_hash,
         malicious,
     ):
         """Inserts or updates a node record. Latitude/longitude must be included in `extras` (JSON)."""

@@ -269,7 +269,6 @@ class PostgresDB(DatabaseAdapter):
         federation,
         federation_round,
         federation_id,
-        run_hash,
         malicious,
     ):
         """
@@ -305,25 +304,23 @@ class PostgresDB(DatabaseAdapter):
                             await conn.execute(
                                 """
                                 INSERT INTO nodes (uid, idx, ip, port, role, neighbors,
-                                                   timestamp, federation, round, scenario, hash, extras, malicious)
+                                                   timestamp, federation, round, scenario, extras, malicious)
                                 VALUES ($1, $2, $3, $4, $5, $6,
-                                        $7, $8, $9, $10, $11, $12::jsonb, $13);
+                                        $7, $8, $9, $10, $11::jsonb, $12);
                                 """,
                                 node_uid, idx, ip, port, role, neighbors,
-                                timestamp, federation, federation_round, federation_id, run_hash, extras_payload, malicious_payload,
+                                timestamp, federation, federation_round, federation_id, extras_payload, malicious_payload,
                             )
                         else:
                             # Update existing node
                             await conn.execute(
                                 """
                                 UPDATE nodes SET idx = $1, ip = $2, port = $3, role = $4, neighbors = $5,
-                                timestamp = $6, federation = $7, round = $8,
-                                hash = $9, extras = $10::jsonb, malicious = $11
+                                timestamp = $6, federation = $7, round = $8, extras = $9::jsonb, malicious = $10
                                 WHERE uid = $12 AND scenario = $13;
                                 """,
                                 idx, ip, port, role, neighbors,
-                                timestamp, federation, federation_round,
-                                run_hash, extras_payload, malicious_payload,
+                                timestamp, federation, federation_round, extras_payload, malicious_payload,
                                 node_uid, federation_id,
                             )
 

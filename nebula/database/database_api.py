@@ -228,7 +228,6 @@ async def update_node_record(request: UpdateNodesRequest):
             str(request.scenario_args.federation),
             str(request.federation_args.round),
             str(request.scenario_args.federation_id),
-            str(request.tracking_args.run_hash),
             bool(request.device_args.malicious),
         )
         return {"message": "Node updated successfully"}
