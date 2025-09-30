@@ -19,7 +19,7 @@ class FederationController(ABC):
         return self._logger 
 
     @abstractmethod
-    async def run_scenario(self,  federation_id: str, scenario_data: Dict, user: str):
+    async def run_scenario(self,  federation_id: str, scenario_data: Dict, user: str, rol: str):
         pass
 
     @abstractmethod
@@ -36,4 +36,8 @@ class FederationController(ABC):
     
     abstractmethod
     async def remove_scenario(self, federation_id: str, remove_scenario_request: RemoveScenarioRequest):
+        pass
+    
+    abstractmethod
+    async def initialize_resources_functionalities(self):
         pass
