@@ -32,8 +32,9 @@ async def lifespan(app: FastAPI):
     hub_url = f"http://{controller_host}:{hub_port}"
 
     # Initialize resource manager to assign devices availables to federations
-    await ResourceManager.get_instance(verbose=False).init()
-
+    #TODO get maxRAM from environ
+    ResourceManager.get_instance(logger=logger, verbose=False).init()
+    
     #["docker", "processes", "physical"]
     for exp_type in ["docker", "process"]:
         fed_controllers[exp_type] = federation_controller_factory(exp_type, hub_url, logger)

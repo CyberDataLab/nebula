@@ -2,7 +2,7 @@ import asyncio
 import importlib
 from collections.abc import Callable
 from typing import Dict, List
-
+import logging 
 import psutil
 from nebula.core.utils.locker import Locker
 import inspect
@@ -59,11 +59,12 @@ class ResourceManager:
                 cls._instance._initialize(*args, **kwargs)
         return cls._instance
 
-    def _initialize(self, max_ram=None, verbose=False):
+    def _initialize(self, logger, verbose=False):
         """Single initialization"""
         if hasattr(self, "_initialized"):
             return
         self._initialized = True
+        self._logger: logging.Logger = logger
         self._subscribers: dict[type, list] = {}
         self._resources_events_lock = Locker("resources_events_lock", async_lock=True)
         self._devices: List = []
@@ -73,15 +74,15 @@ class ResourceManager:
         self._currently_used_devices_lock = Locker("currently_used_devices_lock", async_lock=True)
         self._max_devices_per_user = 0
         self._monitor_cooldown = 10
-        self._max_ram = max_ram
+        self._max_ram = None
         self._monitor_task = None
-        self._verbose = False
+        self._verbose = verbose
         
     @staticmethod
-    def get_instance(verbose=False):
+    def get_instance(logger=None, verbose=False):
         """Static method to obtain EventManager instance"""
         if ResourceManager._instance is None:
-            ResourceManager(verbose=verbose)
+            ResourceManager(logger=logger,verbose=verbose)
         return ResourceManager._instance
     
     @property
@@ -154,10 +155,14 @@ class ResourceManager:
     async def _remove_available_devices(self, devices: List):
         async with self._available_devices_lock:
             self._available_devices.remove(devices)
+            if self._verbose:
+                self._logger.info(f"[ResourceManager] -  REMOVE available devices: {devices}")
 
     async def _update_available_devices(self, devices: List):
         async with self._available_devices_lock:
             self._available_devices.extend(devices)
+            if self._verbose:
+                self._logger.info(f"[ResourceManager] -  UPDATE available devices: {devices}")
 
     async def _get_devices(self, n: int):
         async with self._available_devices_lock:
@@ -174,6 +179,8 @@ class ResourceManager:
         devices = await self._get_devices(n_devices)
         async with self._currently_used_devices_lock:
             self.cud[federation_id] = devices
+            if self._verbose:
+                self._logger.info(f"[ResourceManager] -  ALLOCATED federation ID: {federation_id}, devices: {devices}")
         return devices
 
     async def _release_device_used(self, rde: ReleaseDevicesEvent):
@@ -196,3 +203,5 @@ class ResourceManager:
             memory_info = await asyncio.to_thread(psutil.virtual_memory)
             if memory_info.percent > self._max_ram:
                 asyncio.create_task(self.publish_recource_event(RAMOverusedEvent()))
+                if self._verbose:
+                    self._logger.info(f"[ResourceManager] -  MONITOR RAM overused detected")
