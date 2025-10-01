@@ -1,4 +1,5 @@
 import collections
+import logging
 from typing import Any, Dict, List, Union
 from nebula.core.utils.locker import Locker
 
@@ -44,11 +45,12 @@ class ScenarioQueueManager():
                 else:
                     self._current_fed_id = ""
                     return None
-        
+
         def get_user_destination(self):
             return self._user_dest
 
-    def __init__(self):
+    def __init__(self, logger: logging.Logger):
+        self._logger = logger
         self._active_scenarios: Dict[str, ScenarioQueueManager.Scenario] = {}                # Indexed by Federation-ID
         self._active_user_qeues: Dict[str, ScenarioQueueManager.UserScenarioQueue] = {}       # Indexed by User
         self._active_scenarios_lock = Locker("active_scenarios_lock", async_lock=True)
@@ -70,9 +72,9 @@ class ScenarioQueueManager():
         async with self._active_user_qeues_lock:
             return self._active_user_qeues.get(user, None)
 
-    async def _add_qeue_from_user(self, user: str):
+    async def _add_qeue_from_user(self, user: str, user_dest: str):
         async with self._active_user_qeues_lock:
-            self._active_user_qeues[user] = self.UserScenarioQueue()
+            self._active_user_qeues[user] = ScenarioQueueManager.UserScenarioQueue(user_dest)
 
     async def add_scenarios(
             self,
@@ -92,21 +94,21 @@ class ScenarioQueueManager():
             user_qeue = await self._get_qeue_from_user(user_id)
             await user_qeue.add_scenarios(user_id=user_id, federation_ids=federation_ids, data=data)
 
-    async def get_next_scenario(self, federation_id: str, user: str = "") -> tuple[str, str, Dict[str, Any]] | None:
+    async def get_next_scenario(self, federation_id: str = "", user: str = "") -> tuple[str, str, Dict[str, Any]] | None:
         if user:
             user_qeue = await self._get_qeue_from_user(user)
             next_scenario = await user_qeue.next_scenario()
-            return next_scenario if next_scenario else None
+            return next_scenario
         else:
             scenario_finished = await self._get_scenario_from_id(federation_id)
             if scenario_finished:
                 user_qeue = await self._get_qeue_from_user(scenario_finished.user_id)
                 next_scenario = await user_qeue.next_scenario()
-                return next_scenario if next_scenario else None
+                return next_scenario
             else:
                 # Message ID not found
                 return None
-        
+
     async def get_user_destination(self, federation_id: str) -> str:
         scenario = await self._get_scenario_from_id(federation_id)
         if scenario:

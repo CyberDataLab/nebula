@@ -34,21 +34,21 @@ class HubManager:
             fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST"),
             logger=self.logger
         )
-        
-        self._scenario_qeue_manager = ScenarioQueueManager()
-        
+
+        self._scenario_qeue_manager = ScenarioQueueManager(self.logger)
+
     @property
     def sqm(self):
         """Scenario Qeue Manager instance"""
         return self._scenario_qeue_manager
-    
+
     def _generate_federation_ids(self, user: str, scenario_datas: List) -> List[str]:
         federation_ids = []
         for i, sd in enumerate(scenario_datas):
             id = HashUtils.generate_md5(f"nebula_{user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}_{i}")    # Add index to hash
             federation_ids.append(id)
         return federation_ids
-    
+
     # ------------------------------------------------------------------
     # Scenarios
     # ------------------------------------------------------------------
@@ -69,17 +69,18 @@ class HubManager:
         user_dest = f"{user_host}:{user_port}"
         try:
             # Generate IDs for all scenarios
-            federation_ids = self._generate_federation_ids(user, scenario_data)
-            
+            federation_ids = self._generate_federation_ids(user, [scenario_data])
+
             # Save scenarios on User Scenario Qeue
-            await self.sqm.add_scenarios(user, user_dest, federation_ids, scenario_data)
-            
+            await self.sqm.add_scenarios(user, user_dest, federation_ids, [scenario_data])
+
             # Get first scenario to execute
-            _, federation_id, scenario_data = await self.sqm.get_next_scenario(user)
-            
+            _, federation_id, scenario_data = await self.sqm.get_next_scenario(user=user)
+
+            #TODO modify to use role on query
             response = await self.federation_client.run_scenario(
                 user=user,
-                role=role,
+                #role=role,
                 federation_id=federation_id,
                 scenario_data=scenario_data,
             )
@@ -224,44 +225,33 @@ class HubManager:
     async def update_node(self, federation_id: str, config: Dict[str, Any]) -> Any:
         #TODO command para decidir si quieres recibir o no las updates de los nodos (pensando en el uso por terminal)
         try:
-            # --- mobility_args: default + cast to float ---
-            mob = config.get("mobility_args", None) or {"latitude": 38.0235, "longitude": -1.1744}
-            try:
-                mob = {"latitude": float(mob["latitude"]), "longitude": float(mob["longitude"])}
-            except Exception:
-                mob = {"latitude": 38.0235, "longitude": -1.1744}
-
-            scen = dict(config.get("scenario_args") or {})
-            scen.setdefault("federation_id", federation_id)
-            scen.setdefault("federation", scen.get("federation"))
-
             data = {
-                "device_args": config["device_args"],
-                "network_args": config["network_args"],
-                "federation_args": config["federation_args"],
+                "device_args": config.get("device_args", {}),
+                "network_args": config.get("network_args", {}),
+                "mobility_args": config.get("mobility_args", {"latitude": 38.0235, "longitude": -1.1744}),
+                "federation_args": config.get("federation_args", {}),
                 "scenario_args": config.get("scenario_args", {}),
-                # if your model has `timestamp: datetime`, keep datetime; if it's `str`, use .isoformat()
-                "timestamp": str(datetime.now())
+                "timestamp": config.get("timestamp", str(datetime.now())),
             }
-            data["extras"] = mob
 
             await self.database_client.update_node(data)
-            
+
             #TODO push node update to user
             user_dest = await self.sqm.get_user_destination(federation_id)
 
         except KeyError as e:
             # Missing critical keys in the JSON
+            self.logger.exception("Missing required key in config: %s", e)
             raise HTTPException(status_code=422, detail=f"Missing required key in config: {e}") from e
         except Exception as exc:
             self.logger.exception("Error updating nodes: %s", exc)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def node_done(self, federation_id: str, node_idx) -> Any: # TODO redo for the frontend
-        
+
         user_dest = await self.sqm.get_user_destination(federation_id)
         #TODO push node done to user
-        
+
         # url = (
         #     f"http://{os.environ['NEBULA_ENV_TAG']}_{os.environ['NEBULA_PREFIX_TAG']}_{os.environ['NEBULA_USER_TAG']}_"
         #     f"nebula-frontend/platform/dashboard/{scenario_name}/node/done"
