@@ -28,151 +28,8 @@ async def lifespan(app: FastAPI):
     # Code to run on shutdown
     pass
 
-
 # Initialize FastAPI app outside the Controller class
 app = FastAPI(lifespan=lifespan)
-
-
-# # Define endpoints outside the Controller class
-# @app.get(controller_requests.Routes.INIT)
-# async def read_root():
-#     """
-#     Root endpoint of the NEBULA Controller API.
-
-#     Returns:
-#         dict: A welcome message indicating the API is accessible.
-#     """
-#     return {"message": "Welcome to the NEBULA Controller API"}
-
-
-# @app.get(controller_requests.Routes.STATUS)
-# async def get_status():
-#     """
-#     Check the status of the NEBULA Controller API.
-
-#     Returns:
-#         dict: A status message confirming the API is running.
-#     """
-#     return {"status": "NEBULA Controller API is running"}
-
-
-# @app.get(controller_requests.Routes.RESOURCES)
-# async def get_resources():
-#     """
-#     Get system resource usage including RAM and GPU memory usage.
-
-#     Returns:
-#         dict: A dictionary containing:
-#             - gpus (int): Number of GPUs detected.
-#             - memory_percent (float): Percentage of used RAM.
-#             - gpu_memory_percent (List[float]): List of GPU memory usage percentages.
-#     """
-#     devices = 0
-#     gpu_memory_percent = []
-
-#     # Obtain available RAM
-#     memory_info = await asyncio.to_thread(psutil.virtual_memory)
-
-#     if importlib.util.find_spec("pynvml") is not None:
-#         try:
-#             import pynvml
-
-#             await asyncio.to_thread(pynvml.nvmlInit)
-#             devices = await asyncio.to_thread(pynvml.nvmlDeviceGetCount)
-
-#             # Obtain GPU info
-#             for i in range(devices):
-#                 handle = await asyncio.to_thread(pynvml.nvmlDeviceGetHandleByIndex, i)
-#                 memory_info_gpu = await asyncio.to_thread(pynvml.nvmlDeviceGetMemoryInfo, handle)
-#                 memory_used_percent = (memory_info_gpu.used / memory_info_gpu.total) * 100
-#                 gpu_memory_percent.append(memory_used_percent)
-
-#         except Exception:  # noqa: S110
-#             pass
-
-#     return {
-#         # "cpu_percent": psutil.cpu_percent(),
-#         "gpus": devices,
-#         "memory_percent": memory_info.percent,
-#         "gpu_memory_percent": gpu_memory_percent,
-#     }
-
-
-# @app.get(controller_requests.Routes.LEAST_MEMORY_GPU)
-# async def get_least_memory_gpu():
-#     """
-#     Identify the GPU with the highest memory usage above a threshold (50%).
-
-#     Note:
-#         Despite the name, this function returns the GPU using the **most**
-#         memory above 50% usage.
-
-#     Returns:
-#         dict: A dictionary with the index of the GPU using the most memory above the threshold,
-#               or None if no such GPU is found.
-#     """
-#     gpu_with_least_memory_index = None
-
-#     if importlib.util.find_spec("pynvml") is not None:
-#         max_memory_used_percent = 50
-#         try:
-#             import pynvml
-
-#             await asyncio.to_thread(pynvml.nvmlInit)
-#             devices = await asyncio.to_thread(pynvml.nvmlDeviceGetCount)
-
-#             # Obtain GPU info
-#             for i in range(devices):
-#                 handle = await asyncio.to_thread(pynvml.nvmlDeviceGetHandleByIndex, i)
-#                 memory_info = await asyncio.to_thread(pynvml.nvmlDeviceGetMemoryInfo, handle)
-#                 memory_used_percent = (memory_info.used / memory_info.total) * 100
-
-#                 # Obtain GPU with less memory available
-#                 if memory_used_percent > max_memory_used_percent:
-#                     max_memory_used_percent = memory_used_percent
-#                     gpu_with_least_memory_index = i
-
-#         except Exception:  # noqa: S110
-#             pass
-
-#     return {
-#         "gpu_with_least_memory_index": gpu_with_least_memory_index,
-#     }
-
-
-@app.get(controller_requests.Routes.AVAILABLE_GPUS)
-async def get_available_gpu():
-    """
-    Get the list of GPUs with memory usage below 5%.
-
-    Returns:
-        dict: A dictionary with a list of GPU indices that are mostly free (usage < 5%).
-    """
-    available_gpus = []
-
-    if importlib.util.find_spec("pynvml") is not None:
-        try:
-            import pynvml
-
-            await asyncio.to_thread(pynvml.nvmlInit)
-            devices = await asyncio.to_thread(pynvml.nvmlDeviceGetCount)
-
-            # Obtain GPU info
-            for i in range(devices):
-                handle = await asyncio.to_thread(pynvml.nvmlDeviceGetHandleByIndex, i)
-                memory_info = await asyncio.to_thread(pynvml.nvmlDeviceGetMemoryInfo, handle)
-                memory_used_percent = (memory_info.used / memory_info.total) * 100
-
-                # Obtain available GPUs
-                if memory_used_percent < 5:
-                    available_gpus.append(i)
-
-            return {
-                "available_gpus": available_gpus,
-            }
-        except Exception:  # noqa: S110
-            pass
-
 
 # def validate_physical_fields(data: dict):
 #     if data.get("deployment") != "physical":
@@ -201,7 +58,7 @@ async def get_available_gpu():
 
 @app.post(controller_requests.Routes.RUN)
 async def run_scenario(run_scenario_request: controller_requests.RunScenarioRequest, request: Request):
-    return await hub_manager.run_scenario(run_scenario_request, request)
+    return await hub_manager.run_scenario(run_scenario_request.user, run_scenario_request.role, run_scenario_request.scenario_data, request)
 
 @app.post(controller_requests.Routes.STOP)
 async def stop_scenario(
@@ -272,27 +129,27 @@ async def get_scenario_by_federation_id(
     return await hub_manager.get_scenario_by_federation_id(federation_id)
 
 
-@app.get(controller_requests.Routes.NODES_BY_FEDERATION_ID)
+@app.get(controller_requests.Routes.NODES_LIST)
 async def list_nodes_by_federation_id_endpoint(
     federation_id: str,
 ):
     return await hub_manager.list_nodes_by_federation_id(federation_id)
 
 
-@app.post(controller_requests.Routes.NODES_UPDATE_BY_FEDERATION)
+@app.post(controller_requests.Routes.NODES_UPDATE)
 async def update_nodes(
     federation_id: str,
-    request: Request,
+    node_update_request: controller_requests.NodeUpdateRequest,
 ):
-    return await hub_manager.update_node(federation_id, request)
+    return await hub_manager.update_node(federation_id, node_update_request.config)
 
 
-@app.post(controller_requests.Routes.NODES_DONE_BY_SCENARIO)
+@app.post(controller_requests.Routes.NODES_DONE)
 async def node_done(
-    scenario_name: str,
-    request: Request,
+    federation_id: str,
+    node_done_request: controller_requests.NodeDoneRequest,
 ):
-    return await hub_manager.node_done(scenario_name, request)
+    return await hub_manager.node_done(federation_id, node_done_request.idx)
 
 
 @app.post(controller_requests.Routes.NODES_REMOVE)

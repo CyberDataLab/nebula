@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 from fastapi import HTTPException, Request, UploadFile, status
@@ -41,11 +41,18 @@ class HubManager:
     def sqm(self):
         """Scenario Qeue Manager instance"""
         return self._scenario_qeue_manager
-
+    
+    def _generate_federation_ids(self, user: str, scenario_datas: List) -> List[str]:
+        federation_ids = []
+        for i, sd in enumerate(scenario_datas):
+            id = HashUtils.generate_md5(f"nebula_{user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}_{i}")    # Add index to hash
+            federation_ids.append(id)
+        return federation_ids
+    
     # ------------------------------------------------------------------
     # Scenarios
     # ------------------------------------------------------------------
-    async def run_scenario(self, run_scenario_request: controller_requests.RunScenarioRequest, request: Request):
+    async def run_scenario(self, user: str, role: str, scenario_data, request: Request):
         """
         Launches a new scenario based on the provided configuration.
 
@@ -61,20 +68,20 @@ class HubManager:
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
         try:
-            #TODO crear todas las IDs en lista
-            federation_id = HashUtils.generate_md5(f"nebula_{run_scenario_request.user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}")
+            # Generate IDs for all scenarios
+            federation_ids = self._generate_federation_ids(user, scenario_data)
             
-            #guardar cola de escenarios
-            #await self.sqm.add_scenarios()
+            # Save scenarios on User Scenario Qeue
+            await self.sqm.add_scenarios(user, user_dest, federation_ids, scenario_data)
             
-            #obtener primero escenario
-            #federation_id, scenario_data = await self.sqm.get_next_scenario(run_scenario_request.user)
+            # Get first scenario to execute
+            _, federation_id, scenario_data = await self.sqm.get_next_scenario(user)
             
             response = await self.federation_client.run_scenario(
-                user=run_scenario_request.user,
-                role=run_scenario_request.role,
+                user=user,
+                role=role,
                 federation_id=federation_id,
-                scenario_data=run_scenario_request.scenario_data,
+                scenario_data=scenario_data,
             )
             if response:
                 await self.database_client.update_scenario(
@@ -84,21 +91,21 @@ class HubManager:
                         "scenario_name": response["scenario_name"],
                         "start_time": response["start_time"],
                         "end_time": "",
-                        "scenario": run_scenario_request.scenario_data,
+                        "scenario": scenario_data,
                         "status": "running",
-                        "username":run_scenario_request.user,
+                        "username":user,
                     },
                 )
                 return {"federation_id": federation_id}
             else:
                 raise HTTPException(status_code=500, detail="Error starting scenario")
         except Exception:
-            self.logger.exception("Error running scenario for user %s", run_scenario_request.user)
+            self.logger.exception("Error running scenario for user %s", user)
 
-    async def stop_scenario(self, federation_id: str, stop_all: bool = False) -> None: #TODO stop_all with queues
+    async def stop_scenario(self, federation_id: str, experiment_type: str, stop_all: bool = False) -> None: #TODO stop_all with queues
         try:
             response = await self.federation_client.stop_scenario(
-                experiment_type="all" if stop_all else "nebula",
+                experiment_type=experiment_type,
                 federation_id=federation_id,
             )
             if response:
@@ -214,46 +221,34 @@ class HubManager:
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     #TODO CORE -> FEderationController -> HUB -> USUARIO CONCRETO
-    async def update_node(self, federation_id: str, request: Request) -> Any:
-        #TODO obtener user_dest a partir de federation ID para saber a que usuario mandar las updates/done/finish
-        #TODO command para decidir si queires recibir o no las updates de los nodos (pensando en el uso por terminal)
-        # await self.sqm.get_user_destination(federation_id)
+    async def update_node(self, federation_id: str, config: Dict[str, Any]) -> Any:
+        #TODO command para decidir si quieres recibir o no las updates de los nodos (pensando en el uso por terminal)
         try:
-            body = await request.json()
-            if not isinstance(body, dict):
-                raise HTTPException(status_code=422, detail="Body must be a JSON object")
-
-            # Accept both formats: {config:{...}} or flat
-            cfg = body.get("config", body)
-
             # --- mobility_args: default + cast to float ---
-            mob = cfg.get("mobility_args") or {"latitude": 38.0235, "longitude": -1.1744}
+            mob = config.get("mobility_args", None) or {"latitude": 38.0235, "longitude": -1.1744}
             try:
                 mob = {"latitude": float(mob["latitude"]), "longitude": float(mob["longitude"])}
             except Exception:
                 mob = {"latitude": 38.0235, "longitude": -1.1744}
 
-            scen = dict(cfg.get("scenario_args") or {})
+            scen = dict(config.get("scenario_args") or {})
             scen.setdefault("federation_id", federation_id)
             scen.setdefault("federation", scen.get("federation"))
 
-            # Build the EXACT input expected by Pydantic (without the `config` wrapper)
             data = {
-                "device_args": cfg["device_args"],
-                "network_args": cfg["network_args"],
-                "mobility_args": mob,
-                "federation_args": cfg["federation_args"],
-                "scenario_args": cfg.get("scenario_args", {}),
+                "device_args": config["device_args"],
+                "network_args": config["network_args"],
+                "federation_args": config["federation_args"],
+                "scenario_args": config.get("scenario_args", {}),
                 # if your model has `timestamp: datetime`, keep datetime; if it's `str`, use .isoformat()
                 "timestamp": str(datetime.now())
             }
+            data["extras"] = mob
 
-            validated = controller_requests.UpdateNodesRequest(**data)
-
-            payload = validated.model_dump()  # Python objects: good for DB/driver
-            payload["extras"] = payload.get("mobility_args", {})
-
-            return await self.database_client.update_node(payload)
+            await self.database_client.update_node(data)
+            
+            #TODO push node update to user
+            user_dest = await self.sqm.get_user_destination(federation_id)
 
         except KeyError as e:
             # Missing critical keys in the JSON
@@ -262,15 +257,18 @@ class HubManager:
             self.logger.exception("Error updating nodes: %s", exc)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    async def node_done(self, scenario_name: str, request: Request) -> Any: # TODO redo for the frontend
+    async def node_done(self, federation_id: str, node_idx) -> Any: # TODO redo for the frontend
         
-        url = (
-            f"http://{os.environ['NEBULA_ENV_TAG']}_{os.environ['NEBULA_PREFIX_TAG']}_{os.environ['NEBULA_USER_TAG']}_"
-            f"nebula-frontend/platform/dashboard/{scenario_name}/node/done"
-        )
+        user_dest = await self.sqm.get_user_destination(federation_id)
+        #TODO push node done to user
+        
+        # url = (
+        #     f"http://{os.environ['NEBULA_ENV_TAG']}_{os.environ['NEBULA_PREFIX_TAG']}_{os.environ['NEBULA_USER_TAG']}_"
+        #     f"nebula-frontend/platform/dashboard/{scenario_name}/node/done"
+        # )
 
-        data = await request.json()
-        return await APIUtils.post(url, data=data)
+        # data = await request.json()
+        # return await APIUtils.post(url, data=data)
 
     async def remove_nodes_by_federation_id(self, federation_id: str) -> Dict[str, Any]:
         try:

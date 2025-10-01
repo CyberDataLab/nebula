@@ -9,7 +9,7 @@ class RunScenarioRequest(BaseModel):
     - Only requires scenario_data and user.
     - Extra fields (e.g., role, federation_id) are ignored.
     """
-    #TODO Dict[Dict]
+    #TODO List[Dict]
     scenario_data: Dict[str, Any]
     user: str
     role: str
@@ -65,45 +65,12 @@ class VerifyUserRequest(BaseModel):
     password: str
 
 
-# Nodes update payload
-class _Base(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-class DeviceArgs(_Base):
-    uid: str
+class NodeUpdateRequest(BaseModel):
+    config: Dict[str, Any] = {}    
+    
+    
+class NodeDoneRequest(BaseModel):
     idx: int
-    role: str
-    malicious: bool
-
-
-class NetworkArgs(_Base):
-    ip: str
-    port: int
-    neighbors: List[Any]
-
-
-class MobilityArgs(_Base):
-    latitude: float
-    longitude: float
-
-
-class FederationArgs(_Base):
-    round: int
-
-
-class ScenarioArgs(_Base):
-    federation: str
-    federation_id: str
-    name: str
-
-
-class UpdateNodesRequest(_Base):
-    device_args: DeviceArgs
-    network_args: NetworkArgs
-    mobility_args: MobilityArgs
-    federation_args: FederationArgs
-    scenario_args: ScenarioArgs
-    timestamp: str
 
 class Routes:
     # General
@@ -126,10 +93,9 @@ class Routes:
     GET_SCENARIO_BY_FEDERATION_ID = "/scenarios/{federation_id}"
 
     # Nodes
-    NODES_BY_FEDERATION_ID = "/nodes/{federation_id}"
-    NODES_UPDATE = "/nodes/update"
-    NODES_UPDATE_BY_FEDERATION = "/nodes/{federation_id}/update"
-    NODES_DONE_BY_SCENARIO = "/nodes/{scenario_name}/done"
+    NODES_LIST = "/nodes/{federation_id}"
+    NODES_UPDATE = "/nodes/{federation_id}/update"
+    NODES_DONE = "/nodes/{federation_id}/done"
     NODES_REMOVE = "/nodes/{federation_id}/remove"
 
     # Notes
