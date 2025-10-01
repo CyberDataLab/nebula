@@ -11,6 +11,7 @@ from nebula.utils import LoggerUtils
 from nebula.controller.federation.federation_controller import FederationController 
 from nebula.controller.federation.factory_federation_controller import federation_controller_factory
 from nebula.controller.federation.utils_requests import RemoveScenarioRequest, RunScenarioRequest, StopScenarioRequest, NodeUpdateRequest, NodeDoneRequest, Routes
+from nebula.controller.federation.resource_manager import ResourceManager
 
 fed_controllers: Dict[str, FederationController] = {}
 
@@ -30,9 +31,14 @@ async def lifespan(app: FastAPI):
     controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
     hub_url = f"http://{controller_host}:{hub_port}"
 
+    # Initialize resource manager to assign devices availables to federations
+    #TODO get maxRAM from environ
+    ResourceManager.get_instance(logger=logger, verbose=False).init()
+    
     #["docker", "processes", "physical"]
     for exp_type in ["docker", "process"]:
         fed_controllers[exp_type] = federation_controller_factory(exp_type, hub_url, logger)
+        await fed_controllers[exp_type].initialize_resources_functionalities()
         logger.info(f"{exp_type} Federation controller created.")
 
     yield
@@ -59,7 +65,7 @@ async def run_scenario(run_scenario_request: RunScenarioRequest):
     logger.info(f"[API]: run experiment request for deployment type: {experiment_type}")
     controller = fed_controllers.get(experiment_type, None)
     if controller:
-        return await controller.run_scenario(run_scenario_request.federation_id, run_scenario_request.scenario_data, run_scenario_request.user)
+        return await controller.run_scenario(run_scenario_request.federation_id, run_scenario_request.scenario_data, run_scenario_request.user, run_scenario_request.rol)
     else:
         return {"message": "Experiment type not allowed"}
     

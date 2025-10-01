@@ -7,9 +7,10 @@ from nebula.addons.topologymanager import TopologyManager
 from nebula.config.config import Config
 from nebula.core.utils.certificate import generate_certificate
 from nebula.core.datasets.nebuladataset import NebulaDataset, factory_nebuladataset, factory_dataset_setup
+from nebula.controller.federation.resource_manager import ResourceManager
 
 class ScenarioBuilder():
-    def __init__(self, federation_id, user):
+    def __init__(self, federation_id, user, rol):
         self._scenario_data = None
         self._config_setup = None
         self.logger = logging.getLogger("Federation-Controller")
@@ -17,6 +18,7 @@ class ScenarioBuilder():
         self._scenario_name = ""
         self._federation_id = federation_id
         self._user = user
+        self._rol = rol
 
     @property
     def sd(self):
@@ -387,7 +389,7 @@ class ScenarioBuilder():
                                                             ###############################
     """
 
-    def build_scenario_config_for_node(self, index, node) -> dict:
+    async def build_scenario_config_for_node(self, index, node) -> dict:
         self.logger.info(f"Start building the scenario configuration for participant {index}")
 
         def recursive_defaultdict():
@@ -434,7 +436,7 @@ class ScenarioBuilder():
         participant_config["training_args"]["epochs"] = int(self.sd["epochs"])
         participant_config["training_args"]["trainer"] = "lightning"
         participant_config["device_args"]["accelerator"] = self.sd["accelerator"]
-        participant_config["device_args"]["gpu_id"] = self.sd["gpu_id"]
+        participant_config["device_args"]["gpu_id"] = await ResourceManager.get_instance().assign_device_to_federation(self._federation_id, self._rol) #self.sd["gpu_id"]
         participant_config["device_args"]["logging"] = self.sd["logginglevel"]
         participant_config["aggregator_args"]["algorithm"] = self.sd["agg_algorithm"]
         participant_config["aggregator_args"]["aggregation_timeout"] = 60

@@ -4,11 +4,11 @@ from typing import Dict, Any
 class RunScenarioRequest(BaseModel):
     scenario_data: Dict[str, Any]
     user: str
+    rol: str
     federation_id: str
     
 class StopScenarioRequest(BaseModel):
     experiment_type: str
-    federation_id: str
     
 class NodeUpdateRequest(BaseModel):
     config: Dict[str, Any] = {}    

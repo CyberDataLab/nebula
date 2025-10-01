@@ -4,19 +4,19 @@ import json
 import os
 import shutil
 from nebula.utils import APIUtils
-import docker
+from datetime import datetime, timezone
 from nebula.controller.federation.federation_controller import FederationController
 from nebula.controller.federation.scenario_builder import ScenarioBuilder
 from nebula.controller.federation.utils_requests import factory_requests
 from nebula.controller.federation.utils_requests import RemoveScenarioRequest, NodeUpdateRequest, NodeDoneRequest
 from typing import Dict
-from fastapi import Request
 from nebula.config.config import Config
 from nebula.core.utils.certificate import generate_ca_certificate
 from nebula.core.utils.locker import Locker
+from nebula.controller.federation.resource_manager import ResourceManager, ReleaseDevicesEvent, RAMOverusedEvent
 
 class NebulaFederationProcesses():
-    def __init__(self):
+    def __init__(self, timestamp: datetime):
         self.scenario_name = ""
         self.participants_alive = 0
         self.round_per_participant = {}
@@ -32,6 +32,7 @@ class NebulaFederationProcesses():
         self.participants_alive_lock = Locker("participants_alive_lock", async_lock=True)
         self.config_dir = ""
         self.log_dir = ""
+        self.timestamp = timestamp
 
     async def get_additionals_to_be_deployed(self, config) -> list:
         async with self.federation_deployment_lock:
@@ -86,12 +87,12 @@ class ProcessesFederationController(FederationController):
                                                     ###############################
     """
 
-    async def run_scenario(self, federation_id: str, scenario_data: Dict, user: str):
+    async def run_scenario(self, federation_id: str, scenario_data: Dict, user: str, rol: str):
         #TODO maintain files on memory, not read them again
         federation = await self._add_nebula_federation_to_pool(federation_id, user)
         scenario_info = {}
         if federation:
-            scenario_builder = ScenarioBuilder(federation_id, user=user)
+            scenario_builder = ScenarioBuilder(federation_id, user=user, rol=rol)
             await self._initialize_scenario(scenario_builder, scenario_data, federation)
             generate_ca_certificate(dir_path=self.cert_dir)
             await self._load_configuration_and_start_nodes(scenario_builder, federation)
@@ -186,6 +187,8 @@ class ProcessesFederationController(FederationController):
         self.logger.info(f"Node-Done received from node on federation ID: ({federation_id})")
 
         if await nebula_federation.is_experiment_finish():
+            asyncio.create_task(self._release_devices(federation_id))
+            
             payload = node_done_request.model_dump()
             self.logger.info(f"All nodes have finished on federation ID: ({federation_id}), reporting to hub..")
             await self._remove_nebula_federation_from_pool(federation_id)
@@ -234,7 +237,7 @@ class ProcessesFederationController(FederationController):
         fed = None
         async with self._federations_dict_lock:
             if not federation_id in self.nfp:
-                fed = NebulaFederationProcesses()
+                fed = NebulaFederationProcesses(datetime.now(timezone.utc))
                 self.nfp[federation_id] = fed
                 self.logger.info(f"SUCCESS: new ID: ({federation_id}) added to the pool")
             else:
@@ -250,6 +253,13 @@ class ProcessesFederationController(FederationController):
             else:
                 self.logger.info(f"ERROR: trying to remove ({federation_id}) from federations pool..")
                 return None
+            
+    async def _get_most_recent_federation(self):
+        async with self._federations_dict_lock:
+            if not self.nfp:
+                return None
+            federation_id = max(self.nfp, key=lambda k: self.nfp[k].timestamp)
+            return federation_id
             
     async def _check_active_federation(self, federation_id: str) -> bool:
         async with self._federations_dict_lock:
@@ -335,7 +345,7 @@ class ProcessesFederationController(FederationController):
                  self.logger.info(f"ERROR while creating files: {e}")
 
             try:
-                participant_config = sb.build_scenario_config_for_node(index, node)
+                participant_config = await sb.build_scenario_config_for_node(index, node)
                 #self.logger.info(f"dictionary: {participant_config}")
             except Exception as e:
                  self.logger.info(f"ERROR while building configuration for node: {e}")
@@ -560,3 +570,20 @@ class ProcessesFederationController(FederationController):
                 os.chmod(f"{federation.config_dir}/current_scenario_commands.sh", 0o755)
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
+        
+    """                                             ###############################
+                                                    #     RESOURCE MANAGEMENT     #
+                                                    ###############################
+    """
+
+    async def initialize_resources_functionalities(self):
+        await ResourceManager.get_instance().subscribe_resource_event(RAMOverusedEvent, self._ram_overused_event_callback)
+    
+    async def _ram_overused_event_callback(self, roe: RAMOverusedEvent):
+        federation_id = await self._get_most_recent_federation()
+        if federation_id:
+            await self.stop_scenario(federation_id)
+
+    async def _release_devices(self, federation_id: str):
+        rde = ReleaseDevicesEvent(federation_id)
+        await ResourceManager.get_instance().publish_recource_event(rde)
