@@ -1,14 +1,13 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, ConfigDict, conint, confloat
 
+"""                                                     ###############################
+                                                        #           API REST          #
+                                                        ###############################
+"""
 
 class RunScenarioRequest(BaseModel):
-    """Request model to trigger a scenario run on the controller.
-
-    - Only requires scenario_data and user.
-    - Extra fields (e.g., role, federation_id) are ignored.
-    """
     #TODO List[Dict]
     scenario_data: Dict[str, Any]
     user: str
@@ -71,6 +70,54 @@ class NodeUpdateRequest(BaseModel):
     
 class NodeDoneRequest(BaseModel):
     idx: int
+    
+class ScenarioFinishEvent(BaseModel):
+    federation_id: str
+    
+#TODO verify used correctly on hub API    
+class RunningScenariosRequest(BaseModel):
+    user: str
+    role: str
+    get_all: bool = False
+    
+class UserListRequest(BaseModel):
+    user: str
+    role: str
+    all_info: bool = False
+    
+class AddUserRequest(BaseModel):
+    user: str
+    password: str
+    role: str
+    
+class DeleteUserRequest(BaseModel):
+     user: str
+     role: str
+     user_to_delete: str
+     
+class UpdateUserRequest(BaseModel):
+    user: str
+    password: str
+    role: str
+    
+class VerifyUserRequest(BaseModel):
+    user: str
+    password: str
+    
+"""                                                     ###############################
+                                                        #          WEB SOCKET         #
+                                                        ###############################
+"""
+
+class WSMessage(BaseModel):
+    type: str
+    payload: Dict[str, Any]
+    
+EVENT_MAP: Dict[str, Type[BaseModel]] = {
+    "update": NodeUpdateRequest,
+    "done": NodeDoneRequest,
+    # "finish": ScenarioFinishEvent,
+} 
 
 class Routes:
     # General
@@ -105,7 +152,6 @@ class Routes:
 
     # Users
     USER_LIST = "/user/list"
-    USER_BY_FEDERATION_ID = "/user/{federation_id}"
     USER_ADD = "/user/add"
     USER_DELETE = "/user/delete"
     USER_UPDATE = "/user/update"
