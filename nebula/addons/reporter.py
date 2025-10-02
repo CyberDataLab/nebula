@@ -274,7 +274,7 @@ class Reporter:
             - Delays for 5 seconds upon general exceptions to avoid rapid retry loops.
         """
         try:
-            node_updt_req = NodeUpdateRequest(config=self.config.participant)
+            node_updt_req = NodeUpdateRequest(config=self.config.get_update_info())
             payload = node_updt_req.model_dump()
             async with (
                 aiohttp.ClientSession() as session,

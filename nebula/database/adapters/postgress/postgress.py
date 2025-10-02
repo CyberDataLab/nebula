@@ -317,7 +317,7 @@ class PostgresDB(DatabaseAdapter):
                                 """
                                 UPDATE nodes SET idx = $1, ip = $2, port = $3, role = $4, neighbors = $5,
                                 timestamp = $6, federation = $7, round = $8, extras = $9::jsonb, malicious = $10
-                                WHERE uid = $12 AND scenario = $13;
+                                WHERE uid = $11 AND scenario = $12;
                                 """,
                                 idx, ip, port, role, neighbors,
                                 timestamp, federation, federation_round, extras_payload, malicious_payload,

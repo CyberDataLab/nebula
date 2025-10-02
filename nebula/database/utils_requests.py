@@ -87,7 +87,7 @@ class DeviceArgs(BaseModel):
 class NetworkArgs(BaseModel):
     ip: str
     port: int
-    neighbors: List[Any]
+    neighbors: List[str]
 
 
 class MobilityArgs(BaseModel):

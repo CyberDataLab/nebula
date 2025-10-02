@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from logging import FileHandler, Formatter
+from datetime import datetime
 
 CYAN = "\x1b[0;36m"
 RESET = "\x1b[0m"
@@ -48,6 +49,19 @@ class Config:
     def get_train_logging_config(self):
         # TBD
         pass
+
+    def get_update_info(self):
+        return {
+            "device_args": self.participant["device_args"],
+            "network_args": self.participant["network_args"],
+            "federation_args": self.participant["federation_args"],
+            "scenario_args": self.participant["scenario_args"],
+            "timestamp": str(datetime.now()),
+            **(
+                {"mobility_args": self.participant["mobility_args"]}
+                if "mobility_args" in self.participant else {}
+            )
+        }
 
     def reset_logging_configuration(self):
         for handler in logging.root.handlers[:]:
