@@ -157,6 +157,9 @@ class Routes:
     USER_UPDATE = "/user/update"
     USER_VERIFY = "/user/verify"
 
+    # Real time updates
+    OPEN_RT = "/ws/{channel_id}"
+
     # Discovery / Physical management
     DISCOVER_VPN = "/discover-vpn"
     PHYSICAL_RUN = "/physical/run"

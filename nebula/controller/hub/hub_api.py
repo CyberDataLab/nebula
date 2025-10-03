@@ -6,7 +6,7 @@ import os
 import re
 
 import uvicorn
-from fastapi import Body, FastAPI, File, Request, UploadFile, status
+from fastapi import Body, FastAPI, File, Request, UploadFile, WebSocket, status
 from fastapi.concurrency import asynccontextmanager
 
 from nebula.controller.hub.hub_manager import HubManager
@@ -253,6 +253,9 @@ async def update_user_controller(user: str = Body(...), password: str = Body(...
 async def verify_user_controller(user: str = Body(...), password: str = Body(...)):
     return await hub_manager.verify_user(user, password)
 
+@app.websocket("/ws/{channel_id}")
+async def open_real_time_client(websocket: WebSocket, channel_id: str):
+    return await hub_manager.open_real_time_client(websocket, channel_id)
 
 if __name__ == "__main__":
     # Parse args from command line

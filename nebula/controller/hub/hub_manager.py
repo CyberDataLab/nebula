@@ -4,16 +4,15 @@ import json
 import logging
 import os
 from typing import Any, Dict, List, Optional
-
 import aiohttp
-from fastapi import HTTPException, Request, UploadFile, status
-
+from fastapi import HTTPException, Request, UploadFile, WebSocket, status
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.controller.hub.clients.db_api_client import DatabaseAPIClient
 from nebula.controller.hub.clients.federation_api_client import FederationAPIClient
 from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
 from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
 import nebula.controller.hub.utils_requests as controller_requests
+from nebula.controller.hub.real_time_manager import RealTimeManager
 
 class HubManager:
     """Encapsulates the controller business logic so the API layer stays thin."""
@@ -36,11 +35,17 @@ class HubManager:
         )
 
         self._scenario_qeue_manager = ScenarioQueueManager(self.logger)
+        self._real_time_manager = RealTimeManager(self.logger)
 
     @property
     def sqm(self):
         """Scenario Qeue Manager instance"""
         return self._scenario_qeue_manager
+    
+    @property
+    def rtm(self):
+        """Real Time Manager instance"""
+        return self._real_time_manager
 
     def _generate_federation_ids(self, user: str, scenario_datas: List) -> List[str]:
         federation_ids = []
@@ -370,6 +375,9 @@ class HubManager:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error verifying user: {exc}",
             ) from exc
+        
+    async def open_real_time_client(websocket: WebSocket, channel_id: str):
+        pass
 
     # ------------------------------------------------------------------
     # Discovery / Physical management
