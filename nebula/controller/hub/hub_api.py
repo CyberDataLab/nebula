@@ -253,7 +253,7 @@ async def update_user_controller(user: str = Body(...), password: str = Body(...
 async def verify_user_controller(user: str = Body(...), password: str = Body(...)):
     return await hub_manager.verify_user(user, password)
 
-@app.websocket("/ws/{channel_id}")
+@app.websocket(controller_requests.Routes.OPEN_RT)
 async def open_real_time_client(websocket: WebSocket, channel_id: str):
     return await hub_manager.open_real_time_client(websocket, channel_id)
 

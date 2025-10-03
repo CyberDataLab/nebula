@@ -36,8 +36,6 @@ class RealTimeManager():
             else:
                 return False
             
-    async def 
-
     async def push_message(self, channel_id: str, message: dict):
         """Envía un mensaje a todos los clientes de un canal"""
         async with self._channels_lock:
