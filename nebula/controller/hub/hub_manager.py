@@ -11,7 +11,7 @@ from nebula.controller.hub.clients.db_api_client import DatabaseAPIClient
 from nebula.controller.hub.clients.federation_api_client import FederationAPIClient
 from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
 from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
-import nebula.controller.hub.utils_requests as controller_requests
+import nebula.controller.hub.utils_requests as hub_requests
 from nebula.controller.hub.real_time_manager import RealTimeManager
 
 class HubManager:
@@ -143,7 +143,7 @@ class HubManager:
     async def remove_scenario(
         self,
         federation_id: str,
-        request: controller_requests.RemoveScenarioRequest,
+        request: hub_requests.RemoveScenarioRequest,
     ) -> Dict[str, Any]:
         try:
             await self.federation_client.remove_scenario(federation_id, request.experiment_type, request.user, request.scenario_name)
@@ -167,7 +167,7 @@ class HubManager:
     async def update_scenario(
         self,
         federation_id: str,
-        request: controller_requests.UpdateScenarioRequest,
+        request: hub_requests.UpdateScenarioRequest,
     ) -> Any:
         try:
             return await self.database_client.update_scenario(federation_id, request.model_dump())
@@ -376,8 +376,8 @@ class HubManager:
                 detail=f"Error verifying user: {exc}",
             ) from exc
         
-    async def open_real_time_client(websocket: WebSocket, channel_id: str):
-        pass
+    async def open_real_time_client(self, websocket: WebSocket, channel_id: str):
+        await self.rtm.open_real_time_client(websocket, channel_id)
 
     # ------------------------------------------------------------------
     # Discovery / Physical management

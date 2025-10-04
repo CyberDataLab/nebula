@@ -212,7 +212,7 @@ class NebulaClient:
     
     async def _open_persistent_connection(self):
         try:
-            async with websockets.connect(self._persistent_connection_url) as ws:
+            async with websockets.connect(self._persistent_connection_url, open_timeout=5, close_timeout=2) as ws:
                 self._ws = ws
                 while True:
                     raw_msg = await ws.recv()
