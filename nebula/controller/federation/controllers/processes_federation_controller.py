@@ -7,7 +7,7 @@ from nebula.utils import APIUtils
 import docker
 from nebula.controller.federation.federation_controller import FederationController
 from nebula.controller.federation.scenario_builder import ScenarioBuilder
-from nebula.controller.hub.utils_requests import factory_requests_path, NodeUpdateRequest, NodeDoneRequest, FinishScenarioRequest
+from nebula.controller.hub.utils_requests import factory_requests_path, NodeUpdateRequest, NodeDoneRequest
 from nebula.controller.federation.schemas.responses import *
 from nebula.controller.federation.schemas.errors import *
 from nebula.controller.federation.utils.api_utils import raise_error

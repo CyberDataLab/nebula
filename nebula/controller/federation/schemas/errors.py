@@ -13,9 +13,6 @@ class ErrorCode(IntEnum):
     SCENARIO_INIT_FAILED = 1102
     SCENARIO_STOP_FAILED = 1111
     SCENARIO_REMOVE_ACTIVE_FEDERATION = 1121
-    SCENARIO_REMOVE_FILES_NOT_FOUND = 1122
-    SCENARIO_REMOVE_LOGFILE_NOT_FOUND = 1123
-    SCENARIO_REMOVE_CONFIG_NOT_FOUND = 1123
     SCENARIO_REMOVE_FAILED = 1125
 
     # Nodes
@@ -86,13 +83,6 @@ SCENARIO_STOP_FAILED = ErrorDefinition(
     http_status=500,
     error="ScenarioStopFailed",
     message="Scenario stop failed unexpectedly."
-)
-
-SCENARIO_REMOVE_FILES_NOT_FOUND = ErrorDefinition(
-    code=ErrorCode.SCENARIO_REMOVE_FILES_NOT_FOUND,
-    http_status=404,
-    error="FederationFilesNotFound",
-    message="Can not find files from federation."
 )
 
 SCENARIO_REMOVE_ACTIVE_FEDERATION = ErrorDefinition(
