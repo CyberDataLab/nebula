@@ -41,7 +41,7 @@ class HubManager:
     def sqm(self):
         """Scenario Qeue Manager instance"""
         return self._scenario_qeue_manager
-    
+
     @property
     def rtm(self):
         """Real Time Manager instance"""
@@ -315,15 +315,6 @@ class HubManager:
                 detail=f"Error retrieving users: {exc}",
             ) from exc
 
-    async def get_user_by_federation_id(self, federation_id: str) -> Any:
-        try:
-            return await self.database_client.get_user_by_federation_id(federation_id)
-        except Exception as exc:
-            self.logger.exception(
-                "Error obtaining user for %s: %s", federation_id, exc
-            )
-            raise HTTPException(status_code=500, detail="Internal server error") from exc
-
     async def add_user(self, user: str, password: str, role: str) -> Any:
         try:
             return await self.database_client.add_user({
@@ -375,7 +366,7 @@ class HubManager:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error verifying user: {exc}",
             ) from exc
-        
+
     async def open_real_time_client(self, websocket: WebSocket, channel_id: str):
         await self.rtm.open_real_time_client(websocket, channel_id)
 

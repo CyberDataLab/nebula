@@ -148,11 +148,6 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def _get_user_by_federation_id(self, federation_id):
-        """Retrieves the user associated with a scenario by federation_id."""
-        raise NotImplementedError
-
-    @abstractmethod
     async def _remove_scenario_by_federation_id(self, federation_id):
         """Deletes a scenario by its federation_id."""
         raise NotImplementedError

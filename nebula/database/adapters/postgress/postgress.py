@@ -623,14 +623,6 @@ class PostgresDB(DatabaseAdapter):
         return result
 
 
-    async def _get_user_by_federation_id(self, federation_id:str):
-        """
-        Retrieves the username associated with a scenario (from the direct 'username' column).
-        """
-        async with self.pool.acquire() as conn:
-            return await conn.fetchval("SELECT username FROM scenarios WHERE federation_id = $1;", federation_id)
-
-
     async def _remove_scenario_by_federation_id(self, federation_id:str):
         """
         Delete a scenario from the database by its unique name.

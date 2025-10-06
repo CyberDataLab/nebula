@@ -63,7 +63,7 @@ async def run_scenario(run_scenario_request: hub_requests.RunScenarioRequest, re
 @app.post(hub_requests.Routes.STOP)
 async def stop_scenario(
     federation_id: str,
-    experiment_type: str,
+    experiment_type: str = Body(False, embed=True),
     all: bool = Body(False, embed=True),
 ):
     await hub_manager.stop_scenario(federation_id, experiment_type=experiment_type, stop_all=all)
@@ -184,13 +184,6 @@ async def remove_notes_by_federation_id_endpoint(
 @app.get(hub_requests.Routes.USER_LIST)
 async def list_users_controller(all_info: bool = False):
     return await hub_manager.list_users(all_info=all_info)
-
-
-@app.get(hub_requests.Routes.USER_BY_FEDERATION_ID)
-async def get_user_by_federation_id_endpoint(
-    federation_id: str,
-):
-    return await hub_manager.get_user_by_federation_id(federation_id)
 
 
 @app.get(hub_requests.Routes.DISCOVER_VPN)

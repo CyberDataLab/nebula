@@ -156,13 +156,6 @@ class DatabaseAPIClient:
         payload = {"all_info": all_info}
         return await self._get(url, payload, DBReq.ListUsersRequest)
 
-    async def get_user_by_federation_id(self, federation_id: str) -> Any:
-        path = DBReq.factory_requests_path(
-            "get_user_by_scenario_name", federation_id=federation_id
-        )
-        url = self._build_url(path)
-        return await self._get(url)
-
     async def add_user(self, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("add_user")
         url = self._build_url(path)

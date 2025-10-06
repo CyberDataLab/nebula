@@ -289,18 +289,6 @@ async def list_users_controller(request: ListUsersRequest = Depends()):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {e}")
 
 
-@app.get(Routes.USER_BY_FEDERATION_ID)
-async def get_user_by_federation_id(
-    federation_id: str
-):
-    try:
-        user = await db._get_user_by_federation_id(federation_id)
-        return user
-    except Exception as e:
-        logging.exception(f"Error obtaining user for federation {federation_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
 @app.post(Routes.USER_ADD)
 async def add_user_controller(request: AddUserRequest):
     try:
