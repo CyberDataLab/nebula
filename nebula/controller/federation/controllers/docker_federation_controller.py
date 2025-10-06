@@ -7,9 +7,11 @@ from nebula.utils import DockerUtils, APIUtils
 import docker
 from nebula.controller.federation.federation_controller import FederationController
 from nebula.controller.federation.scenario_builder import ScenarioBuilder
-from nebula.controller.federation.utils_requests import factory_requests
-from nebula.controller.federation.utils_requests import RemoveScenarioRequest, NodeUpdateRequest, NodeDoneRequest
-from typing import Dict
+from nebula.controller.hub.utils_requests import factory_requests_path, NodeUpdateRequest, NodeDoneRequest, FinishScenarioRequest
+from nebula.controller.federation.schemas.responses import *
+from nebula.controller.federation.schemas.errors import *
+from nebula.controller.federation.utils.api_utils import raise_error
+from typing import Any, Dict
 from nebula.config.config import Config
 from nebula.core.utils.certificate import generate_ca_certificate
 from nebula.core.utils.locker import Locker
@@ -101,10 +103,16 @@ class DockerFederationController(FederationController):
                 nebula_federation.scenario_name = scenario_builder.get_scenario_name()
             except Exception as e:
                 self.logger.info(f"ERROR: federation ID: ({federation_id}) not found on pool..")
-                return None
+                raise_error(FEDERATION_NOT_FOUND)
         else:
              self.logger.info(f"ERROR: federation ID: ({federation_id}) already exists..")
-        return scenario_info
+             raise_error(FEDERATION_ALREADY_EXISTS)
+         
+        if scenario_info:
+            return RunScenarioResponse(**scenario_info)
+        else:
+            self.logger.info(f"ERROR: Scenario config not build correctly for federation ID: ({federation_id})")
+            raise_error(SCENARIO_BUILD_FAILED)
 
     async def stop_scenario(self, federation_id: str):
         """
@@ -114,14 +122,14 @@ class DockerFederationController(FederationController):
         """
         federation = await self._remove_nebula_federation_from_pool(federation_id)
         if not federation:
-            return False
+            raise_error(FEDERATION_NOT_FOUND)
 
         client = docker.from_env()
         metadata_path = os.path.join(federation.config_dir, "scenario.metadata")
         
         if not os.path.exists(metadata_path):
             self.logger.info(f"ERROR {metadata_path} - no 'scenario.metadata' found")
-            return False
+            raise_error(SCENARIO_STOP_FAILED)
             
         with open(metadata_path) as f:
             meta = json.load(f)
@@ -155,17 +163,19 @@ class DockerFederationController(FederationController):
             os.remove(metadata_path)
         except Exception as e:
             self.logger.info(f"Could not remove scenario.metadata: {e}")
-            return False
+            raise_error(SCENARIO_STOP_FAILED)
 
-        return True #TODO care about cases
+        return StopScenarioResponse(federation_id=federation_id)
 
-    async def update_nodes(self, federation_id: str, node_update_request: NodeUpdateRequest):
-        config = node_update_request.config
+    async def update_nodes(self, federation_id: str, config: Dict[str, Any]):
         scenario_name = config["scenario_args"]["name"]
         fed_id = config["scenario_args"]["federation_id"]
 
         try:
-            nebula_federation = self.nfp[fed_id]
+            nebula_federation = await self._get_nebula_federation(federation_id)
+            if not nebula_federation:
+                raise_error(FEDERATION_NOT_FOUND)
+                
             self.logger.info(f"Update received from node on federation ID: ({fed_id})")
             last_fed_round = nebula_federation.federation_round
             additionals = await nebula_federation.get_additionals_to_be_deployed(config) # It modifies if neccesary the federation round
@@ -188,56 +198,65 @@ class DockerFederationController(FederationController):
                                     nebula_federation.last_index_deployed += 1
                                     #additionals.remove(index)
                                     adds_deployed.add(index)
-            payload = node_update_request.model_dump()
-            asyncio.create_task(self._send_to_hub("update", payload, federation_id=fed_id))
-            return {"message": "Node updated successfully in Federation Controller"}
+            payload = NodeUpdateRequest(config=Config).model_dump()
+            asyncio.create_task(self._send_to_hub("nodes_update", payload, federation_id=fed_id))
+            return NodeUpdateResponse(federation_id=federation_id)
         except Exception as e:
             self.logger.info(f"ERROR: federation ID: ({fed_id}), {e}")
-            return {"message": "Node updated failed in Federation Controller"}
+            raise_error(NODE_UPDATE_FAILED)
 
-    async def node_done(self, federation_id: str, node_done_request: NodeDoneRequest):
-        nebula_federation = self.nfp[federation_id]
+    async def node_done(self, federation_id: str, idx: int, deployment: str, name: str):
+        nebula_federation = await self._get_nebula_federation(federation_id)
+        if not nebula_federation:
+            raise_error(FEDERATION_NOT_FOUND)
+            
         self.logger.info(f"Node-Done received from node on federation ID: ({federation_id})")
 
         if await nebula_federation.is_experiment_finish():
-            payload = node_done_request.model_dump()
             self.logger.info(f"All nodes have finished on federation ID: ({federation_id}), reporting to hub..")
             await self._remove_nebula_federation_from_pool(federation_id)
-            asyncio.create_task(self._send_to_hub("finish", payload, federation_id=federation_id))
+            asyncio.create_task(self._send_to_hub("finish", payload={}, federation_id=federation_id))
 
-        payload = node_done_request.model_dump()
-        asyncio.create_task(self._send_to_hub("done", payload, federation_id=federation_id))
-        return {"message": "Nodes done received successfully"}
+        payload = NodeDoneRequest(idx=idx).model_dump()
+        asyncio.create_task(self._send_to_hub("nodes_done", payload, federation_id=federation_id))
+        return NodeDoneResponse(federation_id=federation_id, idx=idx)
 
-    async def remove_scenario(self, federation_id: str, remove_scenario_request: RemoveScenarioRequest):
+    async def remove_scenario(self, federation_id: str, experiment_type: str, user: str, scenario_name: str):
         if(await self._check_active_federation(federation_id)):
             self.logger.info(f"WARNING: Cannot remove files from active federation: ({federation_id})")
-            return False
+            raise_error(SCENARIO_REMOVE_ACTIVE_FEDERATION)
         
-        folder_name = remove_scenario_request.user+"_"+remove_scenario_request.scenario_name
+        folder_name = user+"_"+scenario_name
         scenario_config_path = os.path.join(self.config_dir, folder_name)
         scenario_log_path = os.path.join(self.log_dir, folder_name)
-        
-        if not os.path.exists(scenario_config_path):
-            self.logger.info(f"ERROR {scenario_config_path} - no config folder found")
-        if not os.path.exists(scenario_log_path):
-            self.logger.info(f"ERROR {scenario_log_path} - no log folder found")
+          
+        info_messages = []
+       
+        if os.path.exists(scenario_config_path):
+            try:
+                shutil.rmtree(scenario_config_path)
+                self.logger.info(f"Removed config folder {scenario_config_path}")
+            except Exception as e:
+                self.logger.exception(f"Could not remove config folder {scenario_config_path}: {e}")
+                raise_error(SCENARIO_REMOVE_FAILED)
+        else:
+            self.logger.warning(f"Config folder {scenario_config_path} not found, skipping removal")
+            info_messages.append("Config folder not found, nothing to remove.")
+
+        # 3️⃣ Eliminación de la carpeta de LOG
+        if os.path.exists(scenario_log_path):
+            try:
+                shutil.rmtree(scenario_log_path)
+                self.logger.info(f"Removed log folder {scenario_log_path}")
+            except Exception as e:
+                self.logger.exception(f"Could not remove log folder {scenario_log_path}: {e}")
+                raise_error(SCENARIO_REMOVE_FAILED)
+        else:
+            self.logger.warning(f"Log folder {scenario_log_path} not found, skipping removal")
+            info_messages.append("Log folder not found, nothing to remove.")
             
-        try:
-            shutil.rmtree(scenario_config_path)
-            self.logger.info(f"Removed config folder {scenario_config_path}")
-        except Exception as e:
-            self.logger.info(f"Could not remove config folder {scenario_config_path}: {e}")
-            return False
-        
-        try:
-            shutil.rmtree(scenario_log_path)
-            self.logger.info(f"Removed log folder {scenario_log_path}")
-        except Exception as e:
-            self.logger.info(f"Could not remove log folder {scenario_log_path}: {e}")
-            return False
-        
-        return True
+        additional_info = " | ".join(info_messages)    
+        return RemoveScenarioResponse(federation_id=federation_id, additional_info=additional_info)
         
     """                                             ###############################
                                                     #       FUNCTIONALITIES       #
@@ -265,6 +284,10 @@ class DockerFederationController(FederationController):
                 self.logger.info(f"ERROR: trying to remove ({federation_id}) from federations pool..")
                 return None
 
+    async def _get_nebula_federation(self, federation_id: str) -> NebulaFederationDocker | None:
+        async with self._federations_dict_lock:
+            return self.nfp.get(federation_id, None)
+
     async def _check_active_federation(self, federation_id: str) -> bool:
         async with self._federations_dict_lock:
             if federation_id in self.nfp:
@@ -283,9 +306,9 @@ class DockerFederationController(FederationController):
                self.logger.info(f"ERROR: trying to update ({federation_id}) on federations pool..")
         return updated
 
-    async def _send_to_hub(self, operation, payload, **kwargs):
+    async def _send_to_hub(self, operation, payload: Dict = {}, **kwargs):
         try:
-            url_request = self._hub_url + factory_requests(operation, **kwargs)
+            url_request = self._hub_url + factory_requests_path(operation, **kwargs)
             await APIUtils.post(url_request, payload)
         except Exception as e:
             self.logger.info(f"Failed to send update to Hub: {e}")

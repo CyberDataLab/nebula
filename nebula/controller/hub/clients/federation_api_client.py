@@ -1,4 +1,4 @@
-import nebula.controller.federation.utils_requests as FedReq
+import nebula.controller.federation.schemas.requests as FedReq
 from nebula.utils import APIUtils
 import logging
 from typing import Any, Dict

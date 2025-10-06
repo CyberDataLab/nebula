@@ -1,16 +1,16 @@
 import argparse
 import os
 import logging
-from fastapi import FastAPI, Body, Path, Request
+from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager
 from typing import Dict
-from typing import Annotated
-from functools import wraps
-from fastapi import HTTPException
 from nebula.utils import LoggerUtils
 from nebula.controller.federation.federation_controller import FederationController 
 from nebula.controller.federation.factory_federation_controller import federation_controller_factory
-from nebula.controller.federation.utils_requests import RemoveScenarioRequest, RunScenarioRequest, StopScenarioRequest, NodeUpdateRequest, NodeDoneRequest, Routes
+from nebula.controller.federation.schemas.requests import *
+from nebula.controller.federation.schemas.responses import *
+from nebula.controller.federation.schemas.errors import *
+from nebula.controller.federation.utils.api_utils import raise_error
 
 fed_controllers: Dict[str, FederationController] = {}
 
@@ -51,7 +51,20 @@ async def read_root():
     logger.info("Test curl succesfull")
     return {"message": "Welcome to the NEBULA Federation Controller API"}
 
-@app.post(Routes.RUN)
+@app.post(
+    Routes.RUN,
+    response_model=RunScenarioResponse,
+    responses={                                   
+        400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
+        404: {"model": ErrorResponse, "description": "Scenario ID not found"},
+        409: {"model": ErrorResponse, "description": "Conflict - Scenario ID exists"},
+        500: {"model": ErrorResponse, "description": "Error while building scenario"},
+    },
+    summary="Run a new scenario",
+    description=(
+        "Starts a new federated learning scenario based on the provided configuration."
+    ),
+)
 async def run_scenario(run_scenario_request: RunScenarioRequest):
     global fed_controllers
     experiment_type = run_scenario_request.scenario_data["deployment"]
@@ -59,11 +72,22 @@ async def run_scenario(run_scenario_request: RunScenarioRequest):
     logger.info(f"[API]: run experiment request for deployment type: {experiment_type}")
     controller = fed_controllers.get(experiment_type, None)
     if controller:
-        return await controller.run_scenario(run_scenario_request.federation_id, run_scenario_request.scenario_data, run_scenario_request.user)
+        return await controller.run_scenario(run_scenario_request.model_dump())
     else:
-        return {"message": "Experiment type not allowed"}
+        raise_error(BAD_CONTROLLER)
     
-@app.post(Routes.STOP)
+@app.post(
+    Routes.STOP,
+    response_model=StopScenarioResponse,
+    responses={                                   
+        400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
+        500: {"model": ErrorResponse, "description": "Error while stopping scenario"},
+    },
+    summary="Stop a running scenario",
+    description=(
+        "Stops a running scenario and free all the resources used"
+    ),
+)
 async def stop_scenario(
     federation_id: str, 
     stop_scenario_request: StopScenarioRequest
@@ -72,13 +96,25 @@ async def stop_scenario(
     experiment_type = stop_scenario_request.experiment_type
     controller = fed_controllers.get(experiment_type, None)
     logger = logging.getLogger("Federation-Controller")
-    logger.info(f"[API]: stop experiment request for federation ID: {stop_scenario_request.federation_id}")
+    logger.info(f"[API]: stop experiment request for federation ID: {federation_id}")
     if controller:
         return await controller.stop_scenario(federation_id)
     else:
-        return {"message": "Experiment type not allowed"}
+        raise_error(BAD_CONTROLLER)
 
-@app.post(Routes.UPDATE)
+@app.post(
+    Routes.UPDATE,
+    response_model=NodeUpdateResponse,
+    responses={                                   
+        400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
+        404: {"model": ErrorResponse, "description": "Scenario ID not found"},
+        500: {"model": ErrorResponse, "description": "Error while stopping scenario"},
+    },
+    summary="Node update information",
+    description=(
+        "Nodes notify their updates to the controller"
+    ),
+)
 async def update_nodes(
     federation_id: str,
     node_update_request: NodeUpdateRequest,
@@ -87,11 +123,22 @@ async def update_nodes(
     experiment_type = node_update_request.config["scenario_args"]["deployment"]
     controller = fed_controllers.get(experiment_type, None)
     if controller:
-        return await controller.update_nodes(federation_id, node_update_request)
+        return await controller.update_nodes(federation_id, **node_update_request.model_dump())
     else:
-        return {"message": "Experiment type not allowed on response for update message.."}
+        raise_error(BAD_CONTROLLER)
 
-@app.post(Routes.DONE)
+@app.post(
+    Routes.DONE,
+    response_model=NodeDoneResponse,
+    responses={                                   
+        400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
+        404: {"model": ErrorResponse, "description": "Scenario ID not found"},
+    },
+    summary="Node done notification",
+    description=(
+        "Nodes notify when they have finished their process"
+    ),
+)
 async def node_done(
     federation_id: str,
     node_done_request: NodeDoneRequest,
@@ -100,11 +147,23 @@ async def node_done(
     experiment_type = node_done_request.deployment
     controller = fed_controllers.get(experiment_type, None)
     if controller:
-        return await controller.node_done(federation_id, node_done_request)
+        return await controller.node_done(federation_id, **node_done_request.model_dump())
     else:
-        return {"message": "Experiment type not allowed on responde for Node done message.."}
+        raise_error(BAD_CONTROLLER)
     
-@app.post(Routes.REMOVE)
+@app.post(
+    Routes.REMOVE,
+    response_model=RemoveScenarioResponse,
+    responses={                                   
+        400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
+        409: {"model": ErrorResponse, "description": "Scenario is currently active"},
+        500: {"model": ErrorResponse, "description": "Error while removing scenario files"},
+    },
+    summary="Remove federation files",
+    description=(
+        "Removes files from a not running scenario"
+    ),
+)
 async def scenario_remove(
     federation_id: str,
     remove_scenario_request: RemoveScenarioRequest,
@@ -113,9 +172,9 @@ async def scenario_remove(
     experiment_type = remove_scenario_request.experiment_type
     controller = fed_controllers.get(experiment_type, None)
     if controller:
-        return await controller.remove_scenario(federation_id, remove_scenario_request)
+        return await controller.remove_scenario(federation_id, **remove_scenario_request.model_dump())
     else:
-        return {"message": "Experiment type not allowed on responde for scenario remove message.."}
+        raise_error(BAD_CONTROLLER)
 
 if __name__ == "__main__":
     # Parse args from command line

@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from fastapi import Request
-from typing import Dict
+from typing import Any, Dict
 from nebula.controller.federation.scenario_builder import ScenarioBuilder
-from nebula.controller.federation.utils_requests import NodeUpdateRequest, NodeDoneRequest, RemoveScenarioRequest
+from nebula.controller.federation.schemas.requests import NodeUpdateRequest, NodeDoneRequest, RemoveScenarioRequest
 import logging 
 
 class NebulaFederation(ABC):
@@ -27,13 +27,13 @@ class FederationController(ABC):
         pass
 
     @abstractmethod
-    async def update_nodes(self, federation_id: str, node_update_request: NodeUpdateRequest):
+    async def update_nodes(self, federation_id: str, config: Dict[str, Any]):
         pass
     
     abstractmethod
-    async def node_done(self, federation_id: str, node_done_request: NodeDoneRequest):
+    async def node_done(self, federation_id: str, idx: int, deployment: str, name: str):
         pass
     
     abstractmethod
-    async def remove_scenario(self, federation_id: str, remove_scenario_request: RemoveScenarioRequest):
+    async def remove_scenario(self, federation_id: str, experiment_type: str, user: str, scenario_name: str):
         pass

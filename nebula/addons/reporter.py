@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import sys
-from nebula.controller.federation.utils_requests import NodeUpdateRequest, NodeDoneRequest
+from nebula.controller.federation.schemas.requests import NodeUpdateRequest, NodeDoneRequest
 from typing import TYPE_CHECKING
 
 import aiohttp
@@ -175,7 +175,6 @@ class Reporter:
         node_done_req = NodeDoneRequest(idx=self.config.participant["device_args"]["idx"],
                                         deployment=self.config.participant["scenario_args"]["deployment"],
                                         name=self.config.participant["scenario_args"]["name"],
-                                        federation_id=self.config.participant["scenario_args"]["federation_id"]
                         )
         payload = node_done_req.model_dump()
         data = json.dumps(payload)

@@ -71,9 +71,6 @@ class NodeUpdateRequest(BaseModel):
 class NodeDoneRequest(BaseModel):
     idx: int
     
-class ScenarioFinishEvent(BaseModel):
-    federation_id: str
-    
 #TODO verify used correctly on hub API    
 class RunningScenariosRequest(BaseModel):
     user: str
@@ -133,7 +130,7 @@ class Routes:
     STOP = "/scenarios/{federation_id}/stop"
     RESOURCES_STOP = "/scenarios/{federation_id}/resources_stop"
     REMOVE = "/scenarios/{federation_id}/remove"
-    FINISH = "/scenarios/{federation_id}/set_status_to_finished"
+    FINISH = "/scenarios/{federation_id}/finish"
     RUNNING = "/scenarios/running"
     CHECK_SCENARIO = "/scenarios/check/{user}/{role}/{federation_id}"
     GET_SCENARIOS_BY_USER = "/scenarios/{user}/{role}"
