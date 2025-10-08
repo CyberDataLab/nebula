@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Optional
 
 class RunScenarioResponse(BaseModel):
     federation_id: str

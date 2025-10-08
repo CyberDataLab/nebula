@@ -231,7 +231,6 @@ class ProcessesFederationController(FederationController):
             self.logger.warning(f"Config folder {scenario_config_path} not found, skipping removal")
             info_messages.append("Config folder not found, nothing to remove.")
 
-        # 3️⃣ Eliminación de la carpeta de LOG
         if os.path.exists(scenario_log_path):
             try:
                 shutil.rmtree(scenario_log_path)

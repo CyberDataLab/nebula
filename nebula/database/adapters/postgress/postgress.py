@@ -8,6 +8,17 @@ import asyncio
 from passlib.context import CryptContext
 
 from nebula.database.database_adapter_interface import DatabaseAdapter
+from nebula.database.schemas.errors import (
+    CONNECTION_FAILED,
+    CONNECTION_TIMEOUT,
+    CONNECTION_CLOSED,
+    TABLE_NOT_FOUND,
+    COLUMN_NOT_FOUND,
+    PERMISSION_DENIED,
+    DATA_FORMAT_ERROR,
+    QUERY_FAILED,
+    UNKNOWN_DB_ERROR,
+)
 
 # --- Configuration ---
 # Use environment variables for database credentials from the Docker Compose file
@@ -730,3 +741,30 @@ class PostgresDB(DatabaseAdapter):
         """
         async with self.pool.acquire() as conn:
             await conn.execute("DELETE FROM notes WHERE federation_id = $1;", federation_id)
+            
+    def _map_pg_exception_to_error(exc: Exception):
+        """
+        Maping asyncpg exceptions to DatabaseErrorDefinition.
+        """
+        # --- Connection errors ---
+        if isinstance(exc, asyncpg.CannotConnectNowError):
+            return CONNECTION_FAILED
+        if isinstance(exc, asyncpg.InterfaceError):
+            return CONNECTION_CLOSED
+        if isinstance(exc, asyncpg.PoolAcquireTimeoutError):
+            return CONNECTION_TIMEOUT
+
+        # --- Errors SQL / query ---
+        if isinstance(exc, asyncpg.UndefinedTableError):
+            return TABLE_NOT_FOUND
+        if isinstance(exc, asyncpg.UndefinedColumnError):
+            return COLUMN_NOT_FOUND
+        if isinstance(exc, asyncpg.InsufficientPrivilegeError):
+            return PERMISSION_DENIED
+        if isinstance(exc, asyncpg.DataError):
+            return DATA_FORMAT_ERROR
+        if isinstance(exc, asyncpg.PostgresError):
+            return QUERY_FAILED
+
+        # --- Default ---
+        return UNKNOWN_DB_ERROR

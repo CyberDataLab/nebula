@@ -33,7 +33,9 @@ class ErrorDefinition:
     message: str
 
 
-# --- Controllers ---
+# ============================================================
+# ERROR CONTROLLER
+# ============================================================
 BAD_CONTROLLER = ErrorDefinition(
     code=ErrorCode.BAD_CONTROLLER,
     http_status=400,
@@ -41,7 +43,9 @@ BAD_CONTROLLER = ErrorDefinition(
     message="Experiment type not supported in the system."
 )
 
-# --- Federation ---
+# ============================================================
+# ERROR FEDERATION
+# ============================================================
 FEDERATION_ALREADY_EXISTS = ErrorDefinition(
     code=ErrorCode.FEDERATION_ALREADY_EXISTS,
     http_status=409,
@@ -63,7 +67,9 @@ FEDERATION_INIT_FAILED = ErrorDefinition(
     message="Unable to initialize federation properly."
 )
 
-# --- Scenarios ---
+# ============================================================
+# ERROR SCENARIOS
+# ============================================================
 SCENARIO_BUILD_FAILED = ErrorDefinition(
     code=ErrorCode.SCENARIO_BUILD_FAILED,
     http_status=500,
@@ -99,7 +105,9 @@ SCENARIO_REMOVE_FAILED = ErrorDefinition(
     message="Scenario removed failed unexpectedly."
 )
 
-# --- Nodes ---
+# ============================================================
+# ERROR NODES
+# ============================================================
 NODE_UPDATE_FAILED = ErrorDefinition(
     code=ErrorCode.NODE_UPDATE_FAILED,
     http_status=500,
@@ -114,7 +122,7 @@ NODE_DONE_FAILED = ErrorDefinition(
     message="Node done event could not be processed."
 )
 
-# --- Default ---
+# --- DEFAULT ---
 UNKNOWN_ERROR = ErrorDefinition(
     code=ErrorCode.UNKNOWN_ERROR,
     http_status=500,
