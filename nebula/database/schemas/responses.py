@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 
 class UpdateScenarioResponse(BaseModel):
@@ -70,3 +71,8 @@ class CheckScenarioResponse(BaseModel):
 class ListUsersResponse(BaseModel):
     pass
     # all_info: bool = False
+    
+class ErrorResponse(BaseModel):
+    error: str
+    message: str
+    internal_code: Optional[int] = None

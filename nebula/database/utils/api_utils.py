@@ -1,8 +1,8 @@
 from fastapi import HTTPException
-from nebula.controller.federation.schemas.responses import ErrorResponse
-from nebula.controller.federation.schemas.errors import ErrorDefinition
+from nebula.database.schemas.responses import ErrorResponse
+from nebula.database.schemas.errors import DatabaseErrorDefinition
 
-def raise_error(error_def: ErrorDefinition):
+def raise_error(error_def: DatabaseErrorDefinition):
     """raise HTTP exception with standar format."""
     raise HTTPException(
         status_code=error_def.http_status,
