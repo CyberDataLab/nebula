@@ -2,14 +2,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 class UpdateScenarioResponse(BaseModel):
-    pass
-    # alias: str
-    # scenario_name: str
-    # start_time: str
-    # end_time: str
-    # scenario: Dict[str, Any]
-    # status: str
-    # username: str
+    success: bool
 
 class StopScenarioResponse(BaseModel):
     pass
@@ -22,27 +15,6 @@ class FinishScenarioResponse(BaseModel):
 class UpdateNotesResponse(BaseModel):
     pass
     # notes: str
-
-class AddUserResponse(BaseModel):
-    pass
-    # user: str
-    # password: str
-    # role: str
-
-class DeleteUserResponse(BaseModel):
-    pass
-    # user: str
-
-class UpdateUserResponse(BaseModel):
-    pass
-    # user: str
-    # password: str
-    # role: str
-
-class VerifyUserResponse(BaseModel):
-    pass
-    # user: str
-    # password: str
 
 class UpdateNodesResponse(BaseModel):
     pass

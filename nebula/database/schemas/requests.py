@@ -43,14 +43,11 @@ class UpdateScenarioRequest(BaseModel):
     status: str
     username: str
 
-
 class StopScenarioRequest(BaseModel):
     all: bool = False
 
-
 class FinishScenarioRequest(BaseModel):
     all: bool = False
-
 
 class UpdateNotesRequest(BaseModel):
     notes: str
@@ -60,72 +57,32 @@ class AddUserRequest(BaseModel):
     password: str
     role: str
 
-
 class DeleteUserRequest(BaseModel):
     user: str
-
 
 class UpdateUserRequest(BaseModel):
     user: str
     password: str
     role: str
 
-
 class VerifyUserRequest(BaseModel):
     user: str
     password: str
 
-
-# Nodes update payload
-class DeviceArgs(BaseModel):
-    uid: str
-    idx: int
-    role: str
-    malicious: bool
-
-
-class NetworkArgs(BaseModel):
-    ip: str
-    port: int
-    neighbors: List[str]
-
-
-class MobilityArgs(BaseModel):
-    latitude: float
-    longitude: float
-
-
-class FederationArgs(BaseModel):
-    round: int
-
-
-class ScenarioArgs(BaseModel):
-    federation: str
-    federation_id: str
-
-
 class UpdateNodesRequest(BaseModel):
-    device_args: DeviceArgs
-    network_args: NetworkArgs
-    mobility_args: MobilityArgs
-    federation_args: FederationArgs
-    scenario_args: ScenarioArgs
-    timestamp: str
+    config: Dict[str, Any]
 
 class GetScenariosRequest(BaseModel):
     user: str
     role: str
 
-
 class GetRunningScenarioRequest(BaseModel):
     get_all: bool = False
-
 
 class CheckScenarioRequest(BaseModel):
     user: str
     role: str
     federation_id: str
-
 
 class ListUsersRequest(BaseModel):
     all_info: bool = False

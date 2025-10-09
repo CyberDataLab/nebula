@@ -9,6 +9,8 @@ from passlib.context import CryptContext
 
 from nebula.database.database_adapter_interface import DatabaseAdapter
 from nebula.database.schemas.errors import (
+    DatabaseErrorDefinition,
+    POOL_NOT_INITIALIZED,
     CONNECTION_FAILED,
     CONNECTION_TIMEOUT,
     CONNECTION_CLOSED,
@@ -19,6 +21,9 @@ from nebula.database.schemas.errors import (
     QUERY_FAILED,
     UNKNOWN_DB_ERROR,
 )
+
+from nebula.database.schemas.responses import *
+from nebula.database.utils.api_utils import raise_error
 
 # --- Configuration ---
 # Use environment variables for database credentials from the Docker Compose file
@@ -109,16 +114,21 @@ class PostgresDB(DatabaseAdapter):
         """
         Retrieves a list of users from the users database.
         """
-        async with self.pool.acquire() as conn:
-            result = await conn.fetch("SELECT * FROM users")
+        self._verify_pool()
+        
+        try:
+            async with self.pool.acquire() as conn:
+                result = await conn.fetch("SELECT * FROM users")
 
-        if all_info:
-            # Return JSON-serializable dicts with full info
-            return [dict(row) for row in result]
-        else:
-            # Return just the list of usernames (strings)
-            return [row["user"] for row in result]
-
+            if all_info:
+                # Return JSON-serializable dicts with full info
+                return [dict(row) for row in result]
+            else:
+                # Return just the list of usernames (strings)
+                return [row["user"] for row in result]
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            raise_error(db_error)
 
     async def _get_user_info(self, user: str):
         """
@@ -126,7 +136,6 @@ class PostgresDB(DatabaseAdapter):
         """
         async with self.pool.acquire() as conn:
             return await conn.fetchrow('SELECT * FROM users WHERE "user" = $1', user)
-
 
     async def _verify(self, user: str, password: str):
         """
@@ -149,7 +158,6 @@ class PostgresDB(DatabaseAdapter):
             logging.error(f"Error during password verification for user {user_up}", exc_info=True)
         return None
 
-
     async def _verify_hash_algorithm(self, user: str):
         """
         Checks if the stored password hash for a user uses a supported Argon2 algorithm.
@@ -163,14 +171,12 @@ class PostgresDB(DatabaseAdapter):
             return password_hash.startswith(argon2_prefixes)
         return False
 
-
     async def _delete_user_from_db(self, user: str):
         """
         Deletes a user record from the users database.
         """
         async with self.pool.acquire() as conn:
             await conn.execute('DELETE FROM users WHERE "user" = $1', user)
-
 
     async def _add_user(self, user:str, password:str, role:str):
         """
@@ -182,7 +188,6 @@ class PostgresDB(DatabaseAdapter):
                 'INSERT INTO users ("user", password, role) VALUES ($1, $2, $3)',
                 user.upper(), hashed_password, role,
             )
-
 
     async def _update_user(self, user:str, password:str, role:str):
         """
@@ -242,6 +247,8 @@ class PostgresDB(DatabaseAdapter):
         """
         Fetches all nodes associated with a specific scenario, ordered by their index as integers.
         """
+        self._verify_pool()
+        
         try:
             async with self.pool.acquire() as conn:
                 command = "SELECT * FROM nodes WHERE federation = $1 ORDER BY CAST(idx AS INTEGER) ASC;"
@@ -263,8 +270,8 @@ class PostgresDB(DatabaseAdapter):
                     rows.append(row)
                 return rows
         except Exception as e:
-            logging.error(f"Error occurred while listing nodes by scenario name: {e}")
-            return None
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
 
     async def _update_node_record(
@@ -285,9 +292,12 @@ class PostgresDB(DatabaseAdapter):
         """
         Inserts or updates a node record in the database for a given scenario, ensuring thread-safe access.
         """
-        async with _node_lock:
-            async with self.pool.acquire() as conn:
-                try:
+        self._verify_pool()
+        
+        
+        try:
+            async with _node_lock:
+                async with self.pool.acquire() as conn:
                     # Ensure `extras` is a JSON string when provided
                     extras_payload = None
                     if extras is not None:
@@ -300,22 +310,19 @@ class PostgresDB(DatabaseAdapter):
                                 # Fallback to empty JSON object on serialization issues
                                 logging.warning("Unable to serialize extras to JSON, storing as empty object.")
                                 extras_payload = json.dumps({})
-
                     # Ensure malicious is stored as text if the column expects text
                     malicious_payload = malicious if isinstance(malicious, str) else str(malicious)
-
                     async with conn.transaction():
                         result = await conn.fetchrow(
                             "SELECT * FROM nodes WHERE uid = $1 AND scenario = $2 FOR UPDATE;",
                             node_uid, federation_id
                         )
-
                         if result is None:
                             # Insert new node
                             await conn.execute(
                                 """
                                 INSERT INTO nodes (uid, idx, ip, port, role, neighbors,
-                                                   timestamp, federation, round, scenario, extras, malicious)
+                                                timestamp, federation, round, scenario, extras, malicious)
                                 VALUES ($1, $2, $3, $4, $5, $6,
                                         $7, $8, $9, $10, $11::jsonb, $12);
                                 """,
@@ -334,12 +341,11 @@ class PostgresDB(DatabaseAdapter):
                                 timestamp, federation, federation_round, extras_payload, malicious_payload,
                                 node_uid, federation_id,
                             )
-
                         updated_row = await conn.fetchrow("SELECT * from nodes WHERE uid = $1 AND scenario = $2;", node_uid, federation_id)
                         return dict(updated_row) if updated_row else None
-                except asyncpg.PostgresError as e:
-                    logging.error(f"Database error during node record update: {e}", exc_info=True)
-                    return None
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
 
     async def _remove_all_nodes(self):
@@ -354,8 +360,13 @@ class PostgresDB(DatabaseAdapter):
         """
         Deletes all nodes associated with a specific scenario from the database.
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute("DELETE FROM nodes WHERE federation = $1;", federation_id)
+        self._verify_pool()
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("DELETE FROM nodes WHERE federation = $1;", federation_id)
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
     # --- Scenario Management Functions ---
 
@@ -428,31 +439,35 @@ class PostgresDB(DatabaseAdapter):
         # Safe list of allowed sorting fields to prevent SQL injection.
         order_by_clause = self._build_order_by_clause(sort_by)
 
-        async with self.pool.acquire() as conn:
-            # Base query that extracts fields from the JSONB using the ->> operator
-            command = f"""
-                SELECT
-                    federation_id,
-                    name,
-                    username,
-                    status,
-                    start_time,
-                    end_time,
-                    config->>'title' AS title,
-                    config->>'model' AS model,
-                    config->>'dataset' AS dataset,
-                    config->>'rounds' AS rounds,
-                    config  -- Return the full config object
-                FROM scenarios
-            """
-            params = []
-            if role != "admin":
-                command += " WHERE username = $1" # username is a direct column
-                params.append(user)
+        try:
+            async with self.pool.acquire() as conn:
+                # Base query that extracts fields from the JSONB using the ->> operator
+                command = f"""
+                    SELECT
+                        federation_id,
+                        name,
+                        username,
+                        status,
+                        start_time,
+                        end_time,
+                        config->>'title' AS title,
+                        config->>'model' AS model,
+                        config->>'dataset' AS dataset,
+                        config->>'rounds' AS rounds,
+                        config  -- Return the full config object
+                    FROM scenarios
+                """
+                params = []
+                if role != "admin":
+                    command += " WHERE username = $1" # username is a direct column
+                    params.append(user)
 
-            command += f" {order_by_clause};"
+                command += f" {order_by_clause};"
 
-            result_dicts = await conn.fetch(command, *params)
+                result_dicts = await conn.fetch(command, *params)
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
         scenarios_to_return = [dict(s) for s in result_dicts]
 
@@ -471,19 +486,21 @@ class PostgresDB(DatabaseAdapter):
         return scenarios_to_return
 
 
-    async def _scenario_update_record(self, federation_id:str, alias:str, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str):
+    async def _scenario_update_record(self, federation_id:str, alias:str, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str) -> bool:
         """
         Inserts or updates a scenario record using the PostgreSQL "UPSERT" pattern.
         All configuration is saved in the 'config' column of type JSONB.
         Direct columns (name, start_time, end_time, username, status) are also handled.
         """
+        self._verify_pool()
+        
         # Ensure scenario is a dictionary before dumping to JSON
         if not isinstance(scenario, dict):
             try:
                 scenario = json.loads(scenario)
             except (json.JSONDecodeError, TypeError):
                 logging.error("scenario is not a valid JSON string or dict.")
-                return
+                self._log_and_raise_error(DATA_FORMAT_ERROR)
 
         command = """
             INSERT INTO scenarios (federation_id, alias, name, start_time, end_time, username, status, config)
@@ -497,15 +514,21 @@ class PostgresDB(DatabaseAdapter):
                 status = EXCLUDED.status,
                 config = scenarios.config || EXCLUDED.config; -- Merge JSONB
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute(command, federation_id, alias, scenario_name, start_time, end_time, username, status, json.dumps(scenario))
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(command, federation_id, alias, scenario_name, start_time, end_time, username, status, json.dumps(scenario))
+                return True
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
-
-    async def _scenario_set_all_status_to_finished(self):
+    async def _scenario_set_all_status_to_finished(self) -> bool:
         """
         Sets the status of all 'running' scenarios to 'finished'
         and updates their 'end_time' (both in the direct column and within JSONB).
         """
+        self._verify_pool()
+        
         current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
         command = """
             UPDATE scenarios
@@ -516,15 +539,21 @@ class PostgresDB(DatabaseAdapter):
                          jsonb_set(config, '{end_time}', $2::jsonb)
             WHERE status = 'running';
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute(command, current_time, json.dumps(current_time))
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(command, current_time, json.dumps(current_time))
+                return True
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
-
-    async def _scenario_set_status_to_finished(self, federation_id:str):
+    async def _scenario_set_status_to_finished(self, federation_id:str) -> bool:
         """
         Sets the status of a specific scenario to 'finished' and updates its 'end_time'.
         Updates both the direct columns and the JSONB 'config'.
         """
+        self._verify_pool()
+        
         current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
         command = """
             UPDATE scenarios
@@ -537,9 +566,13 @@ class PostgresDB(DatabaseAdapter):
                            )
             WHERE federation_id = $3;
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute(command, current_time, json.dumps(current_time), federation_id)
-
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(command, current_time, json.dumps(current_time), federation_id)
+                return True
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
     async def _scenario_set_status_to_completed(self, federation_id:str):
         """
@@ -553,41 +586,50 @@ class PostgresDB(DatabaseAdapter):
                 config = jsonb_set(config, '{status}', '"completed"')
             WHERE federation_id = $1;
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute(command, federation_id)
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(command, federation_id)
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
-
-    async def _finish_scenario(self, federation_id: str, all: bool = False):
+    async def _finish_scenario(self, federation_id: str, all: bool = False) -> bool:
         """
         Consolidated method to set scenarios to finished.
         """
+        self._verify_pool()
+        
         if all:
-            await self._scenario_set_all_status_to_finished()
+            return await self._scenario_set_all_status_to_finished()
         else:
-            await self._scenario_set_status_to_finished(federation_id)
-
+            return await self._scenario_set_status_to_finished(federation_id)
 
     async def _get_running_scenario(self, username:str=None, get_all:bool=False):
         """
         Retrieves scenarios with a 'running' status, optionally filtered by user.
         Returns full scenario record (including direct columns and config JSONB).
         """
-        async with self.pool.acquire() as conn:
-            params = ["running"]
-            # Select all columns to get both direct and config data
-            command = "SELECT federation_id, name, username, status, start_time, end_time, config FROM scenarios WHERE status = $1"
+        self._verify_pool()
+        
+        try:
+            async with self.pool.acquire() as conn:
+                params = ["running"]
+                # Select all columns to get both direct and config data
+                command = "SELECT federation_id, name, username, status, start_time, end_time, config FROM scenarios WHERE status = $1"
 
-            if username:
-                command += " AND username = $2"
-                params.append(username)
+                if username:
+                    command += " AND username = $2"
+                    params.append(username)
 
-            if get_all:
-                result = [dict(row) for row in await conn.fetch(command, *params)] # Convert records to dicts
-            else:
-                result_row = await conn.fetchrow(command, *params)
-                result = dict(result_row) if result_row else None
+                if get_all:
+                    result = [dict(row) for row in await conn.fetch(command, *params)] # Convert records to dicts
+                else:
+                    result_row = await conn.fetchrow(command, *params)
+                    result = dict(result_row) if result_row else None
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
         return result
-
 
     async def _get_completed_scenario(self):
         """
@@ -603,8 +645,11 @@ class PostgresDB(DatabaseAdapter):
         """
         Compose scenarios list and running scenario respecting role.
         """
+        self._verify_pool()
+        
         scenarios = await self._get_all_scenarios_and_check_completed(user=user, role=role)
         scenario_running = await self._get_running_scenario(None if role == "admin" else user)
+        #TODO create response
         return {"scenarios": scenarios, "scenario_running": scenario_running}
 
 
@@ -612,25 +657,30 @@ class PostgresDB(DatabaseAdapter):
         """
         Retrieves the complete record of a scenario by its name.
         """
-        async with self.pool.acquire() as conn:
-            result_row = await conn.fetchrow("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE federation_id = $1;", federation_id)
+        self._verify_pool()
+        
+        try:
+            async with self.pool.acquire() as conn:
+                result_row = await conn.fetchrow("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE federation_id = $1;", federation_id)
 
-        result = dict(result_row) if result_row else None
+            result = dict(result_row) if result_row else None
 
-        if result and result.get('config'):
-            # Assuming 'config' is a JSON string from the DB, so we parse it
-            # It might already be a dict if asyncpg handles JSONB conversion automatically
-            config_data = result['config']
-            if isinstance(config_data, str):
-                try:
-                    config_data = json.loads(config_data)
-                except json.JSONDecodeError:
-                    config_data = {}
+            if result and result.get('config'):
+                # Assuming 'config' is a JSON string from the DB, so we parse it
+                # It might already be a dict if asyncpg handles JSONB conversion automatically
+                config_data = result['config']
+                if isinstance(config_data, str):
+                    try:
+                        config_data = json.loads(config_data)
+                    except json.JSONDecodeError:
+                        config_data = {}
 
-            # Extract the 'scenario_title' and add it as a top-level key
-            result['title'] = config_data.get('scenario_title')
-            result['description'] = config_data.get('description')
-
+                # Extract the 'scenario_title' and add it as a top-level key
+                result['title'] = config_data.get('scenario_title')
+                result['description'] = config_data.get('description')
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
         return result
 
 
@@ -660,11 +710,7 @@ class PostgresDB(DatabaseAdapter):
                     return False
 
                 # Ensure total_rounds is an integer for comparison
-                try:
-                    total_rounds = int(scenario_rounds_str)
-                except (ValueError, TypeError):
-                    logging.error(f"Invalid 'rounds' value for scenario '{federation_id}': {scenario_rounds_str}")
-                    return False
+                total_rounds = int(scenario_rounds_str)
 
                 # Fetch the current round progress of all nodes in that scenario
                 nodes = await conn.fetch("SELECT round FROM nodes WHERE federation = $1;", federation_id)
@@ -676,33 +722,28 @@ class PostgresDB(DatabaseAdapter):
                 # Check if all nodes have completed the total rounds
                 return all(int(node["round"]) >= total_rounds for node in nodes)
 
-        except asyncpg.PostgresError as e:
-            logging.error(f"PostgreSQL error during check_scenario_federation_completed for '{federation_id}': {e}")
-            return False
-        except ValueError as e:
-            logging.error(f"Data error during check_scenario_federation_completed for '{federation_id}': {e}")
-            return False
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
 
     async def _check_scenario_with_role(self, role:str, federation_id:str, user:str=None):
         """
         Verify if a scenario exists that the user with the given role and username can access.
         """
+        self._verify_pool()
+        
         scenario_info = await self._get_scenario_by_federation_id(federation_id)
 
+        #TODO responses
         if not scenario_info:
             return False  # Scenario does not exist
 
         if role == "admin":
             return True  # Admins can access any existing scenario
 
-        if user is None:
-            logging.warning(
-                "check_scenario_with_role called for non-admin role without user."
-            )
-            return False
-
-        return scenario_info.get("username") == user
+        if scenario_info.get("username") == user:
+            return True
 
     # --- Notes Management Functions ---
 
@@ -710,6 +751,7 @@ class PostgresDB(DatabaseAdapter):
         """
         Save or update notes associated with a specific scenario.
         """
+        self._verify_pool()
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute(
@@ -719,30 +761,53 @@ class PostgresDB(DatabaseAdapter):
                     """,
                     federation_id, notes,
                 )
-        except asyncpg.PostgresError as e:
-            logging.error(f"PostgreSQL error during save_notes: {e}")
-
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
     async def _get_notes(self, federation_id: str):
         """
         Retrieve notes associated with a specific scenario.
         """
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT * FROM notes WHERE federation_id = $1;", federation_id)
-            if row is None:
-                # No notes stored for this scenario yet
-                return None
-            return dict(row)
-
+        self._verify_pool()
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT * FROM notes WHERE federation_id = $1;", federation_id)
+                if row is None:
+                    # No notes stored for this scenario yet
+                    return None
+                return dict(row)
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
     async def _remove_note(self, federation_id: str):
         """
         Delete the note associated with a specific scenario.
         """
-        async with self.pool.acquire() as conn:
-            await conn.execute("DELETE FROM notes WHERE federation_id = $1;", federation_id)
+        self._verify_pool()
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("DELETE FROM notes WHERE federation_id = $1;", federation_id)
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
+    
+    """                                             ###############################
+                                                    #       ERROR MANAGEMENT      #
+                                                    ###############################
+    """    
             
-    def _map_pg_exception_to_error(exc: Exception):
+    def _verify_pool(self):
+        if not self.pool:
+            self._log_and_raise_error(POOL_NOT_INITIALIZED)
+            
+    def _log_and_raise_error(err: DatabaseErrorDefinition):
+        error_msg = f"ERROR_CODE: {err.code}\n ERROR: {err.error}\n Additional info: {err.message}"
+        logging.info(error_msg)
+        raise_error(err)
+            
+    def _map_pg_exception_to_error(self, exc: Exception) -> DatabaseErrorDefinition:
         """
         Maping asyncpg exceptions to DatabaseErrorDefinition.
         """

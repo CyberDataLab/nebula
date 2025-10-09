@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, Optional, Type
 
-import nebula.database.utils_requests as DBReq
+import nebula.database.schemas.requests as DBReq
 from nebula.utils import APIUtils
 from pydantic import BaseModel
 

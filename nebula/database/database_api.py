@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.concurrency import asynccontextmanager
 
 from nebula.database.database_adapter_factory import factory_database_adapter
-from nebula.database.utils_requests import (
+from nebula.database.schemas.requests import (
     Routes,
     UpdateScenarioRequest,
     StopScenarioRequest,
@@ -25,6 +25,8 @@ from nebula.database.utils_requests import (
     CheckScenarioRequest,
     ListUsersRequest,
 )
+
+from nebula.database.schemas.responses import *
 
 # Get a database instance
 db = factory_database_adapter("PostgresDB")
@@ -87,37 +89,53 @@ async def read_root():
 
 
 # Scenarios
-@app.post(Routes.UPDATE)
+@app.post(
+    Routes.UPDATE,
+    response_model=UpdateScenarioResponse,
+    responses={
+        403: {"model": ErrorResponse, "description": "Database permission denied."},
+        422: {"model": ErrorResponse, "description": "Invalid data format."},
+        500: {"model": ErrorResponse, "description": "Internal database or query failure."},
+        503: {"model": ErrorResponse, "description": "Database unavailable."},
+        504: {"model": ErrorResponse, "description": "Database connection timeout."},
+    },
+    summary="Save a scenario or update an existing one.",
+    description=(
+        "Save a new federated learning scenario or update the information for an existing one."
+    ),
+)
 async def update_scenario(
     federation_id: str,
     request: UpdateScenarioRequest,
 ):
-    try:
-        await db._scenario_update_record(
-            federation_id = federation_id,
-            **request.model_dump()
-        )
-        return {"message": f"Scenario {request.scenario_name} updated successfully"}
-    except Exception as e:
-        logging.exception(
-            f"Error updating scenario {request.scenario_name}: {e}"
-        )
-        raise HTTPException(status_code=500, detail="Internal server error")
+    success = await db._scenario_update_record(
+        federation_id = federation_id,
+        **request.model_dump()
+    )
+    return UpdateScenarioResponse(success=success)
 
 
-@app.post(Routes.STOP)
+@app.post(
+    Routes.STOP,
+    response_model=StopScenarioResponse,
+    responses={
+        403: {"model": ErrorResponse, "description": "Database permission denied."},
+        422: {"model": ErrorResponse, "description": "Invalid data format."},
+        500: {"model": ErrorResponse, "description": "Internal database or query failure."},
+        503: {"model": ErrorResponse, "description": "Database unavailable."},
+        504: {"model": ErrorResponse, "description": "Database connection timeout."},
+    },
+    summary="Change status to finish on scenario.",
+    description=(
+        "Change status to finish on a single scenario or change all statuses if required."
+    ),
+)
 async def stop_scenario(
     federation_id: str,
     request: StopScenarioRequest,
 ):
-    try:
-        await db._finish_scenario(federation_id, request.all)
-        return {"message": "Finished status set successfully"}
-    except Exception as e:
-        logging.exception(
-            f"Error stopping scenario {federation_id}: {e}"
-        )
-        raise HTTPException(status_code=500, detail="Internal server error")
+    success = await db._finish_scenario(federation_id, request.all)
+    return StopScenarioResponse(success=success)
 
 
 @app.post(Routes.REMOVE)
