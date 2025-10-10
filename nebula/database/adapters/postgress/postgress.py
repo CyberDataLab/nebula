@@ -2,6 +2,7 @@ import logging
 import os
 import datetime
 import json
+from typing import List
 import asyncpg
 import asyncio
 
@@ -243,7 +244,7 @@ class PostgresDB(DatabaseAdapter):
             return None
 
 
-    async def _list_nodes_by_federation_id(self, federation_id:str):
+    async def _list_nodes_by_federation_id(self, federation_id:str) -> List[Dict]:
         """
         Fetches all nodes associated with a specific scenario, ordered by their index as integers.
         """
@@ -288,12 +289,11 @@ class PostgresDB(DatabaseAdapter):
         federation_round,
         federation_id,
         malicious,
-    ):
+    ) -> bool:
         """
         Inserts or updates a node record in the database for a given scenario, ensuring thread-safe access.
         """
         self._verify_pool()
-        
         
         try:
             async with _node_lock:
@@ -342,7 +342,7 @@ class PostgresDB(DatabaseAdapter):
                                 node_uid, federation_id,
                             )
                         updated_row = await conn.fetchrow("SELECT * from nodes WHERE uid = $1 AND scenario = $2;", node_uid, federation_id)
-                        return dict(updated_row) if updated_row else None
+                        return True if updated_row else False
         except Exception as e:
             db_error = self._map_pg_exception_to_error(e)
             self._log_and_raise_error(db_error)
@@ -356,7 +356,7 @@ class PostgresDB(DatabaseAdapter):
             await conn.execute("TRUNCATE nodes CASCADE;") # Use CASCADE if there are foreign key dependencies
 
 
-    async def _remove_nodes_by_federation_id(self, federation_id:str):
+    async def _remove_nodes_by_federation_id(self, federation_id:str) -> bool:
         """
         Deletes all nodes associated with a specific scenario from the database.
         """
@@ -364,6 +364,7 @@ class PostgresDB(DatabaseAdapter):
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute("DELETE FROM nodes WHERE federation = $1;", federation_id)
+                return True
         except Exception as e:
             db_error = self._map_pg_exception_to_error(e)
             self._log_and_raise_error(db_error)
@@ -604,7 +605,7 @@ class PostgresDB(DatabaseAdapter):
         else:
             return await self._scenario_set_status_to_finished(federation_id)
 
-    async def _get_running_scenario(self, username:str=None, get_all:bool=False):
+    async def _get_running_scenario(self, username:str=None, get_all:bool=False) -> Dict | List[Dict] | None:
         """
         Retrieves scenarios with a 'running' status, optionally filtered by user.
         Returns full scenario record (including direct columns and config JSONB).
@@ -641,7 +642,7 @@ class PostgresDB(DatabaseAdapter):
             result_row = await conn.fetchrow(command, "completed")
             return dict(result_row) if result_row else None
 
-    async def _get_scenarios(self, user: str, role: str):
+    async def _get_scenarios(self, user: str, role: str) -> Dict[str, Any]:
         """
         Compose scenarios list and running scenario respecting role.
         """
@@ -649,11 +650,10 @@ class PostgresDB(DatabaseAdapter):
         
         scenarios = await self._get_all_scenarios_and_check_completed(user=user, role=role)
         scenario_running = await self._get_running_scenario(None if role == "admin" else user)
-        #TODO create response
         return {"scenarios": scenarios, "scenario_running": scenario_running}
 
 
-    async def _get_scenario_by_federation_id(self, federation_id:str):
+    async def _get_scenario_by_federation_id(self, federation_id:str) -> Dict | None:
         """
         Retrieves the complete record of a scenario by its name.
         """
@@ -684,7 +684,7 @@ class PostgresDB(DatabaseAdapter):
         return result
 
 
-    async def _remove_scenario_by_federation_id(self, federation_id:str):
+    async def _remove_scenario_by_federation_id(self, federation_id:str) -> bool:
         """
         Delete a scenario from the database by its unique name.
         """
@@ -692,8 +692,10 @@ class PostgresDB(DatabaseAdapter):
             async with self.pool.acquire() as conn:
                 await conn.execute("DELETE FROM scenarios WHERE federation_id = $1;", federation_id)
             logging.info(f"Scenario '{federation_id}' successfully removed.")
-        except asyncpg.PostgresError as e:
-            logging.error(f"Error occurred while deleting scenario '{federation_id}': {e}")
+            return True
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
 
     async def _check_scenario_federation_completed(self, federation_id:str):
@@ -735,7 +737,6 @@ class PostgresDB(DatabaseAdapter):
         
         scenario_info = await self._get_scenario_by_federation_id(federation_id)
 
-        #TODO responses
         if not scenario_info:
             return False  # Scenario does not exist
 
@@ -747,7 +748,7 @@ class PostgresDB(DatabaseAdapter):
 
     # --- Notes Management Functions ---
 
-    async def _save_notes(self, federation_id: str, notes: str):
+    async def _save_notes(self, federation_id: str, notes: str) -> bool:
         """
         Save or update notes associated with a specific scenario.
         """
@@ -761,11 +762,12 @@ class PostgresDB(DatabaseAdapter):
                     """,
                     federation_id, notes,
                 )
+                return True
         except Exception as e:
             db_error = self._map_pg_exception_to_error(e)
             self._log_and_raise_error(db_error)
 
-    async def _get_notes(self, federation_id: str):
+    async def _get_notes(self, federation_id: str) -> Dict | None:
         """
         Retrieve notes associated with a specific scenario.
         """
@@ -789,6 +791,7 @@ class PostgresDB(DatabaseAdapter):
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute("DELETE FROM notes WHERE federation_id = $1;", federation_id)
+                return True
         except Exception as e:
             db_error = self._map_pg_exception_to_error(e)
             self._log_and_raise_error(db_error)
