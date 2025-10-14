@@ -46,6 +46,8 @@ install-production: install	## Install production dependencies
 	@docker build -t nebula-waf-promtail -f nebula/addons/waf/Dockerfile-promtail --build-arg USER=$(USER) nebula/addons/waf
 	@echo "🐳 Building nebula-grafana"
 	@docker build -t nebula-waf-grafana -f nebula/addons/waf/Dockerfile-grafana --build-arg USER=$(USER) nebula/addons/waf
+	@echo "🐳 Building nebula-kafka"
+	@docker build -t nebula-kafka -f nebula/kafka/Dockerfile nebula/kafka
 	echo "🐳 Docker images updated."
 
 .PHONY: shell
@@ -95,6 +97,23 @@ update-dockers:				## Update docker images
 	else \
 		echo "Skipping nebula-core docker build."; \
 	fi
+
+	@echo ""
+	@echo "🐳 Building nebula-kafka docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-kafka -f nebula/kafka/Dockerfile nebula/kafka;\
+	else \
+		echo "Skipping nebula-kafka docker build."; \
+	fi
+
+	@echo ""
+	@echo "🐳 Building nebula-kafka-ui docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-kafka-ui:latest -f nebula/kafka/ui/Dockerfile nebula/kafka/ui;\
+	else \
+		echo "Skipping nebula-kafka-ui docker build."; \
+	fi
+
 	echo "🐳 Docker images updated."
 
 .PHONY: update

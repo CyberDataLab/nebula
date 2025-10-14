@@ -62,6 +62,22 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    "-kf",
+    "--kafkaport",
+    dest="kafkaport",
+    default=9097,
+    help="Kafka port (default: 9097)",
+)
+
+argparser.add_argument(
+    "-kb",
+    "--kafbatport",
+    dest="kafbatport",
+    default=8081,
+    help="Kafbat port (default: 8081)",
+)
+
+argparser.add_argument(
     "-sp",
     "--statsport",
     dest="statsport",

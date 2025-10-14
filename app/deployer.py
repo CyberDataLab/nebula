@@ -664,6 +664,8 @@ class Deployer:
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
+        self.kafka_port = int(args.kafkaport) if hasattr(args, "kafkaport") else 9097
+        self.kafbat_port = int(args.kafbatport) if hasattr(args, "kafbatport") else 8081
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
 
@@ -862,6 +864,12 @@ class Deployer:
 
         if not SocketUtils.is_port_open(self.frontend_port):
             self.frontend_port = SocketUtils.find_free_port(start_port=self.frontend_port)
+            
+        if not SocketUtils.is_port_open(self.kafka_port):
+            self.kafka_port = SocketUtils.find_free_port(start_port=self.kafka_port)
+
+        if not SocketUtils.is_port_open(self.kafbat_port):
+            self.kafbat_port = SocketUtils.find_free_port(start_port=self.kafbat_port)
 
         if not SocketUtils.is_port_open(self.statistics_port):
             self.statistics_port = SocketUtils.find_free_port(start_port=self.statistics_port)
@@ -872,6 +880,10 @@ class Deployer:
         logging.info(f"NEBULA Databases docker is running")
         self.run_frontend()
         logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
+        self.run_kafka()
+        logging.info(f"NEBULA Kafka service is running")
+        self.run_kafbat()
+        logging.info(f"Nebula Kafbat service is running")
         if self.production and self.prefix == "production":
             logging.info("Deploying NEBULA WAF in production mode")
             self.run_waf()
@@ -1369,6 +1381,129 @@ class Deployer:
 
         client.api.start(container_id_promtail)
         Deployer._add_container_to_metadata(waf_promtail_container_name)
+
+    def run_kafka(self):
+        if sys.platform == "win32":
+            if not os.path.exists("//./pipe/docker_Engine"):
+                raise Exception(
+                    "Docker is not running, please check if Docker is running and Docker Compose is installed."
+                )
+        else:
+            if not os.path.exists("/var/run/docker.sock"):
+                raise Exception(
+                    "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
+                )
+
+        network_name = self.get_network_name("net-base")
+        base = DockerUtils.create_docker_network(network_name)
+        Deployer._add_network_to_metadata(network_name)
+
+        client = docker.from_env()
+
+        environment = {
+            "KAFKA_LOG_DIR": "/home/kafka/kafka-data",
+            "KAFKA_BROKER_ID": "1",
+            "KAFKA_LISTENERS": "PLAINTEXT://:9092,CONTROLLER://:9093,SASL_PLAINTEXT://:9094",
+            "KAFKA_ADVERTISED_LISTENERS":"PLAINTEXT://dev_dev_alejandro_nebula-kafka:9092,SASL_PLAINTEXT://dev_dev_alejandro_nebula-kafka:9094",
+            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT",
+            "KAFKA_INTER_BROKER_LISTENER_NAME": "PLAINTEXT",
+            "KAFKA_CONTROLLER_QUORUM_VOTERS": "1@localhost:9093",
+            "KAFKA_LOG_DIRS": "/kafka/data",
+            "KAFKA_SUPER_USERS": "User:hub_admin,User:controller",
+            "ALLOW_PLAINTEXT_LISTENER": "yes",
+        }
+
+        # Persistence
+        kafka_data_host_path = os.path.join(self.root_path, "kafka_data")
+        os.makedirs(kafka_data_host_path, exist_ok=True)
+
+        host_config = client.api.create_host_config(
+            binds=[
+                f"{kafka_data_host_path}:/kafka/data",  
+                f"{self.root_path}/scripts:/opt/scripts",  
+            ],
+            extra_hosts={"host.docker.internal": "host-gateway"},
+            port_bindings={9092: self.kafka_port, 9093: 9093, 9094: 9094},
+        )
+
+        networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.151")
+        })
+
+        kafka_container_name = self.get_container_name("nebula-kafka")
+
+        # Creation and deployment
+        try:
+            existing = client.containers.get(kafka_container_name)
+            logging.warning(f"Container {kafka_container_name} already exists.")
+        except docker.errors.NotFound:
+            pass
+
+        container_id = client.api.create_container(
+            image="nebula-kafka",
+            name=kafka_container_name,
+            detach=True,
+            environment=environment,
+            host_config=host_config,
+            networking_config=networking_config,
+        )
+
+        client.api.start(container_id)
+        Deployer._add_container_to_metadata(kafka_container_name)
+
+        logging.info("✅ Kafka container started successfully.")
+
+    def run_kafbat(self):
+        if sys.platform == "win32":
+            if not os.path.exists("//./pipe/docker_Engine"):
+                raise Exception("Docker is not running.")
+        else:
+            if not os.path.exists("/var/run/docker.sock"):
+                raise Exception("Docker is not running.")
+
+        network_name = self.get_network_name("net-base")
+        base = DockerUtils.create_docker_network(network_name)
+        Deployer._add_network_to_metadata(network_name)
+
+        client = docker.from_env()
+
+        environment = {
+            "KAFKA_CLUSTERS_0_NAME": "nebula-kafka",
+            "KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS": "dev_dev_alejandro_nebula-kafka:9092",
+            "KAFKA_CLUSTERS_0_SECURITY_PROTOCOL": "PLAINTEXT",
+            "SPRING_CONFIG_ADDITIONAL-LOCATION": "/config.yml"
+        }
+
+        kafbat_container_name = self.get_container_name("nebula-kafka-ui")
+
+        host_config = client.api.create_host_config(
+            extra_hosts={"host.docker.internal": "host-gateway"},
+            port_bindings={8080: self.kafbat_port},
+        )
+
+        networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.152")
+        })
+
+        try:
+            existing = client.containers.get(kafbat_container_name)
+            logging.warning(f"Container {kafbat_container_name} already exists.")
+        except docker.errors.NotFound:
+            pass
+
+        container_id = client.api.create_container(
+            image="nebula-kafka-ui",
+            name=kafbat_container_name,
+            detach=True,
+            environment=environment,
+            host_config=host_config,
+            networking_config=networking_config,
+            ports=[8080],
+        )
+
+        client.api.start(container_id)
+        Deployer._add_container_to_metadata(kafbat_container_name)
+        logging.info("✅ Kafbat UI container started successfully.")
 
     @staticmethod
     def stop_deployer():

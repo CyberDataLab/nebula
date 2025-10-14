@@ -1,0 +1,7 @@
+kafka:
+  clusters:
+    - name: nebula-kafka
+      bootstrap-servers: dev_dev_alejandro_nebula-kafka:9092
+      properties:
+        "security.protocol": PLAINTEXT
+      read-only: false
