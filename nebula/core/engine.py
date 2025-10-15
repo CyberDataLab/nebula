@@ -6,6 +6,8 @@ import socket
 import time
 import docker
 
+
+from nebula.core.noderole import factory_role_behavior, change_role_behavior, Role, RoleBehavior
 from nebula.core.role import Role, factory_node_role
 from nebula.addons.attacks.attacks import create_attack
 from nebula.addons.functions import print_msg_box
@@ -122,6 +124,16 @@ class Engine:
         self._secure_neighbors = []
         self._is_malicious = self.config.participant["adversarial_args"]["attack_params"]["attacks"] != "No Attack"
 
+        role = config.participant["device_args"]["role"]
+        self._role_behavior: RoleBehavior = factory_role_behavior(role, self, config)
+        self._role_behavior_performance_lock = Locker("role_behavior_performance_lock", async_lock=True)
+
+        print_msg_box(
+            msg=f"Name {self.name}\nRole: {self._role_behavior.get_role_name()}",
+            indent=2,
+            title="Node information",
+        )
+
         msg = f"Trainer: {self._trainer.__class__.__name__}"
         msg += f"\nDataset: {self.config.participant['data_args']['dataset']}"
         msg += f"\nIID: {self.config.participant['data_args']['iid']}"
@@ -184,6 +196,11 @@ class Engine:
     def sa(self):
         """Situational Awareness Module"""
         return self._situational_awareness
+    
+    @property
+    def rb(self):
+        """Role Behavior"""
+        return self._role_behavior
 
     def get_aggregator_type(self):
         return type(self.aggregator)
@@ -713,6 +730,48 @@ class Engine:
         else:
             return (self.round < self.total_rounds)
 
+    async def resolve_missing_updates(self):
+        """
+        Delegates the resolution strategy for missing updates to the current role behavior.
+
+        This function is called when the node receives no model updates from neighbors
+        and needs to apply a fallback strategy depending on its role (e.g., using default weights
+        if aggregator, or local model if trainer).
+
+        Returns:
+            The result of the role-specific resolution strategy.
+        """
+        logging.info(f"Using Role behavior: {self.rb.get_role_name()} conflict resolve strategy")
+        return await self.rb.resolve_missing_updates()
+    
+    async def update_self_role(self):
+        """
+        Checks whether a role update is required and performs the transition if necessary.
+
+        If a new role has been assigned (i.e., self.rb.update_role_needed() is True),
+        this function updates the role behavior accordingly and notifies the source
+        that initiated the role transfer, if applicable.
+
+        It logs the role change and spawns an async task to send a control message
+        acknowledging the update to the initiating node.
+
+        Raises:
+            Any exceptions from change_role_behavior or communication logic.
+        """
+        if await self.rb.update_role_needed():
+            logging.info("Starting Role Behavior modification...")
+            from_role = self.rb.get_role_name()
+            next_role = await self.rb.get_next_role()
+            source_to_notificate = await self.rb.get_source_to_notificate()
+            self._role_behavior: RoleBehavior = change_role_behavior(self.rb, next_role, self, self.config)
+            to_role = self.rb.get_role_name()
+            logging.info(f"Role behavior changing from: {from_role} to {to_role}")
+            self.config.participant["device_args"]["role"] = to_role
+            if source_to_notificate:
+                logging.info(f"Sending role modification ACK to transferer: {source_to_notificate}")
+                message = self.cm.create_message("control", "leadership_transfer_ack")
+                asyncio.create_task(self.cm.send_message(source_to_notificate, message))
+
     async def _learning_cycle(self):
         """
         Main asynchronous loop for executing the Federated Learning process across multiple rounds.
@@ -746,7 +805,7 @@ class Engine:
             await self.update_federation_nodes(
                 await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
             )
-            expected_nodes = await self.get_federation_nodes()
+            expected_nodes = await self.rb.select_nodes_to_wait()
             rse = RoundStartEvent(self.round, current_time, expected_nodes)
             await EventManager.get_instance().publish_node_event(rse)
             self.trainer.on_round_start()
@@ -754,9 +813,10 @@ class Engine:
             direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
             undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
             logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
-            logging.info(f"[Role {self.role.value}] Starting learning cycle...")
+            logging.info(f"[Role {self.rb.get_role_name()}] Starting learning cycle...")
             await self.aggregator.update_federation_nodes(expected_nodes)
-            await self._extended_learning_cycle()
+            async with self._role_behavior_performance_lock:
+                await self.rb.extended_learning_cycle()
 
             current_time = time.time()
             ree = RoundEndEvent(self.round, current_time)
@@ -813,9 +873,9 @@ class Engine:
             except Exception as e:
                 logging.exception(f"📦  Error stopping Docker container with ID {docker_id}: {e}")
 
-    async def _extended_learning_cycle(self):
-        """
-        This method is called in each round of the learning cycle. It is used to extend the learning cycle with additional
-        functionalities. The method is called in the _learning_cycle method.
-        """
-        pass
+    # async def _extended_learning_cycle(self):
+    #     """
+    #     This method is called in each round of the learning cycle. It is used to extend the learning cycle with additional
+    #     functionalities. The method is called in the _learning_cycle method.
+    #     """
+    #     pass

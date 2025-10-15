@@ -15,6 +15,7 @@ from lightning import Trainer
 from lightning.pytorch.callbacks import ModelSummary, ProgressBar, ModelPruning
 from lightning.pytorch.loggers import CSVLogger
 from torch.nn import functional as F
+import cv2
 
 from nebula.config.config import TRAINING_LOGGER
 from nebula.core.utils.deterministic import enable_deterministic
@@ -137,6 +138,7 @@ class Lightning:
         self._logger = None
         self.create_logger()
         enable_deterministic(seed=self.config.participant["scenario_args"]["random_seed"])
+        self._eval_on = False
 
     @property
     def logger(self):
@@ -350,6 +352,121 @@ class Lightning:
             logging_training.error(f"Traceback: {tb}")
             # If "raise", the exception will be managed by the main thread
             return None, None
+        
+    async def infer(self, image_path: str, conf_threshold: float = 0.5):
+        try:
+            logging.info(f"{'=' * 10} [Inference] Started {'=' * 10}")
+
+            # Ejecutar inferencia en un hilo separado (no bloquear loop)
+            results = await asyncio.to_thread(self._infer_sync, image_path, conf_threshold)
+
+            logging.info(f"{'=' * 10} [Inference] Finished {'=' * 10}")
+            return results
+
+        except Exception as e:
+            logging_training.error(f"Error during inference: {e}")
+            logging_training.error(traceback.format_exc())
+            return None
+        
+    def _infer_sync(self, image_path: str, conf_threshold: float):
+        try:
+            self.model.eval()
+            results = self.model.predict(source=image_path, conf=conf_threshold, verbose=False)
+
+            detections = []
+            for r in results:
+                boxes = r.boxes.xyxy.tolist()
+                classes = r.boxes.cls.tolist()
+                confs = r.boxes.conf.tolist()
+
+                probs = r.probs.data.tolist() if getattr(r, "probs", None) is not None else None
+
+                for bbox, cls_idx, conf in zip(boxes, classes, confs):
+                    det = {
+                        "bbox": bbox,
+                        "class_id": int(cls_idx),
+                        "class_name": self.model.names[int(cls_idx)] if hasattr(self.model, "names") else str(cls_idx),
+                        "confidence": float(conf)
+                    }
+
+                    # Añadir vector de probabilidades si está disponible
+                    if probs is not None:
+                        det["class_probabilities"] = probs
+
+                    detections.append(det)
+
+            return detections
+
+        except Exception as e:
+            logging_training.error(f"Error in _infer_sync: {e}")
+            logging_training.error(traceback.format_exc())
+            return []
+        
+    async def infer_from_camera(self, cam_index: int = 0, conf_threshold: float = 0.5):
+        """
+        Captura frames desde la cámara y ejecuta inferencia con el modelo YOLO en tiempo real.
+        No muestra ni guarda imágenes, solo devuelve detecciones como listas de diccionarios.
+        """
+        cap = cv2.VideoCapture(cam_index)
+        if not cap.isOpened():
+            logging.error(f"No se pudo abrir la cámara con índice {cam_index}")
+            return
+
+        try:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                detections = await asyncio.to_thread(self._infer_frame, frame, conf_threshold)
+
+                yield detections
+
+        except Exception as e:
+            logging.error(f"Error durante inferencia con cámara: {e}")
+            logging.error(traceback.format_exc())
+        finally:
+            cap.release()
+            
+    def _infer_frame(self, frame, conf_threshold: float):
+        """
+        Ejecuta inferencia sobre un frame (array numpy BGR de OpenCV)
+        y devuelve las detecciones con sus probabilidades.
+        """
+        try:
+            self.model.eval()
+
+            # Realiza inferencia directamente sobre el frame
+            results = self.model.predict(
+                source=frame,
+                conf=conf_threshold,
+                verbose=False
+            )
+
+            detections = []
+            for r in results:
+                boxes = r.boxes.xyxy.tolist() if r.boxes is not None else []
+                classes = r.boxes.cls.tolist() if r.boxes is not None else []
+                confs = r.boxes.conf.tolist() if r.boxes is not None else []
+                probs = r.probs.data.tolist() if getattr(r, "probs", None) is not None else None
+
+                for bbox, cls_idx, conf in zip(boxes, classes, confs):
+                    det = {
+                        "bbox": bbox,  # [x1, y1, x2, y2]
+                        "class_id": int(cls_idx),
+                        "class_name": self.model.names[int(cls_idx)] if hasattr(self.model, "names") else str(cls_idx),
+                        "confidence": float(conf)
+                    }
+                    if probs is not None:
+                        det["class_probabilities"] = probs
+                    detections.append(det)
+
+            return detections
+
+        except Exception as e:
+            logging.error(f"Error inferiendo frame: {e}")
+            logging.error(traceback.format_exc())
+            return []
 
     def cleanup(self):
         if self._trainer is not None:
