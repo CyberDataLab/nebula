@@ -6,6 +6,8 @@ from collections import deque
 from typing import TYPE_CHECKING, Any
 
 from nebula.addons.functions import print_msg_box
+from nebula.core.nebulaevents import ModelPropagationEvent
+from nebula.core.eventmanager import EventManager
 
 if TYPE_CHECKING:
     from nebula.config.config import Config
@@ -194,7 +196,7 @@ class Propagator:
         else:
             return self._cm
 
-    def start(self):
+    async def start(self):
         """
         Initialize the Propagator by retrieving core components and configuration,
         setting up propagation intervals, history buffer, and strategy instances.
@@ -202,6 +204,7 @@ class Propagator:
         This method must be called before any propagation cycles to ensure that
         all dependencies (engine, trainer, aggregator, etc.) are available.
         """
+        await EventManager.get_instance().subscribe_node_event(ModelPropagationEvent, self._propagate)
         self.engine: Engine = self.cm.engine
         self.config: Config = self.cm.get_config()
         self.addr = self.cm.get_addr()
@@ -282,6 +285,74 @@ class Propagator:
         This is typically done at the start of a new propagation cycle.
         """
         self.status_history.clear()
+
+    async def _propagate(self, mpe: ModelPropagationEvent):
+        """
+        Execute a single propagation cycle using the specified strategy.
+
+        1. Resets status history.
+        2. Validates the strategy and current round.
+        3. Identifies eligible neighbors.
+        4. Updates history and checks for repeated statuses.
+        5. Prepares and serializes the model payload.
+        6. Sends the model message to each eligible neighbor.
+        7. Waits for the configured interval before concluding.
+
+        Args:
+            strategy_id (str): Key identifying which propagation strategy to use
+                            (e.g., "initialization" or "stable").
+
+        Returns:
+            bool: True if propagation occurred (payload sent), False if halted early.
+        """
+        eligible_neighbors, strategy_id = await mpe.get_event_data()
+        
+        self.reset_status_history()
+        if strategy_id not in self.strategies:
+            logging.info(f"Strategy {strategy_id} not found.")
+            return False
+        if await self.get_round() is None:
+            logging.info("Propagation halted: round is not set.")
+            return False
+
+        strategy = self.strategies[strategy_id]
+        logging.info(f"Starting model propagation with strategy: {strategy_id}")
+
+        # current_connections = await self.cm.get_addrs_current_connections(only_direct=True)
+        # eligible_neighbors = [
+        #     neighbor_addr for neighbor_addr in current_connections if await strategy.is_node_eligible(neighbor_addr)
+        # ]
+        logging.info(f"Eligible neighbors for model propagation: {eligible_neighbors}")
+        if not eligible_neighbors:
+            logging.info("Propagation complete: No eligible neighbors.")
+            return False
+
+        logging.info("Checking repeated statuses during propagation")
+        if not self.update_and_check_neighbors(strategy, eligible_neighbors):
+            logging.info("Exiting propagation due to repeated statuses.")
+            return False
+
+        model_params, weight = strategy.prepare_model_payload(None)
+        if model_params:
+            serialized_model = (
+                model_params if isinstance(model_params, bytes) else self.trainer.serialize_model(model_params)
+            )
+        else:
+            serialized_model = None
+
+        current_round = await self.get_round()
+        round_number = -1 if strategy_id == "initialization" else current_round
+        parameters = serialized_model
+        message = self.cm.create_message("model", "", round_number, parameters, weight)
+        for neighbor_addr in eligible_neighbors:
+            logging.info(
+                f"Sending model to {neighbor_addr} with round {await self.get_round()}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
+            )
+            asyncio.create_task(self.cm.send_message(neighbor_addr, message, "model"))
+            # asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
+
+        await asyncio.sleep(self.interval)
+        return True
 
     async def propagate(self, strategy_id: str):
         """

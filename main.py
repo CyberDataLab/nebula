@@ -6,6 +6,7 @@ import os
 import re
 import signal
 import subprocess
+import time
 import zipfile
 import socket
 from typing import Dict, List, Optional, Set
@@ -16,6 +17,7 @@ from flask import (
     jsonify,
     request,
     send_file,
+    Response,
 )
 
 import warnings
@@ -350,6 +352,19 @@ def get_metrics():
                      download_name="metrics.zip", as_attachment=True)
 
 # ————————————————————————————————  ACTIONS  ————————————————————————————————
+
+@app.route("/video_feed")
+def video_feed():
+    def generate():
+        temp_path = "/dev/shm/latest_inference.jpg"
+        while True:
+            if os.path.exists(temp_path):
+                with open(temp_path, "rb") as f:
+                    frame = f.read()
+                yield (b"--frame\r\n"
+                       b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+            time.sleep(0.05)
+    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 @app.route("/run/", methods=["GET"])
 def run():

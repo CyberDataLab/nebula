@@ -7,6 +7,7 @@ import io
 import logging
 import os
 import pickle
+import time
 import traceback
 from collections import OrderedDict
 
@@ -138,7 +139,8 @@ class Lightning:
         self._logger = None
         self.create_logger()
         enable_deterministic(seed=self.config.participant["scenario_args"]["random_seed"])
-        self._eval_on = False
+        self.inference_active = asyncio.Event()
+        self.inference_active.set()
 
     @property
     def logger(self):
@@ -401,24 +403,47 @@ class Lightning:
             logging_training.error(f"Error in _infer_sync: {e}")
             logging_training.error(traceback.format_exc())
             return []
-        
-    async def infer_from_camera(self, cam_index: int = 0, conf_threshold: float = 0.5):
-        """
-        Captura frames desde la cámara y ejecuta inferencia con el modelo YOLO en tiempo real.
-        No muestra ni guarda imágenes, solo devuelve detecciones como listas de diccionarios.
-        """
+
+    def save_latest_frame(self, annotated_frame):
+        TEMP_FRAME_PATH = "/dev/shm/latest_inference.jpg"
+        try:
+            cv2.imwrite(TEMP_FRAME_PATH, annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        except Exception as e:
+            logging.error(f"Cannot save temporal frame: {e}")
+
+    def pause_inference(self):
+        if self.inference_active.is_set():
+            self.inference_active.clear()
+            logging.info("🟡 Inferencia paused.")
+
+    def resume_inference(self):
+        if not self.inference_active.is_set():
+            self.inference_active.set()
+            logging.info("🟢 Inferencia active.")   
+
+    async def infer_from_camera(self, cam_index: int = 0, duration = None, conf_threshold: float = 0.5):
         cap = cv2.VideoCapture(cam_index)
         if not cap.isOpened():
             logging.error(f"No se pudo abrir la cámara con índice {cam_index}")
             return
 
+        start_time = time.time()
+
         try:
             while True:
+                await self.inference_active.wait()
+
+                if duration:
+                    elapsed = time.time() - start_time
+                    if elapsed >= duration:
+                        logging.info(f"Inference period reached ({duration} s).")
+                        break
+
                 ret, frame = cap.read()
                 if not ret:
                     break
 
-                detections = await asyncio.to_thread(self._infer_frame, frame, conf_threshold)
+                detections, annotated_frame = await asyncio.to_thread(self._infer_frame, frame, conf_threshold)
 
                 yield detections
 
@@ -442,7 +467,7 @@ class Lightning:
                 conf=conf_threshold,
                 verbose=False
             )
-
+            annotated_frame = frame.copy()
             detections = []
             for r in results:
                 boxes = r.boxes.xyxy.tolist() if r.boxes is not None else []
@@ -451,17 +476,22 @@ class Lightning:
                 probs = r.probs.data.tolist() if getattr(r, "probs", None) is not None else None
 
                 for bbox, cls_idx, conf in zip(boxes, classes, confs):
-                    det = {
-                        "bbox": bbox,  # [x1, y1, x2, y2]
+                    x1, y1, x2, y2 = map(int, bbox)
+                    class_name = self.model.names[int(cls_idx)] if hasattr(self.model, "names") else str(cls_idx)
+                    detections.append({
+                        "bbox": bbox,
                         "class_id": int(cls_idx),
-                        "class_name": self.model.names[int(cls_idx)] if hasattr(self.model, "names") else str(cls_idx),
+                        "class_name": class_name,
                         "confidence": float(conf)
-                    }
-                    if probs is not None:
-                        det["class_probabilities"] = probs
-                    detections.append(det)
+                })
 
-            return detections
+                # 🔹 Dibujar caja y etiqueta
+                cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                label = f"{class_name}: {conf:.2f}"
+                cv2.putText(annotated_frame, label, (x1, y1 - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+            return detections, annotated_frame
 
         except Exception as e:
             logging.error(f"Error inferiendo frame: {e}")

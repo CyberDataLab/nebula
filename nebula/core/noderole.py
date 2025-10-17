@@ -6,7 +6,7 @@ from nebula.addons.functions import print_msg_box
 from nebula.config.config import Config
 from nebula.core.utils.locker import Locker
 from nebula.core.eventmanager import EventManager
-from nebula.core.nebulaevents import UpdateReceivedEvent, ModelPropagationEvent
+from nebula.core.nebulaevents import UpdateReceivedEvent, AggregationEvent, AggregationDoneEvent, ModelPropagationEvent
 import random
 from enum import Enum
 from abc import ABC, abstractmethod
@@ -256,6 +256,7 @@ class TrainerAggregatorRoleBehavior(RoleBehavior):
         await self._engine._waiting_model_updates()
         
     async def select_nodes_to_wait(self):
+        #TODO filter IP from inference node
         nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=True)
         return nodes
     
@@ -396,19 +397,25 @@ class InferenceRoleBehavior(RoleBehavior):
         return self._role.value
     
     async def extended_learning_cycle(self):
-        # obtener lista de ficheros de las imagenes
-        # image_list = []
-        # results = await asyncio.gather(*[self._engine.trainer.infer(path) for path in image_list])
-        # guardar resultados
-        
-        async for detections in self._engine.trainer.infer_from_camera(cam_index=0):
+        await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._aggregation_ready_event_callback)
+        await EventManager.get_instance().subscribe_node_event(AggregationDoneEvent, self._aggregation_done_event_callback)
+
+        inference_timer = self._config.participant["model_args"]["inference_timer"]
+        async for detections in self._engine.trainer.infer_from_camera(cam_index=0, duration=inference_timer):
             logging.info(f"PREDICTIONS: {detections}")
 
     async def select_nodes_to_wait(self):
-        return set()
+        nodes = await self._engine.cm.get_addrs_current_connections(only_direct=True, myself=False)
+        return nodes
     
     async def resolve_missing_updates(self):
         return {}
+    
+    async def _aggregation_ready_event_callback(self, are: AggregationEvent):
+        self._engine.trainer.pause_inference()
+
+    async def _aggregation_done_event_callback(self, ade: AggregationDoneEvent):
+        self._engine.trainer.resume_inference()
 
 """                                                         ##############################
                                                             #       IDLE BEHAVIOR        #

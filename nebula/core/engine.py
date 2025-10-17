@@ -23,6 +23,7 @@ from nebula.core.nebulaevents import (
     UpdateNeighborEvent,
     UpdateReceivedEvent,
     ExperimentFinishEvent,
+    AggregationDoneEvent,
 )
 from nebula.core.network.communications import CommunicationsManager
 from nebula.core.situationalawareness.situationalawareness import SituationalAwareness
@@ -714,6 +715,8 @@ class Engine:
                 f"_waiting_model_updates | Aggregation done for round {self.round}, including parameters in local model."
             )
             self.trainer.set_model_parameters(params)
+            ade = AggregationDoneEvent()
+            await EventManager.get_instance().publish_node_event(ade)
         else:
             logging.error("Aggregation finished with no parameters")
 

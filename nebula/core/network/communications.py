@@ -755,7 +755,7 @@ class CommunicationsManager:
         """
         logging.info("🌐  Deploying additional services...")
         await self._forwarder.start()
-        self._propagator.start()
+        await self._propagator.start()
 
     async def include_received_message_hash(self, hash_message):
         """
