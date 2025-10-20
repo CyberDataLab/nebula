@@ -89,6 +89,7 @@ core = [
     "transformers==4.44.2",
     "web3==6.20.0",
     "h5py==3.13.0",
+    "ultralytics>=8.0.0",
 ]
 
 [build-system]

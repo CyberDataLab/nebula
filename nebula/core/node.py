@@ -37,6 +37,7 @@ from nebula.core.models.fashionmnist.cnn import FashionMNISTModelCNN
 from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
+from nebula.core.models.inference_models.yolo11n import YOLO11n
 #from nebula.core.role import Role
 #from nebula.core.noderole import AggregatorNode, IdleNode, MaliciousNode, ServerNode, TrainerNode
 from nebula.core.engine import Engine
@@ -93,6 +94,7 @@ async def main(config):
     batch_size = None
     num_workers = config.participant["data_args"]["num_workers"]
     model = None
+    datamodule = None
 
     if dataset_name == "MNIST":
         batch_size = 32
@@ -145,25 +147,28 @@ async def main(config):
             model = CIFAR100ModelCNN()
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
+    elif dataset_name == "hackaton":
+        model = YOLO11n()
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 
-    dataset = NebulaPartition(handler=handler, config=config)
-    dataset.load_partition()
-    dataset.log_partition()
-    samples_per_label = Counter(dataset.get_train_labels())
+    if dataset_name != "hackaton":
+        dataset = NebulaPartition(handler=handler, config=config)
+        dataset.load_partition()
+        dataset.log_partition()
+        samples_per_label = Counter(dataset.get_train_labels())
 
-    datamodule = DataModule(
-        train_set=dataset.train_set,
-        train_set_indices=dataset.train_indices,
-        test_set=dataset.test_set,
-        test_set_indices=dataset.test_indices,
-        local_test_set=dataset.local_test_set,
-        local_test_set_indices=dataset.local_test_indices,
-        num_workers=num_workers,
-        batch_size=batch_size,
-        samples_per_label = samples_per_label
-    )
+        datamodule = DataModule(
+            train_set=dataset.train_set,
+            train_set_indices=dataset.train_indices,
+            test_set=dataset.test_set,
+            test_set_indices=dataset.test_indices,
+            local_test_set=dataset.local_test_set,
+            local_test_set_indices=dataset.local_test_indices,
+            num_workers=num_workers,
+            batch_size=batch_size,
+            samples_per_label = samples_per_label
+        )
 
     trainer = None
     trainer_str = config.participant["training_args"]["trainer"]

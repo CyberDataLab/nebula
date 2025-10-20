@@ -301,11 +301,16 @@ class Lightning:
 
     def set_model_parameters(self, params, initialize=False):
         try:
-            self.model.load_state_dict(params)
+            if hasattr(self.model, "load_state_dict"):
+                self.model.load_state_dict()
+            else:
+                self.model.load_state_dict(params)
         except Exception as e:
             raise ParameterSettingError("Error setting parameters") from e
 
     def get_model_parameters(self, bytes=False, initialize=False):
+        if hasattr(self.model, "get_model_parameters"):
+            return self.model.get_model_parameters()
         if bytes:
             return self.serialize_model(self.model.state_dict())
         return self.model.state_dict()
@@ -322,7 +327,10 @@ class Lightning:
 
     def _train_sync(self):
         try:
-            self._trainer.fit(self.model, self.datamodule)
+            if hasattr(self.model, "train"):
+                self.model.train()
+            else:    
+                self._trainer.fit(self.model, self.datamodule)
         except Exception as e:
             logging_training.error(f"Error in _train_sync: {e}")
             tb = traceback.format_exc()
@@ -508,6 +516,9 @@ class Lightning:
         torch.cuda.empty_cache()
 
     def get_model_weight(self):
+        if hasattr(self.model, "get_model_weight"):
+            return self.model.get_model_weight()
+        
         weight = self.datamodule.model_weight
         if weight is None:
             raise ValueError("Model weight not set. Please call setup('fit') before requesting model weight.")
