@@ -399,7 +399,8 @@ class InferenceRoleBehavior(RoleBehavior):
     async def extended_learning_cycle(self):
         await EventManager.get_instance().subscribe_node_event(AggregationEvent, self._aggregation_ready_event_callback)
         await EventManager.get_instance().subscribe_node_event(AggregationDoneEvent, self._aggregation_done_event_callback)
-
+        asyncio.create_task(self._engine._waiting_model_updates())
+         
         inference_timer = self._config.participant["model_args"]["inference_timer"]
         async for detections in self._engine.trainer.infer_from_camera(cam_index=0, duration=inference_timer):
             logging.info(f"PREDICTIONS: {detections}")
@@ -416,6 +417,7 @@ class InferenceRoleBehavior(RoleBehavior):
 
     async def _aggregation_done_event_callback(self, ade: AggregationDoneEvent):
         self._engine.trainer.resume_inference()
+        asyncio.create_task(self._engine._waiting_model_updates())
 
 """                                                         ##############################
                                                             #       IDLE BEHAVIOR        #
