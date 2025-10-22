@@ -493,6 +493,7 @@ def factory_role_behavior(role: str, engine: Engine, config: Config) -> RoleBeha
         "aggregator": AggregatorRoleBehavior,
         "server": ServerRoleBehavior,
         "trainer_aggregator": TrainerAggregatorRoleBehavior,
+        "inference": InferenceRoleBehavior,
         "proxy": ProxyRoleBehavior,
         "idle": IdleRoleBehavior,
     }
