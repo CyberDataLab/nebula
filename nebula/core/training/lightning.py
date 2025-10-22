@@ -452,6 +452,7 @@ class Lightning:
                     break
 
                 detections, annotated_frame = await asyncio.to_thread(self._infer_frame, frame, conf_threshold)
+                self.save_latest_frame(annotated_frame)
 
                 yield detections
 
