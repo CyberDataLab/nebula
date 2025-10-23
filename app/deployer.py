@@ -1411,12 +1411,14 @@ class Deployer:
             "KAFKA_LOG_DIRS": "/kafka/data",
             "KAFKA_SUPER_USERS": "User:hub_admin,User:controller",
             "ALLOW_PLAINTEXT_LISTENER": "yes",
+            "KAFKA_OPTS": "-Djava.security.auth.login.config=/home/kafka/kafka_server_jaas.conf",
         }
 
         # Persistence
         kafka_data_host_path = os.path.join(self.root_path, "kafka_data")
         os.makedirs(kafka_data_host_path, exist_ok=True)
 
+        ports = [9092, 9093, 9094]
         host_config = client.api.create_host_config(
             binds=[
                 f"{kafka_data_host_path}:/kafka/data",  
@@ -1446,6 +1448,7 @@ class Deployer:
             environment=environment,
             host_config=host_config,
             networking_config=networking_config,
+            ports=ports,
         )
 
         client.api.start(container_id)

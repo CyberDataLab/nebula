@@ -29,14 +29,14 @@ super.users=User:hub_admin,User:controller
 log.dirs=${KAFKA_LOG_DIR}
 
 # Opcional: control de autenticación solo para SASL_PLAINTEXT
-listener.name.sasl_plaintext.scram-sha-512.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
+# listener.name.sasl_plaintext.scram-sha-512.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
 EOF
 
 # === kafka_server_jaas.conf ===
 cat > /home/kafka/kafka_server_jaas.conf <<EOF
 KafkaServer {
     org.apache.kafka.common.security.scram.ScramLoginModule required
-    user_hub_admin="hub_admin_password";
+    hub_admin="hub_admin_password";
 };
 EOF
 
@@ -66,7 +66,7 @@ echo "⏳ Waiting for Kafka to be ready..."
 KAFKA_PID=$!
 
 # Esperar a que el broker esté escuchando en PLAINTEXT
-until nc -z localhost 9092; do
+until nc -z localhost 9092 && nc -z localhost 9094; do
   sleep 5
 done
 echo "✅ Kafka broker is ready."
