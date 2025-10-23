@@ -20,7 +20,7 @@ RUN apt-get install -y curl net-tools iproute2 iputils-ping
 RUN curl -fsSL https://tailscale.com/install.sh | sh
 
 # Auth-key for tailscale
-ENV TS_AUTHKEY=tskey-auth-kdo8XYYJhi11CNTRL-v7aNCM1nQU1188ZNXY6nT1E4m3PVjrbb
+ENV TS_AUTHKEY=tskey-auth-kkHE28kavo11CNTRL-S4nDTLmW6CYRsy2KgJwUBYHV6oxjkzh9Y
 
 # Update alternatives to make Python 3.11 the default
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
