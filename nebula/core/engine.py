@@ -100,13 +100,13 @@ class Engine:
         if config.participant["scenario_args"]["deployment"] == "docker":
             self.client = docker.from_env()
 
-        print_banner()
+        # print_banner()
 
-        print_msg_box(
-            msg=f"Name {self.name}\nRole: {self.role.value}",
-            indent=2,
-            title="Node information",
-        )
+        # print_msg_box(
+        #     msg=f"Name {self.name}\nRole: {self.role.value}",
+        #     indent=2,
+        #     title="Node information",
+        # )
 
         self._trainer = None
         self._aggregator = None
