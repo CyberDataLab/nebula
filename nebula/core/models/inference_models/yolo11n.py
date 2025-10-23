@@ -1,6 +1,7 @@
 import copy
 import traceback
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+from nebula.core.models.inference_models.patch import ensure_ultralytics_multihead_support
 from nebula.core.models.nebulamodel import NebulaModel
 from ultralytics import YOLO
 from pathlib import Path
@@ -102,6 +103,7 @@ class YOLO11n(NebulaModel):
         seed=None,
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
+        ensure_ultralytics_multihead_support()
         self._base_model_path = "yolo11n.pt"
         self._model = YOLO(self._base_model_path)
         self._freeze_layers = 23
