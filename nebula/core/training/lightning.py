@@ -302,7 +302,7 @@ class Lightning:
     def set_model_parameters(self, params, initialize=False):
         try:
             if hasattr(self.model, "load_state_dict"):
-                self.model.load_state_dict()
+                self.model.load_state_dict(params)
             else:
                 self.model.load_state_dict(params)
         except Exception as e:
