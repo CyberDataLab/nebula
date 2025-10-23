@@ -420,6 +420,8 @@ def setup_new_run():
     through Tailscale, deletes previous artefacts and finally stores the new
     trio of files.
     """
+    logging.info("[FER] he llamado al endpoint")
+
     # 1 · Refuse while a training task is still running
     global TRAINING_PROC
     if TRAINING_PROC and TRAINING_PROC.poll() is None:
@@ -429,10 +431,10 @@ def setup_new_run():
     ###HACKATON####
     # missing = [x for x in ("config", "global_test", "train_set")
     #            if x not in request.files]
-    missing = [x for x in ("config")
-               if x not in request.files]
-    if missing:
-        _json_abort(400, f"Missing file field(s): {', '.join(missing)}")
+    # missing = [x for x in ("config")
+    #            if x not in request.files]
+    # if missing:
+    #     _json_abort(400, f"Missing file field(s): {', '.join(missing)}")
 
     config_up   = request.files["config"]
     ###HACKATON###
