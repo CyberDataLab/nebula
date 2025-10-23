@@ -240,7 +240,8 @@ class TrainerAggregatorRoleBehavior(RoleBehavior):
         return self._role.value
     
     async def extended_learning_cycle(self):
-        await self._engine.trainer.test()
+        if self._engine.config.participant["data_args"]["dataset"] != "hackaton":
+            await self._engine.trainer.test()
         await self._engine.trainning_in_progress_lock.acquire_async()
         await self._engine.trainer.train()
         await self._engine.trainning_in_progress_lock.release_async()
