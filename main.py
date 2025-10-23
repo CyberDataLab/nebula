@@ -426,21 +426,26 @@ def setup_new_run():
         _json_abort(409, "Training already running; pause or stop it first.")
 
     # 2 · Check field presence
-    missing = [x for x in ("config", "global_test", "train_set")
+    ###HACKATON####
+    # missing = [x for x in ("config", "global_test", "train_set")
+    #            if x not in request.files]
+    missing = [x for x in ("config")
                if x not in request.files]
     if missing:
         _json_abort(400, f"Missing file field(s): {', '.join(missing)}")
 
     config_up   = request.files["config"]
-    global_test = request.files["global_test"]
-    train_set   = request.files["train_set"]
+    ###HACKATON###
+    # global_test = request.files["global_test"]
+    # train_set   = request.files["train_set"]
 
     # 3 · Extension sanity
     if not config_up.filename.endswith(".json"):
         _json_abort(400, f"`{config_up.filename}` must have a .json extension.")
-    for ds in (global_test, train_set):
-        if not ds.filename.endswith(".h5"):
-            _json_abort(400, f"`{ds.filename}` must have a .h5 extension.")
+    ###HACKATON###
+    # for ds in (global_test, train_set):
+    #     if not ds.filename.endswith(".h5"):
+    #         _json_abort(400, f"`{ds.filename}` must have a .h5 extension.")
 
     # 4 · Parse + patch JSON
     try:
@@ -497,12 +502,13 @@ def setup_new_run():
     with open(json_dest, "wb") as dst:
         dst.write(json.dumps(original_cfg, indent=2).encode())
 
+    ###HACKATON###
     # 8 · Persist datasets
     saved = [config_up.filename]
-    for up in (global_test, train_set):
-        dst = os.path.join(CONFIG_FOLDER, up.filename)
-        up.save(dst)
-        saved.append(up.filename)
+    # for up in (global_test, train_set):
+    #     dst = os.path.join(CONFIG_FOLDER, up.filename)
+    #     up.save(dst)
+    #     saved.append(up.filename)
 
     # 9 · Purge previous log files
     for root, _, files in os.walk(LOGS_FOLDER):
