@@ -79,6 +79,7 @@ controller = [
     "scikit-image==0.24.0",
     "scikit-learn==1.5.1",
     "kafka-python==2.0.2",
+    "aiokafka==0.8.1",
 ]
 database = [
     "argon2-cffi==23.1.0",
@@ -87,6 +88,7 @@ database = [
     "passlib==1.7.4",
     "fastapi[all]==0.114.0",
     "kafka-python==2.0.2",
+    "aiokafka==0.8.1",
 ]
 core = [
     "aiohttp==3.10.5",
@@ -131,6 +133,7 @@ core = [
     "codecarbon == 2.5.0",
     "uvloop == 0.20.0",
     "kafka-python==2.0.2",
+    "aiokafka==0.8.1",
 ]
 frontend = [
     "aiohttp==3.10.5",
@@ -157,6 +160,7 @@ frontend = [
     "uvicorn==0.30.6",
     "wheel==0.44.0",
     "kafka-python==2.0.2",
+    "aiokafka==0.8.1",
 ]
 
 [build-system]

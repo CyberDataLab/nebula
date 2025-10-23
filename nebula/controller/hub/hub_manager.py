@@ -13,7 +13,7 @@ from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
 from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
 import nebula.controller.hub.utils_requests as hub_requests
 from nebula.controller.hub.real_time_manager import RealTimeManager
-from nebula.controller.hub.clients.kafka_client import create_topic_9094, USERS, create_topic_9092
+from nebula.controller.hub.clients.kafka_client import create_topic_9094, USERS, create_topic
 
 class HubManager:
     """Encapsulates the controller business logic so the API layer stays thin."""
@@ -74,10 +74,6 @@ class HubManager:
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
         try:
-            res = create_topic_9094("hub_admin", "hub_admin_password", "topic_superuser")
-            self.logger.info(f"Primera peticion: {res}")
-            # res = create_topic_9094("normal_user", USERS["normal_user"], "topic_normal_user")
-            # self.logger.info(f"Segunda peticion: {res}")
 
             # Generate IDs for all scenarios
             federation_ids = self._generate_federation_ids(user, [scenario_data])
