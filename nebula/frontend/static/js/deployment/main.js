@@ -210,7 +210,7 @@ const DeploymentManager = (function() {
         datasetSelect.innerHTML = "";
 
         // Add dataset options
-        const datasets = ['MNIST', 'FashionMNIST', 'EMNIST', 'CIFAR10', 'CIFAR100'];
+        const datasets = ['MNIST', 'FashionMNIST', 'EMNIST', 'CIFAR10', 'CIFAR100', 'hackaton'];
         datasets.forEach(dataset => {
             const option = document.createElement("option");
             option.value = dataset;
@@ -243,6 +243,8 @@ const DeploymentManager = (function() {
     function getModelsForDataset(dataset) {
         // Return appropriate models based on dataset
         switch(dataset.toLowerCase()) {
+            case 'hackaton':
+                return ['Yolo11n'];
             case 'mnist':
             case 'fashionmnist':
             case 'emnist':
