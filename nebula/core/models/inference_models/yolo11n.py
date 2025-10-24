@@ -247,7 +247,7 @@ class YOLO11n(NebulaModel):
     data_yaml: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml"),
     new_class_names: Sequence[str] = ['shoes'],
     freeze_layers: int = 23,
-    epochs: int = 30,
+    epochs: int = 2,
     imgsz: int = 320,
     batch_size: int = 2,
     output_dir: Path = Path("/home/dietpi/prueba/nebula/app/logs/inference_experiment"),
