@@ -104,12 +104,12 @@ class YOLO11n(NebulaModel):
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
         ensure_ultralytics_multihead_support()
-        self._base_model_path = "yolo11n.pt"
+        self._base_model_path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt")
         self._model = YOLO(self._base_model_path)
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
-        self._new_class_names = ["nike"]
-        self._config_path: Path = Path("/home/dietpi/hackaton/config/yolo11n-2xhead.yaml")
+        self._new_class_names = ["shoes"]
+        self._config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/config/yolo11n-2xhead.yaml")
         
     def _detect_last_head_index(self) -> int | None:
         modules = getattr(self._model.model, "model", None)
@@ -216,14 +216,14 @@ class YOLO11n(NebulaModel):
     self,
     config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/config/yolo11n-2xhead.yaml"),
     data_yaml: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml"),
-    new_class_names: Sequence[str] = ['nike'],
+    new_class_names: Sequence[str] = ['shoes'],
     freeze_layers: int = 23,
     epochs: int = 30,
     imgsz: int = 320,
     batch_size: int = 2,
     output_dir: Path = Path("/home/dietpi/prueba/nebula/app/logs/inference_experiment"),
-    dataset_name: str = "nike",
-    base_model: str = "yolo11n.pt",
+    dataset_name: str = "shoes",
+    base_model: str = "/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt",
 ) -> Dict[str, Path | None]:
 
         output_dir.mkdir(parents=True, exist_ok=True)

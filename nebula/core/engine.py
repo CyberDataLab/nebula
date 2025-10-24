@@ -467,9 +467,9 @@ class Engine:
         Sends:
             federation_models_included: A message containing the round number of the aggregation.
         """
-        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {self.get_round()}")
+        logging.info(f"🔄  Broadcasting MODELS_INCLUDED for round {await self.get_round()}")
         message = self.cm.create_message(
-            "federation", "federation_models_included", [str(arg) for arg in [self.get_round()]]
+            "federation", "federation_models_included", [str(arg) for arg in [await self.get_round()]]
         )
         asyncio.create_task(self.cm.send_message_to_neighbors(message))
 
