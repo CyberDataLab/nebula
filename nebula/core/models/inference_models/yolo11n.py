@@ -110,7 +110,7 @@ class YOLO11n(NebulaModel):
         self._model = YOLO(self._base_model_path)
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
-        self._new_class_names = ["shoes"]
+        self._new_class_names = ["nike"]
         self._config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
         
     def _detect_last_head_index(self) -> int | None:
@@ -168,6 +168,7 @@ class YOLO11n(NebulaModel):
         freeze_layers: número de capas congeladas (para localizar la cabeza)
         """
         try:
+            ensure_ultralytics_multihead_support()
             base_model_path = str(self._base_model_path)
             if self._config_path and self._config_path.exists():
                 merged_model = YOLO(str(self._config_path), task="detect").load(base_model_path)
@@ -211,16 +212,16 @@ class YOLO11n(NebulaModel):
             ensure_ultralytics_multihead_support()
             ensure_dual_head_config(Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"))
             class_names, class_mapping, splits = prepare_dataset(
-                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/shoes"), 
-                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/shoes"), 
-                "shoes", 
+                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/nike"), 
+                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/nike"), 
+                "nike", 
                 None)
             logging.info("Detected class ids: %s", class_mapping)
             logging.info("Using class names: %s", class_names)
 
             write_dataset_yaml(
                 Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/dataset.yaml"), 
-                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/shoes"), 
+                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/nike"), 
                 class_names, 
                 splits)
 
@@ -245,13 +246,13 @@ class YOLO11n(NebulaModel):
     self,
     config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"),
     data_yaml: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml"),
-    new_class_names: Sequence[str] = ['shoes'],
+    new_class_names: Sequence[str] = ['nike'],
     freeze_layers: int = 23,
     epochs: int = 2,
     imgsz: int = 320,
     batch_size: int = 2,
     output_dir: Path = Path("/home/dietpi/prueba/nebula/app/logs/inference_experiment"),
-    dataset_name: str = "shoes",
+    dataset_name: str = "nike",
     base_model: str = "/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt",
 ) -> Dict[str, Path | None]:
 

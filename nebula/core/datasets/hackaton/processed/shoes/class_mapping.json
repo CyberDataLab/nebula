@@ -1,9 +1,9 @@
 {
-  "source_dataset": " /home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/shoes",
+  "source_dataset": " /home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/nike",
   "class_id_map": {
     "0": 0
   },
   "class_names": [
-    "shoes"
+    "nike"
   ]
 }
