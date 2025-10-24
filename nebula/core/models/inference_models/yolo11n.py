@@ -123,7 +123,7 @@ class YOLO11n(NebulaModel):
         self._new_class_names = ["test"]
         self._config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
         self._data_yaml_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml")
-        self._model_weight: float = 1.0
+        self._model_weight: int = 1
         self._dataset_name: str = "test"
         
     def _detect_last_head_index(self) -> int | None:
@@ -208,7 +208,7 @@ class YOLO11n(NebulaModel):
             logging.warning("Unable to infer dataset size from %s; keeping existing model weight.", data_yaml)
             return
 
-        self._model_weight = float(sample_count)
+        self._model_weight = int(sample_count)
         logging.info("Updated model weight to %s samples based on %s.", self._model_weight, train_path)
     
     def _update_head(self, head_state, freeze_layers):
