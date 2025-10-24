@@ -229,14 +229,14 @@ class Propagator:
             title="Propagator",
         )
 
-    def get_round(self):
+    async def get_round(self):
         """
         Retrieve the current federated learning round number.
 
         Returns:
             int: The current round index from the engine.
         """
-        return self.engine.get_round()
+        return await self.engine.get_round()
 
     def update_and_check_neighbors(self, strategy, eligible_neighbors):
         """
@@ -377,7 +377,7 @@ class Propagator:
         if strategy_id not in self.strategies:
             logging.info(f"Strategy {strategy_id} not found.")
             return False
-        if self.get_round() is None:
+        if await self.get_round() is None:
             logging.info("Propagation halted: round is not set.")
             return False
 
@@ -406,12 +406,12 @@ class Propagator:
         else:
             serialized_model = None
 
-        round_number = -1 if strategy_id == "initialization" else self.get_round()
+        round_number = -1 if strategy_id == "initialization" else await self.get_round()
         parameters = serialized_model
         message = self.cm.create_message("model", "", round_number, parameters, weight)
         for neighbor_addr in eligible_neighbors:
             logging.info(
-                f"Sending model to {neighbor_addr} with round {self.get_round()}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
+                f"Sending model to {neighbor_addr} with round {await self.get_round()}: weight={weight} | size={sys.getsizeof(serialized_model) / (1024** 2) if serialized_model is not None else 0} MB"
             )
             asyncio.create_task(self.cm.send_message(neighbor_addr, message, "model"))
             # asyncio.create_task(self.cm.send_model(neighbor_addr, round_number, serialized_model, weight))
@@ -440,7 +440,7 @@ class Propagator:
             if strategy_id not in self.strategies:
                 logging.info(f"Strategy {strategy_id} not found.")
                 return None
-            if self.get_round() is None:
+            if await self.get_round() is None:
                 logging.info("Propagation halted: round is not set.")
                 return None
 
@@ -454,6 +454,6 @@ class Propagator:
             serialized_model = (
                 model_params if isinstance(model_params, bytes) else self.trainer.serialize_model(model_params)
             )
-            return (serialized_model, rounds, self.get_round())
+            return (serialized_model, rounds, await self.get_round())
 
         return None

@@ -226,7 +226,7 @@ class Engine:
     def set_initialization_status(self, status):
         self.initialized = status
 
-    def get_round(self):
+    async def get_round(self):
         return self.round
 
     def get_federation_ready_lock(self):
