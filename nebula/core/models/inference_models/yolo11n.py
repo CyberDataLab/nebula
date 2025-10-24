@@ -1,6 +1,8 @@
 import copy
 import traceback
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+from nebula.core.datasets.hackaton.dataset import prepare_dataset, write_dataset_yaml
+from nebula.core.models.inference_models.config.config import ensure_dual_head_config, update_model_cfg
 from nebula.core.models.inference_models.patch import ensure_ultralytics_multihead_support
 from nebula.core.models.nebulamodel import NebulaModel
 from ultralytics import YOLO
@@ -103,13 +105,13 @@ class YOLO11n(NebulaModel):
         seed=None,
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
-        ensure_ultralytics_multihead_support()
+        self._dataset_initialized = False 
         self._base_model_path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt")
         self._model = YOLO(self._base_model_path)
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
         self._new_class_names = ["shoes"]
-        self._config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/config/yolo11n-2xhead.yaml")
+        self._config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
         
     def _detect_last_head_index(self) -> int | None:
         modules = getattr(self._model.model, "model", None)
@@ -205,7 +207,34 @@ class YOLO11n(NebulaModel):
             logging.error(traceback.format_exc())
                 
     def train(self):
-        self._train_and_merge()    
+        if not self._dataset_initialized:
+            ensure_ultralytics_multihead_support()
+            ensure_dual_head_config(Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"))
+            class_names, class_mapping, splits = prepare_dataset(
+                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/shoes"), 
+                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/shoes"), 
+                "shoes", 
+                None)
+            logging.info("Detected class ids: %s", class_mapping)
+            logging.info("Using class names: %s", class_names)
+
+            write_dataset_yaml(
+                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/dataset.yaml"), 
+                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/shoes"), 
+                class_names, 
+                splits)
+
+            added_classes = len(class_names)
+            update_model_cfg(
+                Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"), 
+                added_classes, 
+                base_class_count=80)
+            
+            self._train_and_merge(
+                new_class_names=class_names,
+            )
+        else:
+            self._train_and_merge()    
         
     def build_full_class_names(self, new_class_names: Sequence[str]) -> list[str]:
         """Concatenate the default COCO names with the new dataset-specific names."""
@@ -214,7 +243,7 @@ class YOLO11n(NebulaModel):
         
     def _train_and_merge(
     self,
-    config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/config/yolo11n-2xhead.yaml"),
+    config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"),
     data_yaml: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml"),
     new_class_names: Sequence[str] = ['shoes'],
     freeze_layers: int = 23,
