@@ -13,7 +13,7 @@ from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
 from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
 import nebula.controller.hub.utils_requests as hub_requests
 from nebula.controller.hub.real_time_manager import RealTimeManager
-from nebula.controller.hub.clients.kafka_client import create_topic_9094, USERS, create_topic
+from nebula.controller.hub.clients.kafka_client import HUBKafkaClient
 
 class HubManager:
     """Encapsulates the controller business logic so the API layer stays thin."""
@@ -74,39 +74,42 @@ class HubManager:
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
         try:
+            hkc = HUBKafkaClient(self.logger)
+            msg = await hkc.init()
+            self.logger.info(msg)
+            
+            # # Generate IDs for all scenarios
+            # federation_ids = self._generate_federation_ids(user, [scenario_data])
 
-            # Generate IDs for all scenarios
-            federation_ids = self._generate_federation_ids(user, [scenario_data])
+            # # Save scenarios on User Scenario Qeue
+            # await self.sqm.add_scenarios(user, user_dest, federation_ids, [scenario_data])
 
-            # Save scenarios on User Scenario Qeue
-            await self.sqm.add_scenarios(user, user_dest, federation_ids, [scenario_data])
+            # # Get first scenario to execute
+            # _, federation_id, scenario_data = await self.sqm.get_next_scenario(user=user)
 
-            # Get first scenario to execute
-            _, federation_id, scenario_data = await self.sqm.get_next_scenario(user=user)
-
-            #TODO modify to use role on query
-            response = await self.federation_client.run_scenario(
-                user=user,
-                #role=role,
-                federation_id=federation_id,
-                scenario_data=scenario_data,
-            )
-            if response:
-                await self.database_client.update_scenario(
-                    federation_id,
-                    {
-                        "alias": response["alias"],
-                        "scenario_name": response["scenario_name"],
-                        "start_time": response["start_time"],
-                        "end_time": "",
-                        "scenario": scenario_data,
-                        "status": "running",
-                        "username":user,
-                    },
-                )
-                return {"federation_id": federation_id}
-            else:
-                raise HTTPException(status_code=500, detail="Error starting scenario")
+            # #TODO modify to use role on query
+            # response = await self.federation_client.run_scenario(
+            #     user=user,
+            #     #role=role,
+            #     federation_id=federation_id,
+            #     scenario_data=scenario_data,
+            # )
+            # if response:
+            #     await self.database_client.update_scenario(
+            #         federation_id,
+            #         {
+            #             "alias": response["alias"],
+            #             "scenario_name": response["scenario_name"],
+            #             "start_time": response["start_time"],
+            #             "end_time": "",
+            #             "scenario": scenario_data,
+            #             "status": "running",
+            #             "username":user,
+            #         },
+            #     )
+            #     return {"federation_id": federation_id}
+            # else:
+            #     raise HTTPException(status_code=500, detail="Error starting scenario")
         except Exception:
             self.logger.exception("Error running scenario for user %s", user)
 

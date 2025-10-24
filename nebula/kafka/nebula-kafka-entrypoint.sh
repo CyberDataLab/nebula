@@ -8,6 +8,8 @@ cat > /home/kafka/server.properties <<EOF
 process.roles=broker,controller
 node.id=1
 controller.quorum.voters=1@localhost:9093
+auto.create.topics.enable=true
+offsets.topic.replication.factor=1
 
 # Listeners
 listeners=PLAINTEXT://:9092,SASL_PLAINTEXT://:9094,CONTROLLER://:9093
