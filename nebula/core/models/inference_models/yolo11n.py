@@ -311,3 +311,10 @@ class YOLO11n(NebulaModel):
             "merged_weights": merged_weights_path,
         }
 
+    def forward(self, x):
+        """Forward pass of the model."""
+        pass
+
+    def configure_optimizers(self):
+        """Optimizer configuration."""
+        pass
