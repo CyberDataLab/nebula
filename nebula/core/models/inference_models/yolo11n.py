@@ -221,7 +221,7 @@ class YOLO11n(NebulaModel):
     epochs: int = 30,
     imgsz: int = 320,
     batch_size: int = 2,
-    output_dir: Path = "/home/dietpi/hackaton/prueba_fer",
+    output_dir: Path = Path("/home/dietpi/hackaton/experiment"),
     dataset_name: str = "nike",
     base_model: str = "yolo11n.pt",
 ) -> Dict[str, Path | None]:
