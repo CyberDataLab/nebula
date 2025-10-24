@@ -39,7 +39,7 @@ def ensure_ultralytics_multihead_support() -> None:
         ConcatHead = conv_module.ConcatHead  # type: ignore[attr-defined]
     except AttributeError:
 
-        from modules import ConcatHead
+        from nebula.core.models.inference_models.modules import ConcatHead
 
         conv_module.ConcatHead = ConcatHead  # type: ignore[attr-defined]
         if hasattr(conv_module, "__all__") and "ConcatHead" not in conv_module.__all__:
