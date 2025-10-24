@@ -94,6 +94,16 @@ COCO_NAMES: tuple[str, ...] = (
     "toothbrush",
 )
 
+IMAGE_EXTENSIONS: tuple[str, ...] = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+)
+
 class YOLO11n(NebulaModel):
     def __init__(
         self,
@@ -105,13 +115,16 @@ class YOLO11n(NebulaModel):
         seed=None,
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
-        self._dataset_initialized = False 
+        self._dataset_initialized = False
         self._base_model_path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt")
         self._model = YOLO(self._base_model_path)
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
-        self._new_class_names = ["nike"]
+        self._new_class_names = ["test"]
         self._config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
+        self._data_yaml_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml")
+        self._model_weight: float = 1.0
+        self._dataset_name: str = "test"
         
     def _detect_last_head_index(self) -> int | None:
         modules = getattr(self._model.model, "model", None)
@@ -158,8 +171,45 @@ class YOLO11n(NebulaModel):
         return head_items
     
     def get_model_weight(self):
-        #TODO ver cuantos samples hay en el dataset
-        pass
+        return self._model_weight
+
+    def _update_model_weight(self, data_yaml: Path) -> None:
+        try:
+            data_config = yaml.safe_load(data_yaml.read_text())
+        except FileNotFoundError:
+            logging.warning("Data YAML not found at %s; keeping existing model weight.", data_yaml)
+            return
+        except Exception:
+            logging.warning("Failed to parse data YAML at %s; keeping existing model weight.", data_yaml, exc_info=True)
+            return
+
+        train_path_str = data_config.get("train")
+        if not train_path_str:
+            logging.warning("Data YAML %s does not define a 'train' path; keeping existing model weight.", data_yaml)
+            return
+
+        train_path = Path(train_path_str)
+        if not train_path.exists():
+            logging.warning("Training directory %s does not exist; keeping existing model weight.", train_path)
+            return
+
+        sample_count = sum(
+            1
+            for candidate in train_path.rglob("*")
+            if candidate.is_file() and candidate.suffix.lower() in IMAGE_EXTENSIONS
+        )
+
+        if sample_count == 0:
+            labels_root = train_path.parents[1] / "labels" / train_path.name
+            if labels_root.exists():
+                sample_count = sum(1 for candidate in labels_root.rglob("*.txt") if candidate.is_file())
+
+        if sample_count == 0:
+            logging.warning("Unable to infer dataset size from %s; keeping existing model weight.", data_yaml)
+            return
+
+        self._model_weight = float(sample_count)
+        logging.info("Updated model weight to %s samples based on %s.", self._model_weight, train_path)
     
     def _update_head(self, head_state, freeze_layers):
         """
@@ -210,32 +260,48 @@ class YOLO11n(NebulaModel):
     def train(self):
         if not self._dataset_initialized:
             ensure_ultralytics_multihead_support()
-            ensure_dual_head_config(Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"))
+            ensure_dual_head_config(self._config_path)
+            raw_dataset_path = Path(f"/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/{self._dataset_name}")
+            processed_dataset_path = Path(f"/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/{self._dataset_name}")
+            dataset_yaml_path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/dataset.yaml")
             class_names, class_mapping, splits = prepare_dataset(
-                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/nike"), 
-                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/nike"), 
-                "nike", 
-                None)
+                raw_dataset_path,
+                processed_dataset_path,
+                self._dataset_name,
+                None,
+            )
             logging.info("Detected class ids: %s", class_mapping)
             logging.info("Using class names: %s", class_names)
 
             write_dataset_yaml(
-                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/dataset.yaml"), 
-                Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/nike"), 
-                class_names, 
-                splits)
+                dataset_yaml_path,
+                processed_dataset_path,
+                class_names,
+                splits,
+            )
 
             added_classes = len(class_names)
             update_model_cfg(
-                Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"), 
-                added_classes, 
-                base_class_count=80)
-            
-            self._train_and_merge(
-                new_class_names=class_names,
+                self._config_path,
+                added_classes,
+                base_class_count=80,
             )
+            self._new_class_names = list(class_names)
+
+            self._train_and_merge(
+                config_path=self._config_path,
+                data_yaml=dataset_yaml_path,
+                new_class_names=class_names,
+                dataset_name=self._dataset_name,
+            )
+            self._dataset_initialized = True
         else:
-            self._train_and_merge()    
+            self._train_and_merge(
+                config_path=self._config_path,
+                data_yaml=self._data_yaml_path,
+                new_class_names=self._new_class_names,
+                dataset_name=self._dataset_name,
+            )    
         
     def build_full_class_names(self, new_class_names: Sequence[str]) -> list[str]:
         """Concatenate the default COCO names with the new dataset-specific names."""
@@ -243,18 +309,18 @@ class YOLO11n(NebulaModel):
         return list(COCO_NAMES) + list(new_class_names)    
         
     def _train_and_merge(
-    self,
-    config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"),
-    data_yaml: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml"),
-    new_class_names: Sequence[str] = ['nike'],
-    freeze_layers: int = 23,
-    epochs: int = 2,
-    imgsz: int = 320,
-    batch_size: int = 2,
-    output_dir: Path = Path("/home/dietpi/prueba/nebula/app/logs/inference_experiment"),
-    dataset_name: str = "nike",
-    base_model: str = "/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt",
-) -> Dict[str, Path | None]:
+        self,
+        config_path: Path | None = None,
+        data_yaml: Path | None = None,
+        new_class_names: Sequence[str] | None = None,
+        freeze_layers: int = 23,
+        epochs: int = 2,
+        imgsz: int = 320,
+        batch_size: int = 2,
+        output_dir: Path = Path("/home/dietpi/prueba/nebula/app/logs/inference_experiment"),
+        dataset_name: str | None = None,
+        base_model: str = "/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt",
+    ) -> Dict[str, Path | None]:
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -333,6 +399,7 @@ class YOLO11n(NebulaModel):
         merged_weights_path = output_dir / f"{Path(base_model).stem}_{dataset_name}_merged.pt"
         merged_model.save(str(merged_weights_path))
         
+        self._update_model_weight(data_yaml)
         self._model = merged_model
 
         return {
