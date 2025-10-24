@@ -214,14 +214,14 @@ class YOLO11n(NebulaModel):
         
     def _train_and_merge(
     self,
-    config_path: Path = "/home/dietpi/hackaton/config/yolo11n-2xhead.yaml",
-    data_yaml: Path = "/home/dietpi/hackaton/data/dataset.yaml",
+    config_path: Path = Path("/home/dietpi/prueba/nebula/config/yolo11n-2xhead.yaml"),
+    data_yaml: Path = Path("/home/dietpi/prueba/nebula/core/datasets/hackaton/dataset.yaml"),
     new_class_names: Sequence[str] = ['nike'],
     freeze_layers: int = 23,
     epochs: int = 30,
     imgsz: int = 320,
     batch_size: int = 2,
-    output_dir: Path = Path("/home/dietpi/hackaton/experiment"),
+    output_dir: Path = Path("/home/dietpi/prueba/nebula/app/logs/inference_experiment"),
     dataset_name: str = "nike",
     base_model: str = "yolo11n.pt",
 ) -> Dict[str, Path | None]:
