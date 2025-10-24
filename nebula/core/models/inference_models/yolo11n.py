@@ -214,8 +214,8 @@ class YOLO11n(NebulaModel):
         
     def _train_and_merge(
     self,
-    config_path: Path = Path("/home/dietpi/prueba/nebula/config/yolo11n-2xhead.yaml"),
-    data_yaml: Path = Path("/home/dietpi/prueba/nebula/core/datasets/hackaton/dataset.yaml"),
+    config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/config/yolo11n-2xhead.yaml"),
+    data_yaml: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml"),
     new_class_names: Sequence[str] = ['nike'],
     freeze_layers: int = 23,
     epochs: int = 30,
