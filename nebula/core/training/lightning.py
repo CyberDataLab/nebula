@@ -526,7 +526,8 @@ class Lightning:
         return weight
 
     def on_round_start(self):
-        self.datamodule.setup()
+        if self.datamodule:
+            self.datamodule.setup()
         self._logger.log_data({"A-Round": self.round})
         # self.reporter.enqueue_data("Round", self.round)
 
