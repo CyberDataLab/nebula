@@ -288,15 +288,16 @@ class YOLO11n(NebulaModel):
             )
             self._new_class_names = list(class_names)
 
-            self._train_and_merge(
+            best_weights, head_weights, merged_weights = self._train_and_merge(
                 config_path=self._config_path,
                 data_yaml=dataset_yaml_path,
                 new_class_names=class_names,
                 dataset_name=self._dataset_name,
             )
             self._dataset_initialized = True
+            logging.info(f"Train and merge: best_weights {best_weights}, head_weights {head_weights} and merged_weights {merged_weights}")
         else:
-            self._train_and_merge(
+            best_weights, head_weights, merged_weights = self._train_and_merge(
                 config_path=self._config_path,
                 data_yaml=self._data_yaml_path,
                 new_class_names=self._new_class_names,
