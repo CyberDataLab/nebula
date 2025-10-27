@@ -472,22 +472,24 @@ def setup_new_run():
     neigh_str = original_cfg.get("network_args", {}).get("neighbors", "").strip()
     requested_ips: Set[str] = {re.split(r":", n)[0] for n in neigh_str.split() if n}
 
-    if requested_ips:
-        try:
-            ts_out = subprocess.run(
-                ["tailscale", "status", "--json"],
-                capture_output=True, text=True, check=True,
-            )
-            ts_status = json.loads(ts_out.stdout)
-            reachable: Set[str] = set(ts_status.get("Self", {}).get("TailscaleIPs", []))
-            for peer in ts_status.get("Peer", {}).values():
-                reachable.update(peer.get("TailscaleIPs", []))
-        except Exception as exc:
-            _json_abort(400, f"Could not verify neighbours via Tailscale: {exc}")
 
-        missing = sorted(ip for ip in requested_ips if ip not in reachable)
-        if missing:
-            _json_abort(400, f"Neighbour IP(s) not reachable: {', '.join(missing)}")
+    #HACKATON#
+    # if requested_ips:
+    #     try:
+    #         ts_out = subprocess.run(
+    #             ["tailscale", "status", "--json"],
+    #             capture_output=True, text=True, check=True,
+    #         )
+    #         ts_status = json.loads(ts_out.stdout)
+    #         reachable: Set[str] = set(ts_status.get("Self", {}).get("TailscaleIPs", []))
+    #         for peer in ts_status.get("Peer", {}).values():
+    #             reachable.update(peer.get("TailscaleIPs", []))
+    #     except Exception as exc:
+    #         _json_abort(400, f"Could not verify neighbours via Tailscale: {exc}")
+
+    #     missing = sorted(ip for ip in requested_ips if ip not in reachable)
+    #     if missing:
+    #         _json_abort(400, f"Neighbour IP(s) not reachable: {', '.join(missing)}")
 
     # 6 · Clean previous JSON/H5 artefacts
     for fn in os.listdir(CONFIG_FOLDER):
