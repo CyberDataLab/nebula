@@ -116,13 +116,13 @@ class YOLO11n(NebulaModel):
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
         self._dataset_initialized = False
-        self._base_model_path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt")
+        self._base_model_path = Path("/home/pi/hackathon/nebula/nebula/core/models/inference_models/yolo11n.pt")
         self._model = YOLO(self._base_model_path)
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
         self._new_class_names = ["test"]
-        self._config_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
-        self._data_yaml_path: Path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/dataset.yaml")
+        self._config_path: Path = Path("/home/pi/hackathon/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
+        self._data_yaml_path: Path = Path("/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/dataset.yaml")
         self._model_weight: int = 1
         self._dataset_name: str = "test"
         
@@ -261,9 +261,9 @@ class YOLO11n(NebulaModel):
         if not self._dataset_initialized:
             ensure_ultralytics_multihead_support()
             ensure_dual_head_config(self._config_path)
-            raw_dataset_path = Path(f"/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/{self._dataset_name}")
-            processed_dataset_path = Path(f"/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/processed/{self._dataset_name}")
-            dataset_yaml_path = Path("/home/dietpi/prueba/nebula/nebula/core/datasets/hackaton/datasets/dataset.yaml")
+            raw_dataset_path = Path(f"/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/datasets/{self._dataset_name}")
+            processed_dataset_path = Path(f"/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/processed/{self._dataset_name}")
+            dataset_yaml_path = Path("/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/datasets/dataset.yaml")
             class_names, class_mapping, splits = prepare_dataset(
                 raw_dataset_path,
                 processed_dataset_path,
@@ -317,9 +317,9 @@ class YOLO11n(NebulaModel):
         epochs: int = 2,
         imgsz: int = 320,
         batch_size: int = 2,
-        output_dir: Path = Path("/home/dietpi/prueba/nebula/app/logs/inference_experiment"),
+        output_dir: Path = Path("/home/pi/hackathon/nebula/app/logs/inference_experiment"),
         dataset_name: str | None = None,
-        base_model: str = "/home/dietpi/prueba/nebula/nebula/core/models/inference_models/yolo11n.pt",
+        base_model: str = "/home/pi/hackathon/nebula/nebula/core/models/inference_models/yolo11n.pt",
     ) -> Dict[str, Path | None]:
 
         output_dir.mkdir(parents=True, exist_ok=True)

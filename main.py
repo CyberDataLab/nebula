@@ -383,7 +383,7 @@ def run():
     if TRAINING_PROC and TRAINING_PROC.poll() is None:
         _json_abort(409, "Training already running")
 
-    cmd = ["python", "/home/dietpi/prueba/nebula/nebula/core/node.py", json_files[0]]
+    cmd = ["python", "/home/pi/hackathon/nebula/nebula/core/node.py", json_files[0]]
     TRAINING_PROC = subprocess.Popen(cmd)
 
     return jsonify(pid=TRAINING_PROC.pid, state="running")
