@@ -304,7 +304,7 @@ class YOLO11n(NebulaModel):
                 dataset_name=self._dataset_name,
             )
 
-        state_dict = torch.load(head_weights, map_location="cpu")
+        state_dict = torch.load(head_weights["head_weights"], map_location="cpu")
         self.load_state_dict(state_dict)
         
     def build_full_class_names(self, new_class_names: Sequence[str]) -> list[str]:
