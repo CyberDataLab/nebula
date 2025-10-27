@@ -302,7 +302,10 @@ class YOLO11n(NebulaModel):
                 data_yaml=self._data_yaml_path,
                 new_class_names=self._new_class_names,
                 dataset_name=self._dataset_name,
-            )    
+            )
+
+        state_dict = torch.load(head_weights, map_location="cpu")
+        self.load_state_dict(state_dict)
         
     def build_full_class_names(self, new_class_names: Sequence[str]) -> list[str]:
         """Concatenate the default COCO names with the new dataset-specific names."""
