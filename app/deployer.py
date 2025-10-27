@@ -1412,6 +1412,8 @@ class Deployer:
             "KAFKA_SUPER_USERS": "User:hub_admin,User:controller",
             "ALLOW_PLAINTEXT_LISTENER": "yes",
             "KAFKA_OPTS": "-Djava.security.auth.login.config=/home/kafka/kafka_server_jaas.conf",
+            "KAFKA_SUPER_USER_NAME": "hub_admin",
+            "KAFKA_SUPER_USER_PASS": "hub_admin_password"
         }
 
         # Persistence

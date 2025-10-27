@@ -13,7 +13,7 @@ from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
 from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
 import nebula.controller.hub.utils_requests as hub_requests
 from nebula.controller.hub.real_time_manager import RealTimeManager
-from nebula.controller.hub.clients.kafka_client import HUBKafkaClient
+from nebula.kafka.clients.admin_client import NebulaKafkaAdmin
 
 class HubManager:
     """Encapsulates the controller business logic so the API layer stays thin."""
@@ -74,7 +74,7 @@ class HubManager:
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
         try:
-            hkc = HUBKafkaClient(self.logger)
+            hkc = NebulaKafkaAdmin(self.logger)
             msg = await hkc.init()
             self.logger.info(msg)
             

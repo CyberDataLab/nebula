@@ -3,6 +3,9 @@ set -e
 
 echo "🧠 Starting Nebula Kafka broker..."
 
+KAFKA_SUPER_USER_NAME=${KAFKA_SUPER_USER_NAME:-hub_admin}
+KAFKA_SUPER_USER_PASS=${KAFKA_SUPER_USER_PASS:-hub_admin_password}
+
 # === server.properties ===
 cat > /home/kafka/server.properties <<EOF
 process.roles=broker,controller
@@ -20,9 +23,13 @@ advertised.listeners=PLAINTEXT://dev_dev_alejandro_nebula-kafka:9092,SASL_PLAINT
 security.inter.broker.protocol=PLAINTEXT
 controller.listener.names=CONTROLLER
 
-# SASL / SCRAM
-sasl.enabled.mechanisms=SCRAM-SHA-512
+security.inter.broker.protocol=PLAINTEXT
+sasl.enabled.mechanisms=SCRAM-SHA-256
 sasl.mechanism.inter.broker.protocol=PLAINTEXT
+listener.name.sasl_plaintext.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
+
+# ACLs
+authorizer.class.name=kafka.security.authorizer.AclAuthorizer
 
 # Superusuarios
 super.users=User:hub_admin,User:controller
@@ -30,6 +37,8 @@ super.users=User:hub_admin,User:controller
 # Data directory
 log.dirs=${KAFKA_LOG_DIR}
 
+log4j.logger.org.apache.kafka.common.security=DEBUG
+log4j.logger.kafka.authorizer.logger=DEBUG
 # Opcional: control de autenticación solo para SASL_PLAINTEXT
 # listener.name.sasl_plaintext.scram-sha-512.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
 EOF
@@ -38,7 +47,7 @@ EOF
 cat > /home/kafka/kafka_server_jaas.conf <<EOF
 KafkaServer {
     org.apache.kafka.common.security.scram.ScramLoginModule required
-    hub_admin="hub_admin_password";
+    user_hub_admin="hub_admin_password"
 };
 EOF
 
@@ -74,6 +83,22 @@ done
 echo "✅ Kafka broker is ready."
 
 echo "🚀 Nebula Kafka initialized and ready."
+
+
+# === Crear superusuario SASL/SCRAM si no existe ===
+echo "🔐 Checking SASL/SCRAM superuser..."
+EXISTS=$(/opt/kafka/bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+    --entity-type users --describe 2>/dev/null | grep -c "user='${KAFKA_SUPER_USER_NAME}'" || true)
+
+if [ "$EXISTS" -eq 0 ]; then
+    echo "👤 Creating superuser '${KAFKA_SUPER_USER_NAME}'..."
+    /opt/kafka/bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+        --alter --add-config "SCRAM-SHA-256=[password=${KAFKA_SUPER_USER_PASS}]" \
+        --entity-type users --entity-name "${KAFKA_SUPER_USER_NAME}"
+    echo "✅ Superuser '${KAFKA_SUPER_USER_NAME}' created."
+else
+    echo "ℹ️ Superuser '${KAFKA_SUPER_USER_NAME}' already exists."
+fi
 
 # Mantener el proceso principal en primer plano
 wait $KAFKA_PID

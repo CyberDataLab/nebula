@@ -80,6 +80,7 @@ controller = [
     "scikit-learn==1.5.1",
     "kafka-python==2.0.2",
     "aiokafka==0.8.1",
+    "confluent-kafka>=2.5.0",
 ]
 database = [
     "argon2-cffi==23.1.0",
