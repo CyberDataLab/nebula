@@ -1,4 +1,5 @@
 import gc
+import logging
 
 import torch
 
@@ -26,6 +27,9 @@ class FedAvg(Aggregator):
             raise ValueError("Total number of samples must be greater than zero.")
 
         last_model_params = models[-1][0]
+        for layer, param in last_model_params.items():
+            logging.info(f"[yolo] layer {layer} param {param}")
+
         accum = {layer: torch.zeros_like(param, dtype=torch.float32) for layer, param in last_model_params.items()}
 
         with torch.no_grad():
