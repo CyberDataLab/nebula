@@ -120,11 +120,11 @@ class YOLO11n(NebulaModel):
         self._model = YOLO(self._base_model_path)
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
-        self._new_class_names = ["test"]
+        self._new_class_names = ["nike"]
         self._config_path: Path = Path("/home/pi/hackathon/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
         self._data_yaml_path: Path = Path("/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/dataset.yaml")
         self._model_weight: int = 1
-        self._dataset_name: str = "test"
+        self._dataset_name: str = "nike"
         
     def _detect_last_head_index(self) -> int | None:
         modules = getattr(self._model.model, "model", None)
