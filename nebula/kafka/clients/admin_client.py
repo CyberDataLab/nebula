@@ -1,6 +1,6 @@
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.admin import AIOKafkaAdminClient, NewTopic
-from kafka.errors import KafkaError, TopicAlreadyExistsError
+from kafka.errors import KafkaError, NoError, TopicAlreadyExistsError
 import asyncio
 from nebula.core.utils.locker import Locker
 import logging
@@ -26,7 +26,7 @@ class NebulaKafkaAdmin:
         self._consumer = None
         self._consumer_started = False
         self._consumer_lock = Locker("consumer_lock", async_lock=True)
-        self._client = None
+        self._consumer_client = None
         self._system_control_topic = "nebula-system-control"
         self._consumer_loop_task = None
         self._logger = logger
@@ -145,11 +145,22 @@ class NebulaKafkaAdmin:
 
         try:
             results = self._acl_admin_client.create_acls(acl_list)
-            self.log.info(f"{results}")
-            self.log.info(f"✅ ACL(s) '{operation}' creada(s) para '{user}' en '{topic_name}'")
-            return True
+            succeeded = results.get("succeeded", [])
+            failed = results.get("failed", [])
+
+            if succeeded:
+                self.log.info(f"✅ ACL(s) '{operation}' created for '{user}' on '{topic_name}':")
+                for acl in succeeded:
+                    self.log.info(f"   ↳ {acl}")
+
+            if failed:
+                self.log.error(f"⚠️ Errors creating ACL(s):")
+                for acl in failed:
+                    self.log.error(f"   ↳ {acl}")
+
+            return len(failed) == 0
         except Exception as e:
-            self.log.error(f"❌ Error creando ACL(s) para '{user}' en '{topic_name}': {e}")
+            self.log.error(f"❌ Error creating ACL(s) for '{user}' on '{topic_name}': {e}")
             return False
         
     async def delete_all_acls_for_user(self, user: str) -> bool:
@@ -172,13 +183,15 @@ class NebulaKafkaAdmin:
 
             # results es una lista de tuplas: (ACLFilter, list_of_matching_acls, error)
             for acl_filter, matching_acls, error in results:
-                if error is not None:
-                    self.log.error(f"⚠️ Error eliminando ACLs para '{user}': {error}")
-            self.log.info(f"✅ Todas las ACLs para '{user}' eliminadas")
+                if error is not None and not isinstance(error, NoError):
+                    self.log.error(f"⚠️ Error removing ACLs for '{user}': {error}")
+                else:
+                    self.log.info(f"✅ ACLs removed successfully: {matching_acls}")
+            self.log.info(f"✅ All ACLs for '{user}' removed")
             return True
 
         except Exception as e:
-            self.log.error(f"❌ Error eliminando ACLs para '{user}': {e}")
+            self.log.error(f"❌ Error removing ACLs for '{user}': {e}")
             return False
 
     async def init(self):
@@ -190,20 +203,23 @@ class NebulaKafkaAdmin:
             
         await self.create_user(user="new_user", password="new_pass")
         await self.create_acl_for_user_topic(user="new_user", topic_name="nebula-system-control", operation="read")
-        await self.delete_all_acls_for_user(user="new_user")
-        await self.delete_user(user="new_user")
+        #await self.delete_all_acls_for_user(user="new_user")
+        #await self.delete_user(user="new_user")
         # --- Finish Testing ---
 
-        self._client = AIOKafkaAdminClient(
+        self._consumer_client = AIOKafkaAdminClient(
             bootstrap_servers=BROKER_9092
         )
-        await self._client.start()
+        await self._consumer_client.start()
         msg = await self.create_topic(self._system_control_topic)
         await self._init_consumer()
         await asyncio.sleep(1)
         await self.subscribe_topics(pattern="^experiment-.*|^nebula-system-control$")
         self._consumer_loop_task = asyncio.create_task(self._consume_loop())
         return msg
+    
+    async def shoutdown(self):
+        self._consumer_stop.set()
     
     async def _init_consumer(self):
         async with self._consumer_lock:
@@ -232,7 +248,7 @@ class NebulaKafkaAdmin:
             replication_factor=1
         )
         try:
-            await self._client.create_topics([topic])
+            await self._consumer_client.create_topics([topic])
             topic_status = f"[SUCCESS] Topic '{topic_name}' created"
         except KafkaError as e:
             if "TopicAlreadyExists" in str(e):
@@ -252,17 +268,17 @@ class NebulaKafkaAdmin:
         self.log.info(f"{topic_status} | {message_status}")
             
     async def subscribe_topics(self, topics: list = [], pattern = ""):
-            try:
-                if topics:
-                    self._consumer.subscribe(topics)
-                    self.log.info(f"[SUCCESS] Topic subscribed'{topics}'")
-                elif pattern:
-                    self._consumer.subscribe(pattern=pattern)
-                    self.log.info(f"[SUCCESS] Topic subscribed using pattern: '{pattern}'")
-                else:
-                    self.log.info(f"ERROR no topics or pattern")
-            except KafkaError as e:
-                self.log.info(f"[ERROR]: {e}")
+        try:
+            if topics:
+                self._consumer.subscribe(topics)
+                self.log.info(f"[SUCCESS] Topic subscribed'{topics}'")
+            elif pattern:
+                self._consumer.subscribe(pattern=pattern)
+                self.log.info(f"[SUCCESS] Topic subscribed using pattern: '{pattern}'")
+            else:
+                self.log.info(f"ERROR no topics or pattern")
+        except KafkaError as e:
+            self.log.info(f"[ERROR]: {e}")
 
     async def _consume_loop(self):
         await asyncio.sleep(1)

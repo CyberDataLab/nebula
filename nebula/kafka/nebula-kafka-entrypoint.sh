@@ -8,39 +8,48 @@ KAFKA_SUPER_USER_PASS=${KAFKA_SUPER_USER_PASS:-hub_admin_password}
 
 # === server.properties ===
 cat > /home/kafka/server.properties <<EOF
+############################
+# KRaft Configuration
+############################
 process.roles=broker,controller
 node.id=1
 controller.quorum.voters=1@localhost:9093
-auto.create.topics.enable=true
-offsets.topic.replication.factor=1
+controller.listener.names=CONTROLLER
 
+############################
 # Listeners
+############################
 listeners=PLAINTEXT://:9092,SASL_PLAINTEXT://:9094,CONTROLLER://:9093
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT
 advertised.listeners=PLAINTEXT://dev_dev_alejandro_nebula-kafka:9092,SASL_PLAINTEXT://dev_dev_alejandro_nebula-kafka:9094
 
-# Comunicación interna entre brokers
+############################
+# Security and ACLs
+############################
 security.inter.broker.protocol=PLAINTEXT
-controller.listener.names=CONTROLLER
 
-security.inter.broker.protocol=PLAINTEXT
+# SASL/SCRAM
 sasl.enabled.mechanisms=SCRAM-SHA-256
-sasl.mechanism.inter.broker.protocol=PLAINTEXT
 listener.name.sasl_plaintext.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
 
-# ACLs
-authorizer.class.name=kafka.security.authorizer.AclAuthorizer
+# Authorizer
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
 
-# Superusuarios
-super.users=User:hub_admin,User:controller
+# 👇 ESTA ES LA CLAVE: permitir al broker anónimo registrarse
+super.users=User:hub_admin;User:ANONYMOUS
 
-# Data directory
+############################
+# Topics and Logs
+############################
+auto.create.topics.enable=true
+offsets.topic.replication.factor=1
 log.dirs=${KAFKA_LOG_DIR}
 
+############################
+# Debug
+############################
 log4j.logger.org.apache.kafka.common.security=DEBUG
 log4j.logger.kafka.authorizer.logger=DEBUG
-# Opcional: control de autenticación solo para SASL_PLAINTEXT
-# listener.name.sasl_plaintext.scram-sha-512.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
 EOF
 
 # === kafka_server_jaas.conf ===
