@@ -142,6 +142,10 @@ class YOLO11n(NebulaModel):
             param_keys = set(params.keys())
             current_keys = set(current_state.keys())
 
+            if any(key.startswith("model.model.") for key in param_keys):
+                self._update_head(params, self._freeze_layers)
+                return
+
             unknown_keys = param_keys - current_keys
 
             if unknown_keys:
@@ -303,9 +307,6 @@ class YOLO11n(NebulaModel):
                 new_class_names=self._new_class_names,
                 dataset_name=self._dataset_name,
             )
-
-        state_dict = torch.load(head_weights["head_weights"], map_location="cpu")
-        self.load_state_dict(state_dict)
         
     def build_full_class_names(self, new_class_names: Sequence[str]) -> list[str]:
         """Concatenate the default COCO names with the new dataset-specific names."""
