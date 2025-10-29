@@ -148,7 +148,6 @@ dmypy.json
 _build/
 *.DS_Store
 app/
-*.yaml
 data/
 *.db*
 *.out
