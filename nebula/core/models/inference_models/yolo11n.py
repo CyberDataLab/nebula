@@ -117,13 +117,7 @@ class YOLO11n(NebulaModel):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
         self._dataset_initialized = False
         module_dir = Path(__file__).resolve().parent
-        parents = module_dir.parents
-        if len(parents) >= 5:
-            self._project_root = parents[4]
-        else:
-            fallback_index = len(parents) - 1
-            logging.warning("Unexpected inference model path depth; defaulting project root to %s.", parents[fallback_index])
-            self._project_root = parents[fallback_index]
+        self._project_root = self._discover_project_root(module_dir)
         self._base_model_path = self._project_root / "nebula/core/models/inference_models/yolo11n.pt"
         self._model = YOLO(str(self._base_model_path))
         self._freeze_layers = 23
@@ -134,6 +128,19 @@ class YOLO11n(NebulaModel):
         self._model_weight: int = 1
         self._dataset_name: str = "drones"
         self._logs_root: Path = self._project_root / "app/logs/inference_experiment"
+        
+    def _discover_project_root(self, start_dir: Path) -> Path:
+        markers = ("pyproject.toml", ".git")
+        for candidate in [start_dir, *start_dir.parents]:
+            if any((candidate / marker).exists() for marker in markers):
+                return candidate
+        parent_list = list(start_dir.parents)
+        fallback = parent_list[-1] if parent_list else start_dir
+        logging.warning(
+            "Failed to locate project root markers; defaulting project root to %s.",
+            fallback,
+        )
+        return fallback
         
     def _detect_last_head_index(self) -> int | None:
         modules = getattr(self._model.model, "model", None)
