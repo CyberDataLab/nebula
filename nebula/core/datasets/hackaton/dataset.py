@@ -11,6 +11,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Sequence
 
+import yaml
+
 
 logger = logging.getLogger(__name__)
 
@@ -242,15 +244,138 @@ def select_split(splits: Sequence[str], target: str) -> str | None:
     return None
 
 
+def _load_node_partition_config(yaml_path: Path) -> tuple[int | None, int | None]:
+    """Extract optional node partition metadata from an existing dataset YAML file."""
+
+    if not yaml_path.exists():
+        return None, None
+    try:
+        existing = yaml.safe_load(yaml_path.read_text())
+    except Exception:
+        logger.warning("Failed to parse existing dataset YAML at %s; ignoring node partition metadata.", yaml_path, exc_info=True)
+        return None, None
+    if not isinstance(existing, dict):
+        return None, None
+
+    def _coerce(value: object) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    node_id = _coerce(existing.get("node_id"))
+    num_nodes = _coerce(existing.get("num_nodes"))
+
+    if node_id is None or num_nodes is None:
+        return node_id, num_nodes
+
+    if node_id < 0 or num_nodes <= 0:
+        logger.warning("Invalid node partition metadata in %s (node_id=%s, num_nodes=%s); ignoring.", yaml_path, node_id, num_nodes)
+        return None, None
+
+    return node_id, num_nodes
+
+
+def _partition_slice(total_items: int, num_parts: int, part_index: int) -> tuple[int, int]:
+    """Return the start and end indices for a contiguous partition of ``total_items``."""
+
+    if num_parts <= 0:
+        raise ValueError("num_nodes must be a positive integer")
+    if part_index < 0 or part_index >= num_parts:
+        raise ValueError(f"node_id must be between 0 and {num_parts - 1}, received {part_index}")
+
+    base = total_items // num_parts
+    remainder = total_items % num_parts
+    start = part_index * base + min(part_index, remainder)
+    length = base + (1 if part_index < remainder else 0)
+    end = start + length
+    return start, end
+
+
+def _create_node_partition(
+    processed_dir: Path,
+    splits: Sequence[str],
+    node_id: int,
+    num_nodes: int,
+) -> Path:
+    """
+    Materialise a node-specific view of the dataset by symlinking the assigned samples.
+    """
+
+    partition_root = processed_dir / "node_partitions" / f"node_{node_id}_of_{num_nodes}"
+    if partition_root.exists():
+        shutil.rmtree(partition_root)
+
+    images_root = processed_dir / "images"
+    labels_root = processed_dir / "labels"
+    train_split = select_split(splits, "train")
+
+    for split in splits:
+        src_images_split = images_root / split
+        src_labels_split = labels_root / split
+
+        dest_images_split = partition_root / "images" / split
+        dest_labels_split = partition_root / "labels" / split
+        dest_images_split.mkdir(parents=True, exist_ok=True)
+        dest_labels_split.mkdir(parents=True, exist_ok=True)
+
+        if not src_images_split.exists():
+            continue
+
+        image_paths = [p for p in sorted(src_images_split.iterdir()) if p.is_file()]
+        if not image_paths:
+            continue
+
+        if train_split is not None and split == train_split:
+            start, end = _partition_slice(len(image_paths), num_nodes, node_id)
+            assigned_images = image_paths[start:end]
+        else:
+            # Keep evaluation splits identical across nodes.
+            assigned_images = image_paths
+
+        label_lookup = {p.name: p for p in src_labels_split.glob("*.txt")} if src_labels_split.exists() else {}
+
+        for image_path in assigned_images:
+            dst_image_path = dest_images_split / image_path.name
+            symlink_or_copy(image_path.resolve(), dst_image_path)
+
+            label_name = image_path.with_suffix(".txt").name
+            dst_label_path = dest_labels_split / label_name
+            src_label_path = label_lookup.get(label_name)
+            if src_label_path is None:
+                dst_label_path.write_text("")
+            else:
+                symlink_or_copy(src_label_path.resolve(), dst_label_path)
+
+    logger.debug(
+        "Created node-specific dataset partition at %s (node_id=%s, num_nodes=%s)",
+        partition_root,
+        node_id,
+        num_nodes,
+    )
+    return partition_root
+
+
 def write_dataset_yaml(
     yaml_path: Path,
     processed_dir: Path,
     class_names: Sequence[str],
     splits: Sequence[str],
+    node_id: int | None = None,
+    num_nodes: int | None = None,
 ) -> Path:
     """Generate a YOLO ``data.yaml`` file pointing to the processed dataset."""
 
     processed_dir = processed_dir.resolve()
+    existing_node_id, existing_num_nodes = _load_node_partition_config(yaml_path)
+
+    if node_id is None:
+        node_id = existing_node_id
+    if num_nodes is None:
+        num_nodes = existing_num_nodes
+
     train_split = select_split(splits, "train")
     val_split = select_split(splits, "val")
     test_split = select_split(splits, "test")
@@ -260,20 +385,41 @@ def write_dataset_yaml(
     if val_split is None:
         raise ValueError("Dataset must include a validation split ('val' or 'valid')")
 
+    dataset_root_for_yaml: Path = processed_dir
+    if node_id is not None or num_nodes is not None:
+        if node_id is None or num_nodes is None:
+            raise ValueError("Both 'node_id' and 'num_nodes' must be provided to enable node-based partitioning.")
+        if num_nodes <= 0:
+            raise ValueError("'num_nodes' must be a positive integer.")
+        if node_id < 0 or node_id >= num_nodes:
+            raise ValueError(f"'node_id' must be in the range [0, {num_nodes - 1}] when 'num_nodes' is {num_nodes}.")
+
+        dataset_root_for_yaml = _create_node_partition(processed_dir, splits, node_id, num_nodes).resolve()
+
     lines = [
         "# Auto-generated by src/train.py",
-        f"path: {processed_dir}",
-        f"train: {processed_dir / 'images' / train_split}",
-        f"val: {processed_dir / 'images' / val_split}",
+        f"path: {dataset_root_for_yaml}",
+        f"train: {dataset_root_for_yaml / 'images' / train_split}",
+        f"val: {dataset_root_for_yaml / 'images' / val_split}",
     ]
     if test_split is not None:
-        lines.append(f"test: {processed_dir / 'images' / test_split}")
+        lines.append(f"test: {dataset_root_for_yaml / 'images' / test_split}")
     lines.append(f"nc: {len(class_names)}")
+    if node_id is not None:
+        lines.append(f"node_id: {node_id}")
+    if num_nodes is not None:
+        lines.append(f"num_nodes: {num_nodes}")
     lines.append("names:")
     for name in class_names:
         lines.append(f"  - {name}")
 
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
     yaml_path.write_text("\n".join(lines) + "\n")
-    logger.debug("Wrote dataset YAML to %s", yaml_path)
+    logger.debug(
+        "Wrote dataset YAML to %s (node_id=%s, num_nodes=%s, dataset_root=%s)",
+        yaml_path,
+        node_id,
+        num_nodes,
+        dataset_root_for_yaml,
+    )
     return yaml_path
