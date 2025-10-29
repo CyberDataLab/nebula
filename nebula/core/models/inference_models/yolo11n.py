@@ -1,15 +1,18 @@
 import copy
+import os
 import traceback
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+
+import logging
+import torch
+import yaml
+from ultralytics import YOLO
+
 from nebula.core.datasets.hackaton.dataset import prepare_dataset, write_dataset_yaml
 from nebula.core.models.inference_models.config.config import ensure_dual_head_config, update_model_cfg
 from nebula.core.models.inference_models.patch import ensure_ultralytics_multihead_support
 from nebula.core.models.nebulamodel import NebulaModel
-from ultralytics import YOLO
-from pathlib import Path
-import yaml
-import torch
-import logging
 
 COCO_NAMES: tuple[str, ...] = (
     "person",
@@ -118,13 +121,23 @@ class YOLO11n(NebulaModel):
         self._dataset_initialized = False
         module_dir = Path(__file__).resolve().parent
         self._project_root = self._discover_project_root(module_dir)
+        self._node_id, self._num_nodes = self._load_node_partition_config()
         self._base_model_path = self._project_root / "nebula/core/models/inference_models/yolo11n.pt"
         self._model = YOLO(str(self._base_model_path))
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
         self._new_class_names = ["drones"]
         self._config_path: Path = self._project_root / "nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"
-        self._data_yaml_path: Path = self._project_root / "nebula/core/datasets/hackaton/dataset.yaml"
+        dataset_root = self._project_root / "nebula/core/datasets/hackaton"
+        dataset_yaml_name = self._build_dataset_yaml_name(self._node_id, self._num_nodes)
+        self._data_yaml_path: Path = dataset_root / "datasets" / dataset_yaml_name
+        if self._node_id is not None:
+            logging.info(
+                "Dataset partitioning enabled for node_id=%s over %s nodes. Using dataset YAML %s.",
+                self._node_id,
+                self._num_nodes,
+                self._data_yaml_path,
+            )
         self._model_weight: int = 1
         self._dataset_name: str = "drones"
         self._logs_root: Path = self._project_root / "app/logs/inference_experiment"
@@ -141,6 +154,45 @@ class YOLO11n(NebulaModel):
             fallback,
         )
         return fallback
+
+    def _parse_env_int(self, key: str) -> int | None:
+        value = os.environ.get(key)
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except ValueError:
+            logging.warning("Environment variable %s should be an integer, got %r. Ignoring.", key, value)
+            return None
+
+    def _load_node_partition_config(self) -> tuple[int | None, int | None]:
+        node_id = self._parse_env_int("NEBULA_NODE_ID")
+        num_nodes = self._parse_env_int("NEBULA_NUM_NODES")
+        if (node_id is None) ^ (num_nodes is None):
+            logging.warning(
+                "Both NEBULA_NODE_ID and NEBULA_NUM_NODES must be set to enable dataset partitioning. "
+                "Received node_id=%s, num_nodes=%s. Ignoring node partition configuration.",
+                node_id,
+                num_nodes,
+            )
+            return None, None
+        if node_id is not None and num_nodes is not None:
+            if num_nodes <= 0:
+                logging.warning("NEBULA_NUM_NODES must be positive (got %s). Ignoring node partition configuration.", num_nodes)
+                return None, None
+            if node_id < 0 or node_id >= num_nodes:
+                logging.warning(
+                    "NEBULA_NODE_ID must be in [0, %s] (got %s). Ignoring node partition configuration.",
+                    num_nodes - 1,
+                    node_id,
+                )
+                return None, None
+        return node_id, num_nodes
+
+    def _build_dataset_yaml_name(self, node_id: int | None, num_nodes: int | None) -> str:
+        if node_id is not None and num_nodes is not None:
+            return f"dataset_node_{node_id}_of_{num_nodes}.yaml"
+        return "dataset.yaml"
         
     def _detect_last_head_index(self) -> int | None:
         modules = getattr(self._model.model, "model", None)
@@ -284,7 +336,7 @@ class YOLO11n(NebulaModel):
             dataset_root = self._project_root / "nebula/core/datasets/hackaton"
             raw_dataset_path = dataset_root / "datasets" / self._dataset_name
             processed_dataset_path = dataset_root / "processed" / self._dataset_name
-            dataset_yaml_path = dataset_root / "datasets" / "dataset.yaml"
+            dataset_yaml_path = self._data_yaml_path
             class_names, class_mapping, splits = prepare_dataset(
                 raw_dataset_path,
                 processed_dataset_path,
@@ -299,6 +351,8 @@ class YOLO11n(NebulaModel):
                 processed_dataset_path,
                 class_names,
                 splits,
+                node_id=self._node_id,
+                num_nodes=self._num_nodes,
             )
 
             added_classes = len(class_names)

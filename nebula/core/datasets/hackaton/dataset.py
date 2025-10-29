@@ -311,6 +311,8 @@ def _create_node_partition(
     images_root = processed_dir / "images"
     labels_root = processed_dir / "labels"
     train_split = select_split(splits, "train")
+    val_split = select_split(splits, "val")
+    partitioned_splits = {split for split in (train_split, val_split) if split is not None}
 
     for split in splits:
         src_images_split = images_root / split
@@ -328,11 +330,11 @@ def _create_node_partition(
         if not image_paths:
             continue
 
-        if train_split is not None and split == train_split:
+        if split in partitioned_splits:
             start, end = _partition_slice(len(image_paths), num_nodes, node_id)
             assigned_images = image_paths[start:end]
         else:
-            # Keep evaluation splits identical across nodes.
+            # Keep remaining splits identical across nodes.
             assigned_images = image_paths
 
         label_lookup = {p.name: p for p in src_labels_split.glob("*.txt")} if src_labels_split.exists() else {}
