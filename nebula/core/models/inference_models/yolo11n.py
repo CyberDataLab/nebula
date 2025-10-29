@@ -116,15 +116,24 @@ class YOLO11n(NebulaModel):
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
         self._dataset_initialized = False
-        self._base_model_path = Path("/home/pi/hackathon/nebula/nebula/core/models/inference_models/yolo11n.pt")
-        self._model = YOLO(self._base_model_path)
+        module_dir = Path(__file__).resolve().parent
+        parents = module_dir.parents
+        if len(parents) >= 5:
+            self._project_root = parents[4]
+        else:
+            fallback_index = len(parents) - 1
+            logging.warning("Unexpected inference model path depth; defaulting project root to %s.", parents[fallback_index])
+            self._project_root = parents[fallback_index]
+        self._base_model_path = self._project_root / "nebula/core/models/inference_models/yolo11n.pt"
+        self._model = YOLO(str(self._base_model_path))
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
         self._new_class_names = ["shoes"]
-        self._config_path: Path = Path("/home/pi/hackathon/nebula/nebula/core/models/inference_models/config/yolo11n-2xhead.yaml")
-        self._data_yaml_path: Path = Path("/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/dataset.yaml")
+        self._config_path: Path = self._project_root / "nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"
+        self._data_yaml_path: Path = self._project_root / "nebula/core/datasets/hackaton/dataset.yaml"
         self._model_weight: int = 1
         self._dataset_name: str = "shoes"
+        self._logs_root: Path = self._project_root / "app/logs/inference_experiment"
         
     def _detect_last_head_index(self) -> int | None:
         modules = getattr(self._model.model, "model", None)
@@ -265,9 +274,10 @@ class YOLO11n(NebulaModel):
         if not self._dataset_initialized:
             ensure_ultralytics_multihead_support()
             ensure_dual_head_config(self._config_path)
-            raw_dataset_path = Path(f"/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/datasets/{self._dataset_name}")
-            processed_dataset_path = Path(f"/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/processed/{self._dataset_name}")
-            dataset_yaml_path = Path("/home/pi/hackathon/nebula/nebula/core/datasets/hackaton/datasets/dataset.yaml")
+            dataset_root = self._project_root / "nebula/core/datasets/hackaton"
+            raw_dataset_path = dataset_root / "datasets" / self._dataset_name
+            processed_dataset_path = dataset_root / "processed" / self._dataset_name
+            dataset_yaml_path = dataset_root / "datasets" / "dataset.yaml"
             class_names, class_mapping, splits = prepare_dataset(
                 raw_dataset_path,
                 processed_dataset_path,
@@ -299,6 +309,7 @@ class YOLO11n(NebulaModel):
                 dataset_name=self._dataset_name,
             )
             self._dataset_initialized = True
+            self._data_yaml_path = dataset_yaml_path
             logging.info(f"Train and merge: best_weights {best_weights}, head_weights {head_weights} and merged_weights {merged_weights}")
         else:
             best_weights, head_weights, merged_weights = self._train_and_merge(
@@ -322,14 +333,20 @@ class YOLO11n(NebulaModel):
         epochs: int = 2,
         imgsz: int = 320,
         batch_size: int = 2,
-        output_dir: Path = Path("/home/pi/hackathon/nebula/app/logs/inference_experiment"),
+        output_dir: Path | None = None,
         dataset_name: str | None = None,
-        base_model: str = "/home/pi/hackathon/nebula/nebula/core/models/inference_models/yolo11n.pt",
+        base_model: str | Path | None = None,
     ) -> Dict[str, Path | None]:
 
-        output_dir.mkdir(parents=True, exist_ok=True)
+        resolved_output_dir = output_dir or self._logs_root
+        resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
-        model = YOLO(base_model)
+        model_path = Path(base_model) if base_model else self._base_model_path
+        config_path = Path(config_path) if config_path else self._config_path
+        data_yaml_path = Path(data_yaml) if data_yaml else self._data_yaml_path
+        class_names = new_class_names or self._new_class_names
+        run_name = dataset_name or self._dataset_name
+        model = YOLO(str(model_path))
         original_state = copy.deepcopy(model.state_dict())
         head_prefix = f"model.model.{freeze_layers}"
 
@@ -351,17 +368,17 @@ class YOLO11n(NebulaModel):
         model.add_callback("on_train_epoch_start", put_in_eval_mode)
         model.add_callback("on_pretrain_routine_start", put_in_eval_mode)
 
-        project_dir = output_dir / "runs"
+        project_dir = resolved_output_dir / "runs"
         project_dir.mkdir(parents=True, exist_ok=True)
 
         results = model.train(
-            data=str(data_yaml),
+            data=str(data_yaml_path),
             freeze=freeze_layers,
             epochs=epochs,
             imgsz=imgsz,
             batch=batch_size,
             project=str(project_dir),
-            name=dataset_name,
+            name=run_name,
             exist_ok=True,
         )
 
@@ -371,7 +388,7 @@ class YOLO11n(NebulaModel):
         elif hasattr(results, "save_dir"):
             save_dir = Path(results.save_dir)
         else:
-            save_dir = project_dir / dataset_name
+            save_dir = project_dir / run_name
 
         best_weights = save_dir / "weights" / "best.pt"
 
@@ -390,21 +407,22 @@ class YOLO11n(NebulaModel):
                 renamed = key.replace(f".{freeze_layers}", f".{freeze_layers + 1}", 1)
                 head_weights[renamed] = tensor.clone()
 
-        head_weights_path = output_dir / f"{Path(base_model).stem}_{dataset_name}_head.pth"
+        stem = model_path.stem
+        head_weights_path = resolved_output_dir / f"{stem}_{run_name}_head.pth"
         torch.save(head_weights, head_weights_path)
 
-        merged_model = YOLO(str(config_path), task="detect").load(base_model)
+        merged_model = YOLO(str(config_path), task="detect").load(str(model_path))
 
         state_dict = torch.load(head_weights_path, map_location="cpu")
         missing, unexpected = merged_model.load_state_dict(state_dict, strict=False)
 
-        merged_model.model.names = {idx: name for idx, name in enumerate(self.build_full_class_names(new_class_names))}
+        merged_model.model.names = {idx: name for idx, name in enumerate(self.build_full_class_names(class_names))}
         merged_model.ckpt = {"model": merged_model.model}
 
-        merged_weights_path = output_dir / f"{Path(base_model).stem}_{dataset_name}_merged.pt"
+        merged_weights_path = resolved_output_dir / f"{stem}_{run_name}_merged.pt"
         merged_model.save(str(merged_weights_path))
         
-        self._update_model_weight(data_yaml)
+        self._update_model_weight(data_yaml_path)
         self._model = merged_model
 
         return {
