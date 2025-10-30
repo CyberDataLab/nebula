@@ -614,7 +614,7 @@ class YOLO11n(NebulaModel):
         freeze_layers: int = 23,
         epochs: int = 2,
         imgsz: int = 640,
-        batch_size: int = 4,
+        batch_size: int = 2,
         output_dir: Path | None = None,
         dataset_name: str | None = None,
         base_model: str | Path | None = None,
