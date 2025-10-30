@@ -1,5 +1,9 @@
 # Types and utilities
-from typing import Awaitable, Callable, Union
+from typing import Any, Awaitable, Callable, Tuple, Union
+import base64
+import yaml
+from pathlib import Path
+import secrets
 import asyncio
 import logging
 
@@ -38,9 +42,21 @@ from nebula.kafka.clients.messages.system import SystemMessages, NEBULA_SYSTEM_T
 from nebula.kafka.clients.messages.experiment import ExperimentMessages
 from nebula.kafka.clients.messages.kafka_message import KafkaMessage
 from nebula.kafka.clients.messages.utils.utils import factory_kafka_message, parse_kafka_message
-from nebula.kafka.clients.errors import KafkaInitializationError
+from nebula.kafka.clients.errors import (
+    KafkaInitializationError, 
+    KafkaUserCreationError,
+    KafkaUserDeletionError,
+    KafkaACLCreationError,
+    KafkaACLDeletionError,
+    KafkaExperimentInitializationError,
+    KafkaProducerError,
+    KafkaConsumerLoopError,
+    KafkaLoadingConfigurationError,
+    KafkaConfigurationError,
+    KafkaTopicSubscriptionError,
+)
 
-# --- Datos de conexión ---
+#TODO modify config_parameters.py to obtain from env
 BROKER_9094 = "dev_dev_alejandro_nebula-kafka:9094"
 BROKER_9092 = "dev_dev_alejandro_nebula-kafka:9092"
 # self._username = "hub_admin"
@@ -113,7 +129,7 @@ class NebulaKafkaAdmin:
     """
     
     async def init(self):
-        #TODO robustness
+        #TODO robustness & system-users creation + ACLs
         #await self._testing_func()
         try:
             # Initialize user-admin-client
@@ -136,20 +152,39 @@ class NebulaKafkaAdmin:
             if not created:
                 raise KafkaInitializationError(f"Failed to create {NEBULA_SYSTEM_TOPIC} topic")
             
+            # Send frist message on system topic
             system_topic_initialized = await self.produce(NEBULA_SYSTEM_TOPIC, SystemMessages.AGENT_READY, data=self._client_id)
             if not system_topic_initialized:
-                raise KafkaInitializationError(f"Failed to initialize {NEBULA_SYSTEM_TOPIC} topic")
+                raise KafkaProducerError(f"Failed to send first message on '{NEBULA_SYSTEM_TOPIC}' topic")
             
             await asyncio.sleep(1)
+        
+            # Subscribe to system topic
             subscribed = await self._subscribe_topics(pattern="^experiment-.*|^nebula-system-control$")
             if not subscribed:
-                raise KafkaInitializationError(f"Failed to subscribe to topics: '^experiment-.*|^nebula-system-control$'")
+                raise KafkaTopicSubscriptionError(f"Failed to subscribe to topics: '^experiment-.*|^nebula-system-control$'")
+            
+            # Users creation & ACLs
+            results = await self._bootstrap_users()
+            errors = results.get("errors")
+
+            # Critical error - All agents must be configurated
+            if errors:
+                err_lines = []
+                for usr, usr_errors in errors.items():
+                    err_lines.append(f"User '{usr}' - Errors:")
+                    for err in usr_errors:
+                        err_lines.append(f"   ↳ {err}")
+
+                # Unir todas las líneas en un solo string
+                err_msg = "\n".join(err_lines)
+                raise KafkaConfigurationError(f"[ERROR]:\n{err_msg}")
             
             self._consumer_loop_task = asyncio.create_task(self._consume_loop())
         except Exception as e:
             self.log.exception(f"Kafka node initialization failed: {e}")
             await self.shutdown()  
-            raise KafkaInitializationError(f"{e}")
+            raise KafkaInitializationError(f"[ERROR]: initializing service") from e
     
     async def _init_user_admin_client(self):
         self._admin_user_client = AdminClient({
@@ -206,12 +241,82 @@ class NebulaKafkaAdmin:
         )
         await self._consumer.start()
 
+    async def _load_config(self, config_path: str | Path) -> dict:
+        path = Path(config_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Kafka users config file not found: {config_path}")
+
+        with open(path, "r") as f:
+            config = yaml.safe_load(f)
+
+        users = config.get("users", {})
+        for username, info in users.items():
+            try:
+                password_b64 = info["password"]
+                decoded_pass = base64.b64decode(password_b64).decode()
+                users[username]["password"] = decoded_pass
+            except Exception as e:
+                self._logger.error(f"Error decoding password for {username}: {e}")
+                raise KafkaLoadingConfigurationError(f"[ERROR]: decoding password for {username}: {e}") from e
+
+        return users
+
+    async def _bootstrap_users(self, config_path="/nebula/nebula/kafka/config/kafka_users.yaml") -> dict[str, dict]:
+        results = {
+            "success": [],
+            "errors": {}
+        }
+
+        users = await self._load_config(config_path)
+
+        for username, info in users.items():
+            user_errors = []
+            password = info["password"]
+            topics = info.get("topics", [])
+
+            # User creation
+            try:
+                self.log.info(f"👤 Creating user '{username}'...")
+                await self.create_user(username, password)
+            except KafkaUserCreationError as e:
+                msg = f"❌ Failed to create user '{username}': {e}"
+                self.log.error(msg)
+                user_errors.append(msg)
+            except Exception as e:
+                msg = f"Unexpected error creating user '{username}': {e}"
+                self.log.exception(msg)
+                user_errors.append(msg)
+
+            # ACLs creation if user was created previously
+            if not user_errors:
+                for topic_cfg in topics:
+                    topic_name = topic_cfg["name"]
+                    for op in topic_cfg["operations"]:
+                        try:
+                            await self.create_acl_for_user_topic(username, topic_name, op)
+                        except KafkaACLCreationError as e:
+                            msg = f"⚠️ Failed to create ACL ({op}) for '{username}' on '{topic_name}': {e}"
+                            self.log.error(msg)
+                            user_errors.append(msg)
+                        except Exception as e:
+                            msg = f"Unexpected ACL error for '{username}' on '{topic_name}': {e}"
+                            self.log.exception(msg)
+                            user_errors.append(msg)
+
+            if user_errors:
+                results["errors"][username] = user_errors
+            else:
+                results["success"].append(username)
+
+        return results
+
+
     """                                             ###############################
                                                     #       USERS MANAGEMENT      #
                                                     ###############################
     """
         
-    async def create_user(self, user: str, password: str) -> bool:
+    async def create_user(self, user: str, password: str) -> None:
         try:
             cred_info = ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096)
             password_bytes = password.encode("utf-8")
@@ -228,18 +333,17 @@ class NebulaKafkaAdmin:
             f = fs[user]
 
             try:
-                f.result()  # waiting result (sync)
+                await asyncio.to_thread(f.result)
                 self.log.info(f"✅ User '{user}' Created/Updated successfully.")
-                return True
             except ConfluentKafkaError as e:
                 self.log.error(f"⚠️ Error creating user '{user}': {e}")
-                return False
+                raise KafkaUserCreationError(f"[ERROR]: {e}")
 
         except Exception as e:
             self.log.error(f"❌ Unexpected error creating user '{user}': {e}")
-            return False
+            raise KafkaUserCreationError(f"[ERROR]: {e}")
 
-    async def delete_user(self, user: str) -> bool:
+    async def delete_user(self, user: str) -> None:
         try:
             op = UserScramCredentialDeletion(user, ScramMechanism.SCRAM_SHA_256)
             fs = self._admin_user_client.alter_user_scram_credentials([op])
@@ -248,21 +352,20 @@ class NebulaKafkaAdmin:
             try:
                 f.result()
                 self.log.info(f"✅ User '{user}' deleted successfully.")
-                return True
             except ConfluentKafkaError as e:
                 self.log.error(f"⚠️ Error deleting user '{user}': {e}")
-                return False
+                raise KafkaUserDeletionError(f"[ERROR]: {e}")
 
         except Exception as e:
             self.log.error(f"❌ Unexpected error deleting user '{user}': {e}")
-            return False
+            raise KafkaUserDeletionError(f"[ERROR]: {e}")
  
     """                                             ###############################
                                                     #       ACLs MANAGEMENT       #
                                                     ###############################
     """
         
-    async def create_acl_for_user_topic(self, user: str, topic_name: str, operation: str) -> bool:
+    async def create_acl_for_user_topic(self, user: str, topic_name: str, operation: str):
         op_map = {
             "read": [ACLOperation.READ],
             "write": [ACLOperation.WRITE],
@@ -270,8 +373,8 @@ class NebulaKafkaAdmin:
         }
 
         if operation not in op_map:
-            self.log.error(f"❌ ACL operation no permitida: '{operation}'")
-            return False
+            self.log.error(f"❌ ACL operation not allowed: '{operation}'")
+            raise ValueError(f"ACL operation not allowed: {operation}")
 
         acl_list = [
             ACL(
@@ -298,13 +401,13 @@ class NebulaKafkaAdmin:
                 self.log.error(f"⚠️ Errors creating ACL(s):")
                 for acl in failed:
                     self.log.error(f"   ↳ {acl}")
+                raise KafkaACLCreationError(f"[ERROR]: Cannot create ACLs - {failed}")
 
-            return len(failed) == 0
         except Exception as e:
             self.log.error(f"❌ Error creating ACL(s) for '{user}' on '{topic_name}': {e}")
-            return False
+            raise KafkaACLCreationError(f"[ERROR]: {e}")
         
-    async def delete_all_acls_for_user(self, user: str) -> bool:
+    async def delete_all_acls_for_user(self, user: str) -> list:
         #TODO loop for all ACLOperations
         try:
             acl_filter = ACLFilter(
@@ -329,31 +432,47 @@ class NebulaKafkaAdmin:
                 else:
                     self.log.info(f"✅ ACLs removed successfully: {matching_acls}")
             self.log.info(f"✅ All ACLs for '{user}' removed")
-            return True
+            return results
         
         except Exception as e:
             self.log.error(f"❌ Error removing ACLs for '{user}': {e}")
-            return False
+            raise KafkaACLDeletionError(f"[ERROR]: {e}")
 
     """                                             ###############################
                                                     #       TOPICS MANAGEMENT     #
                                                     ###############################
     """
-    async def initialize_experiment(self, experiment_name) -> bool:
-        # Create topic
-        topic_name = f"experiment-{experiment_name}"
-        topic_created = await self._create_topic(topic_name)
-        if not topic_created: 
-            return False
+    
+    def _generate_experiment_topic_credentials(self, experiment_name: str) -> Tuple[str, str]:
+        user = f"user-{experiment_name}"
+        password = secrets.token_urlsafe(12)
+        return user, password
         
-        await asyncio.sleep(1)
+    async def initialize_experiment(self, experiment_name):
+        try:
+            # Create topic
+            topic_name = f"experiment-{experiment_name}"
+            topic_created = await self._create_topic(topic_name)
+            if not topic_created: 
+                raise KafkaExperimentInitializationError("[ERROR]: Cannot create experiment topic name.")
+            
+            await asyncio.sleep(1)
+            
+            # Produce init message - not critical
+            message_produced = await self.produce(topic_name, ExperimentMessages.INIT, data=experiment_name)
+            if not message_produced:
+                self.log.info(f"[ERROR]: cannot create INIT message on topic '{experiment_name}'")
+            
+            # Create experiment-user
+            user, password = self._generate_experiment_topic_credentials(experiment_name)
+            await self.create_user(user, password)
+            
+            # Create experiment-user ACL
+            await self.create_acl_for_user_topic(user, topic_name, "write")
+            
+        except Exception as e:
+            raise KafkaExperimentInitializationError(f"[ERROR]: initializing experiment {e}") from e
         
-        # Produce init message
-        message_produced = await self.produce(topic_name, ExperimentMessages.INIT, data=experiment_name)
-        
-        #TODO create experiment-user
-        #TODO create experiment-user ACL
-        return message_produced
     
     async def _create_topic(self, topic_name: str):
         topic = NewTopic(
@@ -451,10 +570,12 @@ class NebulaKafkaAdmin:
                 except Exception as e:
                     self.log.exception(f"Error processing message from topic {msg.topic}: {e}")
 
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as ce:
             self.log.info("Consumer loop cancelled")
+            raise KafkaConsumerLoopError(f"[ERROR]: {ce}") from ce
         except Exception as e:
             self.log.exception(f"Unexpected error in consumer loop: {e}")
+            raise KafkaConsumerLoopError(f"[ERROR]: {e}") from e
         finally:
             await self._consumer.stop()
 

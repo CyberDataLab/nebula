@@ -33,7 +33,6 @@ class NebulaKafkaNode:
                 self.log.info(f"[Kafka] Attempting to start producer (attempt {attempt}/{max_retries})...")
                 await self._producer.start()
                 self.log.info(f"[Kafka] Producer started successfully with client_id='{self._client_id}'")
-                return True
             except (KafkaConnectionError, KafkaTimeoutError) as e:
                 self.log.warning(f"[Kafka] Connection issue on attempt {attempt}: {e}")
             except Exception as e:
@@ -44,10 +43,10 @@ class NebulaKafkaNode:
                 await asyncio.sleep(delay)
             else:
                 self.log.error(f"[Kafka] Failed to start producer after {max_retries} attempts")
-                raise KafkaInitializationError("Unable to start Kafka producer after multiple attempts.")
+                raise KafkaInitializationError("Unable to start Kafka producer after multiple attempts on NebulaKafkaNode.")
             
         
-    async def produce(self, message_type: ExperimentMessages, data):
+    async def produce(self, message_type: ExperimentMessages, data) -> bool:
         message = factory_kafka_message(message_type, data=data)
         if message is None:
             self.log.info(f"Cannot create message type '{message_type}'")
@@ -55,15 +54,20 @@ class NebulaKafkaNode:
         
         try:
             await self._producer.send_and_wait(self._experiment_topic, message.to_bytes())
+            return True
         except KafkaError as e:
             self.log.error(f"Kafka error sending {message_type}: {e}")
+            return False
         except Exception as e:
             self.log.info(f"Unexpected error sending message: {e}")
+            return False
 
-    async def shutdown(self):
+    async def shutdown(self) -> bool:
         try:
             await self._producer.stop()
             self.log.info("Kafka producer stopped successfully.")
+            return True
         except Exception as e:
             self.log.info(f"Error stopping Kafka producer: {e}")
+            return False
            
