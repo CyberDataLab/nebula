@@ -122,6 +122,8 @@ class YOLO11n(NebulaModel):
         module_dir = Path(__file__).resolve().parent
         self._project_root = self._discover_project_root(module_dir)
         self._node_id, self._num_nodes = self._load_node_partition_config()
+        self._attack_mode = self._load_attack_mode()
+        self._label_attack_applied = False
         self._base_model_path = self._project_root / "nebula/core/models/inference_models/yolo11n.pt"
         self._model = YOLO(str(self._base_model_path))
         self._freeze_layers = 23
@@ -188,6 +190,221 @@ class YOLO11n(NebulaModel):
                 )
                 return None, None
         return node_id, num_nodes
+
+    def _load_attack_mode(self) -> int:
+        attack_mode = self._parse_env_int("NEBULA_ATTACK")
+        if attack_mode is None:
+            return 0
+        if attack_mode not in (0, 1, 2):
+            logging.warning(
+                "NEBULA_ATTACK must be one of {0, 1, 2} (got %s). Falling back to 0 (no attack).",
+                attack_mode,
+            )
+            return 0
+        if attack_mode:
+            logging.info("Applying attack mode %s for this node.", attack_mode)
+        return attack_mode
+
+    def _apply_pre_training_attack(self, dataset_yaml: Path) -> None:
+        if self._attack_mode != 1 or self._label_attack_applied:
+            return
+        updated_names = self._apply_label_flipping(dataset_yaml)
+        if updated_names:
+            if len(updated_names) != len(self._new_class_names):
+                update_model_cfg(
+                    self._config_path,
+                    len(updated_names),
+                    base_class_count=80,
+                )
+            self._new_class_names = list(updated_names)
+        self._label_attack_applied = True
+
+    def _apply_post_training_attack(self) -> None:
+        if self._attack_mode == 2:
+            self._apply_model_poisoning()
+
+    def _apply_label_flipping(self, dataset_yaml: Path) -> list[str] | None:
+        try:
+            data_config = yaml.safe_load(dataset_yaml.read_text())
+        except Exception:
+            logging.warning("Failed to parse dataset YAML at %s for label flipping.", dataset_yaml, exc_info=True)
+            return
+
+        if not isinstance(data_config, dict):
+            logging.warning("Dataset YAML at %s is not a mapping; skipping label flipping.", dataset_yaml)
+            return
+
+        train_dir = data_config.get("train")
+        if not train_dir:
+            logging.warning("Dataset YAML at %s does not define a 'train' path; skipping label flipping.", dataset_yaml)
+            return
+
+        names_obj = data_config.get("names")
+        class_names = self._normalize_class_names(names_obj)
+        if not class_names:
+            logging.warning("Dataset YAML at %s has no class names; skipping label flipping.", dataset_yaml)
+            return class_names
+
+        names_changed = not isinstance(names_obj, list)
+        source_id: int | None = None
+        target_id: int | None = None
+        for candidate in ("drone", "drones"):
+            source_id = self._resolve_class_identifier(candidate, class_names)
+            if source_id is not None:
+                break
+
+        if source_id is None:
+            logging.warning(
+                "Hardcoded label flip skipped because source class 'drone' was not found among %s.",
+                class_names,
+            )
+            return class_names
+
+        target_id = self._resolve_class_identifier("spoon", class_names)
+        if target_id is None:
+            target_id = len(class_names)
+            class_names.append("spoon")
+            names_changed = True
+            logging.info("Added new target class 'spoon' (id=%s) for targeted label flip.", target_id)
+
+        logging.info(
+            "Applying targeted label flip from class %s (id=%s) to %s (id=%s).",
+            class_names[source_id],
+            source_id,
+            class_names[target_id],
+            target_id,
+        )
+
+        train_images_path = Path(train_dir)
+        labels_root = train_images_path.parent.parent / "labels" / train_images_path.name
+        if not labels_root.exists():
+            logging.warning("Expected labels directory %s for label flipping does not exist.", labels_root)
+            return
+
+        processed_files = 0
+        modified_files = 0
+        for label_file in labels_root.glob("*.txt"):
+            processed_files += 1
+            try:
+                original_lines = label_file.read_text().splitlines()
+            except Exception:
+                logging.warning("Failed to read label file %s during label flipping.", label_file, exc_info=True)
+                continue
+
+            flipped_lines: list[str] = []
+            file_modified = False
+            for line in original_lines:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                parts = stripped.split()
+                try:
+                    cls_id = int(parts[0])
+                except ValueError:
+                    flipped_lines.append(stripped)
+                    continue
+
+                new_cls = target_id if cls_id == source_id else cls_id
+
+                if new_cls != cls_id:
+                    file_modified = True
+                parts[0] = str(new_cls)
+                flipped_lines.append(" ".join(parts))
+
+            if file_modified:
+                try:
+                    label_file.write_text("\n".join(flipped_lines) + ("\n" if flipped_lines else ""))
+                    modified_files += 1
+                except Exception:
+                    logging.warning("Failed to write flipped labels to %s.", label_file, exc_info=True)
+            elif flipped_lines:
+                # Preserve original formatting for files that contained annotations but were not modified.
+                try:
+                    label_file.write_text("\n".join(flipped_lines) + ("\n" if flipped_lines else ""))
+                except Exception:
+                    logging.warning("Failed to rewrite labels file %s during label flipping.", label_file, exc_info=True)
+
+        if processed_files:
+            logging.info(
+                "Applied label flipping to %s label files (%s modified) under %s.",
+                processed_files,
+                modified_files,
+                labels_root,
+            )
+        else:
+            logging.info("No label files found for label flipping under %s.", labels_root)
+
+        if names_changed:
+            data_config["names"] = class_names
+            data_config["nc"] = len(class_names)
+            try:
+                dataset_yaml.write_text(yaml.safe_dump(data_config, sort_keys=False))
+                logging.info(
+                    "Updated dataset YAML at %s with %s class names.",
+                    dataset_yaml,
+                    len(class_names),
+                )
+            except Exception:
+                logging.warning("Failed to update dataset YAML at %s with new class names.", dataset_yaml, exc_info=True)
+
+        return class_names
+
+    def _normalize_class_names(self, names: object) -> list[str]:
+        if isinstance(names, dict):
+            try:
+                ordered = sorted(((int(k), v) for k, v in names.items()), key=lambda item: item[0])
+            except Exception:
+                ordered = list(names.items())
+            return [str(name) for _, name in ordered]
+        if isinstance(names, (list, tuple)):
+            return [str(name) for name in names]
+        return []
+
+    def _resolve_class_identifier(self, identifier: object, class_names: Sequence[str]) -> int | None:
+        if identifier is None:
+            return None
+        if isinstance(identifier, int):
+            return identifier if 0 <= identifier < len(class_names) else None
+        identifier_str = str(identifier).strip()
+        if identifier_str == "":
+            return None
+        try:
+            guessed_index = int(identifier_str)
+        except ValueError:
+            guessed_index = None
+        else:
+            if 0 <= guessed_index < len(class_names):
+                return guessed_index
+        lowered = identifier_str.lower()
+        for idx, name in enumerate(class_names):
+            if name.lower() == lowered:
+                return idx
+        return None
+
+    def _apply_model_poisoning(self) -> None:
+        noise_std = os.environ.get("NEBULA_ATTACK_NOISE_STD", "0.01")
+        try:
+            noise_scale = float(noise_std)
+        except (TypeError, ValueError):
+            logging.warning("Invalid NEBULA_ATTACK_NOISE_STD=%r; defaulting to 0.01.", noise_std)
+            noise_scale = 0.01
+
+        if noise_scale <= 0:
+            logging.warning("NEBULA_ATTACK_NOISE_STD must be positive; defaulting to 0.01.")
+            noise_scale = 0.01
+
+        poisoned_params = 0
+        with torch.no_grad():
+            for param in self._model.model.parameters():
+                noise = torch.randn_like(param) * noise_scale
+                param.add_(noise)
+                poisoned_params += 1
+
+        logging.info(
+            "Applied model poisoning by adding Gaussian noise (std=%s) to %s parameter tensors.",
+            noise_scale,
+            poisoned_params,
+        )
 
     def _build_dataset_yaml_name(self, node_id: int | None, num_nodes: int | None) -> str:
         if node_id is not None and num_nodes is not None:
@@ -362,6 +579,7 @@ class YOLO11n(NebulaModel):
                 base_class_count=80,
             )
             self._new_class_names = list(class_names)
+            self._apply_pre_training_attack(dataset_yaml_path)
 
             best_weights, head_weights, merged_weights = self._train_and_merge(
                 config_path=self._config_path,
@@ -372,13 +590,16 @@ class YOLO11n(NebulaModel):
             self._dataset_initialized = True
             self._data_yaml_path = dataset_yaml_path
             logging.info(f"Train and merge: best_weights {best_weights}, head_weights {head_weights} and merged_weights {merged_weights}")
+            self._apply_post_training_attack()
         else:
+            self._apply_pre_training_attack(self._data_yaml_path)
             best_weights, head_weights, merged_weights = self._train_and_merge(
                 config_path=self._config_path,
                 data_yaml=self._data_yaml_path,
                 new_class_names=self._new_class_names,
                 dataset_name=self._dataset_name,
             )
+            self._apply_post_training_attack()
         
     def build_full_class_names(self, new_class_names: Sequence[str]) -> list[str]:
         """Concatenate the default COCO names with the new dataset-specific names."""
