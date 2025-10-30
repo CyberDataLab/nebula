@@ -115,6 +115,8 @@ class YOLO11n(NebulaModel):
         learning_rate=1e-3,
         metrics=None,
         confusion_matrix=None,
+        malicious: Optional[bool] = None,
+        poison_label: str = "spoon",
         seed=None,
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
@@ -126,6 +128,8 @@ class YOLO11n(NebulaModel):
         self._model = YOLO(str(self._base_model_path))
         self._freeze_layers = 23
         self._head_module_index = self._detect_last_head_index()
+        self._poison_label_name = (poison_label or "spoon").strip().lower()
+        self._poison_logged_once = False
         self._new_class_names = ["drones"]
         self._config_path: Path = self._project_root / "nebula/core/models/inference_models/config/yolo11n-2xhead.yaml"
         dataset_root = self._project_root / "nebula/core/datasets/hackaton"
@@ -379,7 +383,80 @@ class YOLO11n(NebulaModel):
                 new_class_names=self._new_class_names,
                 dataset_name=self._dataset_name,
             )
-        
+
+    def _poison_labels_callback(self, trainer):
+        """
+        En cada batch de entrenamiento, si _is_malicious está activo:
+        cambia todas las anotaciones con clase 'drones' a la clase destino por nombre.
+        """
+        if not self._is_malicious:
+            return
+
+        batch = getattr(trainer, "batch", None)
+        if not batch or "cls" not in batch:
+            return
+
+        # cls viene como float (N,1); convertimos a long para comparar/setear índices
+        cls = batch["cls"].view(-1).to(dtype=torch.long)
+
+        # Resolución de nombres de clase
+        names = getattr(trainer.model, "names", None)
+        if names is None:
+            data = getattr(trainer, "data", None)
+            names = getattr(data, "names", None)
+
+        # Normaliza nombres -> id
+        name_to_id = {}
+        if isinstance(names, (list, tuple)):
+            name_to_id = {str(n).strip().lower(): i for i, n in enumerate(names)}
+        elif isinstance(names, dict):
+            # Algunas versiones usan {id: name}
+            try:
+                name_to_id = {str(v).strip().lower(): int(k) for k, v in names.items()}
+            except Exception:
+                # Otras usan {name: id}
+                name_to_id = {str(k).strip().lower(): int(v) for k, v in names.items()}
+
+        # IDs de la clase origen
+        drone_aliases = ["drones", "drone", "uav"]
+        drone_ids = [name_to_id[n] for n in drone_aliases if n in name_to_id]
+
+        # Caso de data.yaml con una única clase que sea 'drones'
+        if not drone_ids and isinstance(names, (list, tuple)) and len(names) == 1:
+            if str(names[0]).strip().lower() in drone_aliases:
+                drone_ids = [0]
+
+        if not drone_ids:
+            if not self._poison_º_once:
+                logging.warning("[POISON] Clase 'drones' no encontrada en names=%r. Sin cambios.", names)
+                self._poison_logged_once = True
+            return
+
+        src_id = int(drone_ids[0])
+
+        # Clase destino
+        dst_id = name_to_id.get(self._poison_label_name)
+        if dst_id is None:
+            # Fallback: 'spoon' suele ser 44 en COCO; si no, 0
+            if isinstance(names, (list, tuple)) and len(names) >= 45:
+                dst_id = 44
+            else:
+                dst_id = 0
+
+        mask = (cls == src_id)
+        if mask.any():
+            cls[mask] = int(dst_id)
+            batch["cls"] = cls.view(-1, 1).to(dtype=torch.float32)
+            trainer.batch = batch
+
+            if not self._poison_logged_once:
+                logging.info(
+                    "[POISON] Re-etiquetando '%s'(id=%d) -> '%s'(id=%d) en %d anotaciones (cliente malicioso).",
+                    "drones", src_id, self._poison_label_name, dst_id, int(mask.sum().item())
+                )
+                self._poison_logged_once = True
+
+
     def build_full_class_names(self, new_class_names: Sequence[str]) -> list[str]:
         """Concatenate the default COCO names with the new dataset-specific names."""
 
@@ -428,7 +505,12 @@ class YOLO11n(NebulaModel):
 
         model.add_callback("on_train_epoch_start", put_in_eval_mode)
         model.add_callback("on_pretrain_routine_start", put_in_eval_mode)
-
+        if self._is_malicious:
+            # Se engancha al inicio de cada batch de entrenamiento
+            model.add_callback("on_train_batch_start", self._poison_labels_callback)
+            logging.warning("[POISON] Malicious node changing labels from drones to -> '%s'.",
+                            self._poison_label_name)
+        
         project_dir = resolved_output_dir / "runs"
         project_dir.mkdir(parents=True, exist_ok=True)
 
