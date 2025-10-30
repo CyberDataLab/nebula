@@ -2,29 +2,28 @@ import argparse
 import asyncio
 import datetime
 import importlib
+import inspect
 import ipaddress
 import json
 import logging
 import os
+
+# --- Metrics listing and download endpoints ---
+import pathlib
 import re
 from typing import Annotated
 
 import aiohttp
 import psutil
 import uvicorn
-import shutil
-import inspect
-from fastapi import Body, FastAPI, Request, status, HTTPException, Path, File, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Path, Request, UploadFile, status
 from fastapi.concurrency import asynccontextmanager
+from fastapi.responses import FileResponse
 
 from nebula.controller.database import scenario_set_all_status_to_finished, scenario_set_status_to_finished
 from nebula.controller.http_helpers import remote_get, remote_post_form
-from nebula.utils import DockerUtils
 from nebula.controller.scenarios import Scenario
-
-# --- Metrics listing and download endpoints ---
-import pathlib
-from fastapi.responses import FileResponse
+from nebula.utils import DockerUtils
 
 
 # Setup controller logger
@@ -271,24 +270,18 @@ async def get_available_gpu():
 
 def validate_physical_fields(data: dict):
     if data.get("deployment") != "physical":
-        return                                   
- 
+        return
+
     ips = data.get("physical_ips")
     if not ips:
-        raise HTTPException(
-            status_code=400,
-            detail="physical deployment requires 'physical_ips'"
-        )
- 
+        raise HTTPException(status_code=400, detail="physical deployment requires 'physical_ips'")
+
     if len(ips) != data.get("n_nodes"):
-        raise HTTPException(
-            status_code=400,
-            detail="'physical_ips' must have the same length as 'n_nodes'"
-        )
- 
+        raise HTTPException(status_code=400, detail="'physical_ips' must have the same length as 'n_nodes'")
+
     try:
         for ip in ips:
-            ipaddress.ip_address(ip)            
+            ipaddress.ip_address(ip)
             print(ip)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -356,30 +349,30 @@ async def stop_scenario(
     Stops the execution of a federated learning scenario and performs cleanup operations.
     Now also stops physical nodes if the scenario is of type 'physical'.
     """
-    from nebula.controller.scenarios import ScenarioManagement
     from nebula.controller.database import get_scenario_by_name
+    from nebula.controller.scenarios import ScenarioManagement
 
     # Get scenario fron data base
     scenario_row = get_scenario_by_name(scenario_name)
     if scenario_row is None:
         raise HTTPException(status_code=404, detail=f"Scenario '{scenario_name}' not found")
     scenario_dict = dict(scenario_row)
-    
-    json_fields = ['nodes', 'nodes_graph', 'attack_params', 'reputation', 'matrix', 'additional_participants']
-    
+
+    json_fields = ["nodes", "nodes_graph", "attack_params", "reputation", "matrix", "additional_participants"]
+
     for field in json_fields:
-        if field in scenario_dict and scenario_dict[field]:
+        if scenario_dict.get(field):
             try:
                 if isinstance(scenario_dict[field], str):
                     scenario_dict[field] = json.loads(scenario_dict[field])
             except (json.JSONDecodeError, TypeError):
                 scenario_dict[field] = None
-    
+
     sig = inspect.signature(Scenario.__init__)
     scenario_filtered = {}
-    
+
     for param_name, param in sig.parameters.items():
-        if param_name == 'self':
+        if param_name == "self":
             continue
         if param_name in scenario_dict:
             scenario_filtered[param_name] = scenario_dict[param_name]
@@ -402,9 +395,11 @@ async def stop_scenario(
             result["details"] = {
                 "successful": stop_results["successful"],
                 "failed": stop_results["failed"],
-                "total_nodes": stop_results["total_nodes"]
+                "total_nodes": stop_results["total_nodes"],
             }
-            logging.info(f"📊 Physical scenario stop summary: {len(stop_results['successful'])}/{stop_results['total_nodes']} nodes stopped successfully")
+            logging.info(
+                f"📊 Physical scenario stop summary: {len(stop_results['successful'])}/{stop_results['total_nodes']} nodes stopped successfully"
+            )
         except Exception as e:
             result["errors"].append(str(e))
             logging.exception(f"💥 Error during physical scenario stop: {e}")
@@ -583,7 +578,9 @@ async def list_scenarios():
     Devuelve todos los escenarios con su nombre y estado (al menos 'running').
     """
     import logging
+
     from nebula.controller.database import get_all_scenarios
+
     try:
         # Para el polling, no importa el usuario ni el rol, así que devolvemos todos
         scenarios = get_all_scenarios(username=None, role="admin")
@@ -592,10 +589,7 @@ async def list_scenarios():
         for s in scenarios:
             # s puede ser sqlite3.Row, convertir a dict
             d = dict(s)
-            scenarios_list.append({
-                "name": d.get("name"),
-                "status": d.get("status")
-            })
+            scenarios_list.append({"name": d.get("name"), "status": d.get("status")})
         logging.info(f"[SCENARIOS-LIST] Devolviendo {len(scenarios_list)} escenarios")
         return {"scenarios": scenarios_list}
     except Exception as e:
@@ -920,50 +914,53 @@ async def discover_vpn():
     and returns them as a JSON object {"ips": [...]}.
     """
     try:
+        # HACKATON
         # 1) Launch the `tailscale status --json` subprocess
-        proc = await asyncio.create_subprocess_exec(
-            "tailscale", "status", "--json",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
- 
-        # 2) Wait for it to finish and capture stdout/stderr
-        out, err = await proc.communicate()
-        if proc.returncode != 0:
-            # If the CLI returned an error, raise to be caught below
-            raise RuntimeError(err.decode())
- 
-        # 3) Parse the JSON output
-        data = json.loads(out.decode())
- 
-        # 4) Collect only the IPv4 addresses from each peer
-        ips = []
-        for peer in data.get("Peer", {}).values():
-            for ip in peer.get("TailscaleIPs", []):
-                if ":" not in ip:  
-                    # Skip IPv6 entries (they contain colons)
-                    ips.append(ip)
- 
+        # proc = await asyncio.create_subprocess_exec(
+        #     "tailscale", "status", "--json",
+        #     stdout=asyncio.subprocess.PIPE,
+        #     stderr=asyncio.subprocess.PIPE,
+        # )
+
+        # # 2) Wait for it to finish and capture stdout/stderr
+        # out, err = await proc.communicate()
+        # if proc.returncode != 0:
+        #     # If the CLI returned an error, raise to be caught below
+        #     raise RuntimeError(err.decode())
+
+        # # 3) Parse the JSON output
+        # data = json.loads(out.decode())
+
+        # # 4) Collect only the IPv4 addresses from each peer
+        # ips = []
+        # for peer in data.get("Peer", {}).values():
+        #     for ip in peer.get("TailscaleIPs", []):
+        #         if ":" not in ip:
+        #             # Skip IPv6 entries (they contain colons)
+        #             ips.append(ip)
+
+        ips = ["192.168.3.108", "192.168.3.109", "192.168.3.103"]
+
         # 5) Return the list of IPv4s
         return {"ips": ips}
- 
+
     except Exception as e:
         # 6) Log any failure and respond with HTTP 500
-        logging.error(f"Error discovering VPN devices: {e}")
+        logging.exception(f"Error discovering VPN devices: {e}")
         raise HTTPException(status_code=500, detail="No devices discovered")
 
 
 @app.get("/physical/run/{ip}", tags=["physical"])
 async def physical_run(ip: str):
     status, data = await remote_get(ip, "/run/")
- 
+
     if status == 200:
         return data
     if status is None:
         raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
     raise HTTPException(status_code=status, detail=data)
- 
- 
+
+
 @app.get("/physical/stop/{ip}", tags=["physical"])
 async def physical_stop(ip: str):
     """
@@ -976,43 +973,42 @@ async def physical_stop(ip: str):
     status, data = await remote_get(host, "/stop/")
 
     if status == 200:
-        return data                                   # → {"pid":1234,"state":"stopped"}
+        return data  # → {"pid":1234,"state":"stopped"}
     if status is None:
-        raise HTTPException(status_code=502,
-                            detail=f"Node unreachable: {data}")
+        raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
     raise HTTPException(status_code=status, detail=data)
- 
- 
-@app.put("/physical/setup/{ip}", tags=["physical"],
-         status_code=status.HTTP_201_CREATED)
+
+
+@app.put("/physical/setup/{ip}", tags=["physical"], status_code=status.HTTP_201_CREATED)
 async def physical_setup(
     ip: str,
-    config:      UploadFile = File(..., description="*.json* configuration file"),
-    global_test: UploadFile = File(..., description="Global Dataset*.h5*"),
-    train_set:   UploadFile = File(..., description="Training dataset*.h5*"),
+    config: UploadFile = File(..., description="*.json* configuration file"),
+    global_test: UploadFile | None = File(None, description="Global Dataset*.h5*"),
+    train_set: UploadFile | None = File(None, description="Training dataset*.h5*"),
 ):
- 
     form = aiohttp.FormData()
     await config.seek(0)
-    form.add_field("config", config.file,
-                   filename=config.filename, content_type="application/json")
-    await global_test.seek(0)
-    form.add_field("global_test", global_test.file,
-                   filename=global_test.filename, content_type="application/octet-stream")
-    await train_set.seek(0)
-    form.add_field("train_set", train_set.file,
-                   filename=train_set.filename, content_type="application/octet-stream")
- 
-    status_code, data = await remote_post_form(
-        ip, "/setup/", form, method="PUT"
-    )
- 
+    form.add_field("config", config.file, filename=config.filename, content_type="application/json")
+    if global_test is not None:
+        await global_test.seek(0)
+        form.add_field(
+            "global_test", global_test.file, filename=global_test.filename, content_type="application/octet-stream"
+        )
+    if train_set is not None:
+        await train_set.seek(0)
+        form.add_field(
+            "train_set", train_set.file, filename=train_set.filename, content_type="application/octet-stream"
+        )
+
+    status_code, data = await remote_post_form(ip, "/setup/", form, method="PUT")
+
     if status_code == 201:
         return data
     if status_code is None:
         raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
     raise HTTPException(status_code=status_code, detail=data)
- 
+
+
 @app.get("/physical/free_port/{ip}", tags=["physical"])
 async def physical_free_port(ip: str):
     """
@@ -1027,6 +1023,7 @@ async def physical_free_port(ip: str):
         raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
     raise HTTPException(status_code=status_code, detail=data)
 
+
 # ──────────────────────────────────────────────────────────────
 # Physical · single-node state
 # ──────────────────────────────────────────────────────────────
@@ -1034,22 +1031,22 @@ async def physical_free_port(ip: str):
 async def get_physical_node_state(ip: str):
     """
     Query a single Raspberry Pi (or other node) for its training state.
- 
+
     Parameters
     ----------
     ip : str
         IP address or hostname of the node.
- 
+
     Returns
     -------
     dict
-        • running (bool) – True if a training process is active.  
+        • running (bool) – True if a training process is active.
         • error   (str)  – Optional error message when the node is unreachable
                             or returns a non-200 HTTP status.
     """
     # Short global timeout so a dead node doesn't block the whole request
-    timeout = aiohttp.ClientTimeout(total=3)            # seconds
- 
+    timeout = aiohttp.ClientTimeout(total=3)  # seconds
+
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(f"http://{ip}/state/") as resp:
@@ -1057,17 +1054,15 @@ async def get_physical_node_state(ip: str):
                     # Forward the node's own JSON, expected to be {"running": bool}
                     return await resp.json()
                 # Node responded but with an HTTP error code
-                return {"running": False,
-                        "error": f"HTTP {resp.status}"}
+                return {"running": False, "error": f"HTTP {resp.status}"}
     except Exception as exc:
         # Network errors, timeouts, DNS failures, …
         return {"running": False, "error": str(exc)}
- 
+
+
 @app.post("/nodes/{scenario_name}/metrics")
 async def save_node_metrics(
-    scenario_name: Annotated[
-        str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50)
-    ],
+    scenario_name: Annotated[str, Path(regex="^[a-zA-Z0-9_-]+$", min_length=1, max_length=50)],
     request: Request,
 ):
     """
@@ -1091,11 +1086,18 @@ async def save_node_metrics(
         }
         →  ./metrics/<ip>_<timestamp>.json
     """
-    import base64, gzip, io, json, pathlib, re, datetime, logging
+    import base64
+    import datetime
+    import gzip
+    import io
+    import json
+    import logging
+    import pathlib
+    import re
 
     try:
         payload = await request.json()
-        ip  = payload.get("ip")
+        ip = payload.get("ip")
         idx = payload.get("idx")
 
         if not ip:
@@ -1105,8 +1107,8 @@ async def save_node_metrics(
         metrics_root = pathlib.Path(__file__).parent / "metrics"
         metrics_root.mkdir(exist_ok=True)
 
-        safe_ip = re.sub(r"[^0-9a-zA-Z._-]", "_", ip)        # ":" → "_"
-        ts      = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        safe_ip = re.sub(r"[^0-9a-zA-Z._-]", "_", ip)  # ":" → "_"
+        ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # ────────────────  NEW FORMAT → tar.gz  ────────────────
         if payload.get("archive"):
@@ -1120,7 +1122,7 @@ async def save_node_metrics(
             # --- Guardar mapeo filename → idx, ip ---
             mapfile = metrics_root / f"{scenario_name}_metrics_map.json"
             if mapfile.exists():
-                with open(mapfile, "r") as f:
+                with open(mapfile) as f:
                     metrics_map = json.load(f)
             else:
                 metrics_map = {}
@@ -1148,7 +1150,7 @@ async def save_node_metrics(
     except Exception as e:
         logging.exception("Error while processing metrics: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
-     
+
 
 # ──────────────────────────────────────────────────────────────
 # Physical · aggregate state for an entire scenario
@@ -1157,12 +1159,12 @@ async def save_node_metrics(
 async def get_physical_scenario_state(scenario_name: str):
     """
     Check the training state of *every* physical node assigned to a scenario.
- 
+
     Parameters
     ----------
     scenario_name : str
         Scenario identifier.
- 
+
     Returns
     -------
     dict
@@ -1177,25 +1179,23 @@ async def get_physical_scenario_state(scenario_name: str):
     scenario = await get_scenario_by_name(scenario_name)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
- 
+
     nodes = await list_nodes_by_scenario_name(scenario_name)
     if not nodes:
         raise HTTPException(status_code=404, detail="No nodes found for scenario")
- 
+
     # 2) Probe all nodes concurrently
-    ips   = [n["ip"] for n in nodes]
+    ips = [n["ip"] for n in nodes]
     tasks = [get_physical_node_state(ip) for ip in ips]
-    states = await asyncio.gather(*tasks)               # parallel HTTP calls
- 
+    states = await asyncio.gather(*tasks)  # parallel HTTP calls
+
     # 3) Aggregate results
-    nodes_state  = dict(zip(ips, states))
-    any_running  = any(s.get("running") for s in states)
+    nodes_state = dict(zip(ips, states, strict=False))
+    any_running = any(s.get("running") for s in states)
     # 'all_available' is true only if *every* node answered with running=False
     # *and* without an error field.
-    all_available = all(
-        (not s.get("running")) and (not s.get("error")) for s in states
-    )
- 
+    all_available = all((not s.get("running")) and (not s.get("error")) for s in states)
+
     return {
         "running": any_running,
         "nodes_state": nodes_state,
@@ -1304,6 +1304,7 @@ async def list_metrics_files(scenario_name: str):
     files = [f.name for f in metrics_root.glob("*.tar.gz") if f.is_file()]
     return {"files": files}
 
+
 @app.get("/metrics/download/{scenario_name}/{filename}")
 async def download_metrics_file(scenario_name: str, filename: str):
     """
@@ -1315,15 +1316,18 @@ async def download_metrics_file(scenario_name: str, filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(str(file_path), media_type="application/gzip", filename=filename)
 
+
 # --- Nuevo endpoint: devuelve el mapeo de métricas para un escenario ---
 @app.get("/metrics/map/{scenario_name}")
 async def get_metrics_map(scenario_name: str):
-    import pathlib, json
+    import json
+    import pathlib
+
     metrics_root = pathlib.Path(__file__).parent / "metrics"
     mapfile = metrics_root / f"{scenario_name}_metrics_map.json"
     if not mapfile.exists():
         return {"map": {}}
-    with open(mapfile, "r") as f:
+    with open(mapfile) as f:
         metrics_map = json.load(f)
     return {"map": metrics_map}
 

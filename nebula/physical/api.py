@@ -7,7 +7,6 @@ import re
 import signal
 import subprocess
 import zipfile
-from typing import Dict, List, Optional, Set
 
 from flask import (
     Flask,
@@ -21,30 +20,27 @@ from flask import (
 
 app = Flask(__name__)
 
-CERTS_FOLDER   = "./app/certs/"
-CONFIG_FOLDER  = "./app/config/"
-LOGS_FOLDER    = "./app/logs/"
+CERTS_FOLDER = "./app/certs/"
+CONFIG_FOLDER = "./app/config/"
+LOGS_FOLDER = "./app/logs/"
 METRICS_FOLDER = "./app/logs/metrics/"
 
-CONFIG_FILE_COUNT  = 1          # Exactly one *.json* per run
-DATASET_FILE_COUNT = 2          # Exactly two *.h5* per run
+CONFIG_FILE_COUNT = 1  # Exactly one *.json* per run
+DATASET_FILE_COUNT = 2  # Exactly two *.h5* per run
 
 # Current training subprocess (None ⇢ not running)
-TRAINING_PROC: Optional[subprocess.Popen] = None
+TRAINING_PROC: subprocess.Popen | None = None
+
 
 # ──────────────────────────────  HELPER ROUTINES  ────────────────────────────
-def _find_x_files(folder: str, extension: str = ".json") -> List[str]:
+def _find_x_files(folder: str, extension: str = ".json") -> list[str]:
     """
     Return *all* files inside *folder* ending with *extension*.
 
     The check is non-recursive on purpose – the project stores every run in a
     dedicated directory with a flat layout.
     """
-    return [
-        os.path.join(folder, fn)
-        for fn in os.listdir(folder)
-        if fn.endswith(extension)
-    ]
+    return [os.path.join(folder, fn) for fn in os.listdir(folder) if fn.endswith(extension)]
 
 
 def _LFI_sentry(path: str) -> bool:
@@ -55,14 +51,42 @@ def _LFI_sentry(path: str) -> bool:
     referenced folder does not exist), **False** otherwise.
     """
     forbidden_tokens = (
-        "", "..", "/", "\\", "~", "*", "?", ":", "<", ">", "|", '"', "'", "`",
-        "$", "%", "&", "!", "{", "}", "[", "]", "@", "#", "+", "=", ";", ",",
-        " ", "\t", "\n", "\r", "\f", "\v",
+        "",
+        "..",
+        "/",
+        "\\",
+        "~",
+        "*",
+        "?",
+        ":",
+        "<",
+        ">",
+        "|",
+        '"',
+        "'",
+        "`",
+        "$",
+        "%",
+        "&",
+        "!",
+        "{",
+        "}",
+        "[",
+        "]",
+        "@",
+        "#",
+        "+",
+        "=",
+        ";",
+        ",",
+        " ",
+        "\t",
+        "\n",
+        "\r",
+        "\f",
+        "\v",
     )
-    return (
-        not os.path.exists(os.path.join(CONFIG_FOLDER, path))
-        or any(tok in path for tok in forbidden_tokens)
-    )
+    return not os.path.exists(os.path.join(CONFIG_FOLDER, path)) or any(tok in path for tok in forbidden_tokens)
 
 
 def _json_abort(code: int, msg: str) -> None:
@@ -71,8 +95,10 @@ def _json_abort(code: int, msg: str) -> None:
     response.status_code = code
     abort(response)
 
+
 # ────────────────────────────────  END-POINTS  ───────────────────────────────
 # ———————————————————————————————  CONFIG  ————————————————————————————————
+
 
 @app.route("/config/", methods=["GET"])
 def get_config():
@@ -85,8 +111,7 @@ def get_config():
     if len(json_files) != CONFIG_FILE_COUNT:
         _json_abort(404, "Item not found")
 
-    return send_file(json_files.pop(), mimetype="application/json",
-                     as_attachment=True)
+    return send_file(json_files.pop(), mimetype="application/json", as_attachment=True)
 
 
 @app.route("/config/", methods=["PUT"])
@@ -123,7 +148,9 @@ def delete_config():
     os.remove(fn)
     return jsonify(filename=fn)
 
+
 # ———————————————————————————————  DATASET  ————————————————————————————————
+
 
 @app.route("/dataset/", methods=["GET"])
 def get_dataset():
@@ -147,8 +174,7 @@ def get_dataset():
             zf.write(f, arcname=os.path.basename(f))
     buf.seek(0)
 
-    return send_file(buf, mimetype="application/zip",
-                     download_name="dataset.zip", as_attachment=True)
+    return send_file(buf, mimetype="application/zip", download_name="dataset.zip", as_attachment=True)
 
 
 @app.route("/dataset/", methods=["PUT"])
@@ -163,7 +189,7 @@ def set_dataset():
         _json_abort(404, "Item not found")
 
     os.makedirs(os.path.join(CONFIG_FOLDER, path), exist_ok=True)
-    stored: List[str] = []
+    stored: list[str] = []
 
     for fld in ("dataset", "dataset_p"):
         up = request.files[fld]
@@ -185,13 +211,15 @@ def delete_dataset():
     if len(data_files) != DATASET_FILE_COUNT:
         _json_abort(404, "Item not found")
 
-    removed: Dict[str, str] = {}
+    removed: dict[str, str] = {}
     for fn in data_files:
         os.remove(fn)
         removed[fn] = "deleted"
     return jsonify(removed)
 
+
 # ————————————————————————————————  CERTS  ————————————————————————————————
+
 
 @app.route("/certs/", methods=["GET"])
 def get_certs():
@@ -206,8 +234,7 @@ def get_certs():
             zf.write(f, arcname=os.path.basename(f))
     buf.seek(0)
 
-    return send_file(buf, mimetype="application/zip",
-                     download_name="certs.zip", as_attachment=True)
+    return send_file(buf, mimetype="application/zip", download_name="certs.zip", as_attachment=True)
 
 
 @app.route("/certs/", methods=["PUT"])
@@ -227,13 +254,15 @@ def set_cert():
 def delete_certs():
     """Remove **all** certificate files from the system."""
     certs_files = _find_x_files(CERTS_FOLDER, ".cert")
-    removed: Dict[str, str] = {}
+    removed: dict[str, str] = {}
     for fn in certs_files:
         os.remove(fn)
         removed[fn] = "deleted"
     return jsonify(removed)
 
+
 # ————————————————————————————————  LOGS  ————————————————————————————————
+
 
 def _send_single_log(path: str, pattern: str):
     """Return the shortest matching log file inside *path*."""
@@ -243,6 +272,7 @@ def _send_single_log(path: str, pattern: str):
 
     target = min(log_files, key=lambda x: len(os.path.basename(x)))
     return send_file(target, mimetype="text/plain", as_attachment=True)
+
 
 @app.route("/get_logs/", methods=["GET"])
 def get_logs():
@@ -277,6 +307,7 @@ def _log_route(route_name: str, filename: str) -> None:
       • **GET  /get_logs/<route_name>/**  → download the file
       • **DELETE /get_logs/<route_name>/** → delete the file
     """
+
     def _getter():
         path = request.args.get("path", "")
         if _LFI_sentry(path):
@@ -310,10 +341,12 @@ def _log_route(route_name: str, filename: str) -> None:
         methods=["DELETE"],
     )
 
+
 for _name in ("debug", "error", "training"):
     _log_route(_name, f"{_name}.log")
 
 # ————————————————————————————————  METRICS  ————————————————————————————————
+
 
 @app.route("/metrics/", methods=["GET"])
 def get_metrics():
@@ -328,10 +361,11 @@ def get_metrics():
             zf.write(f, arcname=os.path.basename(f))
     buf.seek(0)
 
-    return send_file(buf, mimetype="application/zip",
-                     download_name="metrics.zip", as_attachment=True)
+    return send_file(buf, mimetype="application/zip", download_name="metrics.zip", as_attachment=True)
+
 
 # ————————————————————————————————  ACTIONS  ————————————————————————————————
+
 
 @app.route("/run/", methods=["GET"])
 def run():
@@ -370,7 +404,9 @@ def stop():
 
     return jsonify(pid=pid, state="stopped")
 
+
 # ———————————————————————  SETUP – UPLOAD 3 FILES  ————————————————————————
+
 
 @app.route("/setup/", methods=["PUT"])
 def setup_new_run():
@@ -379,34 +415,32 @@ def setup_new_run():
 
     Expected multipart-form fields
     -------------------------------
-    * **config**     – JSON with scenario, network and security arguments  
-    * **global_test** – shared evaluation dataset (`*.h5`)  
-    * **train_set**   – participant-specific training dataset (`*.h5`)
+    * **config**     – JSON with scenario, network and security arguments
+    * **global_test** – shared evaluation dataset (`*.h5`) (optional for local datasets)
+    * **train_set**   – participant-specific training dataset (`*.h5`) (optional for local datasets)
 
     The function rewrites paths inside *config*, validates neighbour IPs
     through Tailscale, deletes previous artefacts and finally stores the new
-    trio of files.
+    artefacts required for the upcoming run.
     """
     # 1 · Refuse while a training task is still running
     global TRAINING_PROC
     if TRAINING_PROC and TRAINING_PROC.poll() is None:
         _json_abort(409, "Training already running; pause or stop it first.")
 
-    # 2 · Check field presence
-    missing = [x for x in ("config", "global_test", "train_set")
-               if x not in request.files]
-    if missing:
-        _json_abort(400, f"Missing file field(s): {', '.join(missing)}")
+    # 2 · Check essential field presence
+    if "config" not in request.files:
+        _json_abort(400, "Missing file field 'config'")
 
-    config_up   = request.files["config"]
-    global_test = request.files["global_test"]
-    train_set   = request.files["train_set"]
+    config_up = request.files["config"]
+    global_test = request.files.get("global_test")
+    train_set = request.files.get("train_set")
 
-    # 3 · Extension sanity
+    # 3 · Extension sanity for provided files
     if not config_up.filename.endswith(".json"):
         _json_abort(400, f"`{config_up.filename}` must have a .json extension.")
     for ds in (global_test, train_set):
-        if not ds.filename.endswith(".h5"):
+        if ds and not ds.filename.endswith(".h5"):
             _json_abort(400, f"`{ds.filename}` must have a .h5 extension.")
 
     # 4 · Parse + patch JSON
@@ -417,29 +451,44 @@ def setup_new_run():
 
     # Update tracking / security paths to local folders
     tracking = original_cfg.get("tracking_args", {})
-    tracking["log_dir"]    = LOGS_FOLDER.rstrip("/")
+    tracking["log_dir"] = LOGS_FOLDER.rstrip("/")
     tracking["config_dir"] = CONFIG_FOLDER.rstrip("/")
     original_cfg["tracking_args"] = tracking
 
     sec = original_cfg.get("security_args", {})
     for key in ("certfile", "keyfile", "cafile"):
-        if key in sec and sec[key]:
-            sec[key] = os.path.join(CERTS_FOLDER.rstrip("/"),
-                                    os.path.basename(sec[key]))
+        if sec.get(key):
+            sec[key] = os.path.join(CERTS_FOLDER.rstrip("/"), os.path.basename(sec[key]))
     original_cfg["security_args"] = sec
 
-    # 5 · (May be removed) Check neighbour reachability via Tailscale
+    # 5 · Determine whether dataset uploads are required
+    data_args: dict[str, str | None] = original_cfg.get("data_args", {})
+    dataset_name = (data_args or {}).get("dataset", "")
+    requires_dataset_upload = dataset_name not in {"hackaton"}
+
+    if requires_dataset_upload:
+        missing = [x for x in ("global_test", "train_set") if x not in request.files]
+        if missing:
+            _json_abort(400, f"Missing file field(s): {', '.join(missing)}")
+    else:
+        # Ensure we don't carry stale references when skipping uploads
+        global_test = request.files.get("global_test")
+        train_set = request.files.get("train_set")
+
+    # 6 · (May be removed) Check neighbour reachability via Tailscale
     neigh_str = original_cfg.get("network_args", {}).get("neighbors", "").strip()
-    requested_ips: Set[str] = {re.split(r":", n)[0] for n in neigh_str.split() if n}
+    requested_ips: set[str] = {re.split(r":", n)[0] for n in neigh_str.split() if n}
 
     if requested_ips:
         try:
             ts_out = subprocess.run(
                 ["tailscale", "status", "--json"],
-                capture_output=True, text=True, check=True,
+                capture_output=True,
+                text=True,
+                check=True,
             )
             ts_status = json.loads(ts_out.stdout)
-            reachable: Set[str] = set(ts_status.get("Self", {}).get("TailscaleIPs", []))
+            reachable: set[str] = set(ts_status.get("Self", {}).get("TailscaleIPs", []))
             for peer in ts_status.get("Peer", {}).values():
                 reachable.update(peer.get("TailscaleIPs", []))
         except Exception as exc:
@@ -449,7 +498,7 @@ def setup_new_run():
         if missing:
             _json_abort(400, f"Neighbour IP(s) not reachable: {', '.join(missing)}")
 
-    # 6 · Clean previous JSON/H5 artefacts
+    # 7 · Clean previous JSON/H5 artefacts
     for fn in os.listdir(CONFIG_FOLDER):
         if fn.endswith((".json", ".h5")):
             try:
@@ -459,19 +508,21 @@ def setup_new_run():
     if any(fn.endswith((".json", ".h5")) for fn in os.listdir(CONFIG_FOLDER)):
         _json_abort(400, "Could not delete old JSON/H5 files.")
 
-    # 7 · Persist patched JSON
+    # 8 · Persist patched JSON
     json_dest = os.path.join(CONFIG_FOLDER, config_up.filename)
     with open(json_dest, "wb") as dst:
         dst.write(json.dumps(original_cfg, indent=2).encode())
 
-    # 8 · Persist datasets
+    # 9 · Persist datasets
     saved = [config_up.filename]
     for up in (global_test, train_set):
+        if up is None:
+            continue
         dst = os.path.join(CONFIG_FOLDER, up.filename)
         up.save(dst)
         saved.append(up.filename)
 
-    # 9 · Purge previous log files
+    # 10 · Purge previous log files
     for root, _, files in os.walk(LOGS_FOLDER):
         for fn in files:
             if fn.endswith(".log"):
@@ -483,6 +534,7 @@ def setup_new_run():
         _json_abort(400, "Could not delete old log files.")
 
     return jsonify(saved), 201
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  ENTRY-POINT

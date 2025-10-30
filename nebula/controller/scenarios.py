@@ -7,16 +7,14 @@ import math
 import os
 import shutil
 import subprocess
-import sys
 import time
 from datetime import datetime
 from urllib.parse import quote
 
-from aiohttp import FormData
 import docker
-import tensorboard_reducer as tbr
 import h5py
 import numpy as np
+from aiohttp import FormData
 
 from nebula.addons.topologymanager import TopologyManager
 from nebula.config.config import Config
@@ -203,30 +201,30 @@ class Scenario:
         self.mobile_participants_percent = mobile_participants_percent
         self.additional_participants = additional_participants
         self.with_trustworthiness = with_trustworthiness
-        self.robustness_pillar = robustness_pillar,
-        self.resilience_to_attacks = resilience_to_attacks,
-        self.algorithm_robustness = algorithm_robustness,
-        self.client_reliability = client_reliability,
-        self.privacy_pillar = privacy_pillar,
-        self.technique = technique,
-        self.uncertainty = uncertainty,
-        self.indistinguishability = indistinguishability,
-        self.fairness_pillar = fairness_pillar,
-        self.selection_fairness = selection_fairness,
-        self.performance_fairness = performance_fairness,
-        self.class_distribution = class_distribution,
-        self.explainability_pillar = explainability_pillar,
-        self.interpretability = interpretability,
-        self.post_hoc_methods = post_hoc_methods,
-        self.accountability_pillar = accountability_pillar,
-        self.factsheet_completeness = factsheet_completeness,
-        self.architectural_soundness_pillar = architectural_soundness_pillar,
-        self.client_management = client_management,
-        self.optimization = optimization,
-        self.sustainability_pillar = sustainability_pillar,
-        self.energy_source = energy_source,
-        self.hardware_efficiency = hardware_efficiency,
-        self.federation_complexity = federation_complexity,
+        self.robustness_pillar = (robustness_pillar,)
+        self.resilience_to_attacks = (resilience_to_attacks,)
+        self.algorithm_robustness = (algorithm_robustness,)
+        self.client_reliability = (client_reliability,)
+        self.privacy_pillar = (privacy_pillar,)
+        self.technique = (technique,)
+        self.uncertainty = (uncertainty,)
+        self.indistinguishability = (indistinguishability,)
+        self.fairness_pillar = (fairness_pillar,)
+        self.selection_fairness = (selection_fairness,)
+        self.performance_fairness = (performance_fairness,)
+        self.class_distribution = (class_distribution,)
+        self.explainability_pillar = (explainability_pillar,)
+        self.interpretability = (interpretability,)
+        self.post_hoc_methods = (post_hoc_methods,)
+        self.accountability_pillar = (accountability_pillar,)
+        self.factsheet_completeness = (factsheet_completeness,)
+        self.architectural_soundness_pillar = (architectural_soundness_pillar,)
+        self.client_management = (client_management,)
+        self.optimization = (optimization,)
+        self.sustainability_pillar = (sustainability_pillar,)
+        self.energy_source = (energy_source,)
+        self.hardware_efficiency = (hardware_efficiency,)
+        self.federation_complexity = (federation_complexity,)
         self.schema_additional_participants = schema_additional_participants
         self.random_topology_probability = random_topology_probability
         self.with_sa = with_sa
@@ -590,8 +588,7 @@ class ScenarioManagement:
         self.config = Config(entity="scenarioManagement")
 
         logging.debug("[PHYSICAL] physical_ips recibidas: %s", self.scenario.physical_ips)
-        logging.debug("[PHYSICAL] nodos originales: %s",
-              {k: v["ip"] for k, v in self.scenario.nodes.items()})
+        logging.debug("[PHYSICAL] nodos originales: %s", {k: v["ip"] for k, v in self.scenario.nodes.items()})
 
         # If physical set the neighbours correctly
         if self.scenario.deployment == "physical" and self.scenario.physical_ips:
@@ -604,9 +601,10 @@ class ScenarioManagement:
         if self.scenario.deployment == "docker":
             self.controller = f"{os.environ.get('NEBULA_CONTROLLER_HOST')}:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
         elif self.scenario.deployment == "physical":
-                host = self.get_own_tailscale_ip()
-                port = os.getenv("NEBULA_CONTROLLER_PORT", "5050")
-                self.controller = f"{host}:{port}"
+            # host = self.get_own_tailscale_ip()
+            # port = os.getenv("NEBULA_CONTROLLER_PORT", "5050")
+            # self.controller = f"{host}:{port}"
+            self.controller = "192.168.3.102:5050"
         else:
             self.controller = f"127.0.0.1:{os.environ.get('NEBULA_CONTROLLER_PORT')}"
 
@@ -696,7 +694,7 @@ class ScenarioManagement:
             participant_config["device_args"]["malicious"] = node_config["malicious"]
             participant_config["scenario_args"]["rounds"] = int(self.scenario.rounds)
             participant_config["scenario_args"]["deployment"] = self.scenario.deployment
-            participant_config["scenario_args"]["controller"]  = self.controller
+            participant_config["scenario_args"]["controller"] = self.controller
             participant_config["data_args"]["dataset"] = self.scenario.dataset
             participant_config["data_args"]["iid"] = self.scenario.iid
             participant_config["data_args"]["partition_selection"] = self.scenario.partition_selection
@@ -846,10 +844,10 @@ class ScenarioManagement:
     def _calculate_optimal_partitions(self):
         """
         Calculate the optimal number of partitions for dataset splitting.
-        
+
         For physical deployments with few nodes (< 4), we create more partitions
         than nodes to avoid overloading Raspberry Pi devices with large dataset portions.
-        
+
         Returns:
             int: Optimal number of partitions for dataset splitting
         """
@@ -857,7 +855,9 @@ class ScenarioManagement:
             # For physical deployments with less than 4 nodes, use minimum 4 partitions
             # to prevent overloading individual devices
             optimal_partitions = max(4, self.n_nodes)
-            logging.info(f"Physical deployment with {self.n_nodes} nodes: using {optimal_partitions} dataset partitions to prevent device overload")
+            logging.info(
+                f"Physical deployment with {self.n_nodes} nodes: using {optimal_partitions} dataset partitions to prevent device overload"
+            )
             return optimal_partitions
         else:
             # For other deployments or when we have enough nodes, use the actual number of nodes
@@ -866,13 +866,13 @@ class ScenarioManagement:
     def _create_partition_to_node_mapping(self, num_partitions):
         """
         Create a mapping from partition indices to node indices.
-        
+
         When there are more partitions than nodes, only the first n_nodes partitions
         are used (one per node) to avoid overloading physical devices.
-        
+
         Args:
             num_partitions (int): Number of dataset partitions created
-            
+
         Returns:
             dict: Mapping from partition index to node index
         """
@@ -891,42 +891,44 @@ class ScenarioManagement:
     def _save_mapped_partitions(self, dataset, partition_mapping):
         """
         Save dataset partitions mapped to physical nodes.
-        
+
         When there are more partitions than nodes, only the first n_nodes partitions
         are saved (one per node) to avoid overloading physical devices.
-        
+
         Args:
             dataset: The dataset object with partitions
             partition_mapping: Dictionary mapping partition indices to node indices
         """
         try:
-            logging.info(f"Saving mapped partitions for physical deployment")
+            logging.info("Saving mapped partitions for physical deployment")
             path = self.config_dir
-            
+
             # Verify that train_indices_map exists
             if dataset.train_indices_map is None:
                 raise ValueError("train_indices_map is None. Dataset partitioning may not have completed successfully.")
-            
+
             # Save one partition per node (using only the first n_nodes partitions)
             for partition_idx, node_idx in partition_mapping.items():
                 file_name = os.path.join(path, f"participant_{node_idx}_train.h5")
-                
+
                 # Use only the data from this specific partition
                 partition_indices = dataset.train_indices_map[partition_idx]
-                
-                logging.info(f"Saving partition {partition_idx} for node {node_idx} with {len(partition_indices)} samples")
-                
+
+                logging.info(
+                    f"Saving partition {partition_idx} for node {node_idx} with {len(partition_indices)} samples"
+                )
+
                 with h5py.File(file_name, "w") as f:
                     train_data = [dataset.train_set[i] for i in partition_indices]
                     dataset.save_partition(train_data, f, "train_data")
                     f["train_data"].attrs["num_classes"] = dataset.num_classes
                     train_targets = np.array([dataset.train_set.targets[i] for i in partition_indices])
                     f.create_dataset("train_targets", data=train_targets, compression="gzip")
-                
+
                 logging.info(f"Partition {partition_idx} saved for node {node_idx}")
-            
+
             logging.info("Successfully saved all mapped partition files")
-            
+
         except Exception as e:
             logging.exception(f"Error in _save_mapped_partitions: {e}")
             raise
@@ -934,17 +936,17 @@ class ScenarioManagement:
     def _save_global_test_data(self, dataset):
         """
         Save global test data to a separate file for physical deployments.
-        
+
         This method saves the global test dataset that is needed by all nodes
         during physical deployment.
-        
+
         Args:
             dataset: The dataset object with test data
         """
         try:
-            logging.info(f"Saving global test data for physical deployment")
+            logging.info("Saving global test data for physical deployment")
             path = self.config_dir
-            
+
             # Save global test data
             file_name = os.path.join(path, "global_test.h5")
             with h5py.File(file_name, "w") as f:
@@ -954,9 +956,9 @@ class ScenarioManagement:
                 f["test_data"].attrs["num_classes"] = dataset.num_classes
                 test_targets = np.array(dataset.test_set.targets)
                 f.create_dataset("test_targets", data=test_targets, compression="gzip")
-            
+
             logging.info(f"Global test data saved to {file_name}")
-            
+
         except Exception as e:
             logging.exception(f"Error in _save_global_test_data: {e}")
             raise
@@ -1130,10 +1132,10 @@ class ScenarioManagement:
         # Splitting dataset
         dataset_name = self.scenario.dataset
         dataset = None
-        
+
         # Calculate optimal number of partitions based on deployment type and node count
         optimal_partitions = self._calculate_optimal_partitions()
-        
+
         if dataset_name == "MNIST":
             dataset = MNISTDataset(
                 num_classes=10,
@@ -1184,46 +1186,51 @@ class ScenarioManagement:
                 seed=42,
                 config_dir=self.config_dir,
             )
+        elif dataset_name == "hackaton":
+            await self.start_nodes_physical()
         else:
             raise ValueError(f"Dataset {dataset_name} not supported")
 
         logging.info(f"Splitting {dataset_name} dataset...")
-        
-        # For physical deployments with more partitions than nodes, we need to prevent automatic save_partitions()
-        if self.scenario.deployment == "physical" and optimal_partitions > self.n_nodes:
-            logging.info(f"Physical deployment: preventing automatic save_partitions() to handle custom mapping")
-            # Temporarily modify the dataset to prevent automatic save_partitions()
-            original_save_partitions = dataset.save_partitions
-            dataset.save_partitions = lambda: None  # Disable automatic save
-        
-        dataset.initialize_dataset()
-        logging.info(f"Splitting {dataset_name} dataset... Done")
-        
-        # For physical deployments with more partitions than nodes, create mapping and save files
-        if self.scenario.deployment == "physical" and optimal_partitions > self.n_nodes:
-            logging.info(f"Physical deployment: mapping {dataset.partitions_number} partitions to {self.n_nodes} nodes")
-            partition_mapping = self._create_partition_to_node_mapping(dataset.partitions_number)
-            self._save_mapped_partitions(dataset, partition_mapping)
-            
-            # Save global test data separately since we disabled automatic save_partitions
-            self._save_global_test_data(dataset)
-            
-            # Restore original save_partitions method
-            dataset.save_partitions = original_save_partitions
 
-        if self.scenario.deployment in ["docker", "process", "physical"]:
-            if self.scenario.deployment == "docker":
-                self.start_nodes_docker()
-            elif self.scenario.deployment == "physical":
-                await self.start_nodes_physical()
-            elif self.scenario.deployment == "process":
-                self.start_nodes_process()
+        if dataset_name != "hackaton":
+            # For physical deployments with more partitions than nodes, we need to prevent automatic save_partitions()
+            if self.scenario.deployment == "physical" and optimal_partitions > self.n_nodes:
+                logging.info("Physical deployment: preventing automatic save_partitions() to handle custom mapping")
+                # Temporarily modify the dataset to prevent automatic save_partitions()
+                original_save_partitions = dataset.save_partitions
+                dataset.save_partitions = lambda: None  # Disable automatic save
+
+            dataset.initialize_dataset()
+            logging.info(f"Splitting {dataset_name} dataset... Done")
+
+            # For physical deployments with more partitions than nodes, create mapping and save files
+            if self.scenario.deployment == "physical" and optimal_partitions > self.n_nodes:
+                logging.info(
+                    f"Physical deployment: mapping {dataset.partitions_number} partitions to {self.n_nodes} nodes"
+                )
+                partition_mapping = self._create_partition_to_node_mapping(dataset.partitions_number)
+                self._save_mapped_partitions(dataset, partition_mapping)
+
+                # Save global test data separately since we disabled automatic save_partitions
+                self._save_global_test_data(dataset)
+
+                # Restore original save_partitions method
+                dataset.save_partitions = original_save_partitions
+
+            if self.scenario.deployment in ["docker", "process", "physical"]:
+                if self.scenario.deployment == "docker":
+                    self.start_nodes_docker()
+                elif self.scenario.deployment == "physical":
+                    await self.start_nodes_physical()
+                elif self.scenario.deployment == "process":
+                    self.start_nodes_process()
+                else:
+                    raise ValueError(f"Unknown deployment type: {self.scenario.deployment}")
             else:
-                raise ValueError(f"Unknown deployment type: {self.scenario.deployment}")
-        else:
-            logging.info(
-                f"Virtualization mode is disabled for scenario '{self.scenario_name}' with {self.n_nodes} nodes. Waiting for nodes to start manually..."
-            )
+                logging.info(
+                    f"Virtualization mode is disabled for scenario '{self.scenario_name}' with {self.n_nodes} nodes. Waiting for nodes to start manually..."
+                )
 
     def create_topology(self, matrix=None):
         """
@@ -1529,26 +1536,24 @@ class ScenarioManagement:
 
         except Exception as e:
             raise Exception(f"Error starting nodes as processes: {e}")
-        
-    
+
     async def _assign_free_ports_physical(self, participant_files):
         async def _patch(file_path):
             with open(file_path) as f:
                 cfg = json.load(f)
 
             ip_addr = cfg["network_args"]["ip"]
-            host    = f"{ip_addr}:8000"
-            idx     = str(cfg["device_args"]["idx"])
+            host = f"{ip_addr}:8000"
+            idx = str(cfg["device_args"]["idx"])
 
             status, data = await remote_get(host, "/free_port/")
             if status == 200 and isinstance(data, dict) and "port" in data:
                 port = int(data["port"])
             else:
-                logging.warning("Using fallback port 7000 for %s (status %s, data=%s)",
-                                host, status, data)
+                logging.warning("Using fallback port 7000 for %s (status %s, data=%s)", host, status, data)
                 port = 7000
 
-            cfg["network_args"]["port"]      = port
+            cfg["network_args"]["port"] = port
             self.scenario.nodes[idx]["port"] = port
 
             with open(file_path, "w") as f:
@@ -1558,20 +1563,15 @@ class ScenarioManagement:
 
     async def _stop_node(self, node_cfg: dict) -> dict:
         """Send /physical/stop/ through the controller to a single Raspberry."""
-        ip   = node_cfg["network_args"]["ip"]
+        ip = node_cfg["network_args"]["ip"]
         host = f"{ip}:8000"
         stop_ep = f"/physical/stop/{quote(host, safe='')}"
 
         logging.info(f"🛑 Sending stop command to Raspberry at {host}")
         st, data = await remote_get(self.controller, stop_ep)
-        
-        result = {
-            "ip": ip,
-            "host": host,
-            "status_code": st,
-            "response": data
-        }
-        
+
+        result = {"ip": ip, "host": host, "status_code": st, "response": data}
+
         if st == 200:
             logging.info(f"✅ Raspberry {host} stopped successfully: {data}")
             if isinstance(data, dict) and "pid" in data and "state" in data:
@@ -1582,7 +1582,7 @@ class ScenarioManagement:
             logging.warning(f"❌ Raspberry {host} unreachable while stopping: {data}")
         else:
             logging.error(f"💥 Raspberry {host} stop failed with status {st}: {data}")
-        
+
         return result
 
     def get_own_tailscale_ip(self):
@@ -1592,10 +1592,7 @@ class ScenarioManagement:
         """
         try:
             result = subprocess.run(
-                ["tailscale", "status", "--json"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=True
+                ["tailscale", "status", "--json"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
             )
             data = json.loads(result.stdout)
             self_info = data.get("Self", {})
@@ -1625,10 +1622,7 @@ class ScenarioManagement:
         logging.info("Starting nodes as physical devices...")
         logging.info(f"env path: {self.env_path}")
 
-        tasks = [
-            asyncio.create_task(self._upload_and_start(node))
-            for node in self.config.participants
-        ]
+        tasks = [asyncio.create_task(self._upload_and_start(node)) for node in self.config.participants]
         await asyncio.gather(*tasks)
 
         logging.info("All physical nodes launched")
@@ -1738,10 +1732,11 @@ class ScenarioManagement:
         import glob
         import json
         import os
+
         participant_files = glob.glob(os.path.join(self.config_dir, "participant_*.json"))
         participants = []
         for pf in participant_files:
-            with open(pf, "r") as f:
+            with open(pf) as f:
                 participants.append(json.load(f))
         self.config.participants = participants
 
@@ -1750,29 +1745,24 @@ class ScenarioManagement:
         logging.info("🛑 Stopping physical nodes...")
         self.reload_participants_from_config()
         logging.info(f"[DEBUG] Participants to stop: {self.config.participants}")
-        tasks = [
-            asyncio.create_task(self._stop_node(cfg))
-            for cfg in self.config.participants
-        ]
+        tasks = [asyncio.create_task(self._stop_node(cfg)) for cfg in self.config.participants]
         results = await asyncio.gather(*tasks)
-        
+
         # Analizar resultados
         successful_stops = []
         failed_stops = []
-        
+
         for result in results:
             if result["status_code"] == 200:
                 successful_stops.append(result)
             else:
                 failed_stops.append(result)
-        
-        logging.info(f"✅ Physical nodes stop completed: {len(successful_stops)} successful, {len(failed_stops)} failed")
-        
-        return {
-            "successful": successful_stops,
-            "failed": failed_stops,
-            "total_nodes": len(results)
-        }
+
+        logging.info(
+            f"✅ Physical nodes stop completed: {len(successful_stops)} successful, {len(failed_stops)} failed"
+        )
+
+        return {"successful": successful_stops, "failed": failed_stops, "total_nodes": len(results)}
 
     async def _upload_and_start(self, node_cfg: dict) -> None:
         ip = node_cfg["network_args"]["ip"]
@@ -1782,26 +1772,29 @@ class ScenarioManagement:
 
         cfg_dir = self.config_dir
         config_path = f"{cfg_dir}/participant_{idx}.json"
-        global_test_path = f"{cfg_dir}/global_test.h5"
-        train_set_path = f"{cfg_dir}/participant_{idx}_train.h5"
+
+        if node_cfg["data_args"]["dataset"] != "hackaton":
+            global_test_path = f"{cfg_dir}/global_test.h5"
+            train_set_path = f"{cfg_dir}/participant_{idx}_train.h5"
 
         # ---------- multipart/form-data ------------------------
         form = FormData()
         form.add_field(
             "config", open(config_path, "rb"), filename=os.path.basename(config_path), content_type="application/json"
         )
-        form.add_field(
-            "global_test",
-            open(global_test_path, "rb"),
-            filename=os.path.basename(global_test_path),
-            content_type="application/octet-stream",
-        )
-        form.add_field(
-            "train_set",
-            open(train_set_path, "rb"),
-            filename=os.path.basename(train_set_path),
-            content_type="application/octet-stream",
-        )
+        if node_cfg["data_args"]["dataset"] != "hackaton":
+            form.add_field(
+                "global_test",
+                open(global_test_path, "rb"),
+                filename=os.path.basename(global_test_path),
+                content_type="application/octet-stream",
+            )
+            form.add_field(
+                "train_set",
+                open(train_set_path, "rb"),
+                filename=os.path.basename(train_set_path),
+                content_type="application/octet-stream",
+            )
 
         # ---------- /physical/setup/ (PUT) ---------------------
         setup_ep = f"/physical/setup/{quote(host, safe='')}"

@@ -7,20 +7,20 @@ set -x
 echo "Starting services..."
 
 # Launch tailscaled
-tailscaled --state=/var/lib/tailscale/tailscaled.state &
-for i in {1..15}; do
-    if tailscale status > /dev/null 2>&1; then
-        break
-    fi
-    sleep 1
-done
+# tailscaled --state=/var/lib/tailscale/tailscaled.state &
+# for i in {1..15}; do
+#     if tailscale status > /dev/null 2>&1; then
+#         break
+#     fi
+#     sleep 1
+# done
 
-# Join the tailnet
-tailscale up --reset \
-  --authkey="${TS_AUTHKEY}" \
-  --hostname="controller" \
-  --accept-routes \
-  --accept-dns=false
+# # Join the tailnet
+# tailscale up --reset \
+#   --authkey="${TS_AUTHKEY}" \
+#   --hostname="controller" \
+#   --accept-routes \
+#   --accept-dns=false
 
 cd nebula
 echo "path $(pwd)"
