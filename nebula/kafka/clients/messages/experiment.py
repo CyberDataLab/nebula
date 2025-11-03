@@ -31,13 +31,17 @@ class ExperimentINITMessage(KafkaMessage):
 class UpdateMessage(KafkaMessage):
     kafka_message: str = ExperimentMessages.UPDATE.name
     
-    def __init__(self, data: dict):
+    def __init__(self, experiment_id: str, experiment_type: str, data: dict):
+        self.experiment_id = experiment_id
+        self.experiment_type = experiment_type
         self.config = data
         
     def to_bytes(self) -> bytes:
         """Serialize UpdateMessage to bytes"""
         return json.dumps({
             "kafka-message": self.kafka_message,
+            "experiment_id": self.experiment_id,
+            "experiment_type": self.experiment_type,
             "data": self.config
         }).encode()
 
@@ -45,29 +49,61 @@ class UpdateMessage(KafkaMessage):
     def from_bytes(cls, raw_bytes: bytes):
         """Deserialize bytes to UpdateMessage"""
         data = json.loads(raw_bytes.decode())
-        return cls(data=data["data"])
+        return cls(experiment_id=data["experiment_id"],  experiment_type=data["experiment_type"], data=data["data"])
     
 class DoneMessage(KafkaMessage):
     kafka_message: str = ExperimentMessages.DONE.name
     
-    def __init__(self, data: str):
-        self.idx = data
+    def __init__(self, experiment_id: str, experiment_type: str, idx: str):
+        self.experiment_id = experiment_id
+        self.experiment_type = experiment_type
+        self.idx = idx
         
     def to_bytes(self) -> bytes:
         """Serialize UpdateMessage to bytes"""
         return json.dumps({
             "kafka-message": self.kafka_message,
-            "data": self.idx
+            "experiment_id": self.experiment_id,
+            "experiment_type": self.experiment_type,
+            "idx": self.idx
         }).encode()
 
     @classmethod
     def from_bytes(cls, raw_bytes: bytes):
         """Deserialize bytes to UpdateMessage"""
         data = json.loads(raw_bytes.decode())
-        return cls(data=data["data"])
+        return cls(experiment_id=data["experiment_id"], experiment_type=data["experiment_type"], idx=data["idx"])
+    
+class METRICSMessage(KafkaMessage):
+    kafka_message: str = ExperimentMessages.METRICS.name
+
+    def __init__(self, experiment_id: str, step: int, metrics: dict):
+        self.experiment_id = experiment_id
+        self.step = step
+        self.metrics = metrics
+
+    def to_bytes(self) -> bytes:
+        """Serialize metrics message to bytes"""
+        return json.dumps({
+            "kafka-message": self.kafka_message,
+            "experiment_id": self.experiment_id,
+            "step": self.step,
+            "metrics": self.metrics,
+        }).encode()
+
+    @classmethod
+    def from_bytes(cls, raw_bytes: bytes):
+        """Deserialize bytes to message"""
+        data = json.loads(raw_bytes.decode())
+        return cls(
+            experiment_id=data["experiment_id"],
+            step=data["step"],
+            metrics=data["metrics"]
+        )
     
 MESSAGE_CLASSES_EXPERIMENT: Dict[ExperimentMessages, Type[KafkaMessage]] = {
     ExperimentMessages.INIT: ExperimentINITMessage,
     ExperimentMessages.UPDATE: UpdateMessage,
     ExperimentMessages.DONE: DoneMessage,
+    ExperimentMessages.METRICS: METRICSMessage,
 }

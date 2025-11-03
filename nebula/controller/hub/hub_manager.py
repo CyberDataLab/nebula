@@ -74,9 +74,8 @@ class HubManager:
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
         try:
-            hkc = NebulaKafkaAdmin(self.logger)
-            msg = await hkc.init()
-            self.logger.info(msg)
+            hkc = NebulaKafkaAdmin(user="hub_admin", password="hub_admin_password", broker="dev_dev_alejandro_nebula-kafka:9094", client_id="hub", logger=self.logger)
+            await hkc.init()
             
             # # Generate IDs for all scenarios
             # federation_ids = self._generate_federation_ids(user, [scenario_data])
@@ -110,8 +109,8 @@ class HubManager:
             #     return {"federation_id": federation_id}
             # else:
             #     raise HTTPException(status_code=500, detail="Error starting scenario")
-        except Exception:
-            self.logger.exception("Error running scenario for user %s", user)
+        except Exception as e:
+            self.logger.exception(f"Error running scenario for user '{user}\n{e}'")
 
     async def stop_scenario(self, federation_id: str, experiment_type: str, stop_all: bool = False) -> None: #TODO stop_all with queues
         try:

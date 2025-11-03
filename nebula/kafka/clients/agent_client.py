@@ -30,6 +30,7 @@ class NebulaKafkaAgent:
         self._consumer_stop = asyncio.Event()
         self._listeners: list[Callable[[KafkaMessage], Awaitable[None]]] = []
         self._listeners_lock = Locker("listeners_lock", async_lock=True)
+        self._consumer_loop_task = None
          
     @property
     def log(self):
@@ -56,6 +57,7 @@ class NebulaKafkaAgent:
             self._consumer = AIOKafkaConsumer(
                 bootstrap_servers=self._broker,
                 client_id=self._client_id,
+                group_id=f"g-{self._client_id}",
                 security_protocol="SASL_PLAINTEXT",
                 sasl_mechanism="SCRAM-SHA-256",
                 sasl_plain_username=self._username,
@@ -73,7 +75,9 @@ class NebulaKafkaAgent:
             sent = await self.produce(SystemMessages.AGENT_READY, self._client_id)
             if not sent:
                 raise KafkaProducerError("Failed to produce AGENT_READY message")
-
+            
+            self._consumer_loop_task = asyncio.create_task(self._consume_loop())
+            self.log.info(f"[SUCCESS]: Kafka initialization process")
         except Exception as e:
             self.log.exception(f"[Kafka] Initialization failed: {e}")
             await self.shutdown()
@@ -151,7 +155,6 @@ class NebulaKafkaAgent:
         finally:
             await self._consumer.stop()
            
-    
     async def shutdown(self):
         await self._shutdown_consumer()
         await self._shutdown_producer()

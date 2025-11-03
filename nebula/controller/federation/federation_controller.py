@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
-from fastapi import Request
 from typing import Any, Dict
-from nebula.controller.federation.scenario_builder import ScenarioBuilder
-from nebula.controller.federation.schemas.requests import NodeUpdateRequest, NodeDoneRequest, RemoveScenarioRequest
 import logging 
+
+EXPERIMENT_TYPES = ["docker", "process"]
 
 class NebulaFederation(ABC):
     pass
@@ -19,7 +18,7 @@ class FederationController(ABC):
         return self._logger 
 
     @abstractmethod
-    async def run_scenario(self,  federation_id: str, scenario_data: Dict, user: str):
+    async def run_scenario(self, federation_id: str, scenario_data: Dict, user: str):
         pass
 
     @abstractmethod

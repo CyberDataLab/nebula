@@ -49,6 +49,7 @@ from nebula.kafka.clients.errors import (
     KafkaACLCreationError,
     KafkaACLDeletionError,
     KafkaExperimentInitializationError,
+    KafkaProducerInitializationError,
     KafkaProducerError,
     KafkaConsumerLoopError,
     KafkaLoadingConfigurationError,
@@ -76,14 +77,8 @@ class NebulaKafkaAdmin:
         self._consumer = None           # Topics consumer           ->  aiokafka
         
         self._consumer_stop = asyncio.Event()
-
-        self._consumer_started = False
-        self._consumer_lock = Locker("consumer_lock", async_lock=True)
-        self._admin_client = None
-        self._system_control_topic = "nebula-system-control"
         self._consumer_loop_task = None
         self._logger = logger
-        
         
         # Event listeners
         self._listeners: list[Callable[[KafkaMessage], Awaitable[None]]] = []
@@ -129,7 +124,6 @@ class NebulaKafkaAdmin:
     """
     
     async def init(self):
-        #TODO robustness & system-users creation + ACLs
         #await self._testing_func()
         try:
             # Initialize user-admin-client
@@ -181,6 +175,7 @@ class NebulaKafkaAdmin:
                 raise KafkaConfigurationError(f"[ERROR]:\n{err_msg}")
             
             self._consumer_loop_task = asyncio.create_task(self._consume_loop())
+            self.log.info(f"[SUCCESS]: Kafka initialization process")
         except Exception as e:
             self.log.exception(f"Kafka node initialization failed: {e}")
             await self.shutdown()  
@@ -217,7 +212,7 @@ class NebulaKafkaAdmin:
         )
         await self._topic_admin_client.start()
 
-    async def _init_producer(self):
+    async def _init_producer(self, max_retries=5, delay=2):
         self._producer = AIOKafkaProducer(
             bootstrap_servers=self._broker,
             client_id=self._client_id,
@@ -226,12 +221,29 @@ class NebulaKafkaAdmin:
             sasl_plain_username=self._username,
             sasl_plain_password=self._password,
         )
-        await self._producer.start()
+        for attempt in range(1, max_retries + 1):
+            try:
+                self.log.info(f"[Kafka] Attempting to start producer (attempt {attempt}/{max_retries})...")
+                await self._producer.start()
+                self.log.info(f"[Kafka] Producer started successfully with client_id='{self._client_id}'")
+                break
+            except (KafkaConnectionError, KafkaTimeoutError) as e:
+                self.log.warning(f"[Kafka] Connection issue on attempt {attempt}: {e}")
+            except Exception as e:
+                self.log.exception(f"[Kafka] Unexpected error starting producer (attempt {attempt}): {e}")
+
+            if attempt < max_retries:
+                self.log.info(f"[Kafka] Retrying in {delay}s...")
+                await asyncio.sleep(delay)
+            else:
+                self.log.error(f"[Kafka] Failed to start producer after {max_retries} attempts")
+                raise KafkaProducerInitializationError("Unable to start Kafka producer after multiple attempts on NebulaKafkaAdmin.")
 
     async def _init_consumer(self):
         self._consumer = AIOKafkaConsumer(
                     bootstrap_servers=self._broker,
                     client_id=self._client_id,
+                    group_id="g-hub",
                     security_protocol="SASL_PLAINTEXT",
                     sasl_mechanism="SCRAM-SHA-256",
                     sasl_plain_username=self._username,
@@ -472,8 +484,7 @@ class NebulaKafkaAdmin:
             
         except Exception as e:
             raise KafkaExperimentInitializationError(f"[ERROR]: initializing experiment {e}") from e
-        
-    
+           
     async def _create_topic(self, topic_name: str):
         topic = NewTopic(
             name=topic_name,
@@ -525,6 +536,7 @@ class NebulaKafkaAdmin:
     
         try:
             await self._producer.send_and_wait(topic_name, message.to_bytes())
+            self.log.info(f"Message '{message_type.name}' sent on topic '{topic_name}'")
             return True
         except AioKafkaError as e:
             self.log.error(f"Kafka error sending {message_type}: {e}")
@@ -543,14 +555,15 @@ class NebulaKafkaAdmin:
             self._listeners.append(callback)
             
     async def _handle_message(self, message: KafkaMessage):
-        for listener in self._listeners:
+        for callback in self._listeners:
             try:
-                await listener(message)
+                await callback(message)
             except Exception as e:
                 self.log.exception(f"Error in listener: {e}")
 
     async def _consume_loop(self):
         # queue + workers if high concurrency
+        self.log.info(f"Consumer loop started..")
         await asyncio.sleep(1)  
         try:
             async for msg in self._consumer:
@@ -565,6 +578,7 @@ class NebulaKafkaAdmin:
                         continue
 
                     # Trigger event
+                    self.log.info(f"Message received '{kafka_message}'")
                     asyncio.create_task(self._handle_message(kafka_message))
 
                 except Exception as e:

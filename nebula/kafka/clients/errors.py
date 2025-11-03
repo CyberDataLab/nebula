@@ -26,6 +26,10 @@ class KafkaProducerError(Exception):
     """Raised when producer error occurs."""
     pass
 
+class KafkaProducerInitializationError(Exception):
+    """Raised when cannot initialize producer occurs."""
+    pass
+
 class KafkaTopicSubscriptionError(Exception):
     """Raised when topic subscription error occurs."""
     pass
