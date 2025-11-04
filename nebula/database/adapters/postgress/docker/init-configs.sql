@@ -1,10 +1,7 @@
--- --------------------------------------------------
--- init_postgres.sql
--- --------------------------------------------------
-
 -- 1) (Optional) If you need to create the database, uncomment:
 -- CREATE DATABASE nebula;
 -- \c nebula
+
 
 -- 2) Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -13,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT
 );
 
--- 2) Nodes
+-- 3) Nodes
 CREATE TABLE IF NOT EXISTS nodes (
   uid TEXT PRIMARY KEY,
   idx TEXT,
@@ -45,7 +42,7 @@ ALTER TABLE IF EXISTS nodes
 -- ALTER TABLE IF EXISTS scenarios
 --   ADD CONSTRAINT scenarios_pkey PRIMARY KEY (federation_id);
 
--- 3) Configs as JSONB
+-- 4) Configs as JSONB
 DROP INDEX IF EXISTS idx_configs_config_gin;
 DROP TABLE IF EXISTS configs;
 CREATE TABLE configs (
@@ -54,7 +51,7 @@ CREATE TABLE configs (
 );
 CREATE INDEX idx_configs_config_gin ON configs USING GIN (config);
 
--- 4) Scenarios table as JSONB
+-- 5) Scenarios table as JSONB
 CREATE TABLE IF NOT EXISTS scenarios (
     federation_id TEXT PRIMARY KEY,
     alias TEXT NOT NULL,
@@ -70,7 +67,7 @@ CREATE TABLE IF NOT EXISTS scenarios (
 CREATE INDEX IF NOT EXISTS idx_scenarios_config_gin
     ON scenarios USING GIN (config);
 
--- 5) Notes table
+-- 6) Notes table
 CREATE TABLE IF NOT EXISTS notes (
     federation_id TEXT PRIMARY KEY,
     scenario_notes TEXT

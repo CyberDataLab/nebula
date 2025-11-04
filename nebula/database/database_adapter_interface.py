@@ -18,48 +18,6 @@ class DatabaseAdapter(ABC):
         """Closes the database connection pool."""
         raise NotImplementedError
 
-    # --- User Management Functions ---
-
-    @abstractmethod
-    async def _insert_default_admin(self):
-        """Inserts a default admin user."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _list_users(self, all_info=False):
-        """Retrieves a list of users."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _get_user_info(self, user):
-        """Fetches detailed information for a specific user."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _verify(self, user, password):
-        """Verifies user credentials."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _verify_hash_algorithm(self, user):
-        """Checks the password hash algorithm for a user."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _delete_user_from_db(self, user):
-        """Deletes a user from the database."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _add_user(self, user, password, role):
-        """Adds a new user."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def _update_user(self, user, password, role):
-        """Updates an existing user."""
-        raise NotImplementedError
-
     # --- Node Management Functions ---
 
     #TODO not used

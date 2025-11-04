@@ -19,6 +19,13 @@ from watchdog.observers import Observer
 from nebula.addons.env import check_environment
 from nebula.utils import DockerUtils, FileUtils, SocketUtils, TermEscapeCodeFormatter
 
+
+KEYCLOAK_IMAGE = os.environ.get("NEBULA_KEYCLOAK_IMAGE", "nebula-keycloak")
+KEYCLOAK_DB_IMAGE = os.environ.get("NEBULA_KEYCLOAK_DB_IMAGE", "nebula-keycloak-db")
+KEYCLOAK_DEFAULT_REALM = os.environ.get("NEBULA_KEYCLOAK_REALM", "nebula")
+KEYCLOAK_API_AUDIENCE = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE", "nebula-hub")
+KEYCLOAK_AUDIENCE_SCOPE = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE_SCOPE", "nebula-hub")
+
 class CredentialManager:
     """
     CredentialManager handles the generation, storage, and validation of environment-based credentials.
@@ -89,6 +96,14 @@ class CredentialManager:
         else:
             logging.info(f"{key} already set")
 
+    def ensure_value(self, key: str, value: str) -> None:
+        """Ensure an environment variable is present, using a deterministic default when missing."""
+        if key not in os.environ:
+            logging.info(f"Setting default value for {key}")
+            os.environ[key] = value
+            with self.env_path.open("a") as f:
+                f.write(f"{key}={value}\n")
+
     def check_all_credentials(self):
         """
         Checks and sets all required credentials for the application.
@@ -103,7 +118,13 @@ class CredentialManager:
         self.check_credential("SECRET_KEY", is_password=False)
         self.check_credential("GF_SECURITY_ADMIN_PASSWORD")
         self.check_credential("POSTGRES_PASSWORD")
-        self.check_credential("NEBULA_ADMIN_PASSWORD")
+        self.ensure_value("KEYCLOAK_ADMIN", os.environ.get("KEYCLOAK_ADMIN", "kc_admin"))
+        self.check_credential("KEYCLOAK_ADMIN_PASSWORD")
+        self.ensure_value("KEYCLOAK_DB_USER", os.environ.get("KEYCLOAK_DB_USER", "keycloak"))
+        self.check_credential("KEYCLOAK_DB_PASSWORD")
+        self.ensure_value("NEBULA_KEYCLOAK_REALM", KEYCLOAK_DEFAULT_REALM)
+        self.ensure_value("NEBULA_KEYCLOAK_AUDIENCE", KEYCLOAK_API_AUDIENCE)
+        self.ensure_value("NEBULA_KEYCLOAK_AUDIENCE_SCOPE", KEYCLOAK_AUDIENCE_SCOPE)
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -661,6 +682,8 @@ class Deployer:
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
         self.database_host = self.get_container_name("nebula-database")
         self.database_port = int(args.databaseport) if hasattr(args, "databaseport") else 5051
+        self.keycloak_host = self.get_container_name("keycloak")
+        self.keycloak_db_host = self.get_container_name("keycloak-db")
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
@@ -668,6 +691,15 @@ class Deployer:
         self.kafbat_port = int(args.kafbatport) if hasattr(args, "kafbatport") else 8081
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
+
+        self.keycloak_port = int(getattr(args, "keycloakport", 7080))
+        self.keycloak_realm = os.environ.get("NEBULA_KEYCLOAK_REALM", KEYCLOAK_DEFAULT_REALM)
+        self.keycloak_audience = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE", KEYCLOAK_API_AUDIENCE)
+        self.keycloak_scope = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE_SCOPE", KEYCLOAK_AUDIENCE_SCOPE)
+        self.keycloak_admin_user = os.environ.get("KEYCLOAK_ADMIN")
+        self.keycloak_admin_password = os.environ.get("KEYCLOAK_ADMIN_PASSWORD")
+        self.keycloak_db_user = os.environ.get("KEYCLOAK_DB_USER")
+        self.keycloak_db_password = os.environ.get("KEYCLOAK_DB_PASSWORD")
 
 
     def get_container_name(self, role_tag: str) -> str:
@@ -864,7 +896,7 @@ class Deployer:
 
         if not SocketUtils.is_port_open(self.frontend_port):
             self.frontend_port = SocketUtils.find_free_port(start_port=self.frontend_port)
-            
+
         if not SocketUtils.is_port_open(self.kafka_port):
             self.kafka_port = SocketUtils.find_free_port(start_port=self.kafka_port)
 
@@ -874,10 +906,15 @@ class Deployer:
         if not SocketUtils.is_port_open(self.statistics_port):
             self.statistics_port = SocketUtils.find_free_port(start_port=self.statistics_port)
 
-        self.run_controller()
-        logging.info("NEBULA Controller is running")
+        if not SocketUtils.is_port_open(self.keycloak_port):
+            self.keycloak_port = SocketUtils.find_free_port(start_port=self.keycloak_port)
+
         self.run_database()
         logging.info(f"NEBULA Databases docker is running")
+        self.run_keycloak()
+        logging.info(f"Keycloak IdP is running at http://localhost:{self.keycloak_port}")
+        self.run_controller()
+        logging.info("NEBULA Controller is running")
         self.run_frontend()
         logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
         self.run_kafka()
@@ -989,6 +1026,9 @@ class Deployer:
             "NEBULA_DEFAULT_PASSWORD": "admin",
             "NEBULA_CONTROLLER_PORT": self.controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
+            "NEBULA_KEYCLOAK_PUBLIC_URL": f"http://localhost:{self.keycloak_port}",
+            "NEBULA_KEYCLOAK_REALM": self.keycloak_realm,
+            "NEBULA_KEYCLOAK_WEB_CLIENT_ID": "nebula-web",
         }
 
         volumes = ["/nebula", "/var/run/docker.sock", "/etc/nginx/sites-available/default"]
@@ -1065,7 +1105,6 @@ class Deployer:
             "DB_PORT": 5432,
             "DB_USER": "nebula",
             "DB_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
-            "NEBULA_ADMIN_PASSWORD": os.environ.get("NEBULA_ADMIN_PASSWORD")
         }
         host_sql_path = os.path.join(self.root_path, "nebula/database/adapters/postgress/docker/init-configs.sql")
         db_data_path = os.path.join(self.databases_dir, "postgres-data")
@@ -1111,6 +1150,112 @@ class Deployer:
         )
         client.api.start(pgweb_container)
         Deployer._add_container_to_metadata(pgweb_container_name)
+
+    def run_keycloak(self):
+        """Start the Keycloak identity provider and its dedicated PostgreSQL database."""
+        if sys.platform == "win32":
+            if not os.path.exists("//./pipe/docker_Engine"):
+                raise Exception(
+                    "Docker is not running, please check if Docker is running and Docker Compose is installed."
+                )
+        else:
+            if not os.path.exists("/var/run/docker.sock"):
+                raise Exception(
+                    "/var/run/docker.sock not found, please check if Docker is running and Docker Compose is installed."
+                )
+
+        network_name = self.get_network_name("net-base")
+        base = DockerUtils.create_docker_network(network_name)
+        Deployer._add_network_to_metadata(network_name)
+
+        client = docker.from_env()
+
+        if not all([self.keycloak_admin_user, self.keycloak_admin_password, self.keycloak_db_user, self.keycloak_db_password]):
+            raise RuntimeError("Missing Keycloak environment credentials. Check .env generation.")
+
+        # Launch dedicated PostgreSQL for Keycloak
+        keycloak_db_environment = {
+            "POSTGRES_DB": "keycloak",
+            "POSTGRES_USER": self.keycloak_db_user,
+            "POSTGRES_PASSWORD": self.keycloak_db_password,
+        }
+        keycloak_db_data_path = os.path.join(self.databases_dir, "keycloak-postgres")
+        os.makedirs(keycloak_db_data_path, exist_ok=True)
+
+        keycloak_db_host_config = client.api.create_host_config(
+            binds=[
+                f"{keycloak_db_data_path}:/var/lib/postgresql/data",
+            ],
+        )
+        keycloak_db_networking_config = client.api.create_networking_config(
+            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.140")}
+        )
+
+        try:
+            client.containers.get(self.keycloak_db_host)
+            logging.warning(
+                f"Container {self.keycloak_db_host} already exists. Deployment may fail or cause conflicts."
+            )
+        except docker.errors.NotFound:
+            pass
+
+        keycloak_db_container = client.api.create_container(
+            image=KEYCLOAK_DB_IMAGE,
+            name=self.keycloak_db_host,
+            detach=True,
+            environment=keycloak_db_environment,
+            host_config=keycloak_db_host_config,
+            networking_config=keycloak_db_networking_config,
+        )
+        client.api.start(keycloak_db_container)
+        Deployer._add_container_to_metadata(self.keycloak_db_host)
+
+        # Allow Postgres to finish bootstrap before Keycloak attempts the first connection
+        time.sleep(5)
+
+        # Launch Keycloak server
+        keycloak_environment = {
+            "KC_BOOTSTRAP_ADMIN_USERNAME": self.keycloak_admin_user,
+            "KC_BOOTSTRAP_ADMIN_PASSWORD": self.keycloak_admin_password,
+            "KC_DB": "postgres",
+            "KC_DB_URL_HOST": self.keycloak_db_host,
+            "KC_DB_URL_PORT": "5432",
+            "KC_DB_USERNAME": self.keycloak_db_user,
+            "KC_DB_PASSWORD": self.keycloak_db_password,
+            "KC_DB_SCHEMA": "public",
+            "KC_HOSTNAME_STRICT": "false",
+            "KC_HOSTNAME_STRICT_HTTPS": "false",
+            "KC_HTTP_ENABLED": "true",
+            "KC_PROXY": "edge",
+            "KC_CACHE": "local",
+        }
+
+        keycloak_host_config = client.api.create_host_config(
+            port_bindings={8080: self.keycloak_port},
+        )
+        keycloak_networking_config = client.api.create_networking_config(
+            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.141")}
+        )
+
+        try:
+            client.containers.get(self.keycloak_host)
+            logging.warning(
+                f"Container {self.keycloak_host} already exists. Deployment may fail or cause conflicts."
+            )
+        except docker.errors.NotFound:
+            pass
+
+        keycloak_container = client.api.create_container(
+            image=KEYCLOAK_IMAGE,
+            name=self.keycloak_host,
+            detach=True,
+            environment=keycloak_environment,
+            host_config=keycloak_host_config,
+            networking_config=keycloak_networking_config,
+            command=["start", "--import-realm"],
+        )
+        client.api.start(keycloak_container)
+        Deployer._add_container_to_metadata(self.keycloak_host)
 
     def run_controller(self):
         if sys.platform == "win32":
@@ -1158,6 +1303,11 @@ class Deployer:
             "NEBULA_FEDERATION_CONTROLLER_PORT" : self.federation_controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
+            "NEBULA_KEYCLOAK_SERVER": f"http://{self.keycloak_host}:8080",
+            "NEBULA_KEYCLOAK_REALM": self.keycloak_realm,
+            "NEBULA_KEYCLOAK_AUDIENCE": self.keycloak_audience,
+            "NEBULA_KEYCLOAK_SCOPE": self.keycloak_scope,
+            "NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS": os.environ.get("NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS", "300"),
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]
@@ -1423,8 +1573,8 @@ class Deployer:
         ports = [9092, 9093, 9094]
         host_config = client.api.create_host_config(
             binds=[
-                f"{kafka_data_host_path}:/kafka/data",  
-                f"{self.root_path}/scripts:/opt/scripts",  
+                f"{kafka_data_host_path}:/kafka/data",
+                f"{self.root_path}/scripts:/opt/scripts",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={9092: self.kafka_port, 9093: 9093, 9094: 9094},

@@ -25,14 +25,6 @@ class Routes:
     NOTES_UPDATE = "/notes/{federation_id}/update"
     NOTES_REMOVE = "/notes/{federation_id}/remove"
 
-    # Users
-    USER_LIST = "/user/list"
-    USER_BY_FEDERATION_ID = "/user/{federation_id}"
-    USER_ADD = "/user/add"
-    USER_DELETE = "/user/delete"
-    USER_UPDATE = "/user/update"
-    USER_VERIFY = "/user/verify"
-
 
 class UpdateScenarioRequest(BaseModel):
     alias: str
@@ -52,23 +44,6 @@ class FinishScenarioRequest(BaseModel):
 class UpdateNotesRequest(BaseModel):
     notes: str
 
-class AddUserRequest(BaseModel):
-    user: str
-    password: str
-    role: str
-
-class DeleteUserRequest(BaseModel):
-    user: str
-
-class UpdateUserRequest(BaseModel):
-    user: str
-    password: str
-    role: str
-
-class VerifyUserRequest(BaseModel):
-    user: str
-    password: str
-
 class UpdateNodesRequest(BaseModel):
     config: Dict[str, Any]
 
@@ -83,9 +58,6 @@ class CheckScenarioRequest(BaseModel):
     user: str
     role: str
     federation_id: str
-
-class ListUsersRequest(BaseModel):
-    all_info: bool = False
 
 
 def factory_requests_path(resource: str, user: str = "", role: str = "", federation_id: str = "") -> str:
@@ -121,18 +93,5 @@ def factory_requests_path(resource: str, user: str = "", role: str = "", federat
         return Routes.NOTES_UPDATE.format(federation_id=federation_id)
     elif resource == "remove_notes":
         return Routes.NOTES_REMOVE.format(federation_id=federation_id)
-    # Users
-    elif resource == "list_users":
-        return Routes.USER_LIST
-    elif resource == "get_user_by_scenario_name":
-        return Routes.USER_BY_FEDERATION_ID.format(federation_id=federation_id)
-    elif resource == "add_user":
-        return Routes.USER_ADD
-    elif resource == "delete_user":
-        return Routes.USER_DELETE
-    elif resource == "update_user":
-        return Routes.USER_UPDATE
-    elif resource == "verify_user":
-        return Routes.USER_VERIFY
     else:
         raise Exception(f"resource not found: {resource}")

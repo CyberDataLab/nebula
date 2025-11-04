@@ -43,6 +43,15 @@ NEBULA boasts a **modular architecture** that consists of three core elements:
 - **Controller**: An orchestrator that ensures efficient operation management.
 - **Core**: The fundamental component deployed on each device to handle federated learning processes.
 
+## 🔐 Authentication
+
+- The platform now bundles a self-managed [Keycloak](https://www.keycloak.org/) Identity Provider that is automatically deployed alongside the controller and database services.
+- Keycloak issues short-lived access tokens (JWT) and long-lived refresh tokens for every client (web, mobile, CLI, and the hub API itself).
+- The hub validates every protected request by checking the token signature, issuer, audience, expiration, scopes, and mapped realm roles; WebSocket connections must also present a bearer token.
+- Business data continues to reference the authenticated user via the Keycloak username stored alongside each scenario record, so existing tables can relate entries without duplicating identity data.
+- Realm, client, and scope defaults live in `nebula/auth/nebula-realm.json`; tweak that file once and every deployment will pick up the changes automatically.
+- Local username/password management has been retired; administrators should manage users, roles, and client credentials directly in Keycloak.
+
 ## 🌟 Main Features
 
 - **Decentralized**: Train models without a central server, leveraging decentralized federated learning.

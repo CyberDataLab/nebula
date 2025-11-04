@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from fastapi import HTTPException, Request, UploadFile, WebSocket, status
 from nebula.controller.http_helpers import remote_get, remote_post_form
+from nebula.auth import AuthenticatedUser, authenticate_token, obtain_token
 from nebula.controller.hub.clients.db_api_client import DatabaseAPIClient
 from nebula.controller.hub.clients.federation_api_client import FederationAPIClient
 from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
@@ -48,6 +49,23 @@ class HubManager:
         """Real Time Manager instance"""
         return self._real_time_manager
 
+    @staticmethod
+    def _actor_username(actor: AuthenticatedUser) -> str:
+        candidate = actor.username or actor.email or actor.subject
+        return candidate.upper() if candidate else ""
+
+    @staticmethod
+    def _actor_role(actor: AuthenticatedUser) -> str:
+        role_mapping = {
+            "hub-admin": "admin",
+            "hub-operator": "operator",
+            "hub-viewer": "viewer",
+        }
+        for key, value in role_mapping.items():
+            if key in actor.roles:
+                return value
+        return next(iter(actor.roles), "viewer") if actor.roles else "viewer"
+
     def _generate_federation_ids(self, user: str, scenario_datas: List) -> List[str]:
         federation_ids = []
         for i, sd in enumerate(scenario_datas):
@@ -58,14 +76,13 @@ class HubManager:
     # ------------------------------------------------------------------
     # Scenarios
     # ------------------------------------------------------------------
-    async def run_scenario(self, user: str, role: str, scenario_data, request: Request):
+    async def run_scenario(self, actor: AuthenticatedUser, scenario_data, request: Request):
         """
         Launches a new scenario based on the provided configuration.
 
         Args:
             scenario_data (dict): The complete configuration of the scenario to be executed.
-            role (str): The role of the user initiating the scenario.
-            user (str): The username of the user initiating the scenario.
+            actor (AuthenticatedUser): The authenticated user initiating the scenario.
 
         Returns:
             str: The name of the scenario that was started.
@@ -73,10 +90,14 @@ class HubManager:
         user_host = request.client.host
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
+        username = self._actor_username(actor)
+        role = self._actor_role(actor)
+        scenario_payload = dict(scenario_data)
+
         try:
             hkc = NebulaKafkaAdmin(user="hub_admin", password="hub_admin_password", broker="dev_dev_alejandro_nebula-kafka:9094", client_id="hub", logger=self.logger)
             await hkc.init()
-            
+
             # # Generate IDs for all scenarios
             # federation_ids = self._generate_federation_ids(user, [scenario_data])
 
@@ -161,9 +182,13 @@ class HubManager:
             )
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    async def get_scenarios(self, user: str, role: str) -> Any:
+    async def get_scenarios(self, actor: AuthenticatedUser, requested_user: str) -> Any:
         try:
-            return await self.database_client.get_scenarios_by_user(user, role)
+            username = self._actor_username(actor)
+            role = self._actor_role(actor)
+            if requested_user and requested_user.upper() != username:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token and user path mismatch")
+            return await self.database_client.get_scenarios_by_user(username, role)
         except Exception as exc:
             self.logger.exception("Error obtaining scenarios: %s", exc)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -202,9 +227,13 @@ class HubManager:
             self.logger.exception("Error obtaining running scenarios: %s", exc)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    async def check_scenario(self, user: str, role: str, federation_id: str) -> Any:
+    async def check_scenario(self, actor: AuthenticatedUser, requested_user: str, federation_id: str) -> Any:
         try:
-            return await self.database_client.check_scenario(user, role, federation_id)
+            username = self._actor_username(actor)
+            role = self._actor_role(actor)
+            if requested_user and requested_user.upper() != username:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token and user path mismatch")
+            return await self.database_client.check_scenario(username, role, federation_id)
         except Exception as exc:
             self.logger.exception("Error checking scenario with role: %s", exc)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -307,71 +336,98 @@ class HubManager:
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     # ------------------------------------------------------------------
+    # Authentication
+    # ------------------------------------------------------------------
+    async def login(self, request: hub_requests.LoginRequest) -> Dict[str, Any]:
+        if request.grant_type == "password":
+            if not request.username or not request.password:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="username and password must be provided for password grant",
+                )
+        elif request.grant_type == "refresh_token":
+            if not request.refresh_token:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="refresh_token must be provided for refresh_token grant",
+                )
+        else:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported grant type '{request.grant_type}'",
+            )
+
+        try:
+            return await obtain_token(
+                grant_type=request.grant_type,
+                username=request.username,
+                password=request.password,
+                refresh_token=request.refresh_token,
+                client_id=request.client_id,
+                client_secret=request.client_secret,
+                scope=request.scope,
+                auth_url=request.auth_url,
+                realm=request.realm,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception("Unexpected error during Keycloak login flow: %s", exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to obtain token from Keycloak.",
+            ) from exc
+
+    # ------------------------------------------------------------------
     # Users
     # ------------------------------------------------------------------
     async def list_users(self, all_info: bool = False) -> Any:
-        try:
-            return await self.database_client.list_users(all_info)
-        except Exception as exc:
-            self.logger.exception("Error retrieving users: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error retrieving users: {exc}",
-            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Local user management has been removed. Manage identities through Keycloak.",
+        )
 
     async def add_user(self, user: str, password: str, role: str) -> Any:
-        try:
-            return await self.database_client.add_user({
-                "user": user,
-                "password": password,
-                "role": role
-                })
-        except Exception as exc:
-            self.logger.exception("Error adding user: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error adding user: {exc}",
-            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Use Keycloak administration APIs to create users.",
+        )
 
     async def remove_user(self, user: str) -> Any:
-        try:
-            return await self.database_client.delete_user(user)
-        except Exception as exc:
-            self.logger.exception("Error deleting user: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error deleting user: {exc}",
-            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Use Keycloak administration APIs to remove users.",
+        )
 
     async def update_user(self, user: str, password: str, role: str) -> Any:
-        try:
-            return await self.database_client.update_user({
-                "user": user,
-                "password": password,
-                "role": role
-                })
-        except Exception as exc:
-            self.logger.exception("Error updating user: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error updating user: {exc}",
-            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Use Keycloak administration APIs to update users.",
+        )
 
     async def verify_user(self, user: str, password: str) -> Any:
-        try:
-            return await self.database_client.verify_user({
-                "user": user,
-                "password": password})
-        except HTTPException as exc:
-            if exc.status_code == 401:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED) from exc
-            self.logger.exception("Error verifying user: %s", exc)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error verifying user: {exc}",
-            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Password verification is handled by Keycloak. Use its token endpoints.",
+        )
 
     async def open_real_time_client(self, websocket: WebSocket, channel_id: str):
+        token = websocket.query_params.get("token")
+        if not token:
+            authorization = websocket.headers.get("authorization")
+            if authorization and authorization.lower().startswith("bearer "):
+                token = authorization.split(" ", 1)[1].strip()
+
+        if not token:
+            await websocket.close(code=4401, reason="Missing bearer token")
+            return
+
+        try:
+            await authenticate_token(token)
+        except HTTPException as exc:
+            await websocket.close(code=4003, reason=exc.detail)
+            return
+
         await self.rtm.open_real_time_client(websocket, channel_id)
 
     # ------------------------------------------------------------------

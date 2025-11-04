@@ -149,30 +149,3 @@ class DatabaseAPIClient:
         )
         url = self._build_url(path)
         return await self._post(url)
-
-    async def list_users(self, all_info: bool = False) -> Any:
-        path = DBReq.factory_requests_path("list_users")
-        url = self._build_url(path)
-        payload = {"all_info": all_info}
-        return await self._get(url, payload, DBReq.ListUsersRequest)
-
-    async def add_user(self, payload: Dict[str, Any]) -> Any:
-        path = DBReq.factory_requests_path("add_user")
-        url = self._build_url(path)
-        return await self._post(url, payload, DBReq.AddUserRequest)
-
-    async def delete_user(self, user: str) -> Any:
-        path = DBReq.factory_requests_path("delete_user")
-        url = self._build_url(path)
-        payload = {"user": user}
-        return await self._post(url, payload, DBReq.DeleteUserRequest)
-
-    async def update_user(self, payload: Dict[str, Any]) -> Any:
-        path = DBReq.factory_requests_path("update_user")
-        url = self._build_url(path)
-        return await self._post(url, payload, DBReq.UpdateUserRequest)
-
-    async def verify_user(self, payload: Dict[str, Any]) -> Any:
-        path = DBReq.factory_requests_path("verify_user")
-        url = self._build_url(path)
-        return await self._post(url, payload, DBReq.VerifyUserRequest)

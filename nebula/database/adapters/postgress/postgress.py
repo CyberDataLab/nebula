@@ -5,8 +5,7 @@ import json
 from typing import List
 import asyncpg
 import asyncio
-
-from passlib.context import CryptContext
+from typing import Any, Dict
 
 from nebula.database.database_adapter_interface import DatabaseAdapter
 from nebula.database.schemas.errors import (
@@ -29,9 +28,6 @@ from nebula.database.utils.api_utils import raise_error
 # --- Configuration ---
 # Use environment variables for database credentials from the Docker Compose file
 DATABASE_URL = f"postgresql://{os.environ.get('DB_USER')}:{os.environ.get('DB_PASSWORD')}@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT')}/nebula"
-
-# Password hashing context (using Argon2)
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # Asynchronous lock for node updates
 _node_lock = asyncio.Lock()
@@ -88,119 +84,6 @@ class PostgresDB(DatabaseAdapter):
             await self.pool.close()
             logging.info("Database connection pool closed.")
 
-    # --- User Management Functions ---
-
-    async def _insert_default_admin(self):
-        """
-        Inserts a default 'ADMIN' user into the database with a hashed password.
-        The password must be provided via the ADMIN_PASSWORD environment variable.
-        """
-        admin_password = os.environ.get("NEBULA_ADMIN_PASSWORD")
-
-        hashed_password = pwd_context.hash(admin_password)
-
-        query = """
-        INSERT INTO users ("user", password, role)
-        VALUES ($1, $2, $3)
-        ON CONFLICT ("user") DO NOTHING;
-        """
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute(query, "ADMIN", hashed_password, "admin")
-                logging.info("Default admin user inserted (or already exists).")
-        except Exception as e:
-            logging.error(f"Failed to insert default admin user: {e}", exc_info=True)
-
-    async def _list_users(self, all_info: bool = False):
-        """
-        Retrieves a list of users from the users database.
-        """
-        self._verify_pool()
-        
-        try:
-            async with self.pool.acquire() as conn:
-                result = await conn.fetch("SELECT * FROM users")
-
-            if all_info:
-                # Return JSON-serializable dicts with full info
-                return [dict(row) for row in result]
-            else:
-                # Return just the list of usernames (strings)
-                return [row["user"] for row in result]
-        except Exception as e:
-            db_error = self._map_pg_exception_to_error(e)
-            raise_error(db_error)
-
-    async def _get_user_info(self, user: str):
-        """
-        Fetches detailed information for a specific user from the users database.
-        """
-        async with self.pool.acquire() as conn:
-            return await conn.fetchrow('SELECT * FROM users WHERE "user" = $1', user)
-
-    async def _verify(self, user: str, password: str):
-        """
-        Verifies credentials and returns user info when valid.
-
-        Returns
-        -------
-        dict | None
-            {"user": USER, "role": ROLE} if valid, otherwise None.
-        """
-        user_up = user.upper()
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow('SELECT password, role FROM users WHERE "user" = $1', user_up)
-        if not row:
-            return None
-        try:
-            if pwd_context.verify(password, row["password"]):
-                return {"user": user_up, "role": row["role"]}
-        except Exception:
-            logging.error(f"Error during password verification for user {user_up}", exc_info=True)
-        return None
-
-    async def _verify_hash_algorithm(self, user: str):
-        """
-        Checks if the stored password hash for a user uses a supported Argon2 algorithm.
-        """
-        user = user.upper()
-        argon2_prefixes = ("$argon2i$", "$argon2id$")
-        async with self.pool.acquire() as conn:
-            result = await conn.fetchrow('SELECT password FROM users WHERE "user" = $1', user)
-        if result:
-            password_hash = result["password"]
-            return password_hash.startswith(argon2_prefixes)
-        return False
-
-    async def _delete_user_from_db(self, user: str):
-        """
-        Deletes a user record from the users database.
-        """
-        async with self.pool.acquire() as conn:
-            await conn.execute('DELETE FROM users WHERE "user" = $1', user)
-
-    async def _add_user(self, user:str, password:str, role:str):
-        """
-        Adds a new user to the users database with a hashed password.
-        """
-        hashed_password = pwd_context.hash(password)
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                'INSERT INTO users ("user", password, role) VALUES ($1, $2, $3)',
-                user.upper(), hashed_password, role,
-            )
-
-    async def _update_user(self, user:str, password:str, role:str):
-        """
-        Updates the password and role of an existing user in the users database.
-        """
-        hashed_password = pwd_context.hash(password)
-        async with self.pool.acquire() as conn:
-            await conn.execute(
-                'UPDATE users SET password = $1, role = $2 WHERE "user" = $3',
-                hashed_password, role, user.upper(),
-            )
-
     # --- Node Management Functions ---
 
     async def _list_nodes(self, federation_id:str=None, sort_by:str="idx"):
@@ -249,7 +132,7 @@ class PostgresDB(DatabaseAdapter):
         Fetches all nodes associated with a specific scenario, ordered by their index as integers.
         """
         self._verify_pool()
-        
+
         try:
             async with self.pool.acquire() as conn:
                 command = "SELECT * FROM nodes WHERE federation = $1 ORDER BY CAST(idx AS INTEGER) ASC;"
@@ -294,7 +177,7 @@ class PostgresDB(DatabaseAdapter):
         Inserts or updates a node record in the database for a given scenario, ensuring thread-safe access.
         """
         self._verify_pool()
-        
+
         try:
             async with _node_lock:
                 async with self.pool.acquire() as conn:
@@ -432,7 +315,12 @@ class PostgresDB(DatabaseAdapter):
             return await conn.fetch(full_command, *params)
 
 
-    async def _get_all_scenarios_and_check_completed(self, user:str, role:str, sort_by:str="start_time"):
+    async def _get_all_scenarios_and_check_completed(
+        self,
+        user: str,
+        role: str,
+        sort_by: str = "start_time",
+    ):
         """
         Retrieves all scenarios, sorts them, and updates the status if necessary.
         Returns a list of dictionaries, where each dictionary represents a scenario.
@@ -494,7 +382,7 @@ class PostgresDB(DatabaseAdapter):
         Direct columns (name, start_time, end_time, username, status) are also handled.
         """
         self._verify_pool()
-        
+
         # Ensure scenario is a dictionary before dumping to JSON
         if not isinstance(scenario, dict):
             try:
@@ -529,7 +417,7 @@ class PostgresDB(DatabaseAdapter):
         and updates their 'end_time' (both in the direct column and within JSONB).
         """
         self._verify_pool()
-        
+
         current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
         command = """
             UPDATE scenarios
@@ -554,7 +442,7 @@ class PostgresDB(DatabaseAdapter):
         Updates both the direct columns and the JSONB 'config'.
         """
         self._verify_pool()
-        
+
         current_time = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
         command = """
             UPDATE scenarios
@@ -599,7 +487,7 @@ class PostgresDB(DatabaseAdapter):
         Consolidated method to set scenarios to finished.
         """
         self._verify_pool()
-        
+
         if all:
             return await self._scenario_set_all_status_to_finished()
         else:
@@ -611,7 +499,7 @@ class PostgresDB(DatabaseAdapter):
         Returns full scenario record (including direct columns and config JSONB).
         """
         self._verify_pool()
-        
+
         try:
             async with self.pool.acquire() as conn:
                 params = ["running"]
@@ -638,7 +526,9 @@ class PostgresDB(DatabaseAdapter):
         Returns full scenario record (including direct columns and config JSONB).
         """
         async with self.pool.acquire() as conn:
-            command = "SELECT name, username, status, start_time, end_time, config FROM scenarios WHERE status = $1;"
+            command = (
+                "SELECT name, username, status, start_time, end_time, config FROM scenarios WHERE status = $1;"
+            )
             result_row = await conn.fetchrow(command, "completed")
             return dict(result_row) if result_row else None
 
@@ -647,7 +537,7 @@ class PostgresDB(DatabaseAdapter):
         Compose scenarios list and running scenario respecting role.
         """
         self._verify_pool()
-        
+
         scenarios = await self._get_all_scenarios_and_check_completed(user=user, role=role)
         scenario_running = await self._get_running_scenario(None if role == "admin" else user)
         return {"scenarios": scenarios, "scenario_running": scenario_running}
@@ -658,7 +548,7 @@ class PostgresDB(DatabaseAdapter):
         Retrieves the complete record of a scenario by its name.
         """
         self._verify_pool()
-        
+
         try:
             async with self.pool.acquire() as conn:
                 result_row = await conn.fetchrow("SELECT name, start_time, end_time, username, status, config FROM scenarios WHERE federation_id = $1;", federation_id)
@@ -734,7 +624,7 @@ class PostgresDB(DatabaseAdapter):
         Verify if a scenario exists that the user with the given role and username can access.
         """
         self._verify_pool()
-        
+
         scenario_info = await self._get_scenario_by_federation_id(federation_id)
 
         if not scenario_info:
@@ -795,21 +685,21 @@ class PostgresDB(DatabaseAdapter):
         except Exception as e:
             db_error = self._map_pg_exception_to_error(e)
             self._log_and_raise_error(db_error)
-    
+
     """                                             ###############################
                                                     #       ERROR MANAGEMENT      #
                                                     ###############################
-    """    
-            
+    """
+
     def _verify_pool(self):
         if not self.pool:
             self._log_and_raise_error(POOL_NOT_INITIALIZED)
-            
+
     def _log_and_raise_error(err: DatabaseErrorDefinition):
         error_msg = f"ERROR_CODE: {err.code}\n ERROR: {err.error}\n Additional info: {err.message}"
         logging.info(error_msg)
         raise_error(err)
-            
+
     def _map_pg_exception_to_error(self, exc: Exception) -> DatabaseErrorDefinition:
         """
         Maping asyncpg exceptions to DatabaseErrorDefinition.

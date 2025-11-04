@@ -6,9 +6,10 @@ import os
 import re
 
 import uvicorn
-from fastapi import Body, FastAPI, File, Request, UploadFile, WebSocket, status
+from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile, WebSocket, status
 from fastapi.concurrency import asynccontextmanager
 
+from nebula.auth import AuthenticatedUser, get_current_user
 from nebula.controller.hub.hub_manager import HubManager
 import nebula.controller.hub.utils_requests as hub_requests
 from nebula.utils import TermEscapeCodeFormatter
@@ -30,6 +31,12 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app outside the Controller class
 app = FastAPI(lifespan=lifespan)
+
+
+@app.post(hub_requests.Routes.LOGIN)
+async def login(request: hub_requests.LoginRequest):
+    return await hub_manager.login(request)
+
 
 # def validate_physical_fields(data: dict):
 #     if data.get("deployment") != "physical":
@@ -57,14 +64,19 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.post(hub_requests.Routes.RUN)
-async def run_scenario(run_scenario_request: hub_requests.RunScenarioRequest, request: Request):
-    return await hub_manager.run_scenario(run_scenario_request.user, run_scenario_request.role, run_scenario_request.scenario_data, request)
+async def run_scenario(
+    run_scenario_request: hub_requests.RunScenarioRequest,
+    request: Request,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+):
+    return await hub_manager.run_scenario(current_user, run_scenario_request.scenario_data, request)
 
 @app.post(hub_requests.Routes.STOP)
 async def stop_scenario(
     federation_id: str,
     experiment_type: str = Body(False, embed=True),
     all: bool = Body(False, embed=True),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     await hub_manager.stop_scenario(federation_id, experiment_type=experiment_type, stop_all=all)
 
@@ -72,6 +84,7 @@ async def stop_scenario(
 @app.post(hub_requests.Routes.RESOURCES_STOP)
 async def resources_stop_scenario(
     federation_id: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.resources_stop_scenario(federation_id)
 
@@ -80,6 +93,7 @@ async def resources_stop_scenario(
 async def remove_scenario(
     federation_id: str,
     request: hub_requests.RemoveScenarioRequest,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.remove_scenario(federation_id, request)
 
@@ -88,14 +102,16 @@ async def remove_scenario(
 async def get_scenarios(
     user: str,
     role: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    return await hub_manager.get_scenarios(user, role)
+    return await hub_manager.get_scenarios(current_user, user)
 
 
 @app.post(hub_requests.Routes.UPDATE)
 async def update_scenario(
     federation_id: str,
     request: hub_requests.UpdateScenarioRequest,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.update_scenario(federation_id, request)
 
@@ -104,12 +120,16 @@ async def update_scenario(
 async def set_scenario_status_to_finished(
     federation_id: str,
     all: bool = Body(False, embed=True),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.set_scenario_status_to_finished(federation_id, stop_all=all)
 
 
 @app.get(hub_requests.Routes.RUNNING)
-async def get_running_scenario_endpoint(get_all: bool = False):
+async def get_running_scenario_endpoint(
+    get_all: bool = False,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.get_running_scenarios(get_all=get_all)
 
 
@@ -118,13 +138,15 @@ async def check_scenario(
     user: str,
     role: str,
     federation_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    return await hub_manager.check_scenario(user, role, federation_id)
+    return await hub_manager.check_scenario(current_user, user, federation_id)
 
 
 @app.get(hub_requests.Routes.GET_SCENARIO_BY_FEDERATION_ID)
 async def get_scenario_by_federation_id(
     federation_id: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.get_scenario_by_federation_id(federation_id)
 
@@ -132,6 +154,7 @@ async def get_scenario_by_federation_id(
 @app.get(hub_requests.Routes.NODES_LIST)
 async def list_nodes_by_federation_id_endpoint(
     federation_id: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.list_nodes_by_federation_id(federation_id)
 
@@ -140,6 +163,7 @@ async def list_nodes_by_federation_id_endpoint(
 async def update_nodes(
     federation_id: str,
     node_update_request: hub_requests.NodeUpdateRequest,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.update_node(federation_id, node_update_request.config)
 
@@ -148,6 +172,7 @@ async def update_nodes(
 async def node_done(
     federation_id: str,
     node_done_request: hub_requests.NodeDoneRequest,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.node_done(federation_id, node_done_request.idx)
 
@@ -155,6 +180,7 @@ async def node_done(
 @app.post(hub_requests.Routes.NODES_REMOVE)
 async def remove_nodes_by_federation_id_endpoint(
     federation_id: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.remove_nodes_by_federation_id(federation_id)
 
@@ -162,6 +188,7 @@ async def remove_nodes_by_federation_id_endpoint(
 @app.get(hub_requests.Routes.NOTES_BY_FEDERATION_ID)
 async def get_notes_by_federation_id(
     federation_id: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.get_notes_by_federation_id(federation_id)
 
@@ -170,6 +197,7 @@ async def get_notes_by_federation_id(
 async def update_notes_by_federation_id(
     federation_id: str,
     notes: str = Body(..., embed=True),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.update_note_by_federation_id(federation_id, notes)
 
@@ -177,27 +205,39 @@ async def update_notes_by_federation_id(
 @app.post(hub_requests.Routes.NOTES_REMOVE)
 async def remove_notes_by_federation_id_endpoint(
     federation_id: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.remove_note_by_federation_id(federation_id)
 
 
 @app.get(hub_requests.Routes.USER_LIST)
-async def list_users_controller(all_info: bool = False):
+async def list_users_controller(
+    all_info: bool = False,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.list_users(all_info=all_info)
 
 
 @app.get(hub_requests.Routes.DISCOVER_VPN)
-async def discover_vpn():
+async def discover_vpn(
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.discover_vpn()
 
 
 @app.get(hub_requests.Routes.PHYSICAL_RUN, tags=["physical"])
-async def physical_run(ip: str):
+async def physical_run(
+    ip: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.physical_run(ip)
 
 
 @app.get(hub_requests.Routes.PHYSICAL_STOP, tags=["physical"])
-async def physical_stop(ip: str):
+async def physical_stop(
+    ip: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.physical_stop(ip)
 
 
@@ -208,6 +248,7 @@ async def physical_setup(
     config:      UploadFile = File(..., description="*.json* configuration file"),
     global_test: UploadFile = File(..., description="Global Dataset*.h5*"),
     train_set:   UploadFile = File(..., description="Training dataset*.h5*"),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.physical_setup(ip, config, global_test, train_set)
 
@@ -215,7 +256,10 @@ async def physical_setup(
 # Physical · single-node state
 # ──────────────────────────────────────────────────────────────
 @app.get(hub_requests.Routes.PHYSICAL_STATE, tags=["physical"])
-async def get_physical_node_state(ip: str):
+async def get_physical_node_state(
+    ip: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.get_physical_node_state(ip)
 
 
@@ -223,27 +267,47 @@ async def get_physical_node_state(ip: str):
 # Physical · aggregate state for an entire scenario
 # ──────────────────────────────────────────────────────────────
 @app.get(hub_requests.Routes.PHYSICAL_SCENARIO_STATE, tags=["physical"])
-async def get_physical_scenario_state(federation_id: str):
+async def get_physical_scenario_state(
+    federation_id: str,
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.get_physical_scenario_state(federation_id)
 
 
 @app.post(hub_requests.Routes.USER_ADD)
-async def add_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
+async def add_user_controller(
+    user: str = Body(...),
+    password: str = Body(...),
+    role: str = Body(...),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.add_user(user, password, role)
 
 
 @app.post(hub_requests.Routes.USER_DELETE)
-async def remove_user_controller(user: str = Body(..., embed=True)):
+async def remove_user_controller(
+    user: str = Body(..., embed=True),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.remove_user(user)
 
 
 @app.post(hub_requests.Routes.USER_UPDATE)
-async def update_user_controller(user: str = Body(...), password: str = Body(...), role: str = Body(...)):
+async def update_user_controller(
+    user: str = Body(...),
+    password: str = Body(...),
+    role: str = Body(...),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.update_user(user, password, role)
 
 
 @app.post(hub_requests.Routes.USER_VERIFY)
-async def verify_user_controller(user: str = Body(...), password: str = Body(...)):
+async def verify_user_controller(
+    user: str = Body(...),
+    password: str = Body(...),
+    _current_user: AuthenticatedUser = Depends(get_current_user),
+):
     return await hub_manager.verify_user(user, password)
 
 @app.websocket(hub_requests.Routes.OPEN_RT)

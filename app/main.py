@@ -86,6 +86,13 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    "--keycloak-port",
+    dest="keycloakport",
+    default=7080,
+    help="Keycloak HTTP port (default: 7080)",
+)
+
+argparser.add_argument(
     "-st",
     "--stop",
     dest="stop",

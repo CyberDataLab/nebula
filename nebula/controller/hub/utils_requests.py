@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type, Literal
 
 from pydantic import BaseModel, ConfigDict, conint, confloat
 
@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, conint, confloat
 class RunScenarioRequest(BaseModel):
     #TODO List[Dict]
     scenario_data: Dict[str, Any]
-    user: str
-    role: str
+    user: Optional[str] = None
+    role: Optional[str] = None
 
 
 class UpdateScenarioRequest(BaseModel):
@@ -30,7 +30,7 @@ class StopScenarioRequest(BaseModel):
 
 
 class RemoveScenarioRequest(BaseModel):
-    user: str
+    user: Optional[str] = None
     experiment_type: str
     scenario_name: str
 
@@ -43,64 +43,37 @@ class UpdateNotesRequest(BaseModel):
     notes: str
 
 
-class AddUserRequest(BaseModel):
-    user: str
-    password: str
-    role: str
-
-
-class DeleteUserRequest(BaseModel):
-    user: str
-
-
-class UpdateUserRequest(BaseModel):
-    user: str
-    password: str
-    role: str
-
-
-class VerifyUserRequest(BaseModel):
-    user: str
-    password: str
-
 
 class NodeUpdateRequest(BaseModel):
-    config: Dict[str, Any] = {}    
-    
-    
+    config: Dict[str, Any] = {}
+
+
 class NodeDoneRequest(BaseModel):
     idx: int
-    
-#TODO verify used correctly on hub API    
+
+#TODO verify used correctly on hub API
 class RunningScenariosRequest(BaseModel):
     user: str
     role: str
     get_all: bool = False
-    
+
 class UserListRequest(BaseModel):
     user: str
     role: str
     all_info: bool = False
-    
-class AddUserRequest(BaseModel):
-    user: str
-    password: str
-    role: str
-    
-class DeleteUserRequest(BaseModel):
-     user: str
-     role: str
-     user_to_delete: str
-     
-class UpdateUserRequest(BaseModel):
-    user: str
-    password: str
-    role: str
-    
-class VerifyUserRequest(BaseModel):
-    user: str
-    password: str
-    
+
+
+class LoginRequest(BaseModel):
+    grant_type: Literal["password", "refresh_token"] = "password"
+    username: Optional[str] = None
+    password: Optional[str] = None
+    refresh_token: Optional[str] = None
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    scope: Optional[str] = None
+    auth_url: Optional[str] = None
+    realm: Optional[str] = None
+
 """                                                     ###############################
                                                         #          WEB SOCKET         #
                                                         ###############################
@@ -109,12 +82,12 @@ class VerifyUserRequest(BaseModel):
 class WSMessage(BaseModel):
     type: str
     payload: Dict[str, Any]
-    
+
 EVENT_MAP: Dict[str, Type[BaseModel]] = {
     "update": NodeUpdateRequest,
     "done": NodeDoneRequest,
     # "finish": ScenarioFinishEvent,
-} 
+}
 
 class Routes:
     # General
@@ -123,6 +96,7 @@ class Routes:
     RESOURCES = "/resources"
     LEAST_MEMORY_GPU = "/least_memory_gpu"
     AVAILABLE_GPUS = "/available_gpus/"
+    LOGIN = "/auth/login"
 
     # Scenarios (Controller + DB API routing)
     RUN = "/scenarios/run"

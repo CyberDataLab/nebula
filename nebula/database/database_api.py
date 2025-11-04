@@ -15,15 +15,10 @@ from nebula.database.schemas.requests import (
     StopScenarioRequest,
     FinishScenarioRequest,
     UpdateNodesRequest,
-    AddUserRequest,
-    DeleteUserRequest,
-    UpdateUserRequest,
-    VerifyUserRequest,
     UpdateNotesRequest,
     GetScenariosRequest,
     GetRunningScenarioRequest,
     CheckScenarioRequest,
-    ListUsersRequest,
 )
 
 from nebula.database.schemas.responses import *
@@ -79,7 +74,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize the database connection pool
     await db._init_db_pool()
-    await db._insert_default_admin()
 
     yield
 
@@ -334,59 +328,3 @@ async def update_notes_by_scenario_name(federation_id: str, request: UpdateNotes
 async def remove_notes_by_federation_id(federation_id: str):
     success = await db._remove_note(federation_id)
     return RemoveNotesByID(success=success)
-
-
-#TODO remove users endpoints
-# Users
-@app.get(Routes.USER_LIST)
-async def list_users_controller(request: ListUsersRequest = Depends()):
-    try:
-        return {"users": await db._list_users(request.all_info)}
-    except Exception as e:
-        logging.exception(f"Error retrieving users: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving users: {e}")
-
-
-@app.post(Routes.USER_ADD)
-async def add_user_controller(request: AddUserRequest):
-    try:
-        await db._add_user(**request.model_dump())
-        return {"detail": "User added successfully"}
-    except Exception as e:
-        logging.exception(f"Error adding user: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error adding user: {e}")
-
-
-@app.post(Routes.USER_DELETE)
-async def remove_user_controller(request: DeleteUserRequest):
-    try:
-        await db._delete_user_from_db(request.user)
-        return {"detail": "User deleted successfully"}
-    except Exception as e:
-        logging.exception(f"Error deleting user: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting user: {e}")
-
-
-@app.post(Routes.USER_UPDATE)
-async def update_user_controller(request: UpdateUserRequest):
-    try:
-        await db._update_user(**request.model_dump())
-        return {"detail": "User updated successfully"}
-    except Exception as e:
-        logging.exception(f"Error updating user: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating user: {e}")
-
-
-@app.post(Routes.USER_VERIFY)
-async def verify_user_controller(request: VerifyUserRequest):
-    try:
-        auth = await db._verify(**request.model_dump())
-        if auth:
-            return auth
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    except HTTPException as e:
-    # Propagate intended HTTP errors (e.g., 401) without wrapping
-        raise e
-    except Exception as e:
-        logging.exception(f"Error verifying user: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error verifying user: {e}")

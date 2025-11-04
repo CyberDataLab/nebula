@@ -38,6 +38,10 @@ install: install-python		## Install core dependencies
 .PHONY: install-production
 install-production: install	## Install production dependencies
 	@echo "🐳 Updating production docker images..."
+	@echo "🐳 Building nebula-keycloak"
+	@docker build -t nebula-keycloak -f nebula/auth/Dockerfile nebula/auth
+	@echo "🐳 Building nebula-keycloak-db"
+	@docker build -t nebula-keycloak-db -f nebula/auth/db/Dockerfile nebula/auth/db
 	@echo "🐳 Building nebula-waf"
 	@docker build -t nebula-waf -f nebula/addons/waf/Dockerfile-waf --build-arg USER=$(USER) nebula/addons/waf
 	@echo "🐳 Building nebula-loki"
@@ -82,6 +86,20 @@ update-dockers:				## Update docker images
 		docker build -t nebula-pgweb -f nebula/database/pgweb/Dockerfile .; \
 	else \
 		echo "Skipping nebula-database docker build."; \
+	fi
+	@echo ""
+	@echo "🐳 Building nebula-keycloak docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-keycloak -f nebula/auth/Dockerfile nebula/auth; \
+	else \
+		echo "Skipping nebula-keycloak docker build."; \
+	fi
+	@echo ""
+	@echo "🐳 Building nebula-keycloak-db docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-keycloak-db -f nebula/auth/db/Dockerfile nebula/auth/db; \
+	else \
+		echo "Skipping nebula-keycloak-db docker build."; \
 	fi
 	@echo ""
 	@echo "🐳 Building nebula-frontend docker image. Do you want to continue (overrides existing image)? (y/n)"
