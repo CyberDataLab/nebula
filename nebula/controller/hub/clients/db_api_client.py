@@ -67,10 +67,10 @@ class DatabaseAPIClient:
             self._logger.info(exc)
             return None
 
-    async def update_scenario(self, federation_id: str, payload: Dict[str, Any]) -> Any:
-        path = DBReq.factory_requests_path("update", federation_id=federation_id)
+    async def save_scenario(self, federation_id: str, payload: Dict[str, Any]) -> Any:
+        path = DBReq.factory_requests_path("save", federation_id=federation_id)
         url = self._build_url(path)
-        return await self._post(url, payload, DBReq.UpdateScenarioRequest)
+        return await self._post(url, payload, DBReq.SaveScenarioRequest)
 
     async def stop_scenario(self, federation_id: str, payload: Dict[str, Any]) -> Any:
         path = DBReq.factory_requests_path("stop", federation_id=federation_id)

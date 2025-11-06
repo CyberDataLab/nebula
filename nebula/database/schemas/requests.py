@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class Routes:
     # Scenarios
     INIT = "/"
-    UPDATE = "/scenarios/{federation_id}/update"
+    SAVE = "/scenarios/{federation_id}/save"
     STOP = "/scenarios/{federation_id}/stop"
     REMOVE = "/scenarios/{federation_id}/remove"
     FINISH = "/scenarios/{federation_id}/set_status_to_finished"
@@ -26,7 +26,7 @@ class Routes:
     NOTES_REMOVE = "/notes/{federation_id}/remove"
 
 
-class UpdateScenarioRequest(BaseModel):
+class SaveScenarioRequest(BaseModel):
     alias: str
     scenario_name: str
     start_time: str
@@ -63,8 +63,8 @@ class CheckScenarioRequest(BaseModel):
 def factory_requests_path(resource: str, user: str = "", role: str = "", federation_id: str = "") -> str:
     if resource == "init":
         return Routes.INIT
-    elif resource == "update":
-        return Routes.UPDATE.format(federation_id=federation_id)
+    elif resource == "save":
+        return Routes.SAVE.format(federation_id=federation_id)
     elif resource == "stop":
         return Routes.STOP.format(federation_id=federation_id)
     elif resource == "remove":

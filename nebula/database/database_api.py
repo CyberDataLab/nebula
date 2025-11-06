@@ -11,7 +11,7 @@ from fastapi.concurrency import asynccontextmanager
 from nebula.database.database_adapter_factory import factory_database_adapter
 from nebula.database.schemas.requests import (
     Routes,
-    UpdateScenarioRequest,
+    SaveScenarioRequest,
     StopScenarioRequest,
     FinishScenarioRequest,
     UpdateNodesRequest,
@@ -91,23 +91,23 @@ async def read_root():
 
 # Scenarios
 @app.post(
-    Routes.UPDATE,
-    response_model=UpdateScenarioResponse,
+    Routes.SAVE,
+    response_model=SaveScenarioResponse,
     responses=DEFAULT_DB_ERRORS,
     summary="Save a scenario or update an existing one.",
     description=(
         "Save a new federated learning scenario or update the information for an existing one."
     ),
 )
-async def update_scenario(
+async def save_scenario(
     federation_id: str,
-    request: UpdateScenarioRequest,
+    request: SaveScenarioRequest,
 ):
-    success = await db._scenario_update_record(
+    success = await db._save_scenario(
         federation_id = federation_id,
         **request.model_dump()
     )
-    return UpdateScenarioResponse(success=success)
+    return SaveScenarioResponse(success=success)
 
 
 @app.post(
@@ -139,7 +139,7 @@ async def stop_scenario(
 async def remove_scenario(
     federation_id: str
 ):
-    success= await db._remove_scenario_by_federation_id(federation_id)
+    success = await db._remove_scenario_by_federation_id(federation_id)
     return RemoveScenarioResponse(success=success)
 
 

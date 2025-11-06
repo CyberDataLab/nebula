@@ -115,7 +115,7 @@ class HubManager:
             #     scenario_data=scenario_data,
             # )
             # if response:
-            #     await self.database_client.update_scenario(
+            #     await self.database_client.save_scenario(
             #         federation_id,
             #         {
             #             "alias": response["alias"],

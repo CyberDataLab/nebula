@@ -1,12 +1,12 @@
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel
 
-class UpdateScenarioResponse(BaseModel):
+class SaveScenarioResponse(BaseModel):
     success: bool
 
 class StopScenarioResponse(BaseModel):
     success: bool
-    
+
 class RemoveScenarioResponse(BaseModel):
     success: bool
 
@@ -24,22 +24,22 @@ class GetRunningScenarioResponse(BaseModel):
 
 class CheckScenarioResponse(BaseModel):
     allowed: bool
-    
+
 class GetScenarioByID(BaseModel):
     scenario: Optional[Dict[str, Any]]
-    
+
 class ListNodesByIDResponse(BaseModel):
     nodes: List[Dict[str, Any]]
-    
+
 class RemoveNodesByID(BaseModel):
     success: bool
-    
+
 class GetNotesByID(BaseModel):
     notes: Optional[Dict[str, Any]]
-    
+
 class SaveNotesByID(BaseModel):
     success: bool
-    
+
 class RemoveNotesByID(BaseModel):
     success: bool
 

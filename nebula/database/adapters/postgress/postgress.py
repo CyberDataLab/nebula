@@ -281,40 +281,6 @@ class PostgresDB(DatabaseAdapter):
         return f"ORDER BY {sort_by}"
 
 
-    async def _get_all_scenarios(self, username:str, role:str, sort_by:str="start_time"):
-        """
-        Retrieves all scenarios from the database, accessing fields from the 'config' (JSONB) column
-        and direct columns. Filters by user role and sorts by the specified field.
-        """
-        order_by_clause = self._build_order_by_clause(sort_by)
-
-        async with self.pool.acquire() as conn:
-            # Select direct columns and relevant fields from config JSONB
-            command = """
-                SELECT
-                    federation_id,
-                    name,
-                    username,
-                    status,
-                    start_time,
-                    end_time,
-                    config->>'title' AS title,
-                    config->>'model' AS model,
-                    config->>'dataset' AS dataset,
-                    config->>'rounds' AS rounds,
-                    config -- return the full config JSONB
-                FROM scenarios
-            """
-            params = []
-
-            if role != "admin":
-                command += " WHERE username = $1" # username is a direct column now
-                params.append(username)
-
-            full_command = f"{command} {order_by_clause};"
-            return await conn.fetch(full_command, *params)
-
-
     async def _get_all_scenarios_and_check_completed(
         self,
         user: str,
@@ -375,7 +341,7 @@ class PostgresDB(DatabaseAdapter):
         return scenarios_to_return
 
 
-    async def _scenario_update_record(self, federation_id:str, alias:str, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str) -> bool:
+    async def _save_scenario(self, federation_id:str, alias:str, scenario_name:str, start_time:datetime, end_time:datetime, scenario:dict, status:str, username:str) -> bool:
         """
         Inserts or updates a scenario record using the PostgreSQL "UPSERT" pattern.
         All configuration is saved in the 'config' column of type JSONB.
@@ -520,28 +486,43 @@ class PostgresDB(DatabaseAdapter):
             self._log_and_raise_error(db_error)
         return result
 
-    async def _get_completed_scenario(self):
-        """
-        Retrieves a single scenario with a 'completed' status.
-        Returns full scenario record (including direct columns and config JSONB).
-        """
-        async with self.pool.acquire() as conn:
-            command = (
-                "SELECT name, username, status, start_time, end_time, config FROM scenarios WHERE status = $1;"
-            )
-            result_row = await conn.fetchrow(command, "completed")
-            return dict(result_row) if result_row else None
-
-    async def _get_scenarios(self, user: str, role: str) -> Dict[str, Any]:
+    async def _get_scenarios(self, user: str, role: str, sort_by:str="start_time") -> Dict[str, Any]:
         """
         Compose scenarios list and running scenario respecting role.
         """
         self._verify_pool()
 
-        scenarios = await self._get_all_scenarios_and_check_completed(user=user, role=role)
-        scenario_running = await self._get_running_scenario(None if role == "admin" else user)
-        return {"scenarios": scenarios, "scenario_running": scenario_running}
+        order_by_clause = self._build_order_by_clause(sort_by)
 
+        try:
+            async with self.pool.acquire() as conn:
+                # Select direct columns and relevant fields from config JSONB
+                command = """
+                    SELECT
+                        federation_id,
+                        name,
+                        username,
+                        status,
+                        start_time,
+                        end_time,
+                        config->>'title' AS title,
+                        config->>'model' AS model,
+                        config->>'dataset' AS dataset,
+                        config->>'rounds' AS rounds,
+                        config -- return the full config JSONB
+                    FROM scenarios
+                """
+                params = []
+
+                if role != "admin":
+                    command += " WHERE username = $1" # username is a direct column now
+                    params.append(user)
+
+                full_command = f"{command} {order_by_clause};"
+                return await conn.fetch(full_command, *params)
+        except Exception as e:
+            db_error = self._map_pg_exception_to_error(e)
+            self._log_and_raise_error(db_error)
 
     async def _get_scenario_by_federation_id(self, federation_id:str) -> Dict | None:
         """
@@ -581,8 +562,9 @@ class PostgresDB(DatabaseAdapter):
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute("DELETE FROM scenarios WHERE federation_id = $1;", federation_id)
+                nodes_removed = await self._remove_nodes_by_federation_id(federation_id)
             logging.info(f"Scenario '{federation_id}' successfully removed.")
-            return True
+            return True and nodes_removed
         except Exception as e:
             db_error = self._map_pg_exception_to_error(e)
             self._log_and_raise_error(db_error)
