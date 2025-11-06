@@ -30,7 +30,7 @@ class FederationController(ABC):
         pass
     
     abstractmethod
-    async def node_done(self, federation_id: str, idx: int, deployment: str, name: str):
+    async def node_done(self, federation_id: str, idx: int, deployment: str, name: str) -> bool:
         pass
     
     abstractmethod

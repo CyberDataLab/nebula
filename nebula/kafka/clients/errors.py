@@ -45,3 +45,7 @@ class KafkaLoadingConfigurationError(Exception):
 class KafkaConfigurationError(Exception):
     """Raised when an error occurs when configurating initial users."""
     pass
+
+class KafkaMessageHandlerNotDefined(Exception):
+    """Raised when an error occurs when the Message Handler is not defined"""
+    pass

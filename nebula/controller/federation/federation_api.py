@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager
 from typing import Dict
 from nebula.utils import LoggerUtils
+from nebula.controller.federation.federation_broker import FederationBroker
 from nebula.controller.federation.federation_controller import FederationController 
 from nebula.controller.federation.factory_federation_controller import federation_controller_factory
 from nebula.controller.federation.schemas.requests import *
@@ -13,6 +14,7 @@ from nebula.controller.federation.schemas.errors import *
 from nebula.controller.federation.utils.api_utils import raise_error
 
 fed_controllers: Dict[str, FederationController] = {}
+controller_broker: FederationBroker = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,15 +27,12 @@ async def lifespan(app: FastAPI):
     logger = logging.getLogger("Federation-Controller")
     logger.info("Logger initialized for Federation Controller")
 
-    # Create all controller types
     hub_port = os.environ.get("NEBULA_CONTROLLER_PORT")
     controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
     hub_url = f"http://{controller_host}:{hub_port}"
-
-    #["docker", "processes", "physical"]
-    for exp_type in ["docker", "process"]:
-        fed_controllers[exp_type] = federation_controller_factory(exp_type, hub_url, logger)
-        logger.info(f"{exp_type} Federation controller created.")
+    
+    controller_broker = FederationBroker(hub_url=hub_url, logger=logger)
+    await controller_broker.init()
 
     yield
 
@@ -66,15 +65,16 @@ async def read_root():
     ),
 )
 async def run_scenario(run_scenario_request: RunScenarioRequest):
-    global fed_controllers
+    global controller_broker
     experiment_type = run_scenario_request.scenario_data["deployment"]
     logger = logging.getLogger("Federation-Controller")
     logger.info(f"[API]: run experiment request for deployment type: {experiment_type}")
-    controller = fed_controllers.get(experiment_type, None)
-    if controller:
-        return await controller.run_scenario(run_scenario_request.model_dump())
-    else:
-        raise_error(BAD_CONTROLLER)
+    return await controller_broker.run_scenario(experiment_type, run_scenario_request.model_dump())
+    # controller = fed_controllers.get(experiment_type, None)
+    # if controller:
+    #     return await controller.run_scenario(run_scenario_request.model_dump())
+    # else:
+    #     raise_error(BAD_CONTROLLER)
     
 @app.post(
     Routes.STOP,
@@ -92,64 +92,65 @@ async def stop_scenario(
     federation_id: str, 
     stop_scenario_request: StopScenarioRequest
 ):
-    global fed_controllers
-    experiment_type = stop_scenario_request.experiment_type
-    controller = fed_controllers.get(experiment_type, None)
+    global controller_broker
     logger = logging.getLogger("Federation-Controller")
     logger.info(f"[API]: stop experiment request for federation ID: {federation_id}")
-    if controller:
-        return await controller.stop_scenario(federation_id)
-    else:
-        raise_error(BAD_CONTROLLER)
+    experiment_type = stop_scenario_request.experiment_type
+    return await controller_broker.stop_scenario(experiment_type, federation_id)
+    # controller = fed_controllers.get(experiment_type, None)
+    # if controller:
+    #     return await controller.stop_scenario(federation_id)
+    # else:
+    #     raise_error(BAD_CONTROLLER)
 
-@app.post(
-    Routes.UPDATE,
-    response_model=NodeUpdateResponse,
-    responses={                                   
-        400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
-        404: {"model": ErrorResponse, "description": "Scenario ID not found"},
-        500: {"model": ErrorResponse, "description": "Error while stopping scenario"},
-    },
-    summary="Node update information",
-    description=(
-        "Nodes notify their updates to the controller"
-    ),
-)
-async def update_nodes(
-    federation_id: str,
-    node_update_request: NodeUpdateRequest,
-):
-    global fed_controllers
-    experiment_type = node_update_request.config["scenario_args"]["deployment"]
-    controller = fed_controllers.get(experiment_type, None)
-    if controller:
-        return await controller.update_nodes(federation_id, **node_update_request.model_dump())
-    else:
-        raise_error(BAD_CONTROLLER)
+# @app.post(
+#     Routes.UPDATE,
+#     response_model=NodeUpdateResponse,
+#     responses={                                   
+#         400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
+#         404: {"model": ErrorResponse, "description": "Scenario ID not found"},
+#         500: {"model": ErrorResponse, "description": "Error while stopping scenario"},
+#     },
+#     summary="Node update information",
+#     description=(
+#         "Nodes notify their updates to the controller"
+#     ),
+# )
+# async def update_nodes(
+#     federation_id: str,
+#     node_update_request: NodeUpdateRequest,
+# ):
+#     global fed_controllers
+#     experiment_type = node_update_request.config["scenario_args"]["deployment"]
+#     controller = fed_controllers.get(experiment_type, None)
+#     if controller:
+#         return await controller.update_nodes(federation_id, **node_update_request.model_dump())
+#     else:
+#         raise_error(BAD_CONTROLLER)
 
-@app.post(
-    Routes.DONE,
-    response_model=NodeDoneResponse,
-    responses={                                   
-        400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
-        404: {"model": ErrorResponse, "description": "Scenario ID not found"},
-    },
-    summary="Node done notification",
-    description=(
-        "Nodes notify when they have finished their process"
-    ),
-)
-async def node_done(
-    federation_id: str,
-    node_done_request: NodeDoneRequest,
-):
-    global fed_controllers
-    experiment_type = node_done_request.deployment
-    controller = fed_controllers.get(experiment_type, None)
-    if controller:
-        return await controller.node_done(federation_id, **node_done_request.model_dump())
-    else:
-        raise_error(BAD_CONTROLLER)
+# @app.post(
+#     Routes.DONE,
+#     response_model=NodeDoneResponse,
+#     responses={                                   
+#         400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
+#         404: {"model": ErrorResponse, "description": "Scenario ID not found"},
+#     },
+#     summary="Node done notification",
+#     description=(
+#         "Nodes notify when they have finished their process"
+#     ),
+# )
+# async def node_done(
+#     federation_id: str,
+#     node_done_request: NodeDoneRequest,
+# ):
+#     global fed_controllers
+#     experiment_type = node_done_request.deployment
+#     controller = fed_controllers.get(experiment_type, None)
+#     if controller:
+#         return await controller.node_done(federation_id, **node_done_request.model_dump())
+#     else:
+#         raise_error(BAD_CONTROLLER)
     
 @app.post(
     Routes.REMOVE,
@@ -168,13 +169,14 @@ async def scenario_remove(
     federation_id: str,
     remove_scenario_request: RemoveScenarioRequest,
 ):
-    global fed_controllers
+    global controller_broker
     experiment_type = remove_scenario_request.experiment_type
-    controller = fed_controllers.get(experiment_type, None)
-    if controller:
-        return await controller.remove_scenario(federation_id, **remove_scenario_request.model_dump())
-    else:
-        raise_error(BAD_CONTROLLER)
+    return await controller_broker.remove_scenario(experiment_type, federation_id, **remove_scenario_request.model_dump())
+    # controller = fed_controllers.get(experiment_type, None)
+    # if controller:
+    #     return await controller.remove_scenario(federation_id, **remove_scenario_request.model_dump())
+    # else:
+    #     raise_error(BAD_CONTROLLER)
 
 if __name__ == "__main__":
     # Parse args from command line

@@ -198,14 +198,11 @@ class DockerFederationController(FederationController):
                                     nebula_federation.last_index_deployed += 1
                                     #additionals.remove(index)
                                     adds_deployed.add(index)
-            payload = NodeUpdateRequest(config=Config).model_dump()
-            asyncio.create_task(self._send_to_hub("nodes_update", payload, federation_id=fed_id))
-            return NodeUpdateResponse(federation_id=federation_id)
         except Exception as e:
             self.logger.info(f"ERROR: federation ID: ({fed_id}), {e}")
             raise_error(NODE_UPDATE_FAILED)
 
-    async def node_done(self, federation_id: str, idx: int, deployment: str, name: str):
+    async def node_done(self, federation_id: str, idx: int, deployment: str, name: str) -> bool:
         nebula_federation = await self._get_nebula_federation(federation_id)
         if not nebula_federation:
             raise_error(FEDERATION_NOT_FOUND)
@@ -213,13 +210,10 @@ class DockerFederationController(FederationController):
         self.logger.info(f"Node-Done received from node on federation ID: ({federation_id})")
 
         if await nebula_federation.is_experiment_finish():
-            self.logger.info(f"All nodes have finished on federation ID: ({federation_id}), reporting to hub..")
-            await self._remove_nebula_federation_from_pool(federation_id)
-            asyncio.create_task(self._send_to_hub("finish", payload={}, federation_id=federation_id))
-
-        payload = NodeDoneRequest(idx=idx).model_dump()
-        asyncio.create_task(self._send_to_hub("nodes_done", payload, federation_id=federation_id))
-        return NodeDoneResponse(federation_id=federation_id, idx=idx)
+            self.logger.info(f"All nodes have finished on federation ID: ({federation_id})")
+            return True
+        
+        return False
 
     async def remove_scenario(self, federation_id: str, experiment_type: str, user: str, scenario_name: str):
         if(await self._check_active_federation(federation_id)):

@@ -2,17 +2,18 @@ from typing import Awaitable, Callable
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from aiokafka.errors import KafkaConnectionError, KafkaTimeoutError, KafkaError as AioKafkaError
 from kafka.errors import KafkaError
+from nebula.kafka.clients.messages.message_handler import KafkaMessageHandler
 from nebula.kafka.clients.messages.system import SystemMessages
 from nebula.kafka.clients.messages.kafka_message import KafkaMessage
 from nebula.kafka.clients.messages.utils.utils import factory_kafka_message, parse_kafka_message
 from nebula.kafka.clients.messages.system import NEBULA_SYSTEM_TOPIC
-from nebula.kafka.clients.errors import KafkaInitializationError, KafkaTopicSubscriptionError, KafkaConsumerLoopError, KafkaProducerError
+from nebula.kafka.clients.errors import KafkaInitializationError, KafkaTopicSubscriptionError, KafkaConsumerLoopError, KafkaProducerError, KafkaMessageHandlerNotDefined
 from nebula.core.utils.locker import Locker
 import logging
 import asyncio
     
 class NebulaKafkaAgent:
-    def __init__(self, broker: str, user: str, password: str, client_id: str, logger: logging.Logger):
+    def __init__(self, broker: str, user: str, password: str, client_id: str, logger: logging.Logger, handler: KafkaMessageHandler = None):
         self._broker = broker
         self._username = user
         self._password = password
@@ -28,9 +29,8 @@ class NebulaKafkaAgent:
         )
         self._consumer = None
         self._consumer_stop = asyncio.Event()
-        self._listeners: list[Callable[[KafkaMessage], Awaitable[None]]] = []
-        self._listeners_lock = Locker("listeners_lock", async_lock=True)
         self._consumer_loop_task = None
+        self._handler = handler
          
     @property
     def log(self):
@@ -113,18 +113,10 @@ class NebulaKafkaAgent:
         except AioKafkaError as e:
             self.log.error(f"[ERROR]: {e}")
             raise KafkaTopicSubscriptionError(f"[ERROR]: {e}")
-            
-    async def register_listener(self, callback: Callable[[KafkaMessage], Awaitable[None]]):
-        async with self._listeners_lock:
-            self._listeners.append(callback)
-            
-    async def _handle_message(self, message: KafkaMessage):
-        for listener in self._listeners:
-            try:
-                await listener(message)
-            except Exception as e:
-                self.log.exception(f"Error in listener: {e}")        
-            
+       
+    async def set_handler(self, handler: KafkaMessageHandler):
+        self._handler = handler      
+                      
     async def _consume_loop(self):
         # queue + workers if high concurrency
         await asyncio.sleep(1)  
@@ -141,7 +133,10 @@ class NebulaKafkaAgent:
                         continue
 
                     # Trigger event
-                    asyncio.create_task(self._handle_message(kafka_message))
+                    if not self._handler:
+                        raise KafkaMessageHandlerNotDefined("[ERROR]: Kafka Message Handler is not defined")
+                    
+                    asyncio.create_task(self._handler.handle(kafka_message))
 
                 except Exception as e:
                     self.log.exception(f"Error processing message from topic {msg.topic}: {e}")

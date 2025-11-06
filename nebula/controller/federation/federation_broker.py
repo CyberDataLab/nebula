@@ -6,14 +6,14 @@ from nebula.controller.federation.factory_federation_controller import federatio
 from nebula.controller.federation.schemas.errors import BAD_CONTROLLER
 from nebula.controller.federation.utils.api_utils import raise_error
 from nebula.kafka.clients.agent_client import NebulaKafkaAgent
-from nebula.kafka.clients.messages.kafka_message import KafkaMessage
+from nebula.kafka.clients.messages.message_handler import KafkaMessageHandler, generate_handler
 from nebula.kafka.clients.messages.experiment import (
     ExperimentINITMessage,
     UpdateMessage,
     DoneMessage,
 )
 from nebula.kafka.clients.messages.system import (
-    AgentReadyMessage,
+    SystemMessages,
 )
 
 class FederationBroker():
@@ -26,6 +26,10 @@ class FederationBroker():
     @property
     def log(self):
         return self._logger
+    
+    async def init(self, broker: str, user: str, password: str):
+        self._initialize_federation_controllers()
+        await self._initialize_kafka_service(broker, user, password)
     
     def _initialize_federation_controllers(self):
         for exp_type in EXPERIMENT_TYPES:
@@ -61,45 +65,42 @@ class FederationBroker():
                                                     ###############################
     """
     
-    async def initialize_control_system(self, broker: str, user: str, password: str):
+    async def _initialize_kafka_service(self, broker: str, user: str, password: str):
+        callbacks = [
+            (UpdateMessage, self._handle_update_message),
+            (DoneMessage, self._handle_node_done_message)
+        ]
+        message_handler = generate_handler(callbacks)
+        
         self._kafka_client = NebulaKafkaAgent(
             broker=broker, 
             user=user, 
             password=password,
             client_id="N-Controller",
-            logger=self._logger
+            logger=self._logger,
+            handler=message_handler,
         )
-        await self._kafka_client.init()
-        await self._kafka_client.register_listener(self._handle_kafka_messages)
         
-    async def _handle_kafka_messages(self, message: KafkaMessage):
+        await self._kafka_client.init()
+        
+    async def _handle_update_message(self, message: UpdateMessage):
+        self.log.info(f"Update received for experiment {message.experiment_id}")
+        controller = self._get_controller(message.experiment_type)
         try:
-
-            # Experiment Messages
-            if isinstance(message, UpdateMessage):
-                self.log.info(f"Update received for experiment {message.experiment_id}")
-                controller = self._get_controller(message.experiment_type)
-                try:
-                    await controller.update_nodes(message.experiment_id, message.config)
-                except Exception as e:
-                    self.log.error(f"[ERROR]: {e}")
-
-            elif isinstance(message, DoneMessage):
-                self.log.info(f"Done received for experiment {message.idx}")
-                controller = self._get_controller(message.experiment_type)
-                try:
-                    await controller.node_done(message.experiment_id, message.idx, "", "")
-                except Exception as e:
-                    self.log.error(f"[ERROR]: {e}")
-
-             # System Messages
-            elif isinstance(message, AgentReadyMessage):
-                self.log.info(f"Agent ready received: {message.agent}")
-                pass
-            else:
-                self.log.warning(f"⚠️ Unhandled Kafka message type: {type(message).__name__}")
-
+            await controller.update_nodes(message.experiment_id, message.config)
         except Exception as e:
-            self.log.exception(f"❌ Error handling Kafka message {type(message).__name__}: {e}")
+            self.log.error(f"[ERROR]: {e}")
+            
+    async def _handle_node_done_message(self, message: DoneMessage):
+        self.log.info(f"Done received for experiment {message.idx}")
+        controller = self._get_controller(message.experiment_type)
+        try:
+            experiment_finish = await controller.node_done(message.experiment_id, message.idx, "", "")
+            if experiment_finish:
+                await self._kafka_client.produce(SystemMessages.EXPERIMENT_FINISH, data=message.experiment_id)
+        except Exception as e:
+            self.log.error(f"[ERROR]: {e}")
+        
+
         
        
