@@ -16,6 +16,8 @@ from nebula.utils import TermEscapeCodeFormatter
 
 
 hub_manager = HubManager()
+logger = logging.getLogger("Hub-API")
+logger.setLevel(logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,6 +33,24 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app outside the Controller class
 app = FastAPI(lifespan=lifespan)
+
+@app.middleware("http")
+async def log_request_headers(request: Request, call_next):
+    """
+    Log every incoming HTTP request, including headers, so operators can
+    inspect the authentication tokens being sent to the hub API.
+    """
+    client = f"{request.client.host}:{request.client.port}" if request.client else "unknown"
+    headers_snapshot = {key: value for key, value in request.headers.items()}
+    logger.info(
+        "Incoming request %s %s from %s headers=%s",
+        request.method,
+        request.url.path,
+        client,
+        headers_snapshot,
+    )
+    response = await call_next(request)
+    return response
 
 
 @app.post(hub_requests.Routes.LOGIN)
