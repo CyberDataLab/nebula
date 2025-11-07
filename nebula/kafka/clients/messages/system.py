@@ -7,7 +7,7 @@ NEBULA_SYSTEM_TOPIC = "nebula-system-control"
 
 class SystemMessages(Enum):
     AGENT_READY = 1
-    EXPERIMENT_FINISH = 2
+    EXPERIMENT_COMPLETED = 2
     
 class AgentReadyMessage(KafkaMessage):
     kafka_message: str = SystemMessages.AGENT_READY.name
@@ -28,8 +28,8 @@ class AgentReadyMessage(KafkaMessage):
         data = json.loads(raw_bytes.decode())
         return cls(data=data["data"])   
     
-class FinishExperimentMessage(KafkaMessage):
-    kafka_message: str = SystemMessages.EXPERIMENT_FINISH.name
+class CompletedExperimentMessage(KafkaMessage):
+    kafka_message: str = SystemMessages.EXPERIMENT_COMPLETED.name
     
     def __init__(self, data: str):
         self.experiment = data
@@ -49,5 +49,5 @@ class FinishExperimentMessage(KafkaMessage):
     
 MESSAGE_CLASSES_SYSTEM: Dict[SystemMessages, Type[KafkaMessage]] = {
     SystemMessages.AGENT_READY: AgentReadyMessage,
-    SystemMessages.EXPERIMENT_FINISH: FinishExperimentMessage,
+    SystemMessages.EXPERIMENT_COMPLETED: CompletedExperimentMessage,
 }

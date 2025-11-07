@@ -36,23 +36,24 @@ class NebulaKafkaAgent:
     def log(self):
         return self._logger
      
-    async def init(self, subscribe_all=True, max_retries=3, retry_delay=2):
+    async def init(self, producer=True, subscribe_all=True, max_retries=3, retry_delay=2):
         try:
-            for attempt in range(1, max_retries + 1):
-                try:
-                    self.log.info(f"[Kafka] Starting producer (attempt {attempt}/{max_retries})")
-                    await self._producer.start()
-                    break
-                except (KafkaTimeoutError, KafkaConnectionError) as e:
-                    self.log.warning(f"[Kafka] Producer connection issue: {e}")
-                except KafkaError as e:
-                    self.log.error(f"[Kafka] KafkaError starting producer: {e}")
-                except Exception as e:
-                    self.log.exception(f"[Kafka] Unexpected error starting producer: {e}")
-                if attempt < max_retries:
-                    await asyncio.sleep(retry_delay)
-                else:
-                    raise KafkaInitializationError("Failed to start Kafka producer after multiple attempts on NebulaKafkaAgent.")
+            if producer:
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        self.log.info(f"[Kafka] Starting producer (attempt {attempt}/{max_retries})")
+                        await self._producer.start()
+                        break
+                    except (KafkaTimeoutError, KafkaConnectionError) as e:
+                        self.log.warning(f"[Kafka] Producer connection issue: {e}")
+                    except KafkaError as e:
+                        self.log.error(f"[Kafka] KafkaError starting producer: {e}")
+                    except Exception as e:
+                        self.log.exception(f"[Kafka] Unexpected error starting producer: {e}")
+                    if attempt < max_retries:
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        raise KafkaInitializationError("Failed to start Kafka producer after multiple attempts on NebulaKafkaAgent.")
 
             self._consumer = AIOKafkaConsumer(
                 bootstrap_servers=self._broker,

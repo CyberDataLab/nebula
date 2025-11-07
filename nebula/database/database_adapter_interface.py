@@ -103,3 +103,7 @@ class DatabaseAdapter(ABC):
     async def _finish_scenario(self, federation_id, all: bool = False) -> bool:
         """Sets status to finished for one scenario (by federation_id) or all running scenarios."""
         raise NotImplementedError
+    
+    @abstractmethod
+    async def _scenario_set_status_to_completed(self, federation_id: str): 
+        raise NotImplementedError

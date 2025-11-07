@@ -7,13 +7,10 @@ from typing import Dict
 from nebula.utils import LoggerUtils
 from nebula.controller.federation.federation_broker import FederationBroker
 from nebula.controller.federation.federation_controller import FederationController 
-from nebula.controller.federation.factory_federation_controller import federation_controller_factory
 from nebula.controller.federation.schemas.requests import *
 from nebula.controller.federation.schemas.responses import *
 from nebula.controller.federation.schemas.errors import *
-from nebula.controller.federation.utils.api_utils import raise_error
 
-fed_controllers: Dict[str, FederationController] = {}
 controller_broker: FederationBroker = None
 
 @asynccontextmanager
@@ -171,7 +168,7 @@ async def scenario_remove(
 ):
     global controller_broker
     experiment_type = remove_scenario_request.experiment_type
-    return await controller_broker.remove_scenario(experiment_type, federation_id, **remove_scenario_request.model_dump())
+    return await controller_broker.remove_scenario(federation_id, **remove_scenario_request.model_dump())
     # controller = fed_controllers.get(experiment_type, None)
     # if controller:
     #     return await controller.remove_scenario(federation_id, **remove_scenario_request.model_dump())

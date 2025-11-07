@@ -22,9 +22,9 @@ from nebula.database.schemas.requests import (
 )
 
 from nebula.database.schemas.responses import *
+from nebula.database.database_broker import DatabaseBroker
 
-# Get a database instance
-db = factory_database_adapter("PostgresDB")
+database_broker: DatabaseBroker = None
 
 DEFAULT_DB_ERRORS = {
     403: {"model": ErrorResponse, "description": "Database permission denied."},
@@ -72,13 +72,13 @@ async def lifespan(app: FastAPI):
     db_log = os.environ.get("NEBULA_DATABASE_LOG", "database.log")
     configure_logger(db_log)
 
-    # Initialize the database connection pool
-    await db._init_db_pool()
+    database_broker = DatabaseBroker(database_adapter="PostgresDB", broker="", user="", password="", logger=db_log)
+    await database_broker.init()
 
     yield
 
     # Code to run on shutdown
-    await db._close_db_pool()
+    await database_broker.shutdown()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -103,7 +103,7 @@ async def save_scenario(
     federation_id: str,
     request: SaveScenarioRequest,
 ):
-    success = await db._save_scenario(
+    success = await database_broker.save_scenario(
         federation_id = federation_id,
         **request.model_dump()
     )
@@ -123,7 +123,7 @@ async def stop_scenario(
     federation_id: str,
     request: StopScenarioRequest,
 ):
-    success = await db._finish_scenario(federation_id, request.all)
+    success = await database_broker.stop_scenario(federation_id, **request.model_dump())
     return StopScenarioResponse(success=success)
 
 
@@ -139,7 +139,7 @@ async def stop_scenario(
 async def remove_scenario(
     federation_id: str
 ):
-    success = await db._remove_scenario_by_federation_id(federation_id)
+    success = await database_broker.remove_scenario(federation_id)
     return RemoveScenarioResponse(success=success)
 
 
@@ -155,7 +155,7 @@ async def remove_scenario(
 async def get_scenarios(
     request: GetScenariosRequest = Depends()
 ):
-    scenarios_dict =  await db._get_scenarios(request.user, request.role)
+    scenarios_dict = await database_broker.get_scenarios(**request.model_dump())
     return GetScenariosResponse(scenarios=scenarios_dict)
 
 
@@ -172,7 +172,7 @@ async def set_scenario_status_to_finished(
     federation_id: str,
     request: FinishScenarioRequest,
 ):
-    success = await db._finish_scenario(federation_id, request.all)
+    success = await database_broker.set_scenario_status_to_finished(federation_id, **request.model_dump())
     return FinishScenarioResponse(success=success)
 
 
@@ -186,7 +186,7 @@ async def set_scenario_status_to_finished(
     ),
 )
 async def get_running_scenario(request: GetRunningScenarioRequest = Depends()):
-    scenarios = await db._get_running_scenario(get_all=request.get_all)
+    scenarios = await database_broker.get_running_scenario(**request.model_dump())
     return GetRunningScenarioResponse(scenarios=scenarios)
 
 
@@ -202,7 +202,7 @@ async def get_running_scenario(request: GetRunningScenarioRequest = Depends()):
 async def check_scenario(
     request: CheckScenarioRequest = Depends()
 ):
-    allowed = await db._check_scenario_with_role(**request.model_dump())
+    allowed = await database_broker.check_scenario(**request.model_dump())
     return CheckScenarioRequest(allowed=allowed)
 
 
@@ -218,7 +218,7 @@ async def check_scenario(
 async def get_scenario_by_name(
     federation_id: str
 ):
-    scenario = await db._get_scenario_by_federation_id(federation_id)
+    scenario = await database_broker.get_scenario_by_name(federation_id)
     return GetScenarioByID(scenario=scenario)
 
 
@@ -235,41 +235,8 @@ async def get_scenario_by_name(
 async def list_nodes_by_federation_id(
     federation_id: str
 ):
-    nodes = await db._list_nodes_by_federation_id(federation_id)
+    nodes = await database_broker.list_nodes_by_federation_id(federation_id)
     return ListNodesByIDResponse(nodes=nodes)
-
-
-@app.post(
-    Routes.NODES_UPDATE,
-    response_model=UpdateNodesResponse,
-    responses=DEFAULT_DB_ERRORS,
-    summary="Save scenario information.",
-    description=(
-        "Inserts or updates a node record in the database for a given scenario, ensuring thread-safe access."
-    ),
-)
-async def update_node_record(request: UpdateNodesRequest):
-    # Build extras from mobility_args
-    extras = {
-        "latitude": request.mobility_args.latitude,
-        "longitude": request.mobility_args.longitude,
-    }
-    sucesss = await db._update_node_record(
-        str(request.device_args.uid),
-        str(request.device_args.idx),
-        str(request.network_args.ip),
-        str(request.network_args.port),
-        str(request.device_args.role),
-        request.network_args.neighbors,
-        extras,
-        str(request.timestamp),
-        str(request.scenario_args.federation),
-        str(request.federation_args.round),
-        str(request.scenario_args.federation_id),
-        bool(request.device_args.malicious),
-    )
-    return UpdateNodesResponse(updated=sucesss)
-
 
 @app.post(
     Routes.NODES_REMOVE,
@@ -281,7 +248,7 @@ async def update_node_record(request: UpdateNodesRequest):
     ),
 )
 async def remove_nodes_by_federation_id(federation_id: str):
-    success = await db._remove_nodes_by_federation_id(federation_id)
+    success = await database_broker.remove_nodes_by_federation_id(federation_id)
     return RemoveNodesByID(success=success)
 
 
@@ -298,7 +265,7 @@ async def remove_nodes_by_federation_id(federation_id: str):
 async def get_notes_by_federation_id(
     federation_id: str
 ):
-    notes_record = await db._get_notes(federation_id)
+    notes_record = await database_broker.get_notes_by_federation_id(federation_id)
     return GetNotesByID(notes=notes_record)
 
 
@@ -312,7 +279,7 @@ async def get_notes_by_federation_id(
     ),
 )
 async def update_notes_by_scenario_name(federation_id: str, request: UpdateNotesRequest):
-    success = await db._save_notes(federation_id ,**request.model_dump())
+    success = await database_broker.update_notes_by_scenario_name(federation_id ,**request.model_dump())
     return SaveNotesByID(success=success)
 
 
@@ -326,5 +293,5 @@ async def update_notes_by_scenario_name(federation_id: str, request: UpdateNotes
     ),
 )
 async def remove_notes_by_federation_id(federation_id: str):
-    success = await db._remove_note(federation_id)
+    success = await database_broker.remove_nodes_by_federation_id(federation_id)
     return RemoveNotesByID(success=success)

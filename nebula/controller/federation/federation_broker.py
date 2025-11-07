@@ -30,6 +30,9 @@ class FederationBroker():
     async def init(self, broker: str, user: str, password: str):
         self._initialize_federation_controllers()
         await self._initialize_kafka_service(broker, user, password)
+
+    async def shutdown(self):
+        await self._kafka_client.shutdown()
     
     def _initialize_federation_controllers(self):
         for exp_type in EXPERIMENT_TYPES:
@@ -56,7 +59,7 @@ class FederationBroker():
         controller = self._get_controller(experiment_type)
         return await controller.stop_scenario(federation_id)
 
-    async def remove_scenario(self, experiment_type: str, federation_id: str, user: str, scenario_name: str):
+    async def remove_scenario(self, federation_id: str, experiment_type: str, user: str, scenario_name: str):
         controller = self._get_controller(experiment_type)
         return await controller.remove_scenario(federation_id, experiment_type, user, scenario_name)
     
@@ -70,7 +73,7 @@ class FederationBroker():
             (UpdateMessage, self._handle_update_message),
             (DoneMessage, self._handle_node_done_message)
         ]
-        message_handler = generate_handler(callbacks)
+        message_handler = generate_handler(self._logger, callbacks)
         
         self._kafka_client = NebulaKafkaAgent(
             broker=broker, 
@@ -97,7 +100,7 @@ class FederationBroker():
         try:
             experiment_finish = await controller.node_done(message.experiment_id, message.idx, "", "")
             if experiment_finish:
-                await self._kafka_client.produce(SystemMessages.EXPERIMENT_FINISH, data=message.experiment_id)
+                await self._kafka_client.produce(SystemMessages.EXPERIMENT_COMPLETED, data=message.experiment_id)
         except Exception as e:
             self.log.error(f"[ERROR]: {e}")
         
