@@ -5,7 +5,7 @@
 
 users:
   N-DB:
-    password: "c2VjdXJlX2RiX3Bhc3N3ZA=="         
+    password: ${KAFKA_DB_PASSWORD}
     topics:
       - name: "nebula-system-control"
         operations: ["all"]
@@ -13,7 +13,7 @@ users:
         operations: ["read"]
 
   N-RTT:
-    password: "c2VjdXJlX3J0dF9wYXNzd2Q="          
+    password: ${KAFKA_RTT_PASSWORD}
     topics:
       - name: "nebula-system-control"
         operations: ["all"]
@@ -21,7 +21,7 @@ users:
         operations: ["read"]
 
   N-Controller:
-    password: "c2VjdXJlX2N0cmxfdXNlcg=="          
+    password: ${KAFKA_CONTROLLER_PASSWORD}
     topics:
       - name: "nebula-system-control"
         operations: ["all"]

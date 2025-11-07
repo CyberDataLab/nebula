@@ -3,9 +3,6 @@ set -e
 
 echo "🧠 Starting Nebula Kafka broker..."
 
-KAFKA_SUPER_USER_NAME=${KAFKA_SUPER_USER_NAME:-hub_admin}
-KAFKA_SUPER_USER_PASS=${KAFKA_SUPER_USER_PASS:-hub_admin_password}
-
 # === server.properties ===
 cat > /home/kafka/server.properties <<EOF
 ############################
@@ -19,14 +16,14 @@ controller.listener.names=CONTROLLER
 ############################
 # Listeners
 ############################
-listeners=PLAINTEXT://:9092,SASL_PLAINTEXT://:9094,CONTROLLER://:9093
-listener.security.protocol.map=PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT
-advertised.listeners=PLAINTEXT://dev_dev_alejandro_nebula-kafka:9092,SASL_PLAINTEXT://dev_dev_alejandro_nebula-kafka:9094
+listeners=${KAFKA_LISTENERS}
+listener.security.protocol.map=${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP}
+advertised.listeners=${KAFKA_ADVERTISED_LISTENERS}
 
 ############################
 # Security and ACLs
 ############################
-security.inter.broker.protocol=PLAINTEXT
+security.inter.broker.protocol=${KAFKA_INTER_BROKER_LISTENER_NAME}
 
 # SASL/SCRAM
 sasl.enabled.mechanisms=SCRAM-SHA-256
@@ -36,7 +33,7 @@ listener.name.sasl_plaintext.scram-sha-256.sasl.jaas.config=org.apache.kafka.com
 authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
 
 # 👇 ESTA ES LA CLAVE: permitir al broker anónimo registrarse
-super.users=User:hub_admin;User:ANONYMOUS
+super.users=User:${KAFKA_SUPER_USER_NAME};User:ANONYMOUS
 
 ############################
 # Topics and Logs
@@ -56,7 +53,7 @@ EOF
 cat > /home/kafka/kafka_server_jaas.conf <<EOF
 KafkaServer {
     org.apache.kafka.common.security.scram.ScramLoginModule required
-    user_hub_admin="hub_admin_password"
+    user_${KAFKA_SUPER_USER_NAME}=${KAFKA_SUPER_USER_PASS}
 };
 EOF
 
@@ -64,8 +61,8 @@ EOF
 cat > /home/kafka/kafka_client_jaas.conf <<EOF
 KafkaClient {
     org.apache.kafka.common.security.scram.ScramLoginModule required
-    username="hub_admin"
-    password="hub_admin_password";
+    username=${KAFKA_SUPER_USER_NAME}
+    password=${KAFKA_SUPER_USER_PASS};
 };
 EOF
 

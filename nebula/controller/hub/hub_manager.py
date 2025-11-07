@@ -95,7 +95,7 @@ class HubManager:
         scenario_payload = dict(scenario_data)
 
         try:
-            hkc = NebulaKafkaAdmin(user="hub_admin", password="hub_admin_password", broker="dev_dev_alejandro_nebula-kafka:9094", client_id="hub", logger=self.logger)
+            hkc = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=self.logger)
             await hkc.init()
 
             # # Generate IDs for all scenarios

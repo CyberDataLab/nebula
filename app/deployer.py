@@ -125,6 +125,11 @@ class CredentialManager:
         self.ensure_value("NEBULA_KEYCLOAK_REALM", KEYCLOAK_DEFAULT_REALM)
         self.ensure_value("NEBULA_KEYCLOAK_AUDIENCE", KEYCLOAK_API_AUDIENCE)
         self.ensure_value("NEBULA_KEYCLOAK_AUDIENCE_SCOPE", KEYCLOAK_AUDIENCE_SCOPE)
+        self.ensure_value("KAFKA_SUPER_USER_NAME", os.environ.get("KAFKA_SUPER_USER_NAME", "hub_admin"))
+        self.check_credential("KAFKA_SUPER_USER_PASS")
+        self.check_credential("KAFKA_DB_PASSWORD")
+        self.check_credential("KAFKA_RTT_PASSWORD")
+        self.check_credential("KAFKA_CONTROLLER_PASSWORD")
 
 
 class NebulaEventHandler(PatternMatchingEventHandler):
@@ -687,6 +692,7 @@ class Deployer:
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
+        self.kafka_host = self.get_container_name("nebula-kafka")
         self.kafka_port = int(args.kafkaport) if hasattr(args, "kafkaport") else 9097
         self.kafbat_port = int(args.kafbatport) if hasattr(args, "kafbatport") else 8081
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
@@ -912,15 +918,16 @@ class Deployer:
         self.run_database()
         logging.info(f"NEBULA Databases docker is running")
         self.run_keycloak()
+        logging.info(f"NEBULA keycloak docker is running")
+        self.run_kafka()
+        logging.info(f"NEBULA Kafka service is running")
+        self.run_kafbat()
+        logging.info(f"Nebula Kafbat service is running")
         logging.info(f"Keycloak IdP is running at http://localhost:{self.keycloak_port}")
         self.run_controller()
         logging.info("NEBULA Controller is running")
         self.run_frontend()
         logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
-        self.run_kafka()
-        logging.info(f"NEBULA Kafka service is running")
-        self.run_kafbat()
-        logging.info(f"Nebula Kafbat service is running")
         if self.production and self.prefix == "production":
             logging.info("Deploying NEBULA WAF in production mode")
             self.run_waf()
@@ -1105,6 +1112,9 @@ class Deployer:
             "DB_PORT": 5432,
             "DB_USER": "nebula",
             "DB_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+            "KAFKA_BROKER": f"{self.kafka_host}:9094",
+            "KAFKA_USER_NAME": "N-DB",
+            "KAFKA_USER_PASS": os.environ.get("KAFKA_DB_PASSWORD")
         }
         host_sql_path = os.path.join(self.root_path, "nebula/database/adapters/postgress/docker/init-configs.sql")
         db_data_path = os.path.join(self.databases_dir, "postgres-data")
@@ -1308,6 +1318,9 @@ class Deployer:
             "NEBULA_KEYCLOAK_AUDIENCE": self.keycloak_audience,
             "NEBULA_KEYCLOAK_SCOPE": self.keycloak_scope,
             "NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS": os.environ.get("NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS", "300"),
+            "KAFKA_BROKER": f"{self.kafka_host}:9094",
+            "KAFKA_USER_NAME": "N_CONTROLLER",
+            "KAFKA_USER_PASS": os.environ.get("KAFKA_CONTROLLER_PASSWORD")
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]
@@ -1554,7 +1567,7 @@ class Deployer:
             "KAFKA_LOG_DIR": "/home/kafka/kafka-data",
             "KAFKA_BROKER_ID": "1",
             "KAFKA_LISTENERS": "PLAINTEXT://:9092,CONTROLLER://:9093,SASL_PLAINTEXT://:9094",
-            "KAFKA_ADVERTISED_LISTENERS":"PLAINTEXT://dev_dev_alejandro_nebula-kafka:9092,SASL_PLAINTEXT://dev_dev_alejandro_nebula-kafka:9094",
+            "KAFKA_ADVERTISED_LISTENERS":f"PLAINTEXT://{self.kafka_host}:9092,SASL_PLAINTEXT://{self.kafka_host}:9094",
             "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT",
             "KAFKA_INTER_BROKER_LISTENER_NAME": "PLAINTEXT",
             "KAFKA_CONTROLLER_QUORUM_VOTERS": "1@localhost:9093",
@@ -1562,8 +1575,12 @@ class Deployer:
             "KAFKA_SUPER_USERS": "User:hub_admin,User:controller",
             "ALLOW_PLAINTEXT_LISTENER": "yes",
             "KAFKA_OPTS": "-Djava.security.auth.login.config=/home/kafka/kafka_server_jaas.conf",
-            "KAFKA_SUPER_USER_NAME": "hub_admin",
-            "KAFKA_SUPER_USER_PASS": "hub_admin_password"
+            "KAFKA_HOST": f"{self.kafka_host}:9092",
+            "KAFKA_SUPER_USER_NAME": os.environ.get("KAFKA_SUPER_USER_NAME"),
+            "KAFKA_SUPER_USER_PASS": os.environ.get("KAFKA_SUPER_USER_PASS"),
+            "KAFKA_DB_PASSWORD": os.environ.get("KAFKA_DB_PASSWORD"),
+            "KAFKA_RTT_PASSWORD": os.environ.get("KAFKA_RTT_PASSWORD"),
+            "KAFKA_CONTROLLER_PASSWORD": os.environ.get("KAFKA_CONTROLLER_PASSWORD"),
         }
 
         # Persistence
@@ -1584,18 +1601,16 @@ class Deployer:
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.151")
         })
 
-        kafka_container_name = self.get_container_name("nebula-kafka")
-
         # Creation and deployment
         try:
-            existing = client.containers.get(kafka_container_name)
-            logging.warning(f"Container {kafka_container_name} already exists.")
+            existing = client.containers.get(self.kafka_host)
+            logging.warning(f"Container {self.kafka_host} already exists.")
         except docker.errors.NotFound:
             pass
 
         container_id = client.api.create_container(
             image="nebula-kafka",
-            name=kafka_container_name,
+            name=self.kafka_host,
             detach=True,
             environment=environment,
             host_config=host_config,
@@ -1604,7 +1619,7 @@ class Deployer:
         )
 
         client.api.start(container_id)
-        Deployer._add_container_to_metadata(kafka_container_name)
+        Deployer._add_container_to_metadata(self.kafka_host)
 
         logging.info("✅ Kafka container started successfully.")
 
@@ -1624,8 +1639,9 @@ class Deployer:
 
         environment = {
             "KAFKA_CLUSTERS_0_NAME": "nebula-kafka",
-            "KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS": "dev_dev_alejandro_nebula-kafka:9092",
+            "KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS": f"{self.kafka_host}:9092",
             "KAFKA_CLUSTERS_0_SECURITY_PROTOCOL": "PLAINTEXT",
+            "KAFKA_HOST": f"{self.kafka_host}:9092",
             "SPRING_CONFIG_ADDITIONAL-LOCATION": "/config.yml"
         }
 
