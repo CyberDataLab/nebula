@@ -10,11 +10,16 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set
 
-import aiohttp
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError, JWTClaimsError
+from jwcrypto import jwk
+from keycloak import KeycloakOpenID
+from keycloak.exceptions import (
+    KeycloakAuthenticationError,
+    KeycloakConnectionError,
+    KeycloakError,
+    KeycloakInvalidTokenError,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -41,8 +46,47 @@ class AuthenticatedUser:
         return role in self.roles
 
 
+def _ensure_pem_format(public_key: str) -> str:
+    key = (public_key or "").strip()
+    if key.startswith("-----BEGIN "):
+        return key
+    return f"-----BEGIN PUBLIC KEY-----\n{key}\n-----END PUBLIC KEY-----"
+
+
+def _extract_error_detail(payload: Any) -> str:
+    if payload is None:
+        return ""
+    if isinstance(payload, bytes):
+        payload = payload.decode("utf-8", errors="ignore")
+    if isinstance(payload, str):
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            return payload
+    else:
+        data = payload
+
+    if isinstance(data, dict):
+        for key in ("error_description", "error", "message", "detail"):
+            value = data.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return json.dumps(data)
+    return str(payload)
+
+
+def _describe_keycloak_exception(exc: KeycloakError) -> str:
+    detail = _extract_error_detail(getattr(exc, "response_body", None))
+    if detail:
+        return detail
+    message = getattr(exc, "error_message", None)
+    if isinstance(message, str) and message:
+        return message
+    return str(exc)
+
+
 class KeycloakAuthenticator:
-    """Validates JWT access tokens issued by Keycloak."""
+    """Validates JWT access tokens issued by Keycloak using python-keycloak."""
 
     def __init__(
         self,
@@ -51,6 +95,7 @@ class KeycloakAuthenticator:
         audience: Optional[str] = None,
         required_scope: Optional[str] = None,
         jwks_cache_seconds: int = 300,
+        client_id: Optional[str] = None,
     ) -> None:
         if not server_url or not realm:
             raise ValueError("Both server_url and realm must be provided for Keycloak authentication")
@@ -59,74 +104,92 @@ class KeycloakAuthenticator:
         self._realm = realm
         self._audience = audience
         self._required_scope = required_scope
-        self._jwks_cache_seconds = jwks_cache_seconds
+        self._public_key_ttl = jwks_cache_seconds
+        self._client_id = client_id or audience or os.environ.get("NEBULA_KEYCLOAK_CLIENT_ID") or "account"
 
-        self._jwks: Optional[Dict[str, Any]] = None
-        self._jwks_fetched_at: float = 0.0
-        self._jwks_lock = asyncio.Lock()
+        self._openid_client = KeycloakOpenID(
+            server_url=self._server_url,
+            realm_name=self._realm,
+            client_id=self._client_id,
+        )
+
+        self._public_key: Optional[str] = None
+        self._public_jwk: Optional[jwk.JWK] = None
+        self._public_key_fetched_at: float = 0.0
+        self._public_key_lock = asyncio.Lock()
 
     @property
     def issuer(self) -> str:
         return f"{self._server_url}/realms/{self._realm}"
 
-    @property
-    def jwks_url(self) -> str:
-        return f"{self.issuer}/protocol/openid-connect/certs"
-
-    async def _fetch_jwks(self, force: bool = False) -> Dict[str, Any]:
-        async with self._jwks_lock:
+    async def _get_public_key(self) -> jwk.JWK:
+        async with self._public_key_lock:
             if (
-                not force
-                and self._jwks is not None
-                and (time.time() - self._jwks_fetched_at) < self._jwks_cache_seconds
+                self._public_jwk
+                and (time.time() - self._public_key_fetched_at) < self._public_key_ttl
             ):
-                return self._jwks
+                return self._public_jwk
+            try:
+                raw_key = await asyncio.to_thread(self._openid_client.public_key)
+            except KeycloakConnectionError as exc:
+                logger.exception("Unable to contact Keycloak to fetch the public key: %s", exc)
+                raise HTTPException(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Unable to fetch Keycloak signing key.",
+                ) from exc
+            except KeycloakError as exc:
+                logger.exception("Unexpected error while retrieving Keycloak public key: %s", exc)
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    detail="Keycloak public key request failed.",
+                ) from exc
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.jwks_url, timeout=10) as response:
-                    if response.status != 200:
-                        raise HTTPException(
-                            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            detail="Unable to fetch Keycloak signing keys",
-                        )
-                    data = await response.json()
-
-            self._jwks = data
-            self._jwks_fetched_at = time.time()
-            return data
+            formatted_key = _ensure_pem_format(raw_key)
+            try:
+                self._public_jwk = jwk.JWK.from_pem(formatted_key.encode("utf-8"))
+            except Exception as exc:  # jwcrypto raises custom exceptions that do not share a base class
+                logger.exception("Unable to parse Keycloak public key: %s", exc)
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    detail="Invalid Keycloak public key returned by the identity provider.",
+                ) from exc
+            self._public_key = formatted_key
+            self._public_key_fetched_at = time.time()
+            return self._public_jwk
 
     async def authenticate(self, token: str) -> AuthenticatedUser:
         if not token:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authorization header missing")
 
-        jwks = await self._fetch_jwks()
-        header = jwt.get_unverified_header(token)
-        kid = header.get("kid")
-        key = self._select_key(jwks, kid)
-        if key is None:
-            jwks = await self._fetch_jwks(force=True)
-            key = self._select_key(jwks, kid)
-            if key is None:
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unknown token signing key")
-
-        options = {"verify_aud": self._audience is not None, "verify_at_hash": False}
+        key = await self._get_public_key()
         try:
-            claims = jwt.decode(
+            claims = await asyncio.to_thread(
+                self._openid_client.decode_token,
                 token,
-                key,
-                algorithms=[key.get("alg", "RS256")],
-                audience=self._audience,
-                issuer=self.issuer,
-                options=options,
+                key=key,
             )
-        except ExpiredSignatureError as exc:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Token expired") from exc
-        except JWTClaimsError as exc:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token claims: {exc} self._audience {self.issuer}") from exc
-        except JWTError as exc:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Token signature validation failed") from exc
+        except KeycloakInvalidTokenError as exc:
+            detail = _describe_keycloak_exception(exc) or "Token signature validation failed."
+            logger.warning("Keycloak rejected token as invalid: %s", detail)
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=detail) from exc
+        except KeycloakAuthenticationError as exc:
+            detail = _describe_keycloak_exception(exc) or "Token validation failed."
+            logger.warning("Keycloak authentication error during token validation: %s", detail)
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=detail) from exc
+        except KeycloakConnectionError as exc:
+            logger.exception("Connection error while validating Keycloak token: %s", exc)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to validate token with Keycloak.",
+            ) from exc
+        except KeycloakError as exc:
+            detail = _describe_keycloak_exception(exc)
+            logger.exception("Unexpected Keycloak error during token validation: %s", detail)
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Keycloak token validation failed.") from exc
 
         audience = self._extract_audience(claims)
+        if self._audience and self._audience not in audience:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid token audience.")
         scope = self._extract_scope(claims)
         roles = self._extract_roles(claims)
 
@@ -135,7 +198,7 @@ class KeycloakAuthenticator:
 
         return AuthenticatedUser(
             subject=claims.get("sub"),
-            issuer=claims.get("iss"),
+            issuer=claims.get("iss", self.issuer),
             token=token,
             username=claims.get("preferred_username") or claims.get("email"),
             email=claims.get("email"),
@@ -144,15 +207,6 @@ class KeycloakAuthenticator:
             roles=roles,
             claims=claims,
         )
-
-    def _select_key(self, jwks: Dict[str, Any], kid: Optional[str]) -> Optional[Dict[str, Any]]:
-        keys = jwks.get("keys", [])
-        if kid:
-            for entry in keys:
-                if entry.get("kid") == kid:
-                    return entry
-        # Fall back to first key for backward compatibility
-        return keys[0] if keys else None
 
     @staticmethod
     def _extract_audience(claims: Dict[str, Any]) -> Set[str]:
@@ -173,13 +227,20 @@ class KeycloakAuthenticator:
     def _extract_roles(self, claims: Dict[str, Any]) -> Set[str]:
         roles: Set[str] = set()
         realm_access = claims.get("realm_access") or {}
-        roles.update(realm_access.get("roles", []))
+        if isinstance(realm_access, dict):
+            roles.update(realm_access.get("roles", []) or [])
 
         resource_access = claims.get("resource_access") or {}
         if isinstance(resource_access, dict):
             for value in resource_access.values():
                 if isinstance(value, dict):
                     roles.update(value.get("roles", []) or [])
+
+        custom_roles = claims.get("roles")
+        if isinstance(custom_roles, list):
+            roles.update(str(role) for role in custom_roles if role)
+        elif isinstance(custom_roles, str):
+            roles.update(role for role in custom_roles.split() if role)
 
         return roles
 
@@ -194,6 +255,7 @@ class KeycloakTokenClient:
         default_client_id: Optional[str] = None,
         default_client_secret: Optional[str] = None,
         default_scope: Optional[str] = None,
+        request_timeout_seconds: float = 30.0,
     ) -> None:
         if not base_url or not realm:
             raise ValueError("Keycloak token client requires both base_url and realm")
@@ -203,8 +265,15 @@ class KeycloakTokenClient:
         self._default_client_id = default_client_id
         self._default_client_secret = default_client_secret
         self._default_scope = default_scope
+        self._timeout = request_timeout_seconds
 
-    def _build_endpoint(self, override_base_url: Optional[str], override_realm: Optional[str]) -> str:
+    def _build_openid_client(
+        self,
+        override_base_url: Optional[str],
+        override_realm: Optional[str],
+        client_id: str,
+        client_secret: Optional[str],
+    ) -> KeycloakOpenID:
         base_url = (override_base_url or self._base_url or "").rstrip("/")
         realm = (override_realm or self._realm or "").strip()
         if not base_url or not realm:
@@ -212,20 +281,16 @@ class KeycloakTokenClient:
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Keycloak login is not configured on the controller.",
             )
-        return f"{base_url}/realms/{realm}/protocol/openid-connect/token"
 
-    @staticmethod
-    def _extract_error_detail(payload: str) -> str:
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            return payload
-
-        for key in ("error_description", "error", "message", "detail"):
-            value = data.get(key)
-            if isinstance(value, str) and value:
-                return value
-        return payload
+        server_url = f"{base_url}/" if not base_url.endswith("/") else base_url
+        client = KeycloakOpenID(
+            server_url=server_url,
+            realm_name=realm,
+            client_id=client_id,
+            client_secret_key=client_secret,
+        )
+        client.connection.timeout = self._timeout
+        return client
 
     async def obtain_token(
         self,
@@ -240,7 +305,6 @@ class KeycloakTokenClient:
         auth_url: Optional[str] = None,
         realm: Optional[str] = None,
     ) -> Dict[str, Any]:
-        endpoint = self._build_endpoint(auth_url, realm)
         resolved_client_id = client_id or self._default_client_id
         if not resolved_client_id:
             raise HTTPException(
@@ -248,74 +312,54 @@ class KeycloakTokenClient:
                 detail="Keycloak client_id is not configured for login.",
             )
 
-        payload: Dict[str, Any] = {"grant_type": grant_type, "client_id": resolved_client_id}
-        resolved_secret = client_secret or self._default_client_secret
-        if resolved_secret:
-            payload["client_secret"] = resolved_secret
-
-        if grant_type == "password":
-            if not username or not password:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    detail="username and password are required for password grant.",
-                )
-            payload["username"] = username
-            payload["password"] = password
-            resolved_scope = scope or self._default_scope
-            if resolved_scope:
-                payload["scope"] = resolved_scope
-        elif grant_type == "refresh_token":
-            if not refresh_token:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    detail="refresh_token is required for refresh_token grant.",
-                )
-            payload["refresh_token"] = refresh_token
-        else:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported grant type '{grant_type}'.",
-            )
-
+        keycloak = self._build_openid_client(auth_url, realm, resolved_client_id, client_secret or self._default_client_secret)
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(endpoint, data=payload, timeout=30) as response:
-                    text = await response.text()
-                    if response.status >= 400:
-                        detail = self._extract_error_detail(text) or "Keycloak rejected the credentials."
-                        if response.status in (400, 401):
-                            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=detail)
-                        if response.status == 403:
-                            raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
-                        logger.error(
-                            "Keycloak token request failed with unexpected status %s: %s",
-                            response.status,
-                            detail,
-                        )
-                        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Keycloak token request failed.")
-                    try:
-                        data = json.loads(text)
-                    except json.JSONDecodeError as exc:
-                        logger.error("Invalid JSON payload received from Keycloak token endpoint: %s", text)
-                        raise HTTPException(
-                            status.HTTP_502_BAD_GATEWAY,
-                            detail="Invalid response from Keycloak token endpoint.",
-                        ) from exc
-        except asyncio.TimeoutError as exc:
-            raise HTTPException(
-                status.HTTP_504_GATEWAY_TIMEOUT,
-                detail="Timed out while contacting Keycloak for a token.",
-            ) from exc
-        except aiohttp.ClientError as exc:
+            if grant_type == "password":
+                if not username or not password:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail="username and password are required for password grant.",
+                    )
+                requested_scope = scope or self._default_scope
+                result = await asyncio.to_thread(
+                    keycloak.token,
+                    username,
+                    password,
+                    "password",
+                    requested_scope or "openid",
+                )
+            elif grant_type == "refresh_token":
+                if not refresh_token:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail="refresh_token is required for refresh_token grant.",
+                    )
+                result = await asyncio.to_thread(keycloak.refresh_token, refresh_token, "refresh_token")
+            else:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unsupported grant type '{grant_type}'.",
+                )
+        except HTTPException:
+            raise
+        except KeycloakAuthenticationError as exc:
+            detail = _describe_keycloak_exception(exc) or "Keycloak rejected the credentials."
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=detail) from exc
+        except KeycloakConnectionError as exc:
+            logger.exception("Connection error while contacting Keycloak token endpoint: %s", exc)
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to reach Keycloak token endpoint.",
             ) from exc
+        except KeycloakError as exc:
+            detail = _describe_keycloak_exception(exc)
+            logger.exception("Unexpected Keycloak error during token exchange: %s", detail)
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Keycloak token request failed.") from exc
 
-        if grant_type == "refresh_token" and refresh_token and "refresh_token" not in data:
-            data["refresh_token"] = refresh_token
+        if grant_type == "refresh_token" and refresh_token and "refresh_token" not in result:
+            result["refresh_token"] = refresh_token
 
-        return data
+        return result
 
 
 def _build_authenticator() -> KeycloakAuthenticator:
@@ -324,6 +368,7 @@ def _build_authenticator() -> KeycloakAuthenticator:
     audience = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE")
     scope = os.environ.get("NEBULA_KEYCLOAK_SCOPE")
     cache_seconds = int(os.environ.get("NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS", "300"))
+    client_id = os.environ.get("NEBULA_KEYCLOAK_CLIENT_ID") or audience
 
     return KeycloakAuthenticator(
         server_url=server_url,
@@ -331,6 +376,7 @@ def _build_authenticator() -> KeycloakAuthenticator:
         audience=audience,
         required_scope=scope,
         jwks_cache_seconds=cache_seconds,
+        client_id=client_id,
     )
 
 
@@ -357,6 +403,8 @@ def _build_token_client() -> KeycloakTokenClient:
         default_client_secret=os.environ.get("NEBULA_KEYCLOAK_CLIENT_SECRET"),
         default_scope=os.environ.get("NEBULA_KEYCLOAK_SCOPE") or os.environ.get("NEBULA_KEYCLOAK_AUDIENCE_SCOPE"),
     )
+
+
 try:
     _authenticator = _build_authenticator()
 except ValueError as exc:

@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan context manager for the database API.
     """
+    global database_broker
     # Code to run on startup
     db_log = os.environ.get("NEBULA_DATABASE_LOG", "database.log")
     configure_logger(db_log)
@@ -155,8 +156,20 @@ async def remove_scenario(
 async def get_scenarios(
     request: GetScenariosRequest = Depends()
 ):
-    scenarios_dict = await database_broker.get_scenarios(**request.model_dump())
-    return GetScenariosResponse(scenarios=scenarios_dict)
+    raw_scenarios = await database_broker.get_scenarios(**request.model_dump())
+    if not raw_scenarios:
+        return GetScenariosResponse(scenarios=[])
+
+    scenarios = []
+    for row in raw_scenarios:
+        if isinstance(row, dict):
+            scenarios.append(row)
+        else:  # asyncpg.Record or any mapping
+            try:
+                scenarios.append(dict(row))
+            except Exception:
+                logging.getLogger("database").warning("Unable to coerce scenario row into dict: %s", row)
+    return GetScenariosResponse(scenarios=scenarios)
 
 
 @app.post(

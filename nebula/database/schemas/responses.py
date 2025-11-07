@@ -17,7 +17,7 @@ class UpdateNodesResponse(BaseModel):
     updated: bool
 
 class GetScenariosResponse(BaseModel):
-    scenarios: Dict[str, Any]
+    scenarios: List[Dict[str, Any]]
 
 class GetRunningScenarioResponse(BaseModel):
     scenarios: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]

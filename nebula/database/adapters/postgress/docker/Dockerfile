@@ -7,6 +7,8 @@ RUN mv /usr/local/bin/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh.o
 COPY ./nebula/database/adapters/postgress/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+ENV TZ=Europe/Madrid
+
 # Install Python 3.11.7 from source
 RUN apk add --no-cache \
     gcc \

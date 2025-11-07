@@ -58,13 +58,50 @@ class HubManager:
     def _actor_role(actor: AuthenticatedUser) -> str:
         role_mapping = {
             "hub-admin": "admin",
+            "admin": "admin",
             "hub-operator": "operator",
+            "operator": "operator",
             "hub-viewer": "viewer",
+            "viewer": "viewer",
         }
         for key, value in role_mapping.items():
-            if key in actor.roles:
+            if actor.has_role(key):
                 return value
-        return next(iter(actor.roles), "viewer") if actor.roles else "viewer"
+        return "viewer"
+
+    @staticmethod
+    def _can_impersonate(actor: AuthenticatedUser) -> bool:
+        normalized_roles = {role.lower() for role in actor.roles}
+        elevated_roles = {"admin", "hub-admin"}
+        return bool(normalized_roles & elevated_roles)
+
+    def _resolve_username(self, actor: AuthenticatedUser, requested_user: Optional[str]) -> str:
+        username = self._actor_username(actor)
+        requested_upper = (requested_user or "").upper()
+
+        self.logger.info(
+        "[FER] actor %s requested_user %s username %s roles %s",
+        actor,
+        requested_upper,
+        username,
+        ",".join(sorted(actor.roles)) or "none",
+        )
+
+        if requested_upper and requested_upper != username:
+            if not self._can_impersonate(actor):
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token and user path mismatch")
+            impersonated = requested_upper
+            self.logger.info(
+                "Admin actor %s accessing resources for %s",
+                username or "<unknown>",
+                impersonated,
+            )
+            return impersonated
+        if not username and requested_upper:
+            return requested_upper
+        if not username:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token missing user identity")
+        return username
 
     def _generate_federation_ids(self, user: str, scenario_datas: List) -> List[str]:
         federation_ids = []
@@ -184,10 +221,8 @@ class HubManager:
 
     async def get_scenarios(self, actor: AuthenticatedUser, requested_user: str) -> Any:
         try:
-            username = self._actor_username(actor)
             role = self._actor_role(actor)
-            if requested_user and requested_user.upper() != username:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token and user path mismatch")
+            username = self._resolve_username(actor, requested_user)
             return await self.database_client.get_scenarios_by_user(username, role)
         except Exception as exc:
             self.logger.exception("Error obtaining scenarios: %s", exc)
@@ -229,10 +264,8 @@ class HubManager:
 
     async def check_scenario(self, actor: AuthenticatedUser, requested_user: str, federation_id: str) -> Any:
         try:
-            username = self._actor_username(actor)
             role = self._actor_role(actor)
-            if requested_user and requested_user.upper() != username:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token and user path mismatch")
+            username = self._resolve_username(actor, requested_user)
             return await self.database_client.check_scenario(username, role, federation_id)
         except Exception as exc:
             self.logger.exception("Error checking scenario with role: %s", exc)

@@ -28,20 +28,20 @@ class DatabaseBroker():
     @property
     def log(self):
         return self._logger
-    
+
     async def init(self):
         await self.db._init_db_pool()
-        await self._initialize_kafka_service(self._broker, self._user, self._password)
+        #await self._initialize_kafka_service(self._broker, self._user, self._password)
 
     async def shutdown(self):
         await self._kafka_client.shutdown()
         await self.db._close_db_pool()
-              
+
     """                                             ###############################
                                                     #           API REST          #
                                                     ###############################
     """
-    
+
     # Scenarios
     async def save_scenario(self, federation_id: str, **kwargs):
         return await self.db._save_scenario(
@@ -86,30 +86,30 @@ class DatabaseBroker():
 
     async def remove_notes_by_federation_id(self, federation_id: str):
         return await self.db._remove_note(federation_id)
-    
+
     """                                             ###############################
                                                     #         KAFKA SERVICE       #
                                                     ###############################
     """
-    
+
     async def _initialize_kafka_service(self, broker: str, user: str, password: str):
         callbacks = [
             (UpdateMessage, self._handle_update_message),
             (CompletedExperimentMessage, self._handle_finish_experiment_message)
         ]
         message_handler = generate_handler(self._logger, callbacks)
-        
+
         self._kafka_client = NebulaKafkaAgent(
-            broker=broker, 
-            user=user, 
+            broker=broker,
+            user=user,
             password=password,
             client_id="N-Database",
             logger=self._logger,
             handler=message_handler,
         )
-        
+
         await self._kafka_client.init(producer=False)
-        
+
     async def _handle_update_message(self, message: UpdateMessage):
         await self.db._update_node_record(
             message.config["device_args"]["uid"],
@@ -125,5 +125,5 @@ class DatabaseBroker():
             message.config["device_args"]["malicious"],
         )
 
-    async def _handle_finish_experiment_message(self, message: CompletedExperimentMessage):  
+    async def _handle_finish_experiment_message(self, message: CompletedExperimentMessage):
         await self.db._(message.experiment)
