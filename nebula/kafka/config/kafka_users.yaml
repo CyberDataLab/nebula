@@ -1,0 +1,29 @@
+# ====================================================
+# Kafka Access Control Configuration
+# Defines users, their credentials, and ACL policies
+# ====================================================
+
+users:
+  N-DB:
+    password: "c2VjdXJlX2RiX3Bhc3N3ZA=="         
+    topics:
+      - name: "nebula-system-control"
+        operations: ["all"]
+      - name: "experiment-.*"
+        operations: ["read"]
+
+  N-RTT:
+    password: "c2VjdXJlX3J0dF9wYXNzd2Q="          
+    topics:
+      - name: "nebula-system-control"
+        operations: ["all"]
+      - name: "experiment-.*"
+        operations: ["read"]
+
+  N-Controller:
+    password: "c2VjdXJlX2N0cmxfdXNlcg=="          
+    topics:
+      - name: "nebula-system-control"
+        operations: ["all"]
+      - name: "experiment-.*"
+        operations: ["read"]
