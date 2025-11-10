@@ -21,6 +21,7 @@ from nebula.core.utils.deterministic import enable_deterministic
 from nebula.core.utils.nebulalogger_tensorboard import NebulaTensorBoardLogger
 from nebula.core.nebulaevents import TestMetricsEvent
 from nebula.core.eventmanager import EventManager
+from nebula.core.trainer import MetricLoader
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
 
@@ -135,6 +136,9 @@ class Lightning:
         self.idx = self.config.participant["device_args"]["idx"]
         self.log_dir = self.config.participant["tracking_args"]["log_dir"]
         self._logger = None
+        self.metric_loader = MetricLoader()
+        if hasattr(self.model, "set_metric_loader"):
+            self.model.set_metric_loader(self.metric_loader)
         self.create_logger()
         enable_deterministic(seed=self.config.participant["scenario_args"]["random_seed"])
 
@@ -147,6 +151,8 @@ class Lightning:
 
     def set_model(self, model):
         self.model = model
+        if hasattr(self.model, "set_metric_loader"):
+            self.model.set_metric_loader(self.metric_loader)
 
     def set_datamodule(self, datamodule):
         self.datamodule = datamodule
@@ -290,6 +296,14 @@ class Lightning:
         if bytes:
             return self.serialize_model(self.model.state_dict())
         return self.model.state_dict()
+
+    def get_metrics(self, phase=None):
+        if phase is not None:
+            return self.metric_loader.get_phase_metrics(phase)
+        return self.metric_loader.get_all_metrics()
+
+    def get_confusion_matrix(self, phase):
+        return self.metric_loader.get_confusion_matrix(phase)
 
     async def train(self):
         try:

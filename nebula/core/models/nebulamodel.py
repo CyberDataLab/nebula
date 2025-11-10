@@ -57,7 +57,8 @@ class NebulaModel(pl.LightningModule, ABC):
             self.cm_global.update(y_pred_classes, y) if self.cm_global is not None else None
         else:
             raise NotImplementedError
-
+        if self.metric_loader is not None and loss is not None:
+            self.metric_loader.record_metric(phase, "Loss", loss, step=self.global_number[phase])
         del y_pred_classes, y
 
     def log_metrics_end(self, phase):
@@ -84,6 +85,8 @@ class NebulaModel(pl.LightningModule, ABC):
         }
 
         self.logger.log_data(output, step=self.global_number[phase])
+        if self.metric_loader is not None:
+            self.metric_loader.record_metrics(phase, output, step=self.global_number[phase])
 
         metrics_str = ""
         for key, value in output.items():
@@ -139,6 +142,14 @@ class NebulaModel(pl.LightningModule, ABC):
             plt.close()
 
             del cm_numpy, classes, fig, ax
+
+        if self.metric_loader is not None:
+            self.metric_loader.record_confusion_matrix(
+                phase,
+                cm,
+                labels=[i for i in range(self.num_classes)],
+                step=self.global_number[phase],
+            )
 
         # Restablecer la matriz de confusión
         if phase == "Test (Local)":
@@ -199,6 +210,7 @@ class NebulaModel(pl.LightningModule, ABC):
 
         self._current_loss = -1
         self._optimizer = None
+        self.metric_loader = None
 
     def set_communication_manager(self, communication_manager):
         self.communication_manager = communication_manager
@@ -207,6 +219,10 @@ class NebulaModel(pl.LightningModule, ABC):
         if self.communication_manager is None:
             raise ValueError("Communication manager not set.")
         return self.communication_manager
+
+    def set_metric_loader(self, metric_loader):
+        """Attach MetricLoader instance so metrics can be queried externally."""
+        self.metric_loader = metric_loader
 
     @abstractmethod
     def forward(self, x):
@@ -306,7 +322,7 @@ class NebulaModel(pl.LightningModule, ABC):
         loss = self.criterion(y_pred, y)
         y_pred_classes = torch.argmax(y_pred, dim=1)
         accuracy = torch.mean((y_pred_classes == y).float())
-        
+
         if dataloader_idx == 0:
             self.log(f"val_loss", loss, on_epoch=True, prog_bar=False)
             self.log(f"val_accuracy", accuracy, on_epoch=True, prog_bar=False)
