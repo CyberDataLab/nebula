@@ -73,8 +73,8 @@ async def lifespan(app: FastAPI):
     db_log = os.environ.get("NEBULA_DATABASE_LOG", "database.log")
     configure_logger(db_log)
 
-    database_broker = DatabaseBroker(database_adapter="PostgresDB", broker="", user="", password="", logger=db_log)
-    await database_broker.init()
+    database_broker = DatabaseBroker(database_adapter="PostgresDB", logger=logging.getLogger("db_log"))
+    await database_broker.init(broker=os.environ.get("KAFKA_BROKER"), user=os.environ.get("KAFKA_USER_NAME"), password=os.environ.get("KAFKA_USER_PASS"))
 
     yield
 

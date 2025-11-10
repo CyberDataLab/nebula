@@ -1,3 +1,4 @@
+import base64
 import logging
 import asyncio
 from typing import Dict
@@ -29,6 +30,8 @@ class FederationBroker():
     
     async def init(self, broker: str, user: str, password: str):
         self._initialize_federation_controllers()
+        self.log.info(f"{broker} -- {user} -- {password}")
+        await asyncio.sleep(60)
         await self._initialize_kafka_service(broker, user, password)
 
     async def shutdown(self):
@@ -79,7 +82,7 @@ class FederationBroker():
             broker=broker, 
             user=user, 
             password=password,
-            client_id="N-Controller",
+            client_id=user,
             logger=self._logger,
             handler=message_handler,
         )

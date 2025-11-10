@@ -1,3 +1,4 @@
+import base64
 import logging
 import asyncio
 from typing import Dict
@@ -13,13 +14,11 @@ from nebula.kafka.clients.messages.system import (
 )
 
 class DatabaseBroker():
-    def __init__(self, database_adapter: str, broker: str, user: str, password: str, logger: logging.Logger):
+    def __init__(self, database_adapter: str, logger: logging.Logger):
         self._database_adapter = factory_database_adapter(database_adapter)
         self._logger = logger
         self._kafka_client: NebulaKafkaAgent = None
-        self._broker = broker
-        self._user = user
-        self._password = password
+
 
     @property
     def db(self):
@@ -28,10 +27,12 @@ class DatabaseBroker():
     @property
     def log(self):
         return self._logger
-
-    async def init(self):
+    
+    async def init(self, broker: str, user: str, password: str):
         await self.db._init_db_pool()
-        #await self._initialize_kafka_service(self._broker, self._user, self._password)
+        self.log.info(f"{broker} -- {user} -- {password}")
+        await asyncio.sleep(60)
+        await self._initialize_kafka_service(broker, user, password)
 
     async def shutdown(self):
         await self._kafka_client.shutdown()
@@ -103,13 +104,13 @@ class DatabaseBroker():
             broker=broker,
             user=user,
             password=password,
-            client_id="N-Database",
+            client_id=user,
             logger=self._logger,
             handler=message_handler,
         )
-
-        await self._kafka_client.init(producer=False)
-
+        
+        await self._kafka_client.init(producer=True)
+        
     async def _handle_update_message(self, message: UpdateMessage):
         await self.db._update_node_record(
             message.config["device_args"]["uid"],

@@ -12,15 +12,15 @@ users:
       - name: "experiment-.*"
         operations: ["read"]
 
-  N-RTT:
-    password: ${KAFKA_RTT_PASSWORD}
+  N-RTM:
+    password: ${KAFKA_RTM_PASSWORD}
     topics:
       - name: "nebula-system-control"
         operations: ["all"]
       - name: "experiment-.*"
         operations: ["read"]
 
-  N-Controller:
+  N-CONTROLLER:
     password: ${KAFKA_CONTROLLER_PASSWORD}
     topics:
       - name: "nebula-system-control"

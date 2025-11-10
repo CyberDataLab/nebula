@@ -23,7 +23,8 @@ advertised.listeners=${KAFKA_ADVERTISED_LISTENERS}
 ############################
 # Security and ACLs
 ############################
-security.inter.broker.protocol=${KAFKA_INTER_BROKER_LISTENER_NAME}
+#security.inter.broker.protocol=${KAFKA_INTER_BROKER_LISTENER_NAME}
+inter.broker.listener.name=PLAINTEXT
 
 # SASL/SCRAM
 sasl.enabled.mechanisms=SCRAM-SHA-256

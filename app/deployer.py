@@ -1319,8 +1319,14 @@ class Deployer:
             "NEBULA_KEYCLOAK_SCOPE": self.keycloak_scope,
             "NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS": os.environ.get("NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS", "300"),
             "KAFKA_BROKER": f"{self.kafka_host}:9094",
-            "KAFKA_USER_NAME": "N_CONTROLLER",
-            "KAFKA_USER_PASS": os.environ.get("KAFKA_CONTROLLER_PASSWORD")
+            "KAFKA_CONTROLLER_USER": "N-CONTROLLER",
+            "KAFKA_CONTROLLER_PASSWORD": os.environ.get("KAFKA_CONTROLLER_PASSWORD"),
+            "KAFKA_SUPER_USER_NAME": os.environ.get("KAFKA_SUPER_USER_NAME"),
+            "KAFKA_SUPER_USER_PASS": os.environ.get("KAFKA_SUPER_USER_PASS"),
+            "KAFKA_DB_PASSWORD": os.environ.get("KAFKA_DB_PASSWORD"),
+            "KAFKA_RTM_PASSWORD": "rmt_password",
+
+
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]

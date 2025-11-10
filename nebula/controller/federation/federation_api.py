@@ -15,6 +15,7 @@ controller_broker: FederationBroker = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global controller_broker
     log_path = os.environ.get("NEBULA_FEDERATION_CONTROLLER_LOG")
 
     # Configure and register the logger under the name "controller"
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
     hub_url = f"http://{controller_host}:{hub_port}"
     
     controller_broker = FederationBroker(hub_url=hub_url, logger=logger)
-    await controller_broker.init()
+    await controller_broker.init(broker=os.environ.get("KAFKA_BROKER"), user=os.environ.get("KAFKA_CONTROLLER_USER"), password=os.environ.get("KAFKA_CONTROLLER_PASSWORD"))
 
     yield
 

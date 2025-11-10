@@ -13,6 +13,7 @@ from nebula.auth import AuthenticatedUser, get_current_user
 from nebula.controller.hub.hub_manager import HubManager
 import nebula.controller.hub.utils_requests as hub_requests
 from nebula.utils import TermEscapeCodeFormatter
+from nebula.kafka.clients.admin_client import NebulaKafkaAdmin
 
 
 hub_manager = HubManager()
@@ -25,6 +26,9 @@ async def lifespan(app: FastAPI):
     Application lifespan context manager.
     - Configures logging on startup.
     """
+    await asyncio.sleep(10)
+    hkc = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=logging.getLogger("Hub-API"))
+    await hkc.init()
     # Code to run on startup
     yield
 

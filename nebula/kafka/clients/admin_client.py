@@ -6,6 +6,7 @@ from pathlib import Path
 import secrets
 import asyncio
 import logging
+import os
 
 # AIoKafka
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
@@ -92,6 +93,7 @@ class NebulaKafkaAdmin:
 
     async def init(self):
         #await self._testing_func()
+        await asyncio.sleep(30)
         try:
             # Initialize user-admin-client
             await self._init_user_admin_client()
@@ -195,9 +197,9 @@ class NebulaKafkaAdmin:
                 self.log.info(f"[Kafka] Producer started successfully with client_id='{self._client_id}'")
                 break
             except (KafkaConnectionError, KafkaTimeoutError) as e:
-                self.log.warning(f"[Kafka] Connection issue on attempt {attempt}: {e}")
+                self.log.info(f"[Kafka] Connection issue on attempt {attempt}: {e}")
             except Exception as e:
-                self.log.exception(f"[Kafka] Unexpected error starting producer (attempt {attempt}): {e}")
+                self.log.info(f"[Kafka] Unexpected error starting producer (attempt {attempt}): {e}")
 
             if attempt < max_retries:
                 self.log.info(f"[Kafka] Retrying in {delay}s...")
@@ -230,13 +232,22 @@ class NebulaKafkaAdmin:
 
         users = config.get("users", {})
         for username, info in users.items():
-            try:
-                password_b64 = info["password"]
-                decoded_pass = base64.b64decode(password_b64).decode()
-                users[username]["password"] = decoded_pass
-            except Exception as e:
-                self._logger.error(f"Error decoding password for {username}: {e}")
-                raise KafkaLoadingConfigurationError(f"[ERROR]: decoding password for {username}: {e}") from e
+            password_ref = info.get("password", "")
+
+            # Si el password es una referencia del tipo ${VAR}, la resolvemos
+            if password_ref.startswith("${") and password_ref.endswith("}"):
+                env_name = password_ref.strip("${}")
+                env_value = os.getenv(env_name)
+
+                if not env_value:
+                    raise KafkaLoadingConfigurationError(
+                        f"[ERROR]: environment variable {env_name} not found for {username}"
+                    )
+
+                users[username]["password"] = env_value
+            else:
+                # Si no es una referencia, lo dejamos tal cual (valor literal)
+                users[username]["password"] = password_ref
 
         return users
 
@@ -332,11 +343,11 @@ class NebulaKafkaAdmin:
                 f.result()
                 self.log.info(f"✅ User '{user}' deleted successfully.")
             except ConfluentKafkaError as e:
-                self.log.error(f"⚠️ Error deleting user '{user}': {e}")
+                self.log.info(f"⚠️ Error deleting user '{user}': {e}")
                 raise KafkaUserDeletionError(f"[ERROR]: {e}")
 
         except Exception as e:
-            self.log.error(f"❌ Unexpected error deleting user '{user}': {e}")
+            self.log.info(f"❌ Unexpected error deleting user '{user}': {e}")
             raise KafkaUserDeletionError(f"[ERROR]: {e}")
 
     """                                             ###############################
@@ -355,16 +366,37 @@ class NebulaKafkaAdmin:
             self.log.error(f"❌ ACL operation not allowed: '{operation}'")
             raise ValueError(f"ACL operation not allowed: {operation}")
 
-        acl_list = [
+        acl_list = []
+
+        # ACLs sobre el topic
+        for op in op_map[operation]:
+            acl_list.append(
+                ACL(
+                    principal=f"User:{user}",
+                    host="*",
+                    operation=op,
+                    permission_type=ACLPermissionType.ALLOW,
+                    resource_pattern=ResourcePattern(ResourceType.TOPIC, topic_name)
+                )
+            )
+
+        # ➕ ACLs sobre el grupo (permite consumir desde su propio consumer group)
+        acl_list.extend([
             ACL(
                 principal=f"User:{user}",
                 host="*",
-                operation=op,
+                operation=ACLOperation.READ,
                 permission_type=ACLPermissionType.ALLOW,
-                resource_pattern=ResourcePattern(ResourceType.TOPIC, topic_name)
+                resource_pattern=ResourcePattern(ResourceType.GROUP, f"g-{user}")
+            ),
+            ACL(
+                principal=f"User:{user}",
+                host="*",
+                operation=ACLOperation.DESCRIBE,
+                permission_type=ACLPermissionType.ALLOW,
+                resource_pattern=ResourcePattern(ResourceType.GROUP, f"g-{user}")
             )
-            for op in op_map[operation]
-        ]
+        ])
 
         try:
             results = self._acl_admin_client.create_acls(acl_list)
@@ -372,18 +404,18 @@ class NebulaKafkaAdmin:
             failed = results.get("failed", [])
 
             if succeeded:
-                self.log.info(f"✅ ACL(s) '{operation}' created for '{user}' on '{topic_name}':")
+                self.log.info(f"✅ ACL(s) '{operation}' created for '{user}' on '{topic_name}' and group g-{user}:")
                 for acl in succeeded:
                     self.log.info(f"   ↳ {acl}")
 
             if failed:
-                self.log.error(f"⚠️ Errors creating ACL(s):")
+                self.log.info(f"⚠️ Errors creating ACL(s):")
                 for acl in failed:
-                    self.log.error(f"   ↳ {acl}")
+                    self.log.info(f"   ↳ {acl}")
                 raise KafkaACLCreationError(f"[ERROR]: Cannot create ACLs - {failed}")
 
         except Exception as e:
-            self.log.error(f"❌ Error creating ACL(s) for '{user}' on '{topic_name}': {e}")
+            self.log.info(f"❌ Error creating ACL(s) for '{user}' on '{topic_name}': {e}")
             raise KafkaACLCreationError(f"[ERROR]: {e}")
 
     async def delete_all_acls_for_user(self, user: str) -> list:
@@ -407,14 +439,14 @@ class NebulaKafkaAdmin:
             # results es una lista de tuplas: (ACLFilter, list_of_matching_acls, error)
             for acl_filter, matching_acls, error in results:
                 if error is not None and not isinstance(error, NoError):
-                    self.log.error(f"⚠️ Error removing ACLs for '{user}': {error}")
+                    self.log.info(f"⚠️ Error removing ACLs for '{user}': {error}")
                 else:
                     self.log.info(f"✅ ACLs removed successfully: {matching_acls}")
             self.log.info(f"✅ All ACLs for '{user}' removed")
             return results
 
         except Exception as e:
-            self.log.error(f"❌ Error removing ACLs for '{user}': {e}")
+            self.log.info(f"❌ Error removing ACLs for '{user}': {e}")
             raise KafkaACLDeletionError(f"[ERROR]: {e}")
 
     """                                             ###############################
@@ -506,10 +538,10 @@ class NebulaKafkaAdmin:
             self.log.info(f"Message '{message_type.name}' sent on topic '{topic_name}'")
             return True
         except AioKafkaError as e:
-            self.log.error(f"Kafka error sending {message_type}: {e}")
+            self.log.info(f"Kafka error sending {message_type}: {e}")
             return False
         except Exception as e:
-            self.log.error(f"Unexpected error sending message: {e}")
+            self.log.info(f"Unexpected error sending message: {e}")
             return False
 
     """                                             ###############################
@@ -538,19 +570,20 @@ class NebulaKafkaAdmin:
 
                     # Trigger event
                     self.log.info(f"Message received '{kafka_message}'")
-                    if not self._handler:
-                        raise KafkaMessageHandlerNotDefined("[ERROR]: Kafka Message Handler is not defined")
+                    # if not self._handler:
+                    #     raise KafkaMessageHandlerNotDefined("[ERROR]: Kafka Message Handler is not defined")
 
-                    asyncio.create_task(self._handler.handle(kafka_message))
+                    if self._handler:
+                        asyncio.create_task(self._handler.handle(kafka_message))
 
                 except Exception as e:
-                    self.log.exception(f"Error processing message from topic {msg.topic}: {e}")
+                    self.log.info(f"Error processing message from topic {msg.topic}: {e}")
 
         except asyncio.CancelledError as ce:
             self.log.info("Consumer loop cancelled")
             raise KafkaConsumerLoopError(f"[ERROR]: {ce}") from ce
         except Exception as e:
-            self.log.exception(f"Unexpected error in consumer loop: {e}")
+            self.log.info(f"Unexpected error in consumer loop: {e}")
             raise KafkaConsumerLoopError(f"[ERROR]: {e}") from e
         finally:
             await self._consumer.stop()

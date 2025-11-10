@@ -43,13 +43,14 @@ class NebulaKafkaAgent:
                     try:
                         self.log.info(f"[Kafka] Starting producer (attempt {attempt}/{max_retries})")
                         await self._producer.start()
+                        self.log.info(f"[Kafka] Producer started successfully with client_id='{self._client_id}'")
                         break
                     except (KafkaTimeoutError, KafkaConnectionError) as e:
-                        self.log.warning(f"[Kafka] Producer connection issue: {e}")
+                        self.log.info(f"[Kafka] Producer connection issue: {e}")
                     except KafkaError as e:
-                        self.log.error(f"[Kafka] KafkaError starting producer: {e}")
+                        self.log.info(f"[Kafka] KafkaError starting producer: {e}")
                     except Exception as e:
-                        self.log.exception(f"[Kafka] Unexpected error starting producer: {e}")
+                        self.log.info(f"[Kafka] Unexpected error starting producer: {e}")
                     if attempt < max_retries:
                         await asyncio.sleep(retry_delay)
                     else:
@@ -73,14 +74,14 @@ class NebulaKafkaAgent:
             else:
                 await self.subscribe_topics(topics=[NEBULA_SYSTEM_TOPIC])
 
-            sent = await self.produce(SystemMessages.AGENT_READY, self._client_id)
+            sent = await self.produce(SystemMessages.AGENT_READY, data=self._client_id)
             if not sent:
                 raise KafkaProducerError("Failed to produce AGENT_READY message")
             
             self._consumer_loop_task = asyncio.create_task(self._consume_loop())
             self.log.info(f"[SUCCESS]: Kafka initialization process")
         except Exception as e:
-            self.log.exception(f"[Kafka] Initialization failed: {e}")
+            self.log.info(f"[Kafka] Initialization failed: {e}")
             await self.shutdown()
             raise KafkaInitializationError(f"Unable to start Kafka-Agent: {e}") from e
         
@@ -91,13 +92,18 @@ class NebulaKafkaAgent:
             return False
         
         try:
+            self.log.info(f"[Kafka] Sending message {message_type.name} -> {NEBULA_SYSTEM_TOPIC}")
+            await self._producer.client.force_metadata_update()
+            self.log.info(f"[Kafka] Producer metadata state: {self._producer._metadata.topics()}")
+            await asyncio.sleep(2)
             await self._producer.send_and_wait(NEBULA_SYSTEM_TOPIC, message.to_bytes())
+            self.log.info(f"[Kafka] ✅ Message {message_type.name} sent successfully.")
             return True
         except AioKafkaError as e:
-            self.log.error(f"Kafka error sending {message_type}: {e}")
+            self.log.info(f"Kafka error sending {message_type}: {e}")
             return False
         except Exception as e:
-            self.log.error(f"Unexpected error sending message: {e}")
+            self.log.info(f"Unexpected error sending message: {e}")
             return False
                 
     async def subscribe_topics(self, topics: list = [], pattern = ""):
@@ -109,10 +115,10 @@ class NebulaKafkaAgent:
                 self._consumer.subscribe(pattern=pattern)
                 self.log.info(f"[SUCCESS] Topic subscribed using pattern: '{pattern}'")
             else:
-                self.log.error(f"[ERROR] no topics or pattern")
+                self.log.info(f"[ERROR] no topics or pattern")
                 raise KafkaTopicSubscriptionError(f"[ERROR] no topics or pattern")
         except AioKafkaError as e:
-            self.log.error(f"[ERROR]: {e}")
+            self.log.info(f"[ERROR]: {e}")
             raise KafkaTopicSubscriptionError(f"[ERROR]: {e}")
        
     async def set_handler(self, handler: KafkaMessageHandler):
@@ -120,7 +126,8 @@ class NebulaKafkaAgent:
                       
     async def _consume_loop(self):
         # queue + workers if high concurrency
-        await asyncio.sleep(1)  
+        await asyncio.sleep(1) 
+        self.log.info(f"Consumer loop started..") 
         try:
             async for msg in self._consumer:
                 if self._consumer_stop.is_set():
@@ -134,19 +141,20 @@ class NebulaKafkaAgent:
                         continue
 
                     # Trigger event
+                    self.log.info(f"Message received '{kafka_message}'")
                     if not self._handler:
                         raise KafkaMessageHandlerNotDefined("[ERROR]: Kafka Message Handler is not defined")
                     
                     asyncio.create_task(self._handler.handle(kafka_message))
 
                 except Exception as e:
-                    self.log.exception(f"Error processing message from topic {msg.topic}: {e}")
+                    self.log.info(f"Error processing message from topic {msg.topic}: {e}")
 
         except asyncio.CancelledError as ce:
             self.log.info("Consumer loop cancelled")
             raise KafkaConsumerLoopError(f"[ERROR]: {ce}") from ce
         except Exception as e:
-            self.log.exception(f"Unexpected error in consumer loop: {e}")
+            self.log.info(f"Unexpected error in consumer loop: {e}")
             raise KafkaConsumerLoopError(f"[ERROR]: {e}") from e
         finally:
             await self._consumer.stop()
