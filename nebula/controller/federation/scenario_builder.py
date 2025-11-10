@@ -3,7 +3,7 @@ from datetime import datetime
 import hashlib
 import math
 from collections import defaultdict
-from nebula.addons.topologymanager import TopologyManager
+from nebula.controller.federation.utils.topologymanager import TopologyManager
 from nebula.config.config import Config
 from nebula.core.utils.certificate import generate_certificate
 from nebula.core.datasets.nebuladataset import NebulaDataset, factory_nebuladataset, factory_dataset_setup
@@ -439,6 +439,7 @@ class ScenarioBuilder():
         participant_config["aggregator_args"]["algorithm"] = self.sd["agg_algorithm"]
         participant_config["aggregator_args"]["aggregation_timeout"] = 60
 
+        participant_config["kafka_args"]= self._configure_kafka_args()
         participant_config["message_args"]= self._configure_message_args()
         participant_config["reporter_args"]= self._configure_reporter_args()
         participant_config["forwarder_args"]= self._configure_forwarder_args()
@@ -499,6 +500,14 @@ class ScenarioBuilder():
             self.logger.info(f"ERROR: Translating into dictionary - {e}")
 
         return config
+
+    def _configure_kafka_args(self):
+        return {
+            "broker": self.sd["broker"],
+            "topic": self.sd["topic"],
+            "user": self.sd["user"],
+            "password": self.sd["password"],
+        }
 
     def _configure_message_args(self):
         return {

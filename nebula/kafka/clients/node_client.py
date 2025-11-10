@@ -27,7 +27,7 @@ class NebulaKafkaNode:
     def log(self):
         return self._logger
     
-    async def init(self, max_retries=3, delay=2):
+    async def init(self, max_retries=5, delay=2):
         for attempt in range(1, max_retries + 1):
             try:
                 self.log.info(f"[Kafka] Attempting to start producer (attempt {attempt}/{max_retries})...")
@@ -46,8 +46,8 @@ class NebulaKafkaNode:
                 raise KafkaInitializationError("Unable to start Kafka producer after multiple attempts on NebulaKafkaNode.")
             
         
-    async def produce(self, message_type: ExperimentMessages, data) -> bool:
-        message = factory_kafka_message(message_type, data=data)
+    async def produce(self, message_type: ExperimentMessages, **kwargs) -> bool:
+        message = factory_kafka_message(message_type, **kwargs)
         if message is None:
             self.log.info(f"Cannot create message type '{message_type}'")
             return

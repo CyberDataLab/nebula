@@ -103,7 +103,7 @@ class RoundStartEvent(NodeEvent):
 
 
 class RoundEndEvent(NodeEvent):
-    def __init__(self, round, end_time):
+    def __init__(self, round, end_time, metrics):
         """Event triggered when round is going to start.
 
         Args:
@@ -112,6 +112,7 @@ class RoundEndEvent(NodeEvent):
         """
         self._round_end_time = end_time
         self._round = round
+        self._metrics = metrics
 
     def __str__(self):
         return "Round ending"
@@ -124,7 +125,7 @@ class RoundEndEvent(NodeEvent):
                 -round (int): Round number.
                 -end_time (time): Current time when round has ended.
         """
-        return (self._round, self._round_end_time)
+        return (self._round, self._round_end_time, self._metrics)
 
     async def is_concurrent(self):
         return False

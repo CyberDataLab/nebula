@@ -85,8 +85,8 @@ class NebulaKafkaAgent:
             await self.shutdown()
             raise KafkaInitializationError(f"Unable to start Kafka-Agent: {e}") from e
         
-    async def produce(self, message_type: SystemMessages, data) -> bool:
-        message = factory_kafka_message(message_type, data=data)
+    async def produce(self, message_type: SystemMessages, **kwargs) -> bool:
+        message = factory_kafka_message(message_type, **kwargs)
         if message is None:
             self.log.info(f"Cannot create message type '{message_type}'")
             return False

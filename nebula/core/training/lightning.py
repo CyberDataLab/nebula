@@ -21,7 +21,7 @@ from nebula.core.utils.deterministic import enable_deterministic
 from nebula.core.utils.nebulalogger_tensorboard import NebulaTensorBoardLogger
 from nebula.core.nebulaevents import TestMetricsEvent
 from nebula.core.eventmanager import EventManager
-from nebula.core.trainer import MetricLoader
+from nebula.core.training.metric_loader import MetricLoader
 
 logging_training = logging.getLogger(TRAINING_LOGGER)
 

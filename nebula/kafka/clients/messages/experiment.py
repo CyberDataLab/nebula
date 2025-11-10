@@ -77,9 +77,10 @@ class DoneMessage(KafkaMessage):
 class METRICSMessage(KafkaMessage):
     kafka_message: str = ExperimentMessages.METRICS.name
 
-    def __init__(self, experiment_id: str, step: int, metrics: dict):
+    def __init__(self, experiment_id: str, end_time: float, iteration: int, metrics: dict):
         self.experiment_id = experiment_id
-        self.step = step
+        self.end_time = end_time
+        self.iteration = iteration
         self.metrics = metrics
 
     def to_bytes(self) -> bytes:
@@ -87,7 +88,8 @@ class METRICSMessage(KafkaMessage):
         return json.dumps({
             "kafka-message": self.kafka_message,
             "experiment_id": self.experiment_id,
-            "step": self.step,
+            "end_time": self.end_time,
+            "iteration": self.iteration,
             "metrics": self.metrics,
         }).encode()
 
@@ -97,7 +99,8 @@ class METRICSMessage(KafkaMessage):
         data = json.loads(raw_bytes.decode())
         return cls(
             experiment_id=data["experiment_id"],
-            step=data["step"],
+            end_time=data["end_time"],
+            iteration=data["iteration"],
             metrics=data["metrics"]
         )
     

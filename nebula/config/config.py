@@ -50,17 +50,28 @@ class Config:
         # TBD
         pass
 
-    def get_update_info(self):
+    async def get_update_info(self):
         return {
-            "device_args": self.participant["device_args"],
-            "network_args": self.participant["network_args"],
-            "federation_args": self.participant["federation_args"],
-            "scenario_args": self.participant["scenario_args"],
-            "timestamp": str(datetime.now()),
-            **(
-                {"mobility_args": self.participant["mobility_args"]}
-                if "mobility_args" in self.participant else {}
-            )
+            "experiment_id": self.participant["scenario_args"]["federation_id"],
+            "experiment_type": self.participant["scenario_args"]["deployment"],
+            "data": {
+                "device_args": self.participant["device_args"],
+                "network_args": self.participant["network_args"],
+                "federation_args": self.participant["federation_args"],
+                "scenario_args": self.participant["scenario_args"],
+                "timestamp": str(datetime.now()),
+                **(
+                    {"mobility_args": self.participant["mobility_args"]}
+                    if "mobility_args" in self.participant else {}
+                )
+            }
+        }
+        
+    async def get_done_info(self):
+        return {
+            "experiment_id": self.participant["scenario_args"]["federation_id"],
+            "experiment_type": self.participant["scenario_args"]["deployment"],
+            "idx":  self.participant["device_args"]["idx"]
         }
 
     def reset_logging_configuration(self):
@@ -246,7 +257,6 @@ class Config:
 
         logging.info(f"Final neighbors: {final_neighbors} (config updated)")
 
-
     def remove_neighbor_from_config(self, addr):
         if self.participant:
             neighbors = self.participant["network_args"]["neighbors"]
@@ -257,7 +267,12 @@ class Config:
 
                 if addr in self.participant["addons"]["mobility"]["neighbors_distance"]:
                     del self.participant["addons"]["mobility"]["neighbors_distance"][addr]
-
+                    
+    async def get_current_neighbors(self) -> list:
+        return self.participant["network_args"]["neighbors"]
+    
+    async def get_experiment_id(self) -> str:
+        return self.participant["scenario_args"]["federation_id"]
 
     def reload_config_file(self):
         config_dir = self.participant["tracking_args"]["config_dir"]

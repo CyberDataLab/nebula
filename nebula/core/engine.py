@@ -9,7 +9,8 @@ import docker
 
 from nebula.core.noderole import factory_role_behavior, change_role_behavior, Role, RoleBehavior
 from nebula.addons.functions import print_msg_box
-from nebula.addons.reporter import Reporter
+#from nebula.addons.reporter import Reporter
+from nebula.addons.reporting.reporter import Reporter
 from nebula.addons.reputation.reputation import Reputation
 from nebula.core.addonmanager import AddondManager
 from nebula.core.aggregation.aggregator import create_aggregator
@@ -147,7 +148,7 @@ class Engine:
 
         self._cm = CommunicationsManager(engine=self)
 
-        self._reporter = Reporter(config=self.config, trainer=self.trainer)
+        self._reporter = Reporter(config=self.config)
 
         self._sinchronized_status = True
         self.sinchronized_status_lock = Locker(name="sinchronized_status_lock")
@@ -621,8 +622,8 @@ class Engine:
             await self.sa.start()
         if "reputation" in self.config.participant["addons"]:
             await self._reputation.start()
-        await self._reporter.start()
         await self._addon_manager.deploy_additional_services()
+        await self._reporter.start()
 
     async def deploy_federation(self):
         """
@@ -858,9 +859,6 @@ class Engine:
                     await self.rb.extended_learning_cycle()
 
                 current_time = time.time()
-                ree = RoundEndEvent(self.round, current_time)
-                await EventManager.get_instance().publish_node_event(ree)
-
                 await self.get_round_lock().acquire_async()
 
                 print_msg_box(
@@ -870,6 +868,9 @@ class Engine:
                 )
                 # await self.aggregator.reset()
                 self.trainer.on_round_end()
+                ree = RoundEndEvent(self.round, current_time, self.trainer.get_metrics())
+                await EventManager.get_instance().publish_node_event(ree)
+                
                 self.round += 1
                 self.config.participant["federation_args"]["round"] = (
                     self.round

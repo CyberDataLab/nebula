@@ -527,8 +527,8 @@ class NebulaKafkaAdmin:
                                                     ###############################
     """
 
-    async def produce(self, topic_name: str, message_type: Union[SystemMessages, ExperimentMessages], data) -> bool:
-        message = factory_kafka_message(message_type, data=data)
+    async def produce(self, topic_name: str, message_type: Union[SystemMessages, ExperimentMessages], **kwargs) -> bool:
+        message = factory_kafka_message(message_type, **kwargs)
         if message is None:
             self.log.info(f"Cannot create message type '{message_type}'")
             return
