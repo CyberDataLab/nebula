@@ -38,6 +38,7 @@ class HubManager:
 
         self._scenario_qeue_manager = ScenarioQueueManager(self.logger)
         self._real_time_manager = RealTimeManager(self.logger)
+        self._kafka_admin_client = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=self.logger)
 
     @property
     def sqm(self):
@@ -48,6 +49,11 @@ class HubManager:
     def rtm(self):
         """Real Time Manager instance"""
         return self._real_time_manager
+    
+    @property
+    def kac(self):
+        """Kafka Admin Client"""
+        return self._kafka_admin_client
 
     @staticmethod
     def _actor_username(actor: AuthenticatedUser) -> str:
@@ -109,6 +115,13 @@ class HubManager:
             id = HashUtils.generate_md5(f"nebula_{user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}_{i}")    # Add index to hash
             federation_ids.append(id)
         return federation_ids
+    
+    async def init(self):
+        # Delay to let ensure Kafka server is ready
+        await asyncio.sleep(10)
+        
+        # Configure Kafka setup using admin client
+        await self.kac.init()
 
     # ------------------------------------------------------------------
     # Scenarios

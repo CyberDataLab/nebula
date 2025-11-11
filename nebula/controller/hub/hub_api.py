@@ -26,9 +26,9 @@ async def lifespan(app: FastAPI):
     Application lifespan context manager.
     - Configures logging on startup.
     """
-    await asyncio.sleep(10)
-    hkc = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=logging.getLogger("Hub-API"))
-    await hkc.init()
+    global hub_manager
+    await hub_manager.init()
+    
     # Code to run on startup
     yield
 
