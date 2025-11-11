@@ -8,6 +8,12 @@ from .keycloak import (
     require_roles,
     require_scope,
 )
+from .policy import (
+    actor_username,
+    actor_role,
+    can_impersonate,
+    resolve_username,
+)
 
 __all__ = [
     "AuthenticatedUser",
@@ -16,4 +22,8 @@ __all__ = [
     "obtain_token",
     "require_roles",
     "require_scope",
+    "actor_username",
+    "actor_role",
+    "can_impersonate",
+    "resolve_username",
 ]
