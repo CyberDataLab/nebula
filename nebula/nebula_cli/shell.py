@@ -168,6 +168,11 @@ class NebulaInteractiveShell:
             self._clear_screen()
             self._print_banner(full=False)
             print("Authentication successful. You can now run NEBULA commands.")
+        elif command == "logout":
+            self.authenticated = False
+            self._clear_screen()
+            self._print_banner(full=True)
+            print("Logged out. Login again to continue.")
 
     def _print_banner(self, *, full: bool = False) -> None:
         banner = BANNER_FULL if full else BANNER_SHORT

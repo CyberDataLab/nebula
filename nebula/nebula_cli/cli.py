@@ -19,7 +19,7 @@ from typing import Optional
 
 from nebula.nebula_cli.core import CLIConfig, CLIContext, set_token_cache_path
 from nebula.nebula_cli.parser_factory import ParserFactory
-from nebula.nebula_cli.commands import auth, scenario, nodes, notes, users, legacy
+from nebula.nebula_cli.commands import auth, scenario, nodes, notes, users, aliases
 from nebula.nebula_cli.shell import NebulaInteractiveShell
 
 
@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     factory.register(nodes.register)
     factory.register(notes.register)
     factory.register(users.register)
-    factory.register(legacy.register)
+    factory.register(aliases.register)
     return factory.build()
 
 
