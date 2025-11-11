@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 
-from nebula.auth.keycloak import AuthenticatedUser
+from nebula.auth.models import AuthenticatedUser
 
 
 def actor_username(actor: AuthenticatedUser) -> str:

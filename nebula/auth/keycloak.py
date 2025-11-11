@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set
 
 from fastapi import Depends, HTTPException, status
@@ -21,29 +20,9 @@ from keycloak.exceptions import (
     KeycloakInvalidTokenError,
 )
 
+from nebula.auth.models import AuthenticatedUser
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class AuthenticatedUser:
-    """Identity information extracted from a validated access token."""
-
-    subject: str
-    issuer: str
-    token: str
-    username: Optional[str]
-    email: Optional[str]
-    audience: Set[str]
-    scope: Set[str]
-    roles: Set[str]
-    claims: Dict[str, Any]
-
-    def has_scope(self, scope: str) -> bool:
-        return scope in self.scope
-
-    def has_role(self, role: str) -> bool:
-        return role in self.roles
 
 
 def _ensure_pem_format(public_key: str) -> str:

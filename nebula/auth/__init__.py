@@ -1,7 +1,7 @@
 """Authentication helpers for the NEBULA controller."""
 
+from .models import AuthenticatedUser
 from .keycloak import (
-    AuthenticatedUser,
     authenticate_token,
     get_current_user,
     obtain_token,

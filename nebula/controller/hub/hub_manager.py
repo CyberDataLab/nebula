@@ -7,7 +7,13 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from fastapi import HTTPException, Request, UploadFile, WebSocket, status
 from nebula.controller.http_helpers import remote_get, remote_post_form
-from nebula.auth import AuthenticatedUser, authenticate_token, obtain_token
+from nebula.auth import AuthenticatedUser
+from nebula.auth.policy import (
+    actor_username,
+    actor_role,
+    resolve_username,
+)
+from nebula.controller.hub.clients.auth_client import AuthClient, build_auth_client
 from nebula.controller.hub.clients.db_api_client import DatabaseAPIClient
 from nebula.controller.hub.clients.federation_api_client import FederationAPIClient
 from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
@@ -39,6 +45,7 @@ class HubManager:
         self._scenario_qeue_manager = ScenarioQueueManager(self.logger)
         self._real_time_manager = RealTimeManager(self.logger)
         self._kafka_admin_client = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=self.logger)
+        self._auth_client: AuthClient = build_auth_client()
 
     @property
     def sqm(self):
@@ -49,65 +56,11 @@ class HubManager:
     def rtm(self):
         """Real Time Manager instance"""
         return self._real_time_manager
-    
+
     @property
     def kac(self):
         """Kafka Admin Client"""
         return self._kafka_admin_client
-
-    @staticmethod
-    def _actor_username(actor: AuthenticatedUser) -> str:
-        candidate = actor.username or actor.email or actor.subject
-        return candidate.upper() if candidate else ""
-
-    @staticmethod
-    def _actor_role(actor: AuthenticatedUser) -> str:
-        role_mapping = {
-            "hub-admin": "admin",
-            "admin": "admin",
-            "hub-operator": "operator",
-            "operator": "operator",
-            "hub-viewer": "viewer",
-            "viewer": "viewer",
-        }
-        for key, value in role_mapping.items():
-            if actor.has_role(key):
-                return value
-        return "viewer"
-
-    @staticmethod
-    def _can_impersonate(actor: AuthenticatedUser) -> bool:
-        normalized_roles = {role.lower() for role in actor.roles}
-        elevated_roles = {"admin", "hub-admin"}
-        return bool(normalized_roles & elevated_roles)
-
-    def _resolve_username(self, actor: AuthenticatedUser, requested_user: Optional[str]) -> str:
-        username = self._actor_username(actor)
-        requested_upper = (requested_user or "").upper()
-
-        self.logger.info(
-        "[FER] actor %s requested_user %s username %s roles %s",
-        actor,
-        requested_upper,
-        username,
-        ",".join(sorted(actor.roles)) or "none",
-        )
-
-        if requested_upper and requested_upper != username:
-            if not self._can_impersonate(actor):
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token and user path mismatch")
-            impersonated = requested_upper
-            self.logger.info(
-                "Admin actor %s accessing resources for %s",
-                username or "<unknown>",
-                impersonated,
-            )
-            return impersonated
-        if not username and requested_upper:
-            return requested_upper
-        if not username:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Token missing user identity")
-        return username
 
     def _generate_federation_ids(self, user: str, scenario_datas: List) -> List[str]:
         federation_ids = []
@@ -115,11 +68,11 @@ class HubManager:
             id = HashUtils.generate_md5(f"nebula_{user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}_{i}")    # Add index to hash
             federation_ids.append(id)
         return federation_ids
-    
+
     async def init(self):
         # Delay to let ensure Kafka server is ready
         await asyncio.sleep(10)
-        
+
         # Configure Kafka setup using admin client
         await self.kac.init()
 
@@ -140,8 +93,8 @@ class HubManager:
         user_host = request.client.host
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
-        username = self._actor_username(actor)
-        role = self._actor_role(actor)
+        username = actor_username(actor)
+        role = actor_role(actor)
         scenario_payload = dict(scenario_data)
 
         try:
@@ -234,8 +187,14 @@ class HubManager:
 
     async def get_scenarios(self, actor: AuthenticatedUser, requested_user: str) -> Any:
         try:
-            role = self._actor_role(actor)
-            username = self._resolve_username(actor, requested_user)
+            # Trace request vs token identity for auditing
+            self.logger.info(
+                "actor_roles=%s requested_user=%s",
+                ",".join(sorted(actor.roles)) or "none",
+                (requested_user or "").upper(),
+            )
+            role = actor_role(actor)
+            username = resolve_username(actor, requested_user)
             return await self.database_client.get_scenarios_by_user(username, role)
         except Exception as exc:
             self.logger.exception("Error obtaining scenarios: %s", exc)
@@ -277,8 +236,13 @@ class HubManager:
 
     async def check_scenario(self, actor: AuthenticatedUser, requested_user: str, federation_id: str) -> Any:
         try:
-            role = self._actor_role(actor)
-            username = self._resolve_username(actor, requested_user)
+            self.logger.info(
+                "actor_roles=%s requested_user=%s",
+                ",".join(sorted(actor.roles)) or "none",
+                (requested_user or "").upper(),
+            )
+            role = actor_role(actor)
+            username = resolve_username(actor, requested_user)
             return await self.database_client.check_scenario(username, role, federation_id)
         except Exception as exc:
             self.logger.exception("Error checking scenario with role: %s", exc)
@@ -404,7 +368,7 @@ class HubManager:
             )
 
         try:
-            return await obtain_token(
+            return await self._auth_client.obtain_token(
                 grant_type=request.grant_type,
                 username=request.username,
                 password=request.password,
@@ -469,7 +433,7 @@ class HubManager:
             return
 
         try:
-            await authenticate_token(token)
+            await self._auth_client.authenticate(token)
         except HTTPException as exc:
             await websocket.close(code=4003, reason=exc.detail)
             return
