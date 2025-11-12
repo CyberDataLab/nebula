@@ -10,14 +10,6 @@ class RunScenarioRequest(BaseModel):
 class StopScenarioRequest(BaseModel):
     experiment_type: str
 
-class NodeUpdateRequest(BaseModel):
-    config: Dict[str, Any] = {}
-
-class NodeDoneRequest(BaseModel):
-    idx: int
-    deployment: str
-    name: str
-
 class RemoveScenarioRequest(BaseModel):
     experiment_type: str
     user: str
@@ -27,8 +19,6 @@ class Routes:
     INIT = "/init"
     RUN = "/scenarios/run"
     STOP = "/scenarios/{federation_id}/stop"
-    UPDATE = "/nodes/{federation_id}/update"
-    DONE = "/nodes/{federation_id}/done"
     FINISH = "/scenarios/{federation_id}/finish"
     REMOVE = "/scenario/{federation_id}/remove"
 

@@ -14,11 +14,7 @@ class ErrorCode(IntEnum):
     SCENARIO_STOP_FAILED = 1111
     SCENARIO_REMOVE_ACTIVE_FEDERATION = 1121
     SCENARIO_REMOVE_FAILED = 1125
-
-    # Nodes
-    NODE_UPDATE_FAILED = 1201
-    NODE_DONE_FAILED = 1202
-    
+ 
     # Controllers
     BAD_CONTROLLER = 1301
 
@@ -103,23 +99,6 @@ SCENARIO_REMOVE_FAILED = ErrorDefinition(
     http_status=500,
     error="ScenarioRemovedFailed",
     message="Scenario removed failed unexpectedly."
-)
-
-# ============================================================
-# ERROR NODES
-# ============================================================
-NODE_UPDATE_FAILED = ErrorDefinition(
-    code=ErrorCode.NODE_UPDATE_FAILED,
-    http_status=500,
-    error="NodeUpdateFailed",
-    message="Node update request failed to process correctly."
-)
-
-NODE_DONE_FAILED = ErrorDefinition(
-    code=ErrorCode.NODE_DONE_FAILED,
-    http_status=400,
-    error="NodeDoneFailed",
-    message="Node done event could not be processed."
 )
 
 # --- DEFAULT ---

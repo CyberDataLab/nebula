@@ -17,7 +17,6 @@ class Routes:
 
     # Nodes
     NODES_BY_FEDERATION_ID = "/nodes/{federation_id}"
-    NODES_UPDATE = "/nodes/update"
     NODES_REMOVE = "/nodes/{federation_id}/remove"
 
     # Notes
@@ -43,9 +42,6 @@ class FinishScenarioRequest(BaseModel):
 
 class UpdateNotesRequest(BaseModel):
     notes: str
-
-class UpdateNodesRequest(BaseModel):
-    config: Dict[str, Any]
 
 class GetScenariosRequest(BaseModel):
     user: str
@@ -82,8 +78,6 @@ def factory_requests_path(resource: str, user: str = "", role: str = "", federat
     # Nodes
     elif resource == "get_nodes_by_scenario_name":
         return Routes.NODES_BY_FEDERATION_ID.format(federation_id=federation_id)
-    elif resource == "update_nodes":
-        return Routes.NODES_UPDATE
     elif resource == "remove_nodes":
         return Routes.NODES_REMOVE.format(federation_id=federation_id)
     # Notes

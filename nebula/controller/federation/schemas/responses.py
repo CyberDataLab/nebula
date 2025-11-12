@@ -14,13 +14,6 @@ class RemoveScenarioResponse(BaseModel):
     federation_id: str
     additional_info: str
 
-class NodeUpdateResponse(BaseModel):
-    federation_id: str
-    
-class NodeDoneResponse(BaseModel):
-    federation_id: str
-    idx: str
-
 class ErrorResponse(BaseModel):
     error: str
     message: str

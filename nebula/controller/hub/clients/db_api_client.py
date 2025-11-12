@@ -119,11 +119,6 @@ class DatabaseAPIClient:
         url = self._build_url(path)
         return await self._get(url)
 
-    async def update_node(self, payload: Dict[str, Any]) -> Any:
-        path = DBReq.factory_requests_path("update_nodes")
-        url = self._build_url(path)
-        return await self._post(url, payload, DBReq.UpdateNodesRequest)
-
     async def remove_nodes_by_federation_id(self, federation_id: str) -> Any:
         path = DBReq.factory_requests_path("remove_nodes", federation_id=federation_id)
         url = self._build_url(path)

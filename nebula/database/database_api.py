@@ -14,7 +14,6 @@ from nebula.database.schemas.requests import (
     SaveScenarioRequest,
     StopScenarioRequest,
     FinishScenarioRequest,
-    UpdateNodesRequest,
     UpdateNotesRequest,
     GetScenariosRequest,
     GetRunningScenarioRequest,
