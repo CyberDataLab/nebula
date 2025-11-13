@@ -7,10 +7,11 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 from fastapi import HTTPException, Request, UploadFile, WebSocket, status
 from nebula.controller.http_helpers import remote_get, remote_post_form
-from nebula.auth import AuthenticatedUser
+from nebula.auth.api import AuthenticatedUser
 from nebula.auth.policy import (
     actor_username,
     actor_role,
+    can_impersonate,
     resolve_username,
 )
 from nebula.controller.hub.clients.auth_client import AuthClient, build_auth_client
@@ -391,17 +392,46 @@ class HubManager:
     # ------------------------------------------------------------------
     # Users
     # ------------------------------------------------------------------
-    async def list_users(self, all_info: bool = False) -> Any:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Local user management has been removed. Manage identities through Keycloak.",
-        )
+    async def list_users(self, actor: AuthenticatedUser, all_info: bool = False) -> Dict[str, Any]:
+        if not can_impersonate(actor):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Only administrators can list users.",
+            )
+        try:
+            users = await self._auth_client.list_users(actor, all_info=all_info)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception("Error listing users: %s", exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to list users from the identity provider.",
+            ) from exc
+        return {"users": users}
 
-    async def add_user(self, user: str, password: str, role: str) -> Any:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Use Keycloak administration APIs to create users.",
-        )
+    async def add_user(self, actor: AuthenticatedUser, user: str, password: str, role: str) -> Any:
+        if not can_impersonate(actor):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Only administrators can create users.",
+            )
+        if not user or not password or not role:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="user, password and role are required.",
+            )
+
+        try:
+            return await self._auth_client.register_user(actor, user, password, role)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception("Error registering user %s: %s", user, exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to register user with the identity provider.",
+            ) from exc
 
     async def remove_user(self, user: str) -> Any:
         raise HTTPException(
@@ -409,11 +439,25 @@ class HubManager:
             detail="Use Keycloak administration APIs to remove users.",
         )
 
-    async def update_user(self, user: str, password: str, role: str) -> Any:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Use Keycloak administration APIs to update users.",
-        )
+    async def update_user(self, actor: AuthenticatedUser, user: str, password: str, role: str) -> Any:
+        if not can_impersonate(actor):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Only administrators can update users.",
+            )
+        if not user:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="user is required.")
+
+        try:
+            return await self._auth_client.update_user(actor, user, password, role)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception("Error updating user %s: %s", user, exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to update user with the identity provider.",
+            ) from exc
 
     async def verify_user(self, user: str, password: str) -> Any:
         raise HTTPException(

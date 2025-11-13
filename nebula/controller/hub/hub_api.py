@@ -9,7 +9,7 @@ import uvicorn
 from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile, WebSocket, status
 from fastapi.concurrency import asynccontextmanager
 
-from nebula.auth import AuthenticatedUser, get_current_user
+from nebula.auth.api import AuthenticatedUser, get_current_user
 from nebula.controller.hub.hub_manager import HubManager
 import nebula.controller.hub.utils_requests as hub_requests
 from nebula.utils import TermEscapeCodeFormatter
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     """
     global hub_manager
     await hub_manager.init()
-    
+
     # Code to run on startup
     yield
 
@@ -237,9 +237,9 @@ async def remove_notes_by_federation_id_endpoint(
 @app.get(hub_requests.Routes.USER_LIST)
 async def list_users_controller(
     all_info: bool = False,
-    _current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    return await hub_manager.list_users(all_info=all_info)
+    return await hub_manager.list_users(current_user, all_info=all_info)
 
 
 @app.get(hub_requests.Routes.DISCOVER_VPN)
@@ -303,9 +303,9 @@ async def add_user_controller(
     user: str = Body(...),
     password: str = Body(...),
     role: str = Body(...),
-    _current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    return await hub_manager.add_user(user, password, role)
+    return await hub_manager.add_user(current_user, user, password, role)
 
 
 @app.post(hub_requests.Routes.USER_DELETE)
@@ -321,9 +321,9 @@ async def update_user_controller(
     user: str = Body(...),
     password: str = Body(...),
     role: str = Body(...),
-    _current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    return await hub_manager.update_user(user, password, role)
+    return await hub_manager.update_user(current_user, user, password, role)
 
 
 @app.post(hub_requests.Routes.USER_VERIFY)
