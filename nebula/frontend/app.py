@@ -1404,7 +1404,7 @@ async def get_host_resources():
                 else:
                     return None
 
-    return await retry_with_backoff(_get_resources)
+    # return await retry_with_backoff(_get_resources)
 
 
 async def check_enough_resources():
