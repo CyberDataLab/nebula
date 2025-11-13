@@ -17,12 +17,8 @@ def actor_username(actor: AuthenticatedUser) -> str:
 def actor_role(actor: AuthenticatedUser) -> str:
     """Map Keycloak roles to application roles used by the DB layer."""
     role_mapping = {
-        "hub-admin": "admin",
         "admin": "admin",
-        "hub-operator": "operator",
-        "operator": "operator",
-        "hub-viewer": "viewer",
-        "viewer": "viewer",
+        "user": "viewer",
     }
     for key, value in role_mapping.items():
         if actor.has_role(key):
@@ -33,7 +29,7 @@ def actor_role(actor: AuthenticatedUser) -> str:
 def can_impersonate(actor: AuthenticatedUser) -> bool:
     """Return True if the actor can impersonate other users."""
     normalized_roles = {role.lower() for role in actor.roles}
-    elevated_roles = {"admin", "hub-admin"}
+    elevated_roles = {"admin"}
     return bool(normalized_roles & elevated_roles)
 
 
