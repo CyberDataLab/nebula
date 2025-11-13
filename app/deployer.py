@@ -1126,7 +1126,7 @@ class Deployer:
                 f"{host_sql_path}:/docker-entrypoint-initdb.d/init-configs.sql",
                 f"{db_data_path}:/var/lib/postgresql/data",
             ],
-            port_bindings={5432: 5432, 5051: 5051},
+            port_bindings={5432: 5432, self.database_port: self.database_port},
         )
         pg_networking_config = client.api.create_networking_config(
             {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.125")}
@@ -1139,7 +1139,7 @@ class Deployer:
             environment=pg_environment,
             host_config=pg_host_config,
             networking_config=pg_networking_config,
-            ports=[5432, 5051],
+            ports=[5432, self.database_port],
         )
         client.api.start(pg_container)
         Deployer._add_container_to_metadata(pg_container_name)
@@ -1317,6 +1317,8 @@ class Deployer:
             "NEBULA_KEYCLOAK_REALM": self.keycloak_realm,
             "NEBULA_KEYCLOAK_AUDIENCE": self.keycloak_audience,
             "NEBULA_KEYCLOAK_SCOPE": self.keycloak_scope,
+            "NEBULA_KEYCLOAK_CLIENT_ID": "nebula-cli",
+            "NEBULA_KEYCLOAK_CLI_CLIENT_ID": "nebula-cli",
             "NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS": os.environ.get("NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS", "300"),
             "KAFKA_BROKER": f"{self.kafka_host}:9094",
             "KAFKA_CONTROLLER_USER": "N-CONTROLLER",
