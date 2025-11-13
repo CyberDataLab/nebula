@@ -45,5 +45,9 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     register_alias.add_argument("user", help="Username to create")
     register_alias.add_argument("password", help="Password for the new user")
-    register_alias.add_argument("role", help="Role to assign (e.g. viewer, operator, admin)")
+    register_alias.add_argument(
+        "role",
+        choices=("admin", "user"),
+        help="Role to assign (admin or user)",
+    )
     register_alias.set_defaults(func=cmd_alias_register)

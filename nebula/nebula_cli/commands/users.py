@@ -46,7 +46,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     add_parser = users_sub.add_parser("add", help="Add a new user")
     add_parser.add_argument("user")
     add_parser.add_argument("password")
-    add_parser.add_argument("role")
+    add_parser.add_argument("role", choices=("admin", "user"), help="Role to assign (admin or user)")
     add_parser.set_defaults(func=cmd_users_add)
 
     delete_parser = users_sub.add_parser("delete", help="Remove a user")
@@ -56,7 +56,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     update_parser = users_sub.add_parser("update", help="Update a user's password and role")
     update_parser.add_argument("user")
     update_parser.add_argument("password")
-    update_parser.add_argument("role")
+    update_parser.add_argument("role", choices=("admin", "user"), help="Role to assign (admin or user)")
     update_parser.set_defaults(func=cmd_users_update)
 
     verify_parser = users_sub.add_parser("verify", help="Verify a user's credentials")

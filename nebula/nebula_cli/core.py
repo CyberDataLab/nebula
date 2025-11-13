@@ -294,6 +294,9 @@ def _hub_token_exchange(
         response.raise_for_status()
     except requests.HTTPError as exc:
         detail = extract_error_detail(response)
+        hint = _login_error_hint(response.status_code, detail, config, payload)
+        if hint:
+            detail = f"{detail} ({hint})"
         raise RuntimeError(f"Hub login failed ({response.status_code}): {detail}") from exc
 
     try:
@@ -340,3 +343,24 @@ def obtain_token(
         payload["scope"] = scope
 
     return _hub_token_exchange(config, payload, session=session)
+
+
+def _login_error_hint(
+    status_code: int,
+    detail: str,
+    config: CLIConfig,
+    payload: Dict[str, Any],
+) -> str:
+    normalized = detail.lower()
+    if status_code == 401:
+        client_msg = f"client_id='{config.client_id or '<missing>'}'"
+        return f"{client_msg} rejected; verify NEBULA_KEYCLOAK_CLIENT_ID/SECRET and that the client exists"
+    if status_code == 400 and "invalid_grant" in normalized:
+        grant = payload.get("grant_type") or "password"
+        if grant == "password":
+            return "check username/password and that the user is allowed to use this client"
+        if grant == "refresh_token":
+            return "refresh token expired or revoked; run 'auth login' again"
+    if status_code in {404, 502, 503}:
+        return "hub could not reach Keycloak; confirm NEBULA_KEYCLOAK_SERVER/REALM URLs"
+    return ""

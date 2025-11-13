@@ -138,7 +138,7 @@ class NebulaInteractiveShell:
         print("\nExamples:")
         print("  auth login alice")
         print("  scenario list alice hub-admin")
-        print("  register bob s3cret viewer")
+        print("  register bob s3cret user")
         print("  nodes list <federation_id>")
         print("Use '--help' after any command for detailed options.\n")
 
