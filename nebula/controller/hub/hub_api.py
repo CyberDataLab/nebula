@@ -311,9 +311,9 @@ async def add_user_controller(
 @app.post(hub_requests.Routes.USER_DELETE)
 async def remove_user_controller(
     user: str = Body(..., embed=True),
-    _current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
-    return await hub_manager.remove_user(user)
+    return await hub_manager.remove_user(current_user, user)
 
 
 @app.post(hub_requests.Routes.USER_UPDATE)

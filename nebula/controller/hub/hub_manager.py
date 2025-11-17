@@ -433,11 +433,24 @@ class HubManager:
                 detail="Unable to register user with the identity provider.",
             ) from exc
 
-    async def remove_user(self, user: str) -> Any:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Use Keycloak administration APIs to remove users.",
-        )
+    async def remove_user(self, actor: AuthenticatedUser, user: str) -> Any:
+        if not can_impersonate(actor):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Only administrators can delete users.",
+            )
+        if not user:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="user is required.")
+        try:
+            return await self._auth_client.delete_user(actor, user)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception("Error deleting user %s: %s", user, exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to delete user with the identity provider.",
+            ) from exc
 
     async def update_user(self, actor: AuthenticatedUser, user: str, password: str, role: str) -> Any:
         if not can_impersonate(actor):

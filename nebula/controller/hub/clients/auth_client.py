@@ -10,6 +10,7 @@ from nebula.auth.api import (
     obtain_token as keycloak_obtain_token,
     list_users as keycloak_list_users,
     register_user as keycloak_register_user,
+    delete_user as keycloak_delete_user,
     update_user as keycloak_update_user,
 )
 
@@ -69,6 +70,10 @@ class AuthClient(abc.ABC):
     ) -> list[Dict[str, Any]]:
         """Return users visible to the provided actor."""
 
+    @abc.abstractmethod
+    async def delete_user(self, actor: AuthenticatedUser, username: str) -> Dict[str, Any]:
+        """Delete a user from the upstream identity provider."""
+
 
 class KeycloakAuthClient(AuthClient):
     """Auth client implementation backed by the Keycloak helper module."""
@@ -119,6 +124,8 @@ class KeycloakAuthClient(AuthClient):
     ) -> Dict[str, Any]:
         return await keycloak_update_user(actor=actor, username=username, password=password, role=role)
 
+    async def delete_user(self, actor: AuthenticatedUser, username: str) -> Dict[str, Any]:
+        return await keycloak_delete_user(actor=actor, username=username)
     async def list_users(
         self,
         actor: AuthenticatedUser,

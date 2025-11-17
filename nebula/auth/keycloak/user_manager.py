@@ -336,6 +336,59 @@ class KeycloakUserManager:
                 detail="Unexpected error during Keycloak user listing.",
             ) from exc
 
+    async def delete_user(
+        self,
+        *,
+        username: str,
+        actor_token: Optional[str],
+    ) -> Dict[str, Any]:
+        normalized_username = (username or "").strip()
+        if not normalized_username:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Username must be provided.")
+
+        try:
+            return await asyncio.to_thread(
+                self._delete_user_sync,
+                normalized_username,
+                actor_token,
+            )
+        except KeycloakGetError as exc:
+            if exc.response_code == status.HTTP_404_NOT_FOUND:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found.") from exc
+            logger.exception("Keycloak returned error during user deletion: %s", exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail=describe_keycloak_exception(exc) or "Keycloak user deletion failed.",
+            ) from exc
+        except KeycloakAuthenticationError as exc:
+            detail = describe_keycloak_exception(exc) or "Failed to authenticate against Keycloak admin API."
+            logger.exception("Keycloak admin authentication error: %s", detail)
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=detail) from exc
+        except KeycloakConnectionError as exc:
+            logger.exception("Unable to reach Keycloak admin API: %s", exc)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to reach Keycloak admin API.",
+            ) from exc
+        except RuntimeError as exc:
+            logger.error("Keycloak user manager misconfiguration: %s", exc)
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Keycloak user deletion is not configured on the controller.",
+            ) from exc
+        except HTTPException:
+            raise
+        except KeycloakError as exc:
+            detail = describe_keycloak_exception(exc) or "Keycloak user deletion failed."
+            logger.exception("Unexpected Keycloak error during user deletion: %s", detail)
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=detail) from exc
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Unexpected error during Keycloak user deletion: %s", exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unexpected error during Keycloak user deletion.",
+            ) from exc
+
     def _build_actor_token_payload(self, access_token: str) -> Dict[str, Any]:
         return {
             "access_token": access_token,
@@ -384,6 +437,18 @@ class KeycloakUserManager:
             if isinstance(user, dict):
                 serialized.append(self._serialize_user(admin, user, all_info))
         return serialized
+
+    def _delete_user_sync(
+        self,
+        username: str,
+        actor_token: Optional[str],
+    ) -> Dict[str, Any]:
+        admin = self._new_admin_client(actor_token)
+        user_id = admin.get_user_id(username)
+        if not user_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found.")
+        admin.delete_user(user_id=user_id)
+        return {"username": username, "deleted": True}
 
     def _update_user_sync(
         self,

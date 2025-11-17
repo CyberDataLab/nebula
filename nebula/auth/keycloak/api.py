@@ -75,6 +75,23 @@ async def register_user(
     )
 
 
+async def delete_user(
+    actor: AuthenticatedUser,
+    username: str,
+) -> Dict[str, Any]:
+    try:
+        manager = _get_user_manager()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Keycloak user deletion is not configured on the controller.",
+        ) from exc
+    return await manager.delete_user(
+        username=username,
+        actor_token=actor.token,
+    )
+
+
 async def update_user(
     actor: AuthenticatedUser,
     username: str,
