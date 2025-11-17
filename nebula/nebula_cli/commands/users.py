@@ -29,12 +29,6 @@ def cmd_users_update(args: argparse.Namespace, client: NebulaClient) -> None:
     print_output(data, args.output)
 
 
-def cmd_users_verify(args: argparse.Namespace, client: NebulaClient) -> None:
-    body = {"user": args.user, "password": args.password}
-    data = client.request_json("POST", Routes.USER_VERIFY, json_body=body)
-    print_output(data, args.output)
-
-
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     users = subparsers.add_parser("users", help="User management helpers")
     users_sub = users.add_subparsers(dest="users_command", required=True)
@@ -58,8 +52,3 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     update_parser.add_argument("password")
     update_parser.add_argument("role", choices=("admin", "user"), help="Role to assign (admin or user)")
     update_parser.set_defaults(func=cmd_users_update)
-
-    verify_parser = users_sub.add_parser("verify", help="Verify a user's credentials")
-    verify_parser.add_argument("user")
-    verify_parser.add_argument("password")
-    verify_parser.set_defaults(func=cmd_users_verify)

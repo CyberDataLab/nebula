@@ -490,12 +490,6 @@ class HubManager:
                 detail="Unable to update user with the identity provider.",
             ) from exc
 
-    async def verify_user(self, user: str, password: str) -> Any:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="Password verification is handled by Keycloak. Use its token endpoints.",
-        )
-
     async def open_real_time_client(self, websocket: WebSocket, channel_id: str):
         token = websocket.query_params.get("token")
         if not token:

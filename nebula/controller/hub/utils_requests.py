@@ -135,7 +135,6 @@ class Routes:
     USER_ADD = "/user/add"
     USER_DELETE = "/user/delete"
     USER_UPDATE = "/user/update"
-    USER_VERIFY = "/user/verify"
 
     # Real time updates
     OPEN_RT = "/ws/{channel_id}"
