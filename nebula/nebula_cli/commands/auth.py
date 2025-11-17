@@ -28,7 +28,19 @@ def cmd_auth_login(args: argparse.Namespace, client: NebulaClient) -> None:
         print("Login successful. Token cached.")
 
 
-def cmd_auth_logout(_: argparse.Namespace, __: NebulaClient) -> None:
+def cmd_auth_logout(_: argparse.Namespace, client: NebulaClient) -> None:
+    token = load_token()
+    refresh_token = token.get("refresh_token") if token else None
+
+    if refresh_token:
+        try:
+            client.logout(refresh_token)
+            print("Revoked session via NEBULA hub.")
+        except RuntimeError as exc:
+            print(f"Warning: failed to revoke session via hub: {exc}")
+    else:
+        print("No refresh token stored; skipping hub logout.")
+
     if clear_token():
         print(f"Removed cached token at {TOKEN_CACHE}")
     else:

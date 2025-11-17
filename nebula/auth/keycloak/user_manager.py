@@ -64,7 +64,7 @@ class KeycloakUserManager:
         self._verify_tls = verify_tls
         self._timeout = request_timeout_seconds
         self._client_role_client_id = client_role_client_id
-        self._client_role_internal_id: Optional[str] = None
+        self._client_internal_ids: Dict[str, str] = {}
 
     def _new_admin_client(self, token: Optional[str]) -> KeycloakAdmin:
         client_kwargs: Dict[str, Any] = {
@@ -545,15 +545,19 @@ class KeycloakUserManager:
         return "user"
 
     def _resolve_client_role_internal_id(self, admin: KeycloakAdmin) -> str:
-        if self._client_role_internal_id:
-            return self._client_role_internal_id
-        if not self._client_role_client_id:
-            raise RuntimeError("Keycloak client for CLI role assignment is not configured.")
-        client_internal_id = admin.get_client_id(self._client_role_client_id)
-        if not client_internal_id:
-            raise RuntimeError(f"Client '{self._client_role_client_id}' not found in Keycloak.")
-        self._client_role_internal_id = client_internal_id
-        return client_internal_id
+        return self._resolve_client_internal_id(admin, self._client_role_client_id)
+
+    def _resolve_client_internal_id(self, admin: KeycloakAdmin, client_id: Optional[str]) -> str:
+        if not client_id:
+            raise RuntimeError("Client identifier is not configured.")
+        cached = self._client_internal_ids.get(client_id)
+        if cached:
+            return cached
+        internal_id = admin.get_client_id(client_id)
+        if not internal_id:
+            raise RuntimeError(f"Client '{client_id}' not found in Keycloak.")
+        self._client_internal_ids[client_id] = internal_id
+        return internal_id
 
     @staticmethod
     def _decode_jwt_payload(token: str) -> Dict[str, Any]:

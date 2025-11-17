@@ -389,6 +389,24 @@ class HubManager:
                 detail="Unable to obtain token from Keycloak.",
             ) from exc
 
+    async def logout(self, request: hub_requests.LogoutRequest) -> Dict[str, Any]:
+        try:
+            return await self._auth_client.logout(
+                refresh_token=request.refresh_token,
+                client_id=request.client_id,
+                client_secret=request.client_secret,
+                auth_url=request.auth_url,
+                realm=request.realm,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self.logger.exception("Unexpected error during Keycloak logout flow: %s", exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to revoke token with Keycloak.",
+            ) from exc
+
     # ------------------------------------------------------------------
     # Users
     # ------------------------------------------------------------------

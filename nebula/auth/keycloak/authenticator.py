@@ -44,6 +44,8 @@ class KeycloakAuthenticator:
         self._required_scope = required_scope
         self._public_key_ttl = jwks_cache_seconds
         self._client_id = client_id or audience or os.environ.get("NEBULA_KEYCLOAK_CLIENT_ID") or "account"
+        require_active_env = (os.environ.get("NEBULA_KEYCLOAK_REQUIRE_ACTIVE_SESSION") or "true").strip().lower()
+        self._require_active_session = require_active_env not in {"false", "0", "no"}
 
         self._openid_client = KeycloakOpenID(
             server_url=self._server_url,
@@ -125,6 +127,9 @@ class KeycloakAuthenticator:
             logger.exception("Unexpected Keycloak error during token validation: %s", detail)
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Keycloak token validation failed.") from exc
 
+        if self._require_active_session:
+            await self._ensure_active_session(token)
+
         audience = self._extract_audience(claims)
         if self._audience and self._audience not in audience:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid token audience.")
@@ -181,3 +186,24 @@ class KeycloakAuthenticator:
             roles.update(role for role in custom_roles.split() if role)
 
         return roles
+
+    async def _ensure_active_session(self, token: str) -> None:
+        try:
+            await asyncio.to_thread(self._openid_client.userinfo, token)
+        except KeycloakAuthenticationError as exc:
+            detail = describe_keycloak_exception(exc) or "Token is no longer active."
+            logger.warning("Keycloak rejected token during activity check: %s", detail)
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=detail) from exc
+        except KeycloakConnectionError as exc:
+            logger.exception("Connection error while verifying token activity: %s", exc)
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to verify token activity with Keycloak.",
+            ) from exc
+        except KeycloakError as exc:
+            detail = describe_keycloak_exception(exc) or "Token validation failed."
+            logger.exception("Unexpected Keycloak error during activity check: %s", detail)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Keycloak token validation failed.",
+            ) from exc

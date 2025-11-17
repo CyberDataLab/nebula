@@ -74,6 +74,14 @@ class LoginRequest(BaseModel):
     auth_url: Optional[str] = None
     realm: Optional[str] = None
 
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
+    auth_url: Optional[str] = None
+    realm: Optional[str] = None
+
 """                                                     ###############################
                                                         #          WEB SOCKET         #
                                                         ###############################
@@ -97,6 +105,7 @@ class Routes:
     LEAST_MEMORY_GPU = "/least_memory_gpu"
     AVAILABLE_GPUS = "/available_gpus/"
     LOGIN = "/auth/login"
+    LOGOUT = "/auth/logout"
 
     # Scenarios (Controller + DB API routing)
     RUN = "/scenarios/run"

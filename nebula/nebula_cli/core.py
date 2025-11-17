@@ -215,6 +215,27 @@ class NebulaClient:
     def login(self, username: str, password: str) -> Dict[str, Any]:
         return obtain_token(self.config, username, password, self.session)
 
+    def logout(self, refresh_token: Optional[str]) -> None:
+        if not refresh_token:
+            return
+        payload: Dict[str, Any] = {
+            "refresh_token": refresh_token,
+            "client_id": self.config.client_id,
+        }
+        if self.config.client_secret:
+            payload["client_secret"] = self.config.client_secret
+        url = self._url(Routes.LOGOUT)
+        try:
+            response = self.session.post(
+                url,
+                json=payload,
+                timeout=self.config.timeout,
+                verify=self.config.verify_tls,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Failed to revoke session with hub: {exc}") from exc
+
     def _get_access_token(self) -> str:
         token = load_token()
         if token is None:
@@ -265,7 +286,13 @@ class NebulaClient:
 
         if response.status_code >= 400:
             detail = extract_error_detail(response)
-            raise RuntimeError(f"{method.upper()} {path} failed ({response.status_code}): {detail}")
+            if response.status_code == 401:
+                hint = "Token missing, expired, or revoked. Run 'nebula-cli auth login' to obtain a new session."
+                if detail and detail.lower() != "unknown error":
+                    detail = f"{detail}\n{hint}"
+                else:
+                    detail = hint
+            raise RuntimeError(f"{method.upper()} {path} failed {detail}")
 
         return response
 

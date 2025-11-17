@@ -62,6 +62,11 @@ async def login(request: hub_requests.LoginRequest):
     return await hub_manager.login(request)
 
 
+@app.post(hub_requests.Routes.LOGOUT)
+async def logout(request: hub_requests.LogoutRequest):
+    return await hub_manager.logout(request)
+
+
 # def validate_physical_fields(data: dict):
 #     if data.get("deployment") != "physical":
 #         return

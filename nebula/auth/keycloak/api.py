@@ -54,6 +54,23 @@ async def obtain_token(
     )
 
 
+async def logout(
+    *,
+    refresh_token: str,
+    client_id: Optional[str] = None,
+    client_secret: Optional[str] = None,
+    auth_url: Optional[str] = None,
+    realm: Optional[str] = None,
+) -> Dict[str, Any]:
+    return await _token_client.logout(
+        refresh_token=refresh_token,
+        client_id=client_id,
+        client_secret=client_secret,
+        auth_url=auth_url,
+        realm=realm,
+    )
+
+
 async def register_user(
     actor: AuthenticatedUser,
     username: str,

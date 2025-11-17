@@ -132,3 +132,41 @@ class KeycloakTokenClient:
             result["refresh_token"] = refresh_token
 
         return result
+
+    async def logout(
+        self,
+        *,
+        refresh_token: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        auth_url: Optional[str] = None,
+        realm: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if not refresh_token:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="refresh_token is required for logout.")
+
+        resolved_client_id = client_id or self._default_client_id
+        if not resolved_client_id:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Keycloak client_id is not configured for logout.",
+            )
+
+        keycloak = self._build_openid_client(auth_url, realm, resolved_client_id, client_secret or self._default_client_secret)
+        try:
+            await asyncio.to_thread(keycloak.logout, refresh_token)
+        except KeycloakAuthenticationError as exc:
+            detail = describe_keycloak_exception(exc) or "Keycloak rejected the logout request."
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=detail) from exc
+        except KeycloakConnectionError as exc:
+            logger.exception("Connection error while contacting Keycloak logout endpoint: %s", exc)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Unable to reach Keycloak logout endpoint.",
+            ) from exc
+        except KeycloakError as exc:
+            detail = describe_keycloak_exception(exc)
+            logger.exception("Unexpected Keycloak error during logout: %s", detail)
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Keycloak logout failed.") from exc
+
+        return {"revoked": True}

@@ -12,6 +12,7 @@ from nebula.auth.api import (
     register_user as keycloak_register_user,
     delete_user as keycloak_delete_user,
     update_user as keycloak_update_user,
+    logout as keycloak_logout,
 )
 
 
@@ -74,6 +75,18 @@ class AuthClient(abc.ABC):
     async def delete_user(self, actor: AuthenticatedUser, username: str) -> Dict[str, Any]:
         """Delete a user from the upstream identity provider."""
 
+    @abc.abstractmethod
+    async def logout(
+        self,
+        *,
+        refresh_token: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        auth_url: Optional[str] = None,
+        realm: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Revoke a refresh token in the upstream identity provider."""
+
 
 class KeycloakAuthClient(AuthClient):
     """Auth client implementation backed by the Keycloak helper module."""
@@ -126,6 +139,23 @@ class KeycloakAuthClient(AuthClient):
 
     async def delete_user(self, actor: AuthenticatedUser, username: str) -> Dict[str, Any]:
         return await keycloak_delete_user(actor=actor, username=username)
+
+    async def logout(
+        self,
+        *,
+        refresh_token: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        auth_url: Optional[str] = None,
+        realm: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return await keycloak_logout(
+            refresh_token=refresh_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            auth_url=auth_url,
+            realm=realm,
+        )
     async def list_users(
         self,
         actor: AuthenticatedUser,

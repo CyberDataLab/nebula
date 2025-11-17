@@ -1317,6 +1317,8 @@ class Deployer:
             "NEBULA_KEYCLOAK_REALM": self.keycloak_realm,
             "NEBULA_KEYCLOAK_AUDIENCE": self.keycloak_audience,
             "NEBULA_KEYCLOAK_SCOPE": self.keycloak_scope,
+            "NEBULA_KEYCLOAK_ADMIN_USER": self.keycloak_admin_user,
+            "NEBULA_KEYCLOAK_ADMIN_PASSWORD": self.keycloak_admin_password,
             "NEBULA_KEYCLOAK_CLIENT_ID": "nebula-cli",
             "NEBULA_KEYCLOAK_CLI_CLIENT_ID": "nebula-cli",
             "NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS": os.environ.get("NEBULA_KEYCLOAK_JWKS_CACHE_SECONDS", "300"),
