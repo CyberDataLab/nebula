@@ -9,7 +9,6 @@ from fastapi import HTTPException, Request, UploadFile, WebSocket, status
 from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.auth.api import AuthenticatedUser
 from nebula.auth.policy import (
-    actor_username,
     actor_role,
     can_impersonate,
     resolve_username,
@@ -80,7 +79,12 @@ class HubManager:
     # ------------------------------------------------------------------
     # Scenarios
     # ------------------------------------------------------------------
-    async def run_scenario(self, actor: AuthenticatedUser, scenario_data, request: Request):
+    async def run_scenario(
+        self,
+        actor: AuthenticatedUser,
+        scenario_data,
+        request: Request,
+    ):
         """
         Launches a new scenario based on the provided configuration.
 
@@ -94,23 +98,24 @@ class HubManager:
         user_host = request.client.host
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
-        username = actor_username(actor)
+        username = resolve_username(actor, None)
         role = actor_role(actor)
         scenario_payload = dict(scenario_data)
 
         try:
-            hkc = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=self.logger)
-            await hkc.init()
+            # hkc = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=self.logger)
+            # await hkc.init()
 
             # # Generate IDs for all scenarios
-            # federation_ids = self._generate_federation_ids(user, [scenario_data])
+            federation_ids = self._generate_federation_ids(username, [scenario_data])
 
             # # Save scenarios on User Scenario Qeue
-            # await self.sqm.add_scenarios(user, user_dest, federation_ids, [scenario_data])
+            await self.sqm.add_scenarios(username, user_dest, federation_ids, [scenario_data])
 
             # # Get first scenario to execute
-            # _, federation_id, scenario_data = await self.sqm.get_next_scenario(user=user)
+            _, federation_id, scenario_data = await self.sqm.get_next_scenario(user=username)
 
+            return {"federation_id": federation_id}
             # #TODO modify to use role on query
             # response = await self.federation_client.run_scenario(
             #     user=user,
@@ -135,7 +140,7 @@ class HubManager:
             # else:
             #     raise HTTPException(status_code=500, detail="Error starting scenario")
         except Exception as e:
-            self.logger.exception(f"Error running scenario for user '{user}\n{e}'")
+            self.logger.exception(f"Error running scenario {e}")
 
     async def stop_scenario(self, federation_id: str, experiment_type: str, stop_all: bool = False) -> None: #TODO stop_all with queues
         try:

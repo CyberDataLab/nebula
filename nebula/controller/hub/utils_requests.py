@@ -10,8 +10,6 @@ from pydantic import BaseModel, ConfigDict, conint, confloat
 class RunScenarioRequest(BaseModel):
     #TODO List[Dict]
     scenario_data: Dict[str, Any]
-    user: Optional[str] = None
-    role: Optional[str] = None
 
 
 class UpdateScenarioRequest(BaseModel):

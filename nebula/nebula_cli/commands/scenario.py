@@ -31,10 +31,6 @@ def cmd_scenario_run(args: argparse.Namespace, client: NebulaClient) -> None:
         use_stdin=args.config_stdin,
     )
     body: Dict[str, Any] = {"scenario_data": scenario_data}
-    if args.user:
-        body["user"] = args.user
-    if args.role:
-        body["role"] = args.role
     data = client.request_json("POST", Routes.RUN, json_body=body)
     print_output(data, args.output)
 
@@ -113,8 +109,6 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         action="store_true",
         help="Read the scenario JSON from stdin",
     )
-    run_parser.add_argument("--user", help="Override the user included in the payload")
-    run_parser.add_argument("--role", help="Override the role included in the payload")
     run_parser.set_defaults(func=cmd_scenario_run)
 
     stop_parser = scenario_sub.add_parser("stop", help="Stop a scenario")

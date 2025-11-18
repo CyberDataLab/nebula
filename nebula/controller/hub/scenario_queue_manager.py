@@ -1,6 +1,6 @@
 import collections
 import logging
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Optional
 from nebula.core.utils.locker import Locker
 
 class ScenarioQueueManager():
@@ -94,9 +94,16 @@ class ScenarioQueueManager():
             user_qeue = await self._get_qeue_from_user(user_id)
             await user_qeue.add_scenarios(user_id=user_id, federation_ids=federation_ids, data=data)
 
-    async def get_next_scenario(self, federation_id: str = "", user: str = "") -> tuple[str, str, Dict[str, Any]] | None:
-        if user:
+    async def get_next_scenario(
+        self,
+        federation_id: str = "",
+        user: Optional[str] = None,
+    ) -> tuple[str, str, Dict[str, Any]] | None:
+        if user is not None:
             user_qeue = await self._get_qeue_from_user(user)
+            if user_qeue is None:
+                self._logger.warning("Scenario queue not found for user '%s'", user)
+                return None
             next_scenario = await user_qeue.next_scenario()
             return next_scenario
         else:
