@@ -25,7 +25,7 @@ class Graphics():
         self.scenario_name = scenario_name
         log_dir = os.path.join(os.environ["NEBULA_LOGS_DIR"], scenario_name)
         self.nebulalogger = NebulaTensorBoardLogger(scenario_start_time, f"{log_dir}", name="metrics", version=f"trust", log_graph=True)
-        
+
     def __log_figure(self, df, pillar, color, notion_y_pos = -0.4, figsize=(10,6)):
         filtered_df = df[df['Pillar'] == pillar].copy()
 
@@ -36,7 +36,7 @@ class Graphics():
         filtered_df.loc[:, 'Notion'] = filtered_df['Notion'].apply(lambda x: str(x).title())
 
         unique_notion_count = filtered_df['Notion'].nunique()
-        palette = [color] * unique_notion_count 
+        palette = [color] * unique_notion_count
 
         plt.figure(figsize=figsize)
         ax = sns.barplot(data=filtered_df, x='Metric', y='Metric Score', hue='Notion', palette=palette, dodge=False)
@@ -50,12 +50,12 @@ class Graphics():
             notion = row['Notion']
             notion_score = row['Notion Score']
             metric_score = row['Metric Score']
-            
+
             if notion not in notion_scores:
                 metrics_for_notion = filtered_df[filtered_df['Notion'] == notion]['Metric']
                 start_pos = x_positions[i]
                 end_pos = x_positions[i + len(metrics_for_notion) - 1]
-                
+
                 notion_x_pos = (start_pos + end_pos) / 2
                 ax.axhline(notion_score, ls='--', color='black', lw=0.5, xmin=start_pos/len(x_positions), xmax=(end_pos+1)/len(x_positions))
                 ax.text(notion_x_pos, notion_score + 0.01, f"{notion_score:.2f}", ha='center', va='bottom', fontsize=10, color='black')  # Color negro
@@ -70,15 +70,15 @@ class Graphics():
                 metrics_for_notion = filtered_df[filtered_df['Notion'] == notion]['Metric']
                 start_pos = x_positions[i]
                 end_pos = x_positions[i + len(metrics_for_notion) - 1]
-                
+
                 notion_x_pos = (start_pos + end_pos) / 2
-                
-                ax.text(notion_x_pos, notion_y_pos, notion, ha='center', va='center', fontsize=10, color='black') 
-                
-                seen_notions.add(notion)  
+
+                ax.text(notion_x_pos, notion_y_pos, notion, ha='center', va='center', fontsize=10, color='black')
+
+                seen_notions.add(notion)
 
         for i, v in enumerate(filtered_df['Metric Score']):
-            ax.text(i, v + 0.01, f"{v:.2f}", ha='center', va='bottom', fontsize=10, color='black') 
+            ax.text(i, v + 0.01, f"{v:.2f}", ha='center', va='bottom', fontsize=10, color='black')
 
         plt.xlabel('Metrics and notions', labelpad=35)
         plt.ylabel('Score')
@@ -87,7 +87,7 @@ class Graphics():
         ax.legend_.remove()
 
         plt.tight_layout()
-        
+
         self.nebulalogger.log_figure(ax.get_figure(), 0, f"Trust/Pillar/{pillar}")
         plt.close()
 

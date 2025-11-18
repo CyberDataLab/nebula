@@ -27,14 +27,14 @@ class Reporter:
         self._report_locker = Locker(name="report_locker", async_lock=True)
         self._resource_monitor = ResourceMonitor(config=config)
         self._verbose = verbose
-        
+
     async def start(self):
         await EventManager.get_instance().subscribe_addonevent(ChangeLocationEvent, self._update_required_addon_event)
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self._update_required_node_event)
         await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._round_end)
         await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._finish_experiment_notification)
         self._kafka_client.init()
-        
+
     async def stop(self):
         logging.info("🔍  Stopping reporter module...")
         stopped = await self._kafka_client.shutdown()
@@ -46,18 +46,18 @@ class Reporter:
         sent = await self._report_data(ExperimentMessages.UPDATE, await self._config.get_update_info())
         if self._verbose:
             logging.info(f"Data report successfully: {sent}")
-    
+
     async def _update_required_node_event(self, event: UpdateNeighborEvent):
         self._updare_required.set()
         sent = await self._report_data(ExperimentMessages.UPDATE, await self._config.get_update_info())
         if self._verbose:
             logging.info(f"Data report successfully: {sent}")
-    
+
     async def _round_end(self, event: RoundEndEvent):
         # At round end send UPDATE and METRIC
         # Send UPDATE
         await self._update_required_node_event(event)
-        
+
         # Send METRICS
         experiment_id = await self._config.get_experiment_id()
         end_time, iteration, model_metrics = await event.get_event_data()
@@ -69,12 +69,12 @@ class Reporter:
         sent = await self._report_data(ExperimentMessages.METRICS, experiment_id=experiment_id, end_time=end_time, iteration=iteration, metrics=metrics)
         if self._verbose:
             logging.info(f"Data report successfully: {sent}")
-    
+
     async def _finish_experiment_notification(self, event: ExperimentFinishEvent):
         sent = await self._report_data(ExperimentMessages.DONE, await self._config.get_done_info())
         if self._verbose:
             logging.info(f"Data report successfully: {sent}")
-    
+
     async def _report_data(self, message_type: ExperimentMessages, **kwargs) -> bool:
         async with self._report_locker:
             if message_type == ExperimentMessages.UPDATE:
@@ -84,6 +84,3 @@ class Reporter:
             else:
                 sent = await self._kafka_client.produce(message_type, **kwargs)
         return sent
-            
-                
-    

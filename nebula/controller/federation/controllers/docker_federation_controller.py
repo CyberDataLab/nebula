@@ -107,7 +107,7 @@ class DockerFederationController(FederationController):
         else:
              self.logger.info(f"ERROR: federation ID: ({federation_id}) already exists..")
              raise_error(FEDERATION_ALREADY_EXISTS)
-         
+
         if scenario_info:
             return RunScenarioResponse(**scenario_info)
         else:
@@ -126,11 +126,11 @@ class DockerFederationController(FederationController):
 
         client = docker.from_env()
         metadata_path = os.path.join(federation.config_dir, "scenario.metadata")
-        
+
         if not os.path.exists(metadata_path):
             self.logger.info(f"ERROR {metadata_path} - no 'scenario.metadata' found")
             raise_error(SCENARIO_STOP_FAILED)
-            
+
         with open(metadata_path) as f:
             meta = json.load(f)
         # Remove containers listed in metadata
@@ -175,7 +175,7 @@ class DockerFederationController(FederationController):
             nebula_federation = await self._get_nebula_federation(federation_id)
             if not nebula_federation:
                 raise_error(FEDERATION_NOT_FOUND)
-                
+
             self.logger.info(f"Update received from node on federation ID: ({fed_id})")
             last_fed_round = nebula_federation.federation_round
             additionals = await nebula_federation.get_additionals_to_be_deployed(config) # It modifies if neccesary the federation round
@@ -206,26 +206,26 @@ class DockerFederationController(FederationController):
         nebula_federation = await self._get_nebula_federation(federation_id)
         if not nebula_federation:
             raise_error(FEDERATION_NOT_FOUND)
-            
+
         self.logger.info(f"Node-Done received from node on federation ID: ({federation_id})")
 
         if await nebula_federation.is_experiment_finish():
             self.logger.info(f"All nodes have finished on federation ID: ({federation_id})")
             return True
-        
+
         return False
 
     async def remove_scenario(self, federation_id: str, experiment_type: str, user: str, scenario_name: str):
         if(await self._check_active_federation(federation_id)):
             self.logger.info(f"WARNING: Cannot remove files from active federation: ({federation_id})")
             raise_error(SCENARIO_REMOVE_ACTIVE_FEDERATION)
-        
+
         folder_name = user+"_"+scenario_name
         scenario_config_path = os.path.join(self.config_dir, folder_name)
         scenario_log_path = os.path.join(self.log_dir, folder_name)
-          
+
         info_messages = []
-       
+
         if os.path.exists(scenario_config_path):
             try:
                 shutil.rmtree(scenario_config_path)
@@ -247,10 +247,10 @@ class DockerFederationController(FederationController):
         else:
             self.logger.warning(f"Log folder {scenario_log_path} not found, skipping removal")
             info_messages.append("Log folder not found, nothing to remove.")
-            
-        additional_info = " | ".join(info_messages)    
+
+        additional_info = " | ".join(info_messages)
         return RemoveScenarioResponse(federation_id=federation_id, additional_info=additional_info)
-        
+
     """                                             ###############################
                                                     #       FUNCTIONALITIES       #
                                                     ###############################

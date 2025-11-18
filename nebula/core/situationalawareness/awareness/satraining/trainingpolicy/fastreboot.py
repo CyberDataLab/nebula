@@ -24,13 +24,13 @@ class FastReboot(TrainingPolicy):
         self._upgrade_lr = FR_LEARNING_RATE                     # Increased value for learning rate
         self._current_lr = VANILLA_LEARNING_RATE
         self._verbose = config["verbose"]
-        
+
         self._learning_rate_lock = Locker(name="learning_rate_lock", async_lock=True)
         self._weight_modifier = {}
         self._weight_modifier_lock = Locker(name="weight_modifier_lock", async_lock=True)
 
         self._fr_in_progress = False
-        
+
     async def init(self, config):
         #await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent)
         #await EventManager.get_instance().subscribe_node_event(AggregationEvent)

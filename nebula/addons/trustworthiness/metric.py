@@ -64,6 +64,6 @@ class TrustMetricManager:
             final_score = round(final_score, 2)
             result_json["trust_score"] = final_score
             write_results_json(results_file, result_json)
-            
+
             graphics = Graphics(self.scenario_start_time, scenario_name)
             graphics.graphics()

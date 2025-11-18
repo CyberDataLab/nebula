@@ -27,7 +27,7 @@ class DatabaseBroker():
     @property
     def log(self):
         return self._logger
-    
+
     async def init(self, broker: str, user: str, password: str):
         await self.db._init_db_pool()
         self.log.info(f"{broker} -- {user} -- {password}")
@@ -108,9 +108,9 @@ class DatabaseBroker():
             logger=self._logger,
             handler=message_handler,
         )
-        
+
         await self._kafka_client.init(producer=True)
-        
+
     async def _handle_update_message(self, message: UpdateMessage):
         await self.db._update_node_record(
             message.config["device_args"]["uid"],

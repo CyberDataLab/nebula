@@ -308,7 +308,7 @@ class Propagator:
             bool: True if propagation occurred (payload sent), False if halted early.
         """
         eligible_neighbors, strategy_id = await mpe.get_event_data()
-        
+
         self.reset_status_history()
         if strategy_id not in self.strategies:
             logging.info(f"Strategy {strategy_id} not found.")

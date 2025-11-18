@@ -15,11 +15,11 @@ class NebulaAddon(ABC):
     @abstractmethod
     async def start():
         raise NotImplementedError
-    
+
     @abstractmethod
     async def stop():
         raise NotImplementedError
-    
+
 
 class AddondManager:
     """

@@ -165,7 +165,7 @@ class Factsheet:
                 #         dataloader = pickle.load(file)
                 #     get_entropy(i, scenario_name, dataloader)
                 #     i += 1
-                
+
                 get_all_data_entropy(scenario_name)
 
                 with open(f"{files_dir}/entropy.json", "r") as file:
@@ -198,7 +198,7 @@ class Factsheet:
                 factsheet["fairness"]["selection_cv"] = 1
 
                 count_all_class_samples(scenario_name)
-                
+
                 with open(f"{files_dir}/count_class.json", "r") as file:
                     class_distribution = json.load(file)
 
@@ -217,7 +217,7 @@ class Factsheet:
                 #     model = SyscallModelMLP()
                 # else:
                 #     model = CIFAR10ModelCNN()
-                
+
                 model.load_state_dict(lightning_model.state_dict())
 
                 with open(test_dataloader_file, "rb") as file:

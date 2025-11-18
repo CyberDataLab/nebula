@@ -4,11 +4,11 @@ const TrustworthinessManager = (function() {
         setupTrustworthinessSwitch();
         setupWeightValidation();
     }
- 
+
     function setupTrustworthinessSwitch() {
         document.getElementById("TrustworthinessSwitch").addEventListener("change", function() {
             const trustworthinessOptionsDiv = document.getElementById("trustworthiness-options");
-            
+
             if(this.checked){
                 document.getElementById("federationArchitecture").value = "CFL";
                 document.getElementById("federationArchitecture").dispatchEvent(new Event('change'));
@@ -20,7 +20,7 @@ const TrustworthinessManager = (function() {
             }
         });
     }
- 
+
     function setupWeightValidation() {
         const pillarIds = [
             "robustness-pillar",
@@ -49,7 +49,7 @@ const TrustworthinessManager = (function() {
             "sustainability-notion-2",
             "sustainability-notion-3"
         ];
- 
+
         pillarIds.concat(notionIds).forEach(id => {
             const input = document.getElementById(id);
             if (input) {
@@ -57,7 +57,7 @@ const TrustworthinessManager = (function() {
             }
         });
     }
- 
+
     function validateWeights() {
         const robustnessPercent = parseFloat(document.getElementById("robustness-pillar").value) || 0;
         const privacyPercent = parseFloat(document.getElementById("privacy-pillar").value) || 0;
@@ -66,7 +66,7 @@ const TrustworthinessManager = (function() {
         const accountabilityPercent = parseFloat(document.getElementById("accountability-pillar").value) || 0;
         const architecturalSoundnessPercent = parseFloat(document.getElementById("architectural-soundness-pillar").value) || 0;
         const sustainabilityPercent = parseFloat(document.getElementById("sustainability-pillar").value) || 0;
- 
+
         const robustnessNotion1 = parseFloat(document.getElementById("robustness-notion-1").value) || 0;
         const robustnessNotion2 = parseFloat(document.getElementById("robustness-notion-2").value) || 0;
         const robustnessNotion3 = parseFloat(document.getElementById("robustness-notion-3").value) || 0;
@@ -83,7 +83,7 @@ const TrustworthinessManager = (function() {
         const sustainabilityNotion1 = parseFloat(document.getElementById("sustainability-notion-1").value) || 0;
         const sustainabilityNotion2 = parseFloat(document.getElementById("sustainability-notion-2").value) || 0;
         const sustainabilityNotion3 = parseFloat(document.getElementById("sustainability-notion-3").value) || 0;
- 
+
         const totalPillar =
             robustnessPercent +
             privacyPercent +
@@ -92,14 +92,14 @@ const TrustworthinessManager = (function() {
             accountabilityPercent +
             architecturalSoundnessPercent +
             sustainabilityPercent;
- 
+
         const totalRobustnessNotion = robustnessNotion1 + robustnessNotion2 + robustnessNotion3;
         const totalPrivacyNotion = privacyNotion1 + privacyNotion2 + privacyNotion3;
         const totalFairnessNotion = fairnessNotion1 + fairnessNotion2 + fairnessNotion3;
         const totalExplainabilityNotion = explainabilityNotion1 + explainabilityNotion2;
         const totalArchitecturalSoundnessNotion = architecturalSoundnessNotion1 + architecturalSoundnessNotion2;
         const totalSustainabilityNotion = sustainabilityNotion1 + sustainabilityNotion2 + sustainabilityNotion3;
- 
+
         if (totalPillar !== 100) {
             return "[Trustworthiness] Check pillars weights";
         }
@@ -122,11 +122,11 @@ const TrustworthinessManager = (function() {
             return "[Trustworthiness] Check sustainability notions weights";
         }
     }
- 
+
     function getTrustworthinessConfig() {
         const enabled = document.getElementById("trustworthiness-options").style.display === "block";
         const federationArchitecture = document.getElementById("federationArchitecture").value;
- 
+
         const pillars = {
             robustness: parseFloat(document.getElementById("robustness-pillar").value) || 0,
             privacy: parseFloat(document.getElementById("privacy-pillar").value) || 0,
@@ -136,7 +136,7 @@ const TrustworthinessManager = (function() {
             architecturalSoundness: parseFloat(document.getElementById("architectural-soundness-pillar").value) || 0,
             sustainability: parseFloat(document.getElementById("sustainability-pillar").value) || 0
         };
- 
+
         const notions = {
             robustness: [
                 parseFloat(document.getElementById("robustness-notion-1").value) || 0,
@@ -167,7 +167,7 @@ const TrustworthinessManager = (function() {
                 parseFloat(document.getElementById("sustainability-notion-3").value) || 0
             ]
         };
- 
+
         return {
             enabled,
             federationArchitecture,
@@ -175,10 +175,10 @@ const TrustworthinessManager = (function() {
             notions
         };
     }
- 
+
     function setTrustworthinessConfig(config) {
         if (!config) return;
- 
+
         // Set pillar weights
         if (config.pillars) {
             document.getElementById("robustness-pillar").value = config.pillars.robustness || 0;
@@ -189,50 +189,50 @@ const TrustworthinessManager = (function() {
             document.getElementById("architectural-soundness-pillar").value = config.pillars.architecturalSoundness || 0;
             document.getElementById("sustainability-pillar").value = config.pillars.sustainability || 0;
         }
- 
+
         // Set notion weights
         if (config.notions) {
             const rNotions = config.notions.robustness || [0, 0, 0];
             document.getElementById("robustness-notion-1").value = rNotions[0];
             document.getElementById("robustness-notion-2").value = rNotions[1];
             document.getElementById("robustness-notion-3").value = rNotions[2];
- 
+
             const pNotions = config.notions.privacy || [0, 0, 0];
             document.getElementById("privacy-notion-1").value = pNotions[0];
             document.getElementById("privacy-notion-2").value = pNotions[1];
             document.getElementById("privacy-notion-3").value = pNotions[2];
- 
+
             const fNotions = config.notions.fairness || [0, 0, 0];
             document.getElementById("fairness-notion-1").value = fNotions[0];
             document.getElementById("fairness-notion-2").value = fNotions[1];
             document.getElementById("fairness-notion-3").value = fNotions[2];
- 
+
             const eNotions = config.notions.explainability || [0, 0];
             document.getElementById("explainability-notion-1").value = eNotions[0];
             document.getElementById("explainability-notion-2").value = eNotions[1];
- 
+
             const aNotions = config.notions.architecturalSoundness || [0, 0];
             document.getElementById("architectural-soundness-notion-1").value = aNotions[0];
             document.getElementById("architectural-soundness-notion-2").value = aNotions[1];
- 
+
             const sNotions = config.notions.sustainability || [0, 0, 0];
             document.getElementById("sustainability-notion-1").value = sNotions[0];
             document.getElementById("sustainability-notion-2").value = sNotions[1];
             document.getElementById("sustainability-notion-3").value = sNotions[2];
         }
- 
+
         // Perform a weight validation check to update any warnings if needed
         validateWeights();
     }
- 
+
     function resetTrustworthinessConfig() {
         const trustworthinessOptionsDiv = document.getElementById("trustworthiness-options");
         const fedArchElement = document.getElementById("federationArchitecture");
- 
+
         // Hide options and re-enable federationArchitecture
         trustworthinessOptionsDiv.style.display = "none";
         fedArchElement.disabled = false;
- 
+
         // Reset pillars to 0
         document.getElementById("robustness-pillar").value = "0";
         document.getElementById("privacy-pillar").value = "0";
@@ -241,7 +241,7 @@ const TrustworthinessManager = (function() {
         document.getElementById("accountability-pillar").value = "0";
         document.getElementById("architectural-soundness-pillar").value = "0";
         document.getElementById("sustainability-pillar").value = "0";
- 
+
         // Reset notions to 0
         document.getElementById("robustness-notion-1").value = "0";
         document.getElementById("robustness-notion-2").value = "0";
@@ -259,11 +259,11 @@ const TrustworthinessManager = (function() {
         document.getElementById("sustainability-notion-1").value = "0";
         document.getElementById("sustainability-notion-2").value = "0";
         document.getElementById("sustainability-notion-3").value = "0";
- 
+
         // Re-validate weights after reset
         validateWeights();
     }
- 
+
     return {
         initializeTrustworthinessSystem,
         getTrustworthinessConfig,
@@ -271,5 +271,5 @@ const TrustworthinessManager = (function() {
         resetTrustworthinessConfig
     };
 })();
- 
+
 export default TrustworthinessManager;

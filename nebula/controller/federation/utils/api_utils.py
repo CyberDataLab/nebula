@@ -12,4 +12,3 @@ def raise_error(error_def: ErrorDefinition):
             internal_code=error_def.code,
         ).model_dump()
     )
-    

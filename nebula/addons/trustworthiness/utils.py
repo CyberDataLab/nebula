@@ -59,7 +59,7 @@ def count_class_samples(scenario_name, dataloaders_files, class_counter: Counter
 
     result = {}
     dataloaders = []
-    
+
     if class_counter:
         result = {hashids.encode(int(class_id)): count for class_id, count in class_counter.items()}
     else:
@@ -81,7 +81,7 @@ def count_class_samples(scenario_name, dataloaders_files, class_counter: Counter
         name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "count_class.json")
     except:
         name_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "count_class.json")
-        
+
     with open(name_file, "w") as f:
         json.dump(result, f)
 
@@ -90,7 +90,7 @@ def get_all_data_entropy(experiment_name):
     participant_id = 0
     data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
     entropy_per_participant = {}
-    
+
     while True:
         data_class_count_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), experiment_name, "trustworthiness", f"{str(participant_id)}_class_count.json")
 
@@ -109,12 +109,12 @@ def get_all_data_entropy(experiment_name):
 
         entropy_per_participant[str(participant_id)] = round(entropy_value, 6)
         participant_id += 1
-        
+
     name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'),experiment_name, "trustworthiness", "entropy.json")
 
     with open(name_file, "w") as f:
         json.dump(entropy_per_participant, f, indent=2)
-       
+
 def get_entropy(client_id, scenario_name, dataloader):
     """
     Get the entropy of each client in the scenario.
@@ -129,7 +129,7 @@ def get_entropy(client_id, scenario_name, dataloader):
     client_entropy = {}
 
     name_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "entropy.json")
-        
+
     if os.path.exists(name_file):
         logging.info(f"entropy fiel already exists.. loading.")
         with open(name_file, "r") as f:
@@ -274,12 +274,12 @@ def save_results_csv(scenario_name: str, id: int, bytes_sent: int, bytes_recv: i
         data_results_file = os.path.join(os.environ.get('NEBULA_LOGS_DIR'), scenario_name, "trustworthiness", "data_results.csv")
     except:
         data_results_file = os.path.join("nebula", "app", "logs", scenario_name, "trustworthiness", "data_results.csv")
-        
+
     if exists(data_results_file):
         df = pd.read_csv(data_results_file)
     else:
         df = pd.DataFrame(columns=["id", "bytes_sent", "bytes_recv", "accuracy", "loss"])
-        
+
     try:
         # Add new entry to DataFrame
         new_data = pd.DataFrame({'id': [id], 'bytes_sent': [bytes_sent],

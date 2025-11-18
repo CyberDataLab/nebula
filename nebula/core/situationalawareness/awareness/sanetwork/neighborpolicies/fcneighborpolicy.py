@@ -8,8 +8,8 @@ class FCNeighborPolicy(NeighborPolicy):
     """
     Neighbor policy for fully-connected (FC) structured topologies.
 
-    This policy assumes a fully-connected topology where every node should attempt 
-    to connect to all known nodes. It always accepts incoming neighbor connections 
+    This policy assumes a fully-connected topology where every node should attempt
+    to connect to all known nodes. It always accepts incoming neighbor connections
     and considers the neighbor list incomplete if there are known nodes that are not yet connected.
 
     The goal is to maintain full connectivity across all known nodes in the federation.
@@ -23,7 +23,7 @@ class FCNeighborPolicy(NeighborPolicy):
         nodes_known_lock (Locker): Async lock for safe access to `nodes_known`.
         _verbose (bool): Whether to enable verbose logging for debugging purposes.
     """
-    
+
     def __init__(self):
         self.max_neighbors = None
         self.nodes_known = set()

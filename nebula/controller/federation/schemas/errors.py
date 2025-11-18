@@ -14,7 +14,7 @@ class ErrorCode(IntEnum):
     SCENARIO_STOP_FAILED = 1111
     SCENARIO_REMOVE_ACTIVE_FEDERATION = 1121
     SCENARIO_REMOVE_FAILED = 1125
- 
+
     # Controllers
     BAD_CONTROLLER = 1301
 
@@ -108,4 +108,3 @@ UNKNOWN_ERROR = ErrorDefinition(
     error="UnknownError",
     message="An unknown error occurred during processing."
 )
-

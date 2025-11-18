@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class Update:
     """
     Represents a model update received from a node in a specific training round.
-    
+
     Attributes:
         model (object): The model object or weights received.
         weight (float): The weight or importance of the update.
@@ -55,7 +55,7 @@ class CFLUpdateHandler(UpdateHandler):
         _missing_ones (set): Tracks nodes whose updates are missing.
         _role (str): Role of this node (e.g., trainer or server).
     """
-    
+
     def __init__(self, aggregator, addr, buffersize=MAX_UPDATE_BUFFER_SIZE):
         self._addr = addr
         self._aggregator: Aggregator = aggregator

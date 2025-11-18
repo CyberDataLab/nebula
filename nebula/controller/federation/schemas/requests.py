@@ -6,7 +6,7 @@ class RunScenarioRequest(BaseModel):
     scenario_data: Dict[str, Any]
     user: str
     federation_id: str
-    
+
 class StopScenarioRequest(BaseModel):
     experiment_type: str
 
@@ -14,7 +14,7 @@ class RemoveScenarioRequest(BaseModel):
     experiment_type: str
     user: str
     scenario_name: str
-    
+
 class Routes:
     INIT = "/init"
     RUN = "/scenarios/run"
@@ -33,4 +33,3 @@ def factory_requests(resource: str, **kwargs) -> str:
         raise ValueError(f"Resource not found: {resource}")
     except KeyError as e:
         raise ValueError(f"Missing parameter for route '{resource}': {e}")
-    

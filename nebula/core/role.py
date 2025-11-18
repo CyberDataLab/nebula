@@ -10,7 +10,7 @@ class Role(Enum):
     PROXY = "proxy"
     IDLE = "idle"
     SERVER = "server"
-    
+
 def factory_node_role(role: str) -> Role:
     if role == "trainer":
         return Role.TRAINER

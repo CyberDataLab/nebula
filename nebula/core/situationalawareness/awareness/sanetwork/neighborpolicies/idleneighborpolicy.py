@@ -8,11 +8,11 @@ class IDLENeighborPolicy(NeighborPolicy):
     """
     Neighbor policy for minimal connectivity scenarios.
 
-    This policy only attempts to discover or establish new neighbor connections 
-    if the node is currently isolated (i.e., has no neighbors). All incoming 
+    This policy only attempts to discover or establish new neighbor connections
+    if the node is currently isolated (i.e., has no neighbors). All incoming
     connection requests are accepted regardless of the current neighbor state.
 
-    This policy is suitable for scenarios where minimal intervention is preferred, 
+    This policy is suitable for scenarios where minimal intervention is preferred,
     and connections are formed opportunistically rather than proactively.
 
     Attributes:
@@ -24,7 +24,7 @@ class IDLENeighborPolicy(NeighborPolicy):
         nodes_known_lock (Locker): Async lock for thread-safe access to `nodes_known`.
         _verbose (bool): Enables verbose logging for debugging and traceability.
     """
-    
+
     def __init__(self):
         self.max_neighbors = None
         self.nodes_known = set()

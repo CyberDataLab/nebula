@@ -16,7 +16,7 @@ class DistanceNeighborPolicy(NeighborPolicy):
     - When to discard or replace existing neighbors.
     - Keeping track of current neighbors and known nodes with their distances.
 
-    The policy operates under the assumption that physical proximity 
+    The policy operates under the assumption that physical proximity
     can be beneficial for performance and robustness in the network.
 
     Attributes:
@@ -26,7 +26,7 @@ class DistanceNeighborPolicy(NeighborPolicy):
         addr (str | None): The address of this node (used for self-identification).
         neighbors_lock (Locker): Async lock for safe access to `neighbors`.
         nodes_known_lock (Locker): Async lock for safe access to `nodes_known`.
-        nodes_distances (dict[str, tuple[float, tuple[float, float]]] | None): 
+        nodes_distances (dict[str, tuple[float, tuple[float, float]]] | None):
             Mapping from node IDs to a tuple containing (distance, (latitude, longitude)).
         nodes_distances_lock (Locker): Async lock for safe access to `nodes_distances`.
         _verbose (bool): Whether to enable verbose logging for debugging purposes.

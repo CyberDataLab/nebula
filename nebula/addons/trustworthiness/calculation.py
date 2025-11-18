@@ -309,7 +309,7 @@ def get_bytes_sent_recv(scenario_name):
 
     total_upload_bytes = int(data["bytes_sent"].sum())
     total_download_bytes = int(data["bytes_recv"].sum())
-    
+
     avg_upload_bytes = total_upload_bytes / number_files
     avg_download_bytes = total_download_bytes / number_files
 
@@ -338,7 +338,7 @@ def get_avg_loss_accuracy(scenario_name):
 
     total_loss = data["loss"].sum()
     total_accuracy = data["accuracy"].sum()
-    
+
     avg_loss = total_loss / number_files
     avg_accuracy = total_accuracy / number_files
     std_accuracy = statistics.stdev(data["accuracy"])

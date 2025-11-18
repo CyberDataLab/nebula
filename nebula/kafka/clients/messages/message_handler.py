@@ -11,14 +11,14 @@ class KafkaMessageHandler:
     async def handle(self, message):
         handler = self._handlers.get(type(message))
         if not handler:
-            return 
+            return
         await handler(message)
-        
+
 def generate_handler(
     log,
     handlers: List[Tuple[Type, Callable]]
 ) -> KafkaMessageHandler:
-    
+
     handler = KafkaMessageHandler(log=log)
 
     for message_type, callback in handlers:

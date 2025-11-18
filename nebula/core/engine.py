@@ -870,7 +870,7 @@ class Engine:
                 self.trainer.on_round_end()
                 ree = RoundEndEvent(self.round, current_time, self.trainer.get_metrics())
                 await EventManager.get_instance().publish_node_event(ree)
-                
+
                 self.round += 1
                 self.config.participant["federation_args"]["round"] = (
                     self.round

@@ -46,7 +46,7 @@ class DataModule(LightningDataModule):
         self.data_val = None
         self.global_te_subset = None
         self.local_te_subset = None
-        
+
     def get_samples_per_label(self):
         return self._samples_per_label
 

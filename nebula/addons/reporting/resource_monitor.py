@@ -144,5 +144,5 @@ class ResourceMonitor():
                 resources["V-GPU"] = devices_info
             except Exception:  # noqa: S110
                 pass
-            
+
         return resources

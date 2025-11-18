@@ -92,7 +92,7 @@ const AttackManager = (function() {
                 targetLabel: {title: document.getElementById("target_label-title"), container: document.getElementById("target_label-container")},
                 targetChangedLabel: {title: document.getElementById("target_changed_label-title"), container: document.getElementById("target_changed_label-container")}
             };
-            
+
             if (this.checked && attackType === ATTACK_TYPES.LABEL_FLIPPING) {
                 showElements(elements, ['targetLabel', 'targetChangedLabel']);
             } else if (this.checked && attackType === ATTACK_TYPES.SAMPLE_POISONING) {
@@ -118,7 +118,7 @@ const AttackManager = (function() {
 
     function getAttackConfig() {
         const attackType = document.getElementById("poisoning-attack-select").value;
-        
+
         // Validate numeric inputs
         function validateNumericInput(id, min = 0, max = 100) {
             const value = parseFloat(document.getElementById(id).value);

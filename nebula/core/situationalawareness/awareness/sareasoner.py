@@ -148,7 +148,7 @@ class SAReasoner(ISAReasoner):
             bool: True if the node is marked as an additional participant, False otherwise.
         """
         return self._is_additional_node
-    
+
 
     """                                                     ###############################
                                                             #    REESTRUCTURE TOPOLOGY    #

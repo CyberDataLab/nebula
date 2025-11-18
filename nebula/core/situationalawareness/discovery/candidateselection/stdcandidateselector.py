@@ -9,8 +9,8 @@ class STDandidateSelector(CandidateSelector):
     Candidate selector for scenarios without a predefined structural topology.
 
     In cases where the federation topology is not explicitly structured,
-    this selector chooses candidates based on the average number of neighbors 
-    indicated in their offers. It selects approximately as many candidates as the 
+    this selector chooses candidates based on the average number of neighbors
+    indicated in their offers. It selects approximately as many candidates as the
     average neighbor count, aiming to balance connectivity dynamically.
 
     Attributes:
@@ -27,7 +27,7 @@ class STDandidateSelector(CandidateSelector):
     Inherits from:
         CandidateSelector: Base interface for candidate selection strategies.
     """
-    
+
     def __init__(self):
         self.candidates = []
         self.candidates_lock = Locker(name="candidates_lock")

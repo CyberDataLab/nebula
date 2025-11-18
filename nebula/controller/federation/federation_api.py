@@ -6,7 +6,7 @@ from fastapi.concurrency import asynccontextmanager
 from typing import Dict
 from nebula.utils import LoggerUtils
 from nebula.controller.federation.federation_broker import FederationBroker
-from nebula.controller.federation.federation_controller import FederationController 
+from nebula.controller.federation.federation_controller import FederationController
 from nebula.controller.federation.schemas.requests import *
 from nebula.controller.federation.schemas.responses import *
 from nebula.controller.federation.schemas.errors import *
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     hub_port = os.environ.get("NEBULA_CONTROLLER_PORT")
     controller_host = os.environ.get("NEBULA_CONTROLLER_HOST")
     hub_url = f"http://{controller_host}:{hub_port}"
-    
+
     controller_broker = FederationBroker(hub_url=hub_url, logger=logger)
     await controller_broker.init(broker=os.environ.get("KAFKA_BROKER"), user=os.environ.get("KAFKA_CONTROLLER_USER"), password=os.environ.get("KAFKA_CONTROLLER_PASSWORD"))
 
@@ -51,7 +51,7 @@ async def read_root():
 @app.post(
     Routes.RUN,
     response_model=RunScenarioResponse,
-    responses={                                   
+    responses={
         400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
         404: {"model": ErrorResponse, "description": "Scenario ID not found"},
         409: {"model": ErrorResponse, "description": "Conflict - Scenario ID exists"},
@@ -72,7 +72,7 @@ async def run_scenario(run_scenario_request: RunScenarioRequest):
 @app.post(
     Routes.STOP,
     response_model=StopScenarioResponse,
-    responses={                                   
+    responses={
         400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
         500: {"model": ErrorResponse, "description": "Error while stopping scenario"},
     },
@@ -82,7 +82,7 @@ async def run_scenario(run_scenario_request: RunScenarioRequest):
     ),
 )
 async def stop_scenario(
-    federation_id: str, 
+    federation_id: str,
     stop_scenario_request: StopScenarioRequest
 ):
     global controller_broker
@@ -90,11 +90,11 @@ async def stop_scenario(
     logger.info(f"[API]: stop experiment request for federation ID: {federation_id}")
     experiment_type = stop_scenario_request.experiment_type
     return await controller_broker.stop_scenario(experiment_type, federation_id)
-   
+
 @app.post(
     Routes.REMOVE,
     response_model=RemoveScenarioResponse,
-    responses={                                   
+    responses={
         400: {"model": ErrorResponse, "description": "Bad Request - wrong experiment type"},
         409: {"model": ErrorResponse, "description": "Scenario is currently active"},
         500: {"model": ErrorResponse, "description": "Error while removing scenario files"},
@@ -122,8 +122,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5051, help="Port to run the Federation controller on.")
     args = parser.parse_args()
-    
+
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=args.port)
-
-    

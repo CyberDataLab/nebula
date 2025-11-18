@@ -27,7 +27,7 @@ def parse_kafka_message(raw_bytes) -> KafkaMessage | None:
     msg_type_str = data.get("kafka-message", None)
     if not msg_type_str:
         raise ValueError("Missing 'kafka-message' field in payload")
-    
+
     for enum_type, registry in _MESSAGE_REGISTRY.items():
         if msg_type_str in enum_type.__members__:
             msg_type = enum_type[msg_type_str]
@@ -35,7 +35,7 @@ def parse_kafka_message(raw_bytes) -> KafkaMessage | None:
             break
     else:
         raise ValueError(f"Unknown kafka-message type: '{msg_type_str}'")
-    
+
     if not cls:
         raise ValueError(f"No registered class for message type: '{msg_type_str}'")
     return cls.from_bytes(raw_bytes)

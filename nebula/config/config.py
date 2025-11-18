@@ -66,7 +66,7 @@ class Config:
                 )
             }
         }
-        
+
     async def get_done_info(self):
         return {
             "experiment_id": self.participant["scenario_args"]["federation_id"],
@@ -267,10 +267,10 @@ class Config:
 
                 if addr in self.participant["addons"]["mobility"]["neighbors_distance"]:
                     del self.participant["addons"]["mobility"]["neighbors_distance"][addr]
-                    
+
     async def get_current_neighbors(self) -> list:
         return self.participant["network_args"]["neighbors"]
-    
+
     async def get_experiment_id(self) -> str:
         return self.participant["scenario_args"]["federation_id"]
 

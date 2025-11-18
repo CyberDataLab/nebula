@@ -15,13 +15,13 @@ import math
 class QDSTrainingPolicy(TrainingPolicy):
     """
     Implements a Quality-Driven Selection (QDS) strategy for training in DFL.
-    
+
     This policy tracks the cosine similarity of neighbor model updates over time,
     and detects nodes that are inactive or provide redundant updates.
     Based on these evaluations, the policy suggests disconnecting such nodes
     to promote better model convergence and network efficiency.
     """
-    
+
     MAX_HISTORIC_SIZE = 10
     SIMILARITY_THRESHOLD = 0.73
     INACTIVE_THRESHOLD = 3
@@ -31,7 +31,7 @@ class QDSTrainingPolicy(TrainingPolicy):
     def __init__(self, config : dict):
         """
         Initializes the QDS training policy.
-        
+
         Args:
             config (dict): Configuration dictionary with keys:
                 - "addr": Local node address.
@@ -46,7 +46,7 @@ class QDSTrainingPolicy(TrainingPolicy):
         self._last_check = 0
         self._check_done = False
         self._evaluation_results = set()
-        
+
     def __str__(self):
         return "QDS"
 
@@ -94,21 +94,21 @@ class QDSTrainingPolicy(TrainingPolicy):
             for addr, updt in updates.items():
                 if addr == self._addr: continue
                 if not addr in self._nodes.keys(): continue
-                
+
                 deque_history, missed_count = self._nodes[addr]
                 if addr in missing_nodes:
                     if self._verbose: logging.info(f"Node inactivity counter increased for: {addr}")
                     self._nodes[addr] = (deque_history, missed_count + 1)   # Inactive rounds counter +1
                 else:
                     self._nodes[addr] = (deque_history, 0)                  # Reset inactive counter
-                    
-                #TODO Do it for the ones not using the last update received cause they are missing this round                      
+
+                #TODO Do it for the ones not using the last update received cause they are missing this round
                 (model,_) = updt
-                (self_model, _) = self_updt 
+                (self_model, _) = self_updt
                 cos_sim = cosine_metric(self_model, model, similarity=True)
                 self._nodes[addr][0].append(cos_sim)
         self._evaluation_results = await self.evaluate()
-        
+
     async def _get_nodes(self):
         """
         Safely returns a copy of the current node tracking dictionary.
@@ -118,8 +118,8 @@ class QDSTrainingPolicy(TrainingPolicy):
         """
         async with self._nodes_lock:
             nodes = self._nodes.copy()
-        return nodes    
-    
+        return nodes
+
     async def evaluate(self):
         """
         Evaluates the current neighbor set to determine inactive or redundant nodes.
@@ -131,10 +131,10 @@ class QDSTrainingPolicy(TrainingPolicy):
             self._grace_rounds -= 1
             if self._verbose: logging.info("Grace time hasnt finished...")
             return None
-        
+
         if self._verbose: logging.info("Evaluation in process")
-    
-        result = set()     
+
+        result = set()
         if self._last_check == 0:
             self._check_done = True
             nodes = await self._get_nodes()
@@ -149,18 +149,18 @@ class QDSTrainingPolicy(TrainingPolicy):
                         if self._verbose: logging.info(f"Node: {node} hadn't participated in any of the last {self.INACTIVE_THRESHOLD} rounds")
                     else:
                         if self._verbose: logging.info(f"Node: {node} inactivity counter: {inactivity_counter}")
-                        
+
                     if node not in self._round_missing_nodes:
                         if last_sim < self.SIMILARITY_THRESHOLD:
                             if self._verbose: logging.info(f"Node: {node} got a similarity value of: {last_sim} under threshold: {self.SIMILARITY_THRESHOLD}")
                         else:
                             if self._verbose: logging.info(f"Node: {node} got a redundant model, cossine simmilarity: {last_sim} over threshold: {self.SIMILARITY_THRESHOLD}")
                             redundant_nodes.add((node, last_sim))
-                        
+
             if self._verbose: logging.info(f"Inactive nodes on aggregations: {inactive_nodes}")
             if self._verbose: logging.info(f"Redundant nodes on aggregations: {redundant_nodes}")
             if inactive_nodes:
-                result = result.union(inactive_nodes)    
+                result = result.union(inactive_nodes)
             if len(redundant_nodes):
                 sorted_redundant_nodes = sorted(redundant_nodes, key=lambda x: x[1])
                 n_discarded = math.ceil((len(redundant_nodes)/2))
@@ -171,11 +171,11 @@ class QDSTrainingPolicy(TrainingPolicy):
         else:
             if self._verbose: logging.info(f"Evaluation is on cooldown... | {self.CHECK_COOLDOWN - self._last_check} rounds remaining")
             self._check_done = False
-            
+
         self._last_check = (self._last_check + 1)  % self.CHECK_COOLDOWN
-                             
+
         return result
-    
+
     async def get_evaluation_results(self):
         """
         Triggers suggested actions based on last evaluation results.
@@ -186,14 +186,14 @@ class QDSTrainingPolicy(TrainingPolicy):
             for node_discarded in self._evaluation_results:
                 args = (node_discarded, False, True)
                 sac = factory_sa_command(
-                    "connectivity",                        
+                    "connectivity",
                     SACommandAction.DISCONNECT,
-                    self,           
-                    node_discarded,                       
-                    SACommandPRIO.MEDIUM,                 
-                    False,                                
-                    CommunicationsManager.get_instance().disconnect,  
-                    *args                                  
+                    self,
+                    node_discarded,
+                    SACommandPRIO.MEDIUM,
+                    False,
+                    CommunicationsManager.get_instance().disconnect,
+                    *args
                 )
                 await self.suggest_action(sac)
             await self.notify_all_suggestions_done(RoundEndEvent)
@@ -203,9 +203,9 @@ class QDSTrainingPolicy(TrainingPolicy):
 
     async def register_sa_agent(self):
         await SuggestionBuffer.get_instance().register_event_agents(RoundEndEvent, self)
-    
+
     async def suggest_action(self, sac : SACommand):
         await SuggestionBuffer.get_instance().register_suggestion(RoundEndEvent, self, sac)
-    
+
     async def notify_all_suggestions_done(self, event_type):
         await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)

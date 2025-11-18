@@ -1,13 +1,13 @@
 from __future__ import annotations
- 
+
 import logging
 from typing import Optional, Union
- 
+
 import aiohttp
 from aiohttp import FormData
- 
+
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
- 
+
 async def _request_json(
     method: str,
     host: str,
@@ -27,12 +27,12 @@ async def _request_json(
     except Exception as exc:
         logging.error("[%s] %s%s – %s", method.upper(), host, endpoint, exc)
         return None, str(exc)
- 
- 
+
+
 async def remote_get(host: str, endpoint: str):
     return await _request_json("GET", host, endpoint)
- 
- 
+
+
 async def remote_post_form(
     host: str,
     endpoint: str,
