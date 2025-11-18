@@ -83,8 +83,12 @@ echo "⏳ Waiting for Kafka to be ready..."
 /opt/kafka/bin/kafka-server-start.sh /home/kafka/server.properties &
 KAFKA_PID=$!
 
-# Esperar a que el broker esté escuchando en PLAINTEXT
-until nc -z localhost 9092 && nc -z localhost 9094; do
+# Define internal ports for readiness check
+KAFKA_PORT_PLAINTEXT=9092
+KAFKA_PORT_SASL=9094
+
+# Esperar a que el broker esté escuchando en PLAINTEXT y SASL
+until nc -z localhost $KAFKA_PORT_PLAINTEXT && nc -z localhost $KAFKA_PORT_SASL; do
   sleep 5
 done
 echo "✅ Kafka broker is ready."

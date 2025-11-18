@@ -147,7 +147,8 @@ dmypy.json
 .idea/
 _build/
 *.DS_Store
-app/
+app/*/
+*.metadata
 *.yaml
 data/
 *.db*

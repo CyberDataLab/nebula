@@ -19,12 +19,12 @@ from watchdog.observers import Observer
 from nebula.addons.env import check_environment
 from nebula.utils import DockerUtils, FileUtils, SocketUtils, TermEscapeCodeFormatter
 
-
 KEYCLOAK_IMAGE = os.environ.get("NEBULA_KEYCLOAK_IMAGE", "nebula-keycloak")
 KEYCLOAK_DB_IMAGE = os.environ.get("NEBULA_KEYCLOAK_DB_IMAGE", "nebula-keycloak-db")
 KEYCLOAK_DEFAULT_REALM = os.environ.get("NEBULA_KEYCLOAK_REALM", "nebula")
 KEYCLOAK_API_AUDIENCE = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE", "nebula-hub")
 KEYCLOAK_AUDIENCE_SCOPE = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE_SCOPE", "nebula-hub")
+
 
 class CredentialManager:
     """
@@ -72,7 +72,7 @@ class CredentialManager:
         alphabet = string.ascii_letters + string.digits + string.punctuation
         for char in ['"', "'", "\\", "`", "|", "(", ")", "{", "}", "[", "]", "#"]:
             alphabet = alphabet.replace(char, "")
-        return ''.join(secrets.choice(alphabet) for _ in range(length))
+        return "".join(secrets.choice(alphabet) for _ in range(length))
 
     def check_credential(self, key, is_password=True):
         """
@@ -526,7 +526,7 @@ class Deployer:
     @staticmethod
     def _read_metadata():
         try:
-            with open(Deployer.METADATA_FILE, "r") as f:
+            with open(Deployer.METADATA_FILE) as f:
                 data = json.load(f)
                 # Backward compatibility: if it's a list, treat as containers only
                 if isinstance(data, list):
@@ -662,7 +662,9 @@ class Deployer:
             sys.exit(1)
 
         self.controller_port = int(args.controllerport) if hasattr(args, "controllerport") else 5050
-        self.federation_controller_port = int(args.federationcontrollerport) if hasattr(args, "federationcontrollerport") else 5052
+        self.federation_controller_port = (
+            int(args.federationcontrollerport) if hasattr(args, "federationcontrollerport") else 5052
+        )
         self.waf_port = int(args.wafport) if hasattr(args, "wafport") else 6000
         self.frontend_port = int(args.webport) if hasattr(args, "webport") else 6060
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
@@ -694,6 +696,8 @@ class Deployer:
         self.grafana_port = int(args.grafanaport) if hasattr(args, "grafanaport") else 6040
         self.kafka_host = self.get_container_name("nebula-kafka")
         self.kafka_port = int(args.kafkaport) if hasattr(args, "kafkaport") else 9097
+        self.kafka_sasl_port = int(args.kafkasaslport) if hasattr(args, "kafkasaslport") else 9094
+        self.kafka_controller_port = int(args.kafkacontrollerport) if hasattr(args, "kafkacontrollerport") else 9093
         self.kafbat_port = int(args.kafbatport) if hasattr(args, "kafbatport") else 8081
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
@@ -706,7 +710,6 @@ class Deployer:
         self.keycloak_admin_password = os.environ.get("KEYCLOAK_ADMIN_PASSWORD")
         self.keycloak_db_user = os.environ.get("KEYCLOAK_DB_USER")
         self.keycloak_db_password = os.environ.get("KEYCLOAK_DB_PASSWORD")
-
 
     def get_container_name(self, role_tag: str) -> str:
         """
@@ -818,14 +821,14 @@ class Deployer:
                 test_file.write_text("nebula")
                 test_file.unlink()
             except OSError as e:
-                logging.exception(f"Write permission test failed: {str(e)}")
+                logging.exception(f"Write permission test failed: {e!s}")
                 raise SystemExit(1) from e
 
             logging.info(f"Successfully verified access to directory: {path}")
             return str(path.absolute())
 
         except Exception as e:
-            logging.exception(f"Failed to create/access directory {directory_path}: {str(e)}")
+            logging.exception(f"Failed to create/access directory {directory_path}: {e!s}")
             logging.exception(
                 "Please check directory permissions or choose a different location using --database option"
             )
@@ -916,13 +919,13 @@ class Deployer:
             self.keycloak_port = SocketUtils.find_free_port(start_port=self.keycloak_port)
 
         self.run_database()
-        logging.info(f"NEBULA Databases docker is running")
+        logging.info("NEBULA Databases docker is running")
         self.run_keycloak()
-        logging.info(f"NEBULA keycloak docker is running")
+        logging.info("NEBULA keycloak docker is running")
         self.run_kafka()
-        logging.info(f"NEBULA Kafka service is running")
+        logging.info("NEBULA Kafka service is running")
         self.run_kafbat()
-        logging.info(f"Nebula Kafbat service is running")
+        logging.info("Nebula Kafbat service is running")
         logging.info(f"Keycloak IdP is running at http://localhost:{self.keycloak_port}")
         self.run_controller()
         logging.info("NEBULA Controller is running")
@@ -1114,7 +1117,7 @@ class Deployer:
             "DB_PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
             "KAFKA_BROKER": f"{self.kafka_host}:9094",
             "KAFKA_USER_NAME": "N-DB",
-            "KAFKA_USER_PASS": os.environ.get("KAFKA_DB_PASSWORD")
+            "KAFKA_USER_PASS": os.environ.get("KAFKA_DB_PASSWORD"),
         }
         host_sql_path = os.path.join(self.root_path, "nebula/database/adapters/postgress/docker/init-configs.sql")
         db_data_path = os.path.join(self.databases_dir, "postgres-data")
@@ -1128,9 +1131,9 @@ class Deployer:
             ],
             port_bindings={5432: 5432, self.database_port: self.database_port},
         )
-        pg_networking_config = client.api.create_networking_config(
-            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.125")}
-        )
+        pg_networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.125")
+        })
 
         pg_container = client.api.create_container(
             image="nebula-database",
@@ -1147,9 +1150,9 @@ class Deployer:
         # --- PGWeb ---
         pgweb_container_name = self.get_container_name("nebula-pgweb")
         pgweb_host_config = client.api.create_host_config(port_bindings={8081: 8085})
-        pgweb_networking_config = client.api.create_networking_config(
-            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.135")}
-        )
+        pgweb_networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.135")
+        })
 
         pgweb_container = client.api.create_container(
             image="nebula-pgweb",
@@ -1180,7 +1183,12 @@ class Deployer:
 
         client = docker.from_env()
 
-        if not all([self.keycloak_admin_user, self.keycloak_admin_password, self.keycloak_db_user, self.keycloak_db_password]):
+        if not all([
+            self.keycloak_admin_user,
+            self.keycloak_admin_password,
+            self.keycloak_db_user,
+            self.keycloak_db_password,
+        ]):
             raise RuntimeError("Missing Keycloak environment credentials. Check .env generation.")
 
         # Launch dedicated PostgreSQL for Keycloak
@@ -1197,9 +1205,9 @@ class Deployer:
                 f"{keycloak_db_data_path}:/var/lib/postgresql/data",
             ],
         )
-        keycloak_db_networking_config = client.api.create_networking_config(
-            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.140")}
-        )
+        keycloak_db_networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.140")
+        })
 
         try:
             client.containers.get(self.keycloak_db_host)
@@ -1243,15 +1251,13 @@ class Deployer:
         keycloak_host_config = client.api.create_host_config(
             port_bindings={8080: self.keycloak_port},
         )
-        keycloak_networking_config = client.api.create_networking_config(
-            {f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.141")}
-        )
+        keycloak_networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.141")
+        })
 
         try:
             client.containers.get(self.keycloak_host)
-            logging.warning(
-                f"Container {self.keycloak_host} already exists. Deployment may fail or cause conflicts."
-            )
+            logging.warning(f"Container {self.keycloak_host} already exists. Deployment may fail or cause conflicts.")
         except docker.errors.NotFound:
             pass
 
@@ -1303,14 +1309,14 @@ class Deployer:
             "NEBULA_DATABASE_HOST": self.database_host,
             "NEBULA_DATABASE_PORT": self.database_port,
             "NEBULA_HUB_API_LOG": "/nebula/app/logs/hub_api.log",
-            "NEBULA_HUB_LOG" : "/nebula/app/logs/hub.log",
+            "NEBULA_HUB_LOG": "/nebula/app/logs/hub.log",
             "NEBULA_FEDERATION_CONTROLLER_LOG": "/nebula/app/logs/federation.log",
             "NEBULA_CONFIG_DIR": "/nebula/app/config/",
             "NEBULA_LOGS_DIR": "/nebula/app/logs/",
             "NEBULA_CERTS_DIR": "/nebula/app/certs/",
             "NEBULA_HOST_PLATFORM": self.host_platform,
             "NEBULA_CONTROLLER_PORT": self.controller_port,
-            "NEBULA_FEDERATION_CONTROLLER_PORT" : self.federation_controller_port,
+            "NEBULA_FEDERATION_CONTROLLER_PORT": self.federation_controller_port,
             "NEBULA_CONTROLLER_HOST": self.controller_host,
             "NEBULA_FRONTEND_PORT": self.frontend_port,
             "NEBULA_KEYCLOAK_SERVER": f"http://{self.keycloak_host}:8080",
@@ -1329,8 +1335,6 @@ class Deployer:
             "KAFKA_SUPER_USER_PASS": os.environ.get("KAFKA_SUPER_USER_PASS"),
             "KAFKA_DB_PASSWORD": os.environ.get("KAFKA_DB_PASSWORD"),
             "KAFKA_RTM_PASSWORD": "rmt_password",
-
-
         }
 
         volumes = ["/nebula", "/var/run/docker.sock"]
@@ -1346,13 +1350,17 @@ class Deployer:
             extra_hosts={"host.docker.internal": "host-gateway"},
             port_bindings={
                 self.controller_port: self.controller_port,
-                self.federation_controller_port: self.federation_controller_port
+                self.federation_controller_port: self.federation_controller_port,
             },
-            device_requests=[{
-                "Driver": "nvidia",
-                "Count": -1,
-                "Capabilities": [["gpu"]],
-            }] if self.gpu_available else None,
+            device_requests=[
+                {
+                    "Driver": "nvidia",
+                    "Count": -1,
+                    "Capabilities": [["gpu"]],
+                }
+            ]
+            if self.gpu_available
+            else None,
         )
 
         networking_config = client.api.create_networking_config({
@@ -1577,7 +1585,7 @@ class Deployer:
             "KAFKA_LOG_DIR": "/home/kafka/kafka-data",
             "KAFKA_BROKER_ID": "1",
             "KAFKA_LISTENERS": "PLAINTEXT://:9092,CONTROLLER://:9093,SASL_PLAINTEXT://:9094",
-            "KAFKA_ADVERTISED_LISTENERS":f"PLAINTEXT://{self.kafka_host}:9092,SASL_PLAINTEXT://{self.kafka_host}:9094",
+            "KAFKA_ADVERTISED_LISTENERS": f"PLAINTEXT://{self.kafka_host}:9092,SASL_PLAINTEXT://{self.kafka_host}:9094",
             "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT",
             "KAFKA_INTER_BROKER_LISTENER_NAME": "PLAINTEXT",
             "KAFKA_CONTROLLER_QUORUM_VOTERS": "1@localhost:9093",
@@ -1604,7 +1612,7 @@ class Deployer:
                 f"{self.root_path}/scripts:/opt/scripts",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
-            port_bindings={9092: self.kafka_port, 9093: 9093, 9094: 9094},
+            port_bindings={9092: self.kafka_port, 9093: self.kafka_controller_port, 9094: self.kafka_sasl_port},
         )
 
         networking_config = client.api.create_networking_config({
@@ -1652,7 +1660,7 @@ class Deployer:
             "KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS": f"{self.kafka_host}:9092",
             "KAFKA_CLUSTERS_0_SECURITY_PROTOCOL": "PLAINTEXT",
             "KAFKA_HOST": f"{self.kafka_host}:9092",
-            "SPRING_CONFIG_ADDITIONAL-LOCATION": "/config.yml"
+            "SPRING_CONFIG_ADDITIONAL-LOCATION": "/config.yml",
         }
 
         kafbat_container_name = self.get_container_name("nebula-kafka-ui")
@@ -1721,7 +1729,7 @@ class Deployer:
         print("Closing NEBULA (exiting from components)... Please wait")
         errors = []
 
-        #TODO call federation_controller to remove all scenarios instead of deployer
+        # TODO call federation_controller to remove all scenarios instead of deployer
         # try:
         #     # Remove all scenario containers
         #     ScenarioManagement.cleanup_scenario_containers()

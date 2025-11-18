@@ -70,6 +70,22 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    "-ksp",
+    "--kafkasaslport",
+    dest="kafkasaslport",
+    default=9094,
+    help="Kafka SASL port (default: 9094)",
+)
+
+argparser.add_argument(
+    "-kcp",
+    "--kafkacontrollerport",
+    dest="kafkacontrollerport",
+    default=9093,
+    help="Kafka Controller port (default: 9093)",
+)
+
+argparser.add_argument(
     "-kb",
     "--kafbatport",
     dest="kafbatport",
@@ -186,7 +202,7 @@ if __name__ == "__main__":
     if args.stop == "all":
         Deployer.stop_all()
     elif args.stop == "nodes":
-        #TODO stop_nodes from federation_controller
+        # TODO stop_nodes from federation_controller
         pass
 
     Deployer(args).start()
