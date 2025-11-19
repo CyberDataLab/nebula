@@ -33,6 +33,7 @@ class NebulaKafkaNode:
                 self.log.info(f"[Kafka] Attempting to start producer (attempt {attempt}/{max_retries})...")
                 await self._producer.start()
                 self.log.info(f"[Kafka] Producer started successfully with client_id='{self._client_id}'")
+                return  # Exit successfully after initialization
             except (KafkaConnectionError, KafkaTimeoutError) as e:
                 self.log.warning(f"[Kafka] Connection issue on attempt {attempt}: {e}")
             except Exception as e:

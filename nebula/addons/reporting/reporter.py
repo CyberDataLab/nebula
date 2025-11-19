@@ -33,7 +33,7 @@ class Reporter:
         await EventManager.get_instance().subscribe_node_event(UpdateNeighborEvent, self._update_required_node_event)
         await EventManager.get_instance().subscribe_node_event(RoundEndEvent, self._round_end)
         await EventManager.get_instance().subscribe_node_event(ExperimentFinishEvent, self._finish_experiment_notification)
-        self._kafka_client.init()
+        await self._kafka_client.init()
 
     async def stop(self):
         logging.info("🔍  Stopping reporter module...")
