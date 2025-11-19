@@ -29,9 +29,7 @@ WORKDIR /app
 COPY pyproject.toml .
 
 # Install dependencies
-RUN uv python install 3.11.7
-RUN uv python pin 3.11.7
-RUN uv sync --group core
+RUN uv sync --group core --python /usr/bin/python3.11
 
 # Stage 2: Final
 FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
