@@ -109,6 +109,13 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    "--realtimeport",
+    dest="realtimeport",
+    default=8000,
+    help="Realtime service port (default: 8000)",
+)
+
+argparser.add_argument(
     "-st",
     "--stop",
     dest="stop",

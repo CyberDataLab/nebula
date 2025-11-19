@@ -703,6 +703,7 @@ class Deployer:
         self.kafbat_port = int(args.kafbatport) if hasattr(args, "kafbatport") else 8081
         self.loki_port = int(args.lokiport) if hasattr(args, "lokiport") else 6010
         self.statistics_port = int(args.statsport) if hasattr(args, "statsport") else 8080
+        self.realtime_port = int(args.realtimeport) if hasattr(args, "realtimeport") else 8000
 
         self.keycloak_port = int(getattr(args, "keycloakport", 7080))
         self.keycloak_realm = os.environ.get("NEBULA_KEYCLOAK_REALM", KEYCLOAK_DEFAULT_REALM)
@@ -919,6 +920,9 @@ class Deployer:
         if not SocketUtils.is_port_open(self.statistics_port):
             self.statistics_port = SocketUtils.find_free_port(start_port=self.statistics_port)
 
+        if not SocketUtils.is_port_open(self.realtime_port):
+            self.realtime_port = SocketUtils.find_free_port(start_port=self.realtime_port)
+
         if not SocketUtils.is_port_open(self.keycloak_port):
             self.keycloak_port = SocketUtils.find_free_port(start_port=self.keycloak_port)
 
@@ -935,6 +939,8 @@ class Deployer:
         logging.info("NEBULA Controller is running")
         self.run_frontend()
         logging.info(f"NEBULA Frontend is running at http://localhost:{self.frontend_port}")
+        self.run_realtime()
+        logging.info(f"NEBULA Realtime service is running at http://localhost:{self.realtime_port}")
         if self.production and self.prefix == "production":
             logging.info("Deploying NEBULA WAF in production mode")
             self.run_waf()
@@ -983,6 +989,67 @@ class Deployer:
         logging.info("Received termination signal, shutting down...")
         self.stop_all()
         sys.exit(0)
+
+    def run_realtime(self):
+        """
+        Runs the Nebula Realtime service within a Docker container.
+        """
+        if sys.platform == "win32":
+            if not os.path.exists("//./pipe/docker_Engine"):
+                raise Exception("Docker is not running...")
+        else:
+            if not os.path.exists("/var/run/docker.sock"):
+                raise Exception("/var/run/docker.sock not found...")
+
+        network_name = self.get_network_name("net-base")
+        base = DockerUtils.create_docker_network(network_name)
+        Deployer._add_network_to_metadata(network_name)
+
+        client = docker.from_env()
+
+        environment = {
+            "KAFKA_BROKER": f"{self.kafka_host}:9094",
+            "KAFKA_USER_NAME": os.environ.get("KAFKA_SUPER_USER_NAME"),
+            "KAFKA_USER_PASS": os.environ.get("KAFKA_SUPER_USER_PASS"),
+            "NEBULA_KEYCLOAK_SERVER": f"http://{self.keycloak_host}:8080",
+            "NEBULA_KEYCLOAK_REALM": self.keycloak_realm,
+            "NEBULA_KEYCLOAK_AUDIENCE": self.keycloak_audience,
+            "DATA_DIR": "/nebula/realtime/data",
+            "PYTHONPATH": "/nebula:/app",
+        }
+
+        host_config = client.api.create_host_config(
+            binds=[
+                f"{self.root_path}:/nebula",
+            ],
+            port_bindings={8000: self.realtime_port},
+        )
+
+        networking_config = client.api.create_networking_config({
+            f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.160")
+        })
+
+        realtime_container_name = self.get_container_name("nebula-realtime")
+
+        try:
+            client.containers.get(realtime_container_name)
+            logging.warning(f"Container {realtime_container_name} already exists...")
+        except docker.errors.NotFound:
+            pass
+
+        container_id = client.api.create_container(
+            image="nebula-realtime",
+            name=realtime_container_name,
+            detach=True,
+            environment=environment,
+            host_config=host_config,
+            networking_config=networking_config,
+            ports=[8000],
+            command=["python", "/nebula/nebula/realtime/main.py"],
+        )
+
+        client.api.start(container_id)
+        Deployer._add_container_to_metadata(realtime_container_name)
 
     def run_frontend(self):
         """

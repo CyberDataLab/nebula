@@ -58,8 +58,8 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
   && update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
 # Copy virtual environment
-COPY --from=builder /app/.venv /.venv
-ENV PATH="/.venv/bin:$PATH"
+COPY --from=builder /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /
 COPY /nebula/controller/start_services.sh .

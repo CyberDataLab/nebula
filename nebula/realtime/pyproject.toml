@@ -1,0 +1,17 @@
+[project]
+name = "realtime"
+version = "0.1.0"
+description = "Nebula Realtime Service"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "kafka-python",
+    "websockets",
+    "python-keycloak",
+    "jwcrypto",
+]
+
+[tool.uv]
+dev-dependencies = []

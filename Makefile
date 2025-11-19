@@ -52,7 +52,9 @@ install-production: install	## Install production dependencies
 	@docker build -t nebula-waf-grafana -f nebula/addons/waf/Dockerfile-grafana --build-arg USER=$(USER) nebula/addons/waf
 	@echo "🐳 Building nebula-kafka"
 	@docker build -t nebula-kafka -f nebula/kafka/Dockerfile nebula/kafka
-	echo "🐳 Docker images updated."
+	@echo "🐳 Building nebula-realtime"
+	@docker build -t nebula-realtime -f nebula/realtime/Dockerfile nebula/realtime
+	@echo "🐳 Docker images updated."
 
 .PHONY: shell
 shell:				## Start a shell in the uv environment
@@ -122,6 +124,14 @@ update-dockers:				## Update docker images
 		docker build -t nebula-kafka -f nebula/kafka/Dockerfile nebula/kafka;\
 	else \
 		echo "Skipping nebula-kafka docker build."; \
+	fi
+
+	@echo ""
+	@echo "🐳 Building nebula-realtime docker image. Do you want to continue (overrides existing image)? (y/n)"
+	@read ans; if [ "$${ans:-N}" = y ]; then \
+		docker build -t nebula-realtime -f nebula/realtime/Dockerfile nebula/realtime;\
+	else \
+		echo "Skipping nebula-realtime docker build."; \
 	fi
 
 	@echo ""

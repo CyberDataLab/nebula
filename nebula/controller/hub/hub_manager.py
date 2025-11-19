@@ -1,26 +1,28 @@
 import asyncio
-from datetime import datetime
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any
+
 import aiohttp
-from fastapi import HTTPException, Request, UploadFile, WebSocket, status
-from nebula.controller.http_helpers import remote_get, remote_post_form
+from fastapi import HTTPException, Request, UploadFile, status
+
+import nebula.controller.hub.utils_requests as hub_requests
 from nebula.auth.api import AuthenticatedUser
 from nebula.auth.policy import (
     actor_role,
     can_impersonate,
     resolve_username,
 )
+from nebula.controller.http_helpers import remote_get, remote_post_form
 from nebula.controller.hub.clients.auth_client import AuthClient, build_auth_client
 from nebula.controller.hub.clients.db_api_client import DatabaseAPIClient
 from nebula.controller.hub.clients.federation_api_client import FederationAPIClient
 from nebula.controller.hub.scenario_queue_manager import ScenarioQueueManager
-from nebula.utils import APIUtils, HashUtils, TermEscapeCodeFormatter
-import nebula.controller.hub.utils_requests as hub_requests
-from nebula.controller.hub.real_time_manager import RealTimeManager
 from nebula.kafka.clients.admin_client import NebulaKafkaAdmin
+from nebula.utils import HashUtils, TermEscapeCodeFormatter
+
 
 class HubManager:
     """Encapsulates the controller business logic so the API layer stays thin."""
@@ -34,18 +36,24 @@ class HubManager:
         self.database_client = DatabaseAPIClient(
             db_port=os.environ.get("NEBULA_DATABASE_PORT"),
             db_host=os.environ.get("NEBULA_DATABASE_HOST"),
-            logger=self.logger
+            logger=self.logger,
         )
         self.federation_client = FederationAPIClient(
-            fed_controller_port = os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT"),
-            fed_controller_host = os.environ.get("NEBULA_CONTROLLER_HOST"),
-            logger=self.logger
+            fed_controller_port=os.environ.get("NEBULA_FEDERATION_CONTROLLER_PORT"),
+            fed_controller_host=os.environ.get("NEBULA_CONTROLLER_HOST"),
+            logger=self.logger,
         )
 
         self._scenario_qeue_manager = ScenarioQueueManager(self.logger)
-        self._real_time_manager = RealTimeManager(self.logger)
-        self._kafka_admin_client = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=self.logger)
+        self._kafka_admin_client = NebulaKafkaAdmin(
+            user=os.environ.get("KAFKA_SUPER_USER_NAME"),
+            password=os.environ.get("KAFKA_SUPER_USER_PASS"),
+            broker=os.environ.get("KAFKA_BROKER"),
+            client_id="hub",
+            logger=self.logger,
+        )
         self._auth_client: AuthClient = build_auth_client()
+        self.is_ready = False
 
     @property
     def sqm(self):
@@ -53,28 +61,27 @@ class HubManager:
         return self._scenario_qeue_manager
 
     @property
-    def rtm(self):
-        """Real Time Manager instance"""
-        return self._real_time_manager
-
-    @property
     def kac(self):
         """Kafka Admin Client"""
         return self._kafka_admin_client
 
-    def _generate_federation_ids(self, user: str, scenario_datas: List) -> List[str]:
+    def _generate_federation_ids(self, user: str, scenario_datas: list) -> list[str]:
         federation_ids = []
-        for i, sd in enumerate(scenario_datas):
-            id = HashUtils.generate_md5(f"nebula_{user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}_{i}")    # Add index to hash
-            federation_ids.append(id)
+        for i, _ in enumerate(scenario_datas):
+            federation_id = HashUtils.generate_md5(
+                f"nebula_{user}_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}_{i}"
+            )  # Add index to hash
+            federation_ids.append(federation_id)
         return federation_ids
 
     async def init(self):
-        # Delay to let ensure Kafka server is ready
-        await asyncio.sleep(10)
-
-        # Configure Kafka setup using admin client
-        await self.kac.init()
+        try:
+            await self.kac.init()
+            self.is_ready = True
+            self.logger.info("HubManager initialized successfully")
+        except Exception:
+            self.logger.exception("HubManager initialization failed")
+            # We do not re-raise to avoid crashing the app, but the service will remain partially unavailable
 
     # ------------------------------------------------------------------
     # Scenarios
@@ -99,8 +106,9 @@ class HubManager:
         user_port = request.client.port
         user_dest = f"{user_host}:{user_port}"
         username = resolve_username(actor, None)
-        role = actor_role(actor)
-        scenario_payload = dict(scenario_data)
+
+        if not self.is_ready:
+            raise HTTPException(status_code=503, detail="Service is still initializing, please try again later.")
 
         try:
             # hkc = NebulaKafkaAdmin(user=os.environ.get("KAFKA_SUPER_USER_NAME"), password=os.environ.get("KAFKA_SUPER_USER_PASS"), broker=os.environ.get("KAFKA_BROKER"), client_id="hub", logger=self.logger)
@@ -138,10 +146,12 @@ class HubManager:
                 return {"federation_id": federation_id}
             # else:
             #     raise HTTPException(status_code=500, detail="Error starting scenario")
-        except Exception as e:
-            self.logger.exception(f"Error running scenario {e}")
+        except Exception:
+            self.logger.exception("Error running scenario")
 
-    async def stop_scenario(self, federation_id: str, experiment_type: str, stop_all: bool = False) -> None: #TODO stop_all with queues
+    async def stop_scenario(
+        self, federation_id: str, experiment_type: str, stop_all: bool = False
+    ) -> None:  # TODO stop_all with queues
         try:
             response = await self.federation_client.stop_scenario(
                 experiment_type=experiment_type,
@@ -155,9 +165,7 @@ class HubManager:
             else:
                 raise HTTPException(status_code=500, detail="Error stopping scenario")
         except Exception as exc:
-            self.logger.exception(
-                "Error stopping scenario %s: %s", federation_id, exc
-            )
+            self.logger.exception("Error stopping scenario %s", federation_id)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def resources_stop_scenario(self, federation_id: str) -> None:
@@ -166,27 +174,26 @@ class HubManager:
                 federation_id,
                 {"all": False},
             )
-            #TODO notify frontend
+            # TODO notify frontend
         except Exception as exc:
-            self.logger.exception(
-                f"Error stopping scenario {federation_id}"
-            )
+            self.logger.exception(f"Error stopping scenario {federation_id}")
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def remove_scenario(
         self,
         federation_id: str,
         request: hub_requests.RemoveScenarioRequest,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         try:
-            await self.federation_client.remove_scenario(federation_id, request.experiment_type, request.user, request.scenario_name)
+            await self.federation_client.remove_scenario(
+                federation_id, request.experiment_type, request.user, request.scenario_name
+            )
             await self.database_client.remove_scenario(federation_id)
         except Exception as exc:
             self.logger.exception(
-                "Error removing scenario %s (%s): %s",
+                "Error removing scenario %s (%s)",
                 request.scenario_name,
                 federation_id,
-                exc,
             )
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
@@ -202,7 +209,7 @@ class HubManager:
             username = resolve_username(actor, requested_user)
             return await self.database_client.get_scenarios_by_user(username, role)
         except Exception as exc:
-            self.logger.exception("Error obtaining scenarios: %s", exc)
+            self.logger.exception("Error obtaining scenarios")
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def update_scenario(
@@ -214,29 +221,24 @@ class HubManager:
             return await self.database_client.update_scenario(federation_id, request.model_dump())
         except Exception as exc:
             self.logger.exception(
-                "Error updating scenario %s (%s): %s",
+                "Error updating scenario %s (%s)",
                 request.scenario_name,
                 federation_id,
-                exc,
             )
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    async def set_scenario_status_to_finished(
-        self, federation_id: str, stop_all: bool = False
-    ) -> Any:
+    async def set_scenario_status_to_finished(self, federation_id: str, stop_all: bool = False) -> Any:
         try:
             return await self.database_client.finish_scenario(federation_id, {"all": stop_all})
         except Exception as exc:
-            self.logger.exception(
-                "Error setting scenario %s to finished: %s", federation_id, exc
-            )
+            self.logger.exception("Error setting scenario %s to finished", federation_id)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def get_running_scenarios(self, get_all: bool = False) -> Any:
         try:
             return await self.database_client.get_running_scenarios(get_all)
         except Exception as exc:
-            self.logger.exception("Error obtaining running scenarios: %s", exc)
+            self.logger.exception("Error obtaining running scenarios")
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def check_scenario(self, actor: AuthenticatedUser, requested_user: str, federation_id: str) -> Any:
@@ -250,16 +252,14 @@ class HubManager:
             username = resolve_username(actor, requested_user)
             return await self.database_client.check_scenario(username, role, federation_id)
         except Exception as exc:
-            self.logger.exception("Error checking scenario with role: %s", exc)
+            self.logger.exception("Error checking scenario with role")
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def get_scenario_by_federation_id(self, federation_id: str) -> Any:
         try:
             return await self.database_client.get_scenario_by_federation_id(federation_id)
         except Exception as exc:
-            self.logger.exception(
-                "Error obtaining scenario %s: %s", federation_id, exc
-            )
+            self.logger.exception("Error obtaining scenario %s", federation_id)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     # ------------------------------------------------------------------
@@ -269,14 +269,12 @@ class HubManager:
         try:
             return await self.database_client.list_nodes_by_federation_id(federation_id)
         except Exception as exc:
-            self.logger.exception(
-                "Error obtaining nodes for %s: %s", federation_id, exc
-            )
+            self.logger.exception("Error obtaining nodes for %s", federation_id)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    #TODO CORE -> FEderationController -> HUB -> USUARIO CONCRETO
-    async def update_node(self, federation_id: str, config: Dict[str, Any]) -> Any:
-        #TODO command para decidir si quieres recibir o no las updates de los nodos (pensando en el uso por terminal)
+    # TODO CORE -> FEderationController -> HUB -> USUARIO CONCRETO
+    async def update_node(self, federation_id: str, config: dict[str, Any]) -> Any:
+        # TODO command para decidir si quieres recibir o no las updates de los nodos (pensando en el uso por terminal)
         try:
             data = {
                 "device_args": config.get("device_args", {}),
@@ -289,21 +287,21 @@ class HubManager:
 
             await self.database_client.update_node(data)
 
-            #TODO push node update to user
-            user_dest = await self.sqm.get_user_destination(federation_id)
+            # TODO push node update to user
+            # user_dest = await self.sqm.get_user_destination(federation_id)
 
         except KeyError as e:
             # Missing critical keys in the JSON
-            self.logger.exception("Missing required key in config: %s", e)
+            self.logger.exception("Missing required key in config")
             raise HTTPException(status_code=422, detail=f"Missing required key in config: {e}") from e
         except Exception as exc:
-            self.logger.exception("Error updating nodes: %s", exc)
+            self.logger.exception("Error updating nodes")
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    async def node_done(self, federation_id: str, node_idx) -> Any: # TODO redo for the frontend
-
-        user_dest = await self.sqm.get_user_destination(federation_id)
-        #TODO push node done to user
+    async def node_done(self, federation_id: str, node_idx) -> Any:  # TODO redo for the frontend
+        # user_dest = await self.sqm.get_user_destination(federation_id)
+        pass
+        # TODO push node done to user
 
         # url = (
         #     f"http://{os.environ['NEBULA_ENV_TAG']}_{os.environ['NEBULA_PREFIX_TAG']}_{os.environ['NEBULA_USER_TAG']}_"
@@ -313,11 +311,11 @@ class HubManager:
         # data = await request.json()
         # return await APIUtils.post(url, data=data)
 
-    async def remove_nodes_by_federation_id(self, federation_id: str) -> Dict[str, Any]:
+    async def remove_nodes_by_federation_id(self, federation_id: str) -> dict[str, Any]:
         try:
             await self.database_client.remove_nodes_by_federation_id(federation_id)
         except Exception as exc:
-            self.logger.exception("Error removing nodes: %s", exc)
+            self.logger.exception("Error removing nodes")
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     # ------------------------------------------------------------------
@@ -327,33 +325,27 @@ class HubManager:
         try:
             return await self.database_client.get_notes_by_federation_id(federation_id)
         except Exception as exc:
-            self.logger.exception(
-                "Error obtaining notes for %s: %s", federation_id, exc
-            )
+            self.logger.exception("Error obtaining notes for %s", federation_id)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     async def update_note_by_federation_id(self, federation_id: str, notes: str) -> Any:
         try:
             return await self.database_client.update_notes_by_federation_id(federation_id, {"notes": notes})
         except Exception as exc:
-            self.logger.exception(
-                "Error updating notes for %s: %s", federation_id, exc
-            )
+            self.logger.exception("Error updating notes for %s", federation_id)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
-    async def remove_note_by_federation_id(self, federation_id: str) -> Dict[str, Any]:
+    async def remove_note_by_federation_id(self, federation_id: str) -> dict[str, Any]:
         try:
             return await self.database_client.remove_notes_by_federation_id(federation_id)
         except Exception as exc:
-            self.logger.exception(
-                "Error removing notes for %s: %s", federation_id, exc
-            )
+            self.logger.exception("Error removing notes for %s", federation_id)
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     # ------------------------------------------------------------------
     # Authentication
     # ------------------------------------------------------------------
-    async def login(self, request: hub_requests.LoginRequest) -> Dict[str, Any]:
+    async def login(self, request: hub_requests.LoginRequest) -> dict[str, Any]:
         if request.grant_type == "password":
             if not request.username or not request.password:
                 raise HTTPException(
@@ -387,13 +379,13 @@ class HubManager:
         except HTTPException:
             raise
         except Exception as exc:
-            self.logger.exception("Unexpected error during Keycloak login flow: %s", exc)
+            self.logger.exception("Unexpected error during Keycloak login flow")
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to obtain token from Keycloak.",
             ) from exc
 
-    async def logout(self, request: hub_requests.LogoutRequest) -> Dict[str, Any]:
+    async def logout(self, request: hub_requests.LogoutRequest) -> dict[str, Any]:
         try:
             return await self._auth_client.logout(
                 refresh_token=request.refresh_token,
@@ -405,7 +397,7 @@ class HubManager:
         except HTTPException:
             raise
         except Exception as exc:
-            self.logger.exception("Unexpected error during Keycloak logout flow: %s", exc)
+            self.logger.exception("Unexpected error during Keycloak logout flow")
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to revoke token with Keycloak.",
@@ -414,7 +406,7 @@ class HubManager:
     # ------------------------------------------------------------------
     # Users
     # ------------------------------------------------------------------
-    async def list_users(self, actor: AuthenticatedUser, all_info: bool = False) -> Dict[str, Any]:
+    async def list_users(self, actor: AuthenticatedUser, all_info: bool = False) -> dict[str, Any]:
         if not can_impersonate(actor):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -425,7 +417,7 @@ class HubManager:
         except HTTPException:
             raise
         except Exception as exc:
-            self.logger.exception("Error listing users: %s", exc)
+            self.logger.exception("Error listing users")
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to list users from the identity provider.",
@@ -449,7 +441,7 @@ class HubManager:
         except HTTPException:
             raise
         except Exception as exc:
-            self.logger.exception("Error registering user %s: %s", user, exc)
+            self.logger.exception("Error registering user %s", user)
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to register user with the identity provider.",
@@ -468,7 +460,7 @@ class HubManager:
         except HTTPException:
             raise
         except Exception as exc:
-            self.logger.exception("Error deleting user %s: %s", user, exc)
+            self.logger.exception("Error deleting user %s", user)
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to delete user with the identity provider.",
@@ -488,35 +480,16 @@ class HubManager:
         except HTTPException:
             raise
         except Exception as exc:
-            self.logger.exception("Error updating user %s: %s", user, exc)
+            self.logger.exception("Error updating user %s", user)
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to update user with the identity provider.",
             ) from exc
 
-    async def open_real_time_client(self, websocket: WebSocket, channel_id: str):
-        token = websocket.query_params.get("token")
-        if not token:
-            authorization = websocket.headers.get("authorization")
-            if authorization and authorization.lower().startswith("bearer "):
-                token = authorization.split(" ", 1)[1].strip()
-
-        if not token:
-            await websocket.close(code=4401, reason="Missing bearer token")
-            return
-
-        try:
-            await self._auth_client.authenticate(token)
-        except HTTPException as exc:
-            await websocket.close(code=4003, reason=exc.detail)
-            return
-
-        await self.rtm.open_real_time_client(websocket, channel_id)
-
     # ------------------------------------------------------------------
     # Discovery / Physical management
     # ------------------------------------------------------------------
-    async def discover_vpn(self) -> Dict[str, Any]:
+    async def discover_vpn(self) -> dict[str, Any]:
         try:
             proc = await asyncio.create_subprocess_exec(
                 "tailscale",
@@ -540,7 +513,7 @@ class HubManager:
 
             return {"ips": ips}
         except Exception as exc:
-            self.logger.error("Error discovering VPN devices: %s", exc)
+            self.logger.exception("Error discovering VPN devices")
             raise HTTPException(status_code=500, detail="No devices discovered") from exc
 
     async def physical_run(self, ip: str) -> Any:
@@ -591,9 +564,7 @@ class HubManager:
             content_type="application/octet-stream",
         )
 
-        status_code, data = await remote_post_form(
-            ip, "/setup/", form, method="PUT"
-        )
+        status_code, data = await remote_post_form(ip, "/setup/", form, method="PUT")
 
         if status_code == 201:
             return data
@@ -601,7 +572,7 @@ class HubManager:
             raise HTTPException(status_code=502, detail=f"Node unreachable: {data}")
         raise HTTPException(status_code=status_code, detail=data)
 
-    async def get_physical_node_state(self, ip: str) -> Dict[str, Any]:
+    async def get_physical_node_state(self, ip: str) -> dict[str, Any]:
         timeout = aiohttp.ClientTimeout(total=3)
 
         try:
@@ -613,9 +584,7 @@ class HubManager:
         except Exception as exc:
             return {"running": False, "error": str(exc)}
 
-    async def get_physical_scenario_state(
-        self, federation_id: str
-    ) -> Dict[str, Any]:
+    async def get_physical_scenario_state(self, federation_id: str) -> dict[str, Any]:
         scenario = await self.get_scenario_by_federation_id(federation_id)
         if not scenario:
             raise HTTPException(status_code=404, detail="Scenario not found")
@@ -628,11 +597,9 @@ class HubManager:
         tasks = [self.get_physical_node_state(ip) for ip in ips]
         states = await asyncio.gather(*tasks)
 
-        nodes_state = dict(zip(ips, states))
+        nodes_state = dict(zip(ips, states, strict=True))
         any_running = any(state.get("running") for state in states)
-        all_available = all(
-            (not state.get("running")) and (not state.get("error")) for state in states
-        )
+        all_available = all((not state.get("running")) and (not state.get("error")) for state in states)
 
         return {
             "running": any_running,

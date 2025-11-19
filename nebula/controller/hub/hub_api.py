@@ -1,24 +1,19 @@
 import argparse
 import asyncio
-import importlib
 import logging
-import os
-import re
 
 import uvicorn
-from fastapi import Body, Depends, FastAPI, File, HTTPException, Request, UploadFile, WebSocket, status
+from fastapi import Body, Depends, FastAPI, File, Request, UploadFile, WebSocket, status
 from fastapi.concurrency import asynccontextmanager
 
+import nebula.controller.hub.utils_requests as hub_requests
 from nebula.auth.api import AuthenticatedUser, get_current_user
 from nebula.controller.hub.hub_manager import HubManager
-import nebula.controller.hub.utils_requests as hub_requests
-from nebula.utils import TermEscapeCodeFormatter
-from nebula.kafka.clients.admin_client import NebulaKafkaAdmin
-
 
 hub_manager = HubManager()
 logger = logging.getLogger("Hub-API")
 logger.setLevel(logging.INFO)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,7 +22,8 @@ async def lifespan(app: FastAPI):
     - Configures logging on startup.
     """
     global hub_manager
-    await hub_manager.init()
+    logger.info("DEBUG: Lifespan startup - initializing HubManager")
+    asyncio.create_task(hub_manager.init())
 
     # Code to run on startup
     yield
@@ -35,8 +31,10 @@ async def lifespan(app: FastAPI):
     # Code to run on shutdown
     pass
 
+
 # Initialize FastAPI app outside the Controller class
 app = FastAPI(lifespan=lifespan)
+
 
 @app.middleware("http")
 async def log_request_headers(request: Request, call_next):
@@ -99,6 +97,7 @@ async def run_scenario(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.run_scenario(current_user, run_scenario_request.scenario_data, request)
+
 
 @app.post(hub_requests.Routes.STOP)
 async def stop_scenario(
@@ -270,16 +269,16 @@ async def physical_stop(
     return await hub_manager.physical_stop(ip)
 
 
-@app.put(hub_requests.Routes.PHYSICAL_SETUP, tags=["physical"],
-         status_code=status.HTTP_201_CREATED)
+@app.put(hub_requests.Routes.PHYSICAL_SETUP, tags=["physical"], status_code=status.HTTP_201_CREATED)
 async def physical_setup(
     ip: str,
-    config:      UploadFile = File(..., description="*.json* configuration file"),
+    config: UploadFile = File(..., description="*.json* configuration file"),
     global_test: UploadFile = File(..., description="Global Dataset*.h5*"),
-    train_set:   UploadFile = File(..., description="Training dataset*.h5*"),
+    train_set: UploadFile = File(..., description="Training dataset*.h5*"),
     _current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await hub_manager.physical_setup(ip, config, global_test, train_set)
+
 
 # ──────────────────────────────────────────────────────────────
 # Physical · single-node state
@@ -330,10 +329,6 @@ async def update_user_controller(
 ):
     return await hub_manager.update_user(current_user, user, password, role)
 
-
-@app.websocket(hub_requests.Routes.OPEN_RT)
-async def open_real_time_client(websocket: WebSocket, channel_id: str):
-    await hub_manager.open_real_time_client(websocket, channel_id)
 
 if __name__ == "__main__":
     # Parse args from command line

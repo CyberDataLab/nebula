@@ -35,7 +35,7 @@ class RealTimeManager:
             if channel_id in self._channels:
                 self._channels[channel_id].discard(websocket)
                 self.log.info(f"Client unregistered from channel {channel_id}")
-            if not self._channels[channel_id]:
+            if channel_id in self._channels and not self._channels[channel_id]:
                 # Si el canal queda vacío, lo eliminamos
                 del self._channels[channel_id]
                 self.log.info(f"Channel {channel_id} removed (empty)")
@@ -70,7 +70,7 @@ class RealTimeManager:
                 self.log.info(f"Error closing WS in channel {channel_id}: {e}")
 
         # Cierres concurrentes sin bloquear
-        asyncio.create_task(asyncio.gather(*[_close_client(ws) for ws in clients]))
+        _ = asyncio.create_task(asyncio.gather(*[_close_client(ws) for ws in clients]))
 
     """                                                     ###############################
                                                             #      CLIENTS CONNECTION     #
@@ -80,9 +80,19 @@ class RealTimeManager:
     async def open_real_time_client(self, websocket: WebSocket, channel_id: str):
         try:
             await websocket.accept()
-            await self._register_client(websocket, channel_id)
+            try:
+                await self._register_client(websocket, channel_id)
+            except ValueError:
+                # Auto-create channel if missing (modification for robustness)
+                await self.generate_communication_channel(channel_id)
+                await self._register_client(websocket, channel_id)
+
+            # Keep connection alive
+            while True:
+                await websocket.receive_text()
+
         except Exception as e:
-            self.log.info(f"Client failed to connect or crashed early: {e}")
+            self.log.info(f"Client disconnected or crashed: {e}")
         finally:
             await self._unregister_client(websocket, channel_id)
 
@@ -106,6 +116,7 @@ class RealTimeManager:
         # Clean failled clients
         if to_remove:
             async with self._channels_lock:
-                for ws in to_remove:
-                    self._channels[channel_id].discard(ws)
+                if channel_id in self._channels:
+                    for ws in to_remove:
+                        self._channels[channel_id].discard(ws)
             self.log.info(f"Cleaned {len(to_remove)} disconnected clients from {channel_id}")
