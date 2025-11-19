@@ -67,7 +67,12 @@ async def run_scenario(run_scenario_request: RunScenarioRequest):
     experiment_type = run_scenario_request.scenario_data["deployment"]
     logger = logging.getLogger("Federation-Controller")
     logger.info(f"[API]: run experiment request for deployment type: {experiment_type}")
-    return await controller_broker.run_scenario(experiment_type, run_scenario_request.model_dump())
+    return await controller_broker.run_scenario(
+        experiment_type,
+        run_scenario_request.federation_id,
+        run_scenario_request.scenario_data,
+        run_scenario_request.user,
+    )
 
 @app.post(
     Routes.STOP,

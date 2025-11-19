@@ -43,13 +43,15 @@ class Reporter:
 
     async def _update_required_addon_event(self, event: ChangeLocationEvent):
         self._updare_required.set()
-        sent = await self._report_data(ExperimentMessages.UPDATE, await self._config.get_update_info())
+        update_payload = await self._config.get_update_info()
+        sent = await self._report_data(ExperimentMessages.UPDATE, **update_payload)
         if self._verbose:
             logging.info(f"Data report successfully: {sent}")
 
     async def _update_required_node_event(self, event: UpdateNeighborEvent):
         self._updare_required.set()
-        sent = await self._report_data(ExperimentMessages.UPDATE, await self._config.get_update_info())
+        update_payload = await self._config.get_update_info()
+        sent = await self._report_data(ExperimentMessages.UPDATE, **update_payload)
         if self._verbose:
             logging.info(f"Data report successfully: {sent}")
 
@@ -71,11 +73,13 @@ class Reporter:
             logging.info(f"Data report successfully: {sent}")
 
     async def _finish_experiment_notification(self, event: ExperimentFinishEvent):
-        sent = await self._report_data(ExperimentMessages.DONE, await self._config.get_done_info())
+        done_payload = await self._config.get_done_info()
+        sent = await self._report_data(ExperimentMessages.DONE, **done_payload)
         if self._verbose:
             logging.info(f"Data report successfully: {sent}")
 
     async def _report_data(self, message_type: ExperimentMessages, **kwargs) -> bool:
+        sent = False
         async with self._report_locker:
             if message_type == ExperimentMessages.UPDATE:
                 if self._updare_required.is_set():

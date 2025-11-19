@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime
 import hashlib
 import math
@@ -502,11 +503,37 @@ class ScenarioBuilder():
         return config
 
     def _configure_kafka_args(self):
+        broker = self.sd.get("broker") or os.environ.get("KAFKA_BROKER")
+        topic = self.sd.get("topic") or f"experiment-{self._federation_id}"
+        user = (
+            self.sd.get("user")
+            or os.environ.get("KAFKA_USER_NAME")
+            or os.environ.get("KAFKA_SUPER_USER_NAME")
+        )
+        password = (
+            self.sd.get("password")
+            or os.environ.get("KAFKA_USER_PASS")
+            or os.environ.get("KAFKA_SUPER_USER_PASS")
+        )
+
+        if not all([broker, topic, user, password]):
+            missing = [
+                name
+                for name, value in (
+                    ("broker", broker),
+                    ("topic", topic),
+                    ("user", user),
+                    ("password", password),
+                )
+                if not value
+            ]
+            raise ValueError(f"Kafka configuration missing keys: {', '.join(missing)}")
+
         return {
-            "broker": self.sd["broker"],
-            "topic": self.sd["topic"],
-            "user": self.sd["user"],
-            "password": self.sd["password"],
+            "broker": broker,
+            "topic": topic,
+            "user": user,
+            "password": password,
         }
 
     def _configure_message_args(self):

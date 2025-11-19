@@ -115,15 +115,14 @@ class HubManager:
             # # Get first scenario to execute
             _, federation_id, scenario_data = await self.sqm.get_next_scenario(user=username)
 
-            return {"federation_id": federation_id}
             # #TODO modify to use role on query
-            # response = await self.federation_client.run_scenario(
-            #     user=user,
-            #     #role=role,
-            #     federation_id=federation_id,
-            #     scenario_data=scenario_data,
-            # )
-            # if response:
+            response = await self.federation_client.run_scenario(
+                user=username,
+                # role=role,
+                federation_id=federation_id,
+                scenario_data=scenario_data,
+            )
+            if response:
             #     await self.database_client.save_scenario(
             #         federation_id,
             #         {
@@ -136,7 +135,7 @@ class HubManager:
             #             "username":user,
             #         },
             #     )
-            #     return {"federation_id": federation_id}
+                return {"federation_id": federation_id}
             # else:
             #     raise HTTPException(status_code=500, detail="Error starting scenario")
         except Exception as e:
