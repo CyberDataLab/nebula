@@ -88,3 +88,21 @@ class Reporter:
             else:
                 sent = await self._kafka_client.produce(message_type, **kwargs)
         return sent
+
+    async def report_scenario_finished(self):
+        """
+        Reports scenario completion to the controller via Kafka.
+
+        This method sends a DONE message through Kafka to notify that the
+        participant has finished the federated learning scenario.
+
+        Returns:
+            bool: True if message sent successfully, False otherwise.
+        """
+        done_payload = await self._config.get_done_info()
+        sent = await self._report_data(ExperimentMessages.DONE, **done_payload)
+        if sent:
+            logging.info(f"Participant {self._config.participant['device_args']['idx']} reported scenario finished via Kafka")
+        else:
+            logging.error("Failed to report scenario finished via Kafka")
+        return sent

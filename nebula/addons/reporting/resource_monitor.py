@@ -105,7 +105,7 @@ class ResourceMonitor():
             "X-Network/Network (MB received)": round(self.acc_bytes_recv / (1024**2), 3),
             "X-Network/Network (packets sent)": self.acc_packets_sent,
             "X-Network/Network (packets received)": self.acc_packets_recv,
-            "X-Network/Connections": len(current_connections),
+            "X-Network/Connections": current_connections,
         }
 
         if importlib.util.find_spec("pynvml") is not None:
