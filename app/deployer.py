@@ -122,6 +122,8 @@ class CredentialManager:
         self.check_credential("KEYCLOAK_ADMIN_PASSWORD")
         self.ensure_value("KEYCLOAK_DB_USER", os.environ.get("KEYCLOAK_DB_USER", "keycloak"))
         self.check_credential("KEYCLOAK_DB_PASSWORD")
+        self.ensure_value("KEYCLOAK_NEBULA_ADMIN", os.environ.get("KEYCLOAK_NEBULA_ADMIN", "admin"))
+        self.check_credential("KEYCLOAK_NEBULA_PASSWORD")
         self.ensure_value("NEBULA_KEYCLOAK_REALM", KEYCLOAK_DEFAULT_REALM)
         self.ensure_value("NEBULA_KEYCLOAK_AUDIENCE", KEYCLOAK_API_AUDIENCE)
         self.ensure_value("NEBULA_KEYCLOAK_AUDIENCE_SCOPE", KEYCLOAK_AUDIENCE_SCOPE)
@@ -710,6 +712,8 @@ class Deployer:
         self.keycloak_admin_password = os.environ.get("KEYCLOAK_ADMIN_PASSWORD")
         self.keycloak_db_user = os.environ.get("KEYCLOAK_DB_USER")
         self.keycloak_db_password = os.environ.get("KEYCLOAK_DB_PASSWORD")
+        self.keycloak_nebula_admin_user = os.environ.get("KEYCLOAK_NEBULA_ADMIN")
+        self.keycloak_nebula_admin_password = os.environ.get("KEYCLOAK_NEBULA_PASSWORD")
 
     def get_container_name(self, role_tag: str) -> str:
         """
@@ -1164,6 +1168,67 @@ class Deployer:
         client.api.start(pgweb_container)
         Deployer._add_container_to_metadata(pgweb_container_name)
 
+    def _patch_realm_credentials(self, realm_source_path: str, realm_output_path: str) -> None:
+        """
+        Patches the Keycloak realm JSON file with admin credentials from environment variables.
+
+        Args:
+            realm_source_path: Path to the original realm JSON template
+            realm_output_path: Path where the patched realm JSON will be saved
+        """
+        if not all([self.keycloak_nebula_admin_user, self.keycloak_nebula_admin_password]):
+            raise RuntimeError("Missing KEYCLOAK_NEBULA_ADMIN or KEYCLOAK_NEBULA_PASSWORD environment variables.")
+
+        logging.info(f"Patching realm file {realm_source_path} with credentials from environment")
+
+        with open(realm_source_path, 'r') as f:
+            realm_data = json.load(f)
+
+        # Find and update the admin user in the realm
+        users = realm_data.get("users", [])
+        admin_user_found = False
+
+        for user in users:
+            # Look for the first user with admin role or username "admin"
+            client_roles = user.get("clientRoles", {})
+            if ("admin" in client_roles.get("nebula-cli", []) or
+                "admin" in client_roles.get("nebula-web", []) or
+                user.get("username") == "admin"):
+
+                logging.info(f"Updating user '{user.get('username')}' with credentials from environment")
+                user["username"] = self.keycloak_nebula_admin_user
+                user["credentials"] = [{
+                    "type": "password",
+                    "value": self.keycloak_nebula_admin_password
+                }]
+                admin_user_found = True
+                break
+
+        if not admin_user_found:
+            logging.warning("No admin user found in realm template. Creating new admin user.")
+            realm_data["users"].append({
+                "username": self.keycloak_nebula_admin_user,
+                "enabled": True,
+                "emailVerified": True,
+                "credentials": [{
+                    "type": "password",
+                    "value": self.keycloak_nebula_admin_password
+                }],
+                "clientRoles": {
+                    "nebula-cli": ["admin"],
+                    "nebula-web": ["admin"]
+                },
+                "realmRoles": ["default-roles-nebula"]
+            })
+
+        # Write patched realm to output path
+        os.makedirs(os.path.dirname(realm_output_path), exist_ok=True)
+        with open(realm_output_path, 'w') as f:
+            json.dump(realm_data, f, indent=2)
+
+        logging.info(f"Patched realm file saved to {realm_output_path}")
+
+
     def run_keycloak(self):
         """Start the Keycloak identity provider and its dedicated PostgreSQL database."""
         if sys.platform == "win32":
@@ -1231,6 +1296,11 @@ class Deployer:
         # Allow Postgres to finish bootstrap before Keycloak attempts the first connection
         time.sleep(5)
 
+        # Patch realm file with credentials from environment
+        realm_source = os.path.join(self.root_path, "nebula", "auth", "nebula-realm.json")
+        realm_patched = os.path.join(self.databases_dir, "keycloak-realm-patched.json")
+        self._patch_realm_credentials(realm_source, realm_patched)
+
         # Launch Keycloak server
         keycloak_environment = {
             "KC_BOOTSTRAP_ADMIN_USERNAME": self.keycloak_admin_user,
@@ -1250,6 +1320,9 @@ class Deployer:
 
         keycloak_host_config = client.api.create_host_config(
             port_bindings={8080: self.keycloak_port},
+            binds=[
+                f"{realm_patched}:/opt/keycloak/data/import/nebula-realm.json:ro",
+            ],
         )
         keycloak_networking_config = client.api.create_networking_config({
             f"{network_name}": client.api.create_endpoint_config(ipv4_address=f"{base}.141")
