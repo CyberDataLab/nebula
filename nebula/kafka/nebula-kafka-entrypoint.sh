@@ -28,7 +28,8 @@ inter.broker.listener.name=PLAINTEXT
 
 # SASL/SCRAM
 sasl.enabled.mechanisms=SCRAM-SHA-256
-listener.name.sasl_plaintext.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
+listener.name.sasl_internal.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
+listener.name.sasl_external.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required;
 
 # Authorizer
 authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
@@ -53,8 +54,7 @@ EOF
 # === kafka_server_jaas.conf ===
 cat > /home/kafka/kafka_server_jaas.conf <<EOF
 KafkaServer {
-    org.apache.kafka.common.security.scram.ScramLoginModule required
-    user_${KAFKA_SUPER_USER_NAME}=${KAFKA_SUPER_USER_PASS}
+    org.apache.kafka.common.security.scram.ScramLoginModule required;
 };
 EOF
 
@@ -85,13 +85,19 @@ KAFKA_PID=$!
 
 # Define internal ports for readiness check
 KAFKA_PORT_PLAINTEXT=9092
-KAFKA_PORT_SASL=9094
+KAFKA_PORT_SASL=9095
 
 # Esperar a que el broker esté escuchando en PLAINTEXT y SASL
 until nc -z localhost $KAFKA_PORT_PLAINTEXT && nc -z localhost $KAFKA_PORT_SASL; do
   sleep 5
 done
 echo "✅ Kafka broker is ready."
+
+# echo "🔧 Creating default topics..."
+# /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic nebula.federation.nodes --partitions 1 --replication-factor 1
+# /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic nebula.metrics --partitions 1 --replication-factor 1
+# /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic nebula.tensorboard --partitions 1 --replication-factor 1
+# echo "✅ Default topics created."
 
 echo "🚀 Nebula Kafka initialized and ready."
 

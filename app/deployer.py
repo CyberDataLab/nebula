@@ -1045,7 +1045,7 @@ class Deployer:
             host_config=host_config,
             networking_config=networking_config,
             ports=[8000],
-            command=["python", "/nebula/nebula/realtime/main.py"],
+            command=["python", "/nebula/realtime/main.py"],
         )
 
         client.api.start(container_id)
@@ -1248,7 +1248,7 @@ class Deployer:
 
         logging.info(f"Patching realm file {realm_source_path} with credentials from environment")
 
-        with open(realm_source_path, 'r') as f:
+        with open(realm_source_path) as f:
             realm_data = json.load(f)
 
         # Find and update the admin user in the realm
@@ -1258,16 +1258,14 @@ class Deployer:
         for user in users:
             # Look for the first user with admin role or username "admin"
             client_roles = user.get("clientRoles", {})
-            if ("admin" in client_roles.get("nebula-cli", []) or
-                "admin" in client_roles.get("nebula-web", []) or
-                user.get("username") == "admin"):
-
+            if (
+                "admin" in client_roles.get("nebula-cli", [])
+                or "admin" in client_roles.get("nebula-web", [])
+                or user.get("username") == "admin"
+            ):
                 logging.info(f"Updating user '{user.get('username')}' with credentials from environment")
                 user["username"] = self.keycloak_nebula_admin_user
-                user["credentials"] = [{
-                    "type": "password",
-                    "value": self.keycloak_nebula_admin_password
-                }]
+                user["credentials"] = [{"type": "password", "value": self.keycloak_nebula_admin_password}]
                 admin_user_found = True
                 break
 
@@ -1277,24 +1275,17 @@ class Deployer:
                 "username": self.keycloak_nebula_admin_user,
                 "enabled": True,
                 "emailVerified": True,
-                "credentials": [{
-                    "type": "password",
-                    "value": self.keycloak_nebula_admin_password
-                }],
-                "clientRoles": {
-                    "nebula-cli": ["admin"],
-                    "nebula-web": ["admin"]
-                },
-                "realmRoles": ["default-roles-nebula"]
+                "credentials": [{"type": "password", "value": self.keycloak_nebula_admin_password}],
+                "clientRoles": {"nebula-cli": ["admin"], "nebula-web": ["admin"]},
+                "realmRoles": ["default-roles-nebula"],
             })
 
         # Write patched realm to output path
         os.makedirs(os.path.dirname(realm_output_path), exist_ok=True)
-        with open(realm_output_path, 'w') as f:
+        with open(realm_output_path, "w") as f:
             json.dump(realm_data, f, indent=2)
 
         logging.info(f"Patched realm file saved to {realm_output_path}")
-
 
     def run_keycloak(self):
         """Start the Keycloak identity provider and its dedicated PostgreSQL database."""
@@ -1724,9 +1715,9 @@ class Deployer:
         environment = {
             "KAFKA_LOG_DIR": "/home/kafka/kafka-data",
             "KAFKA_BROKER_ID": "1",
-            "KAFKA_LISTENERS": "PLAINTEXT://:9092,CONTROLLER://:9093,SASL_PLAINTEXT://:9094",
-            "KAFKA_ADVERTISED_LISTENERS": f"PLAINTEXT://{self.kafka_host}:9092,SASL_PLAINTEXT://{self.kafka_host}:9094",
-            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT",
+            "KAFKA_LISTENERS": "PLAINTEXT://:9092,CONTROLLER://:9093,SASL_INTERNAL://:9094,SASL_EXTERNAL://:9095",
+            "KAFKA_ADVERTISED_LISTENERS": f"PLAINTEXT://{self.kafka_host}:9092,SASL_INTERNAL://{self.kafka_host}:9094,SASL_EXTERNAL://localhost:{self.kafka_sasl_port}",
+            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,SASL_INTERNAL:SASL_PLAINTEXT,SASL_EXTERNAL:SASL_PLAINTEXT",
             "KAFKA_INTER_BROKER_LISTENER_NAME": "PLAINTEXT",
             "KAFKA_CONTROLLER_QUORUM_VOTERS": "1@localhost:9093",
             "KAFKA_LOG_DIRS": "/kafka/data",
@@ -1745,14 +1736,14 @@ class Deployer:
         kafka_data_host_path = os.path.join(self.root_path, "kafka_data")
         os.makedirs(kafka_data_host_path, exist_ok=True)
 
-        ports = [9092, 9093, 9094]
+        ports = [9092, 9093, 9094, 9095]
         host_config = client.api.create_host_config(
             binds=[
                 f"{kafka_data_host_path}:/kafka/data",
                 f"{self.root_path}/scripts:/opt/scripts",
             ],
             extra_hosts={"host.docker.internal": "host-gateway"},
-            port_bindings={9092: self.kafka_port, 9093: self.kafka_controller_port, 9094: self.kafka_sasl_port},
+            port_bindings={9092: self.kafka_port, 9093: self.kafka_controller_port, 9095: self.kafka_sasl_port},
         )
 
         networking_config = client.api.create_networking_config({

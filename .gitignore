@@ -149,7 +149,6 @@ _build/
 *.DS_Store
 app/*/
 *.metadata
-*.yaml
 data/
 *.db*
 *.out

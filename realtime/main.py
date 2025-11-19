@@ -16,7 +16,7 @@ from kafka import KafkaConsumer
 sys.path.append("/nebula")
 
 from nebula.auth.keycloak.authenticator import KeycloakAuthenticator
-from nebula.realtime.manager import RealTimeManager
+from realtime.manager import RealTimeManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +35,7 @@ app.add_middleware(
 # Environment variables
 KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "localhost:9092")
 KAFKA_TOPICS = ["nebula.federation.nodes", "nebula.metrics", "nebula.tensorboard"]
-DATA_DIR = os.environ.get("DATA_DIR", "/nebula/realtime/data")
+DATA_DIR = os.environ.get("DATA_DIR", "/realtime/data")
 KEYCLOAK_SERVER_URL = os.environ.get("NEBULA_KEYCLOAK_SERVER", "http://localhost:8080")
 KEYCLOAK_REALM = os.environ.get("NEBULA_KEYCLOAK_REALM", "nebula")
 KEYCLOAK_AUDIENCE = os.environ.get("NEBULA_KEYCLOAK_AUDIENCE", "nebula-hub")
