@@ -13,7 +13,10 @@ const HelpContent = (function() {
             'partitionMethodsHelpIcon': partitionMethods,
             'parameterSettingHelpIcon': parameterSetting,
             'modelHelpIcon': model,
-            'maliciousHelpIcon': malicious
+            'maliciousHelpIcon': malicious,
+            'aggregationFractionHelpIcon': caff.aggregationFraction,
+            'stalenessThresholdHelpIcon': caff.stalenessThreshold,
+            'fallbackTimeoutHelpIcon': caff.fallbackTimeout,
         };
 
         Object.entries(tooltipElements).forEach(([id, content]) => {
@@ -160,6 +163,43 @@ const HelpContent = (function() {
         </div>`
     };
 
+    const caff = {
+        aggregationFraction: `
+            <div style="text-align:left;">
+                <strong>Aggregation Fraction (alpha)</strong>
+                <p style="margin-bottom:0;">
+                    The fraction of peers (N) whose updates you wait for before aggregating.
+                    E.g. alpha=0.5 means “once 50% of other nodes have sent an update and local model is ready, start aggregation.”
+                    <br>
+                    <code>K = max(1, round(alpha * N))</code>
+                </p>
+            </div>`,
+
+        stalenessThreshold: `
+            <div style="text-align:left;">
+                <strong>Staleness Threshold (S<sub>max</sub>)</strong>
+                <p style="margin-bottom:0;">
+                    A peer’s update is only accepted if:
+                    <br>
+                    <code>local_round - peer_update_round ≤ S<sub>max</sub></code>.
+                    <br>
+                    Otherwise (i.e. if it’s older), it’s discarded as too stale.
+                </p>
+            </div>`,
+
+        fallbackTimeout: `
+            <div style="text-align:left;">
+                <strong>Fallback Timeout</strong>
+                <p style="margin-bottom:0;">
+                    A timer that starts immediately after your local update is sent.
+                    <br>
+                    If aggregation hasn’t triggered within this many seconds,
+                    <br>
+                    it forces aggregation with whatever updates are in the cache.
+                </p>
+            </div>`
+    };
+
     return {
         initializePopovers,
         topology,
@@ -171,7 +211,8 @@ const HelpContent = (function() {
         model,
         malicious,
         deployment,
-        reputation
+        reputation,
+        caff
     };
 })();
 

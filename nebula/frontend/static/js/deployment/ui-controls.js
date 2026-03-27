@@ -11,11 +11,11 @@ const UIControls = (function() {
         /* === control Physical + Predefined => block input === */
         document.querySelectorAll('input[name="deploymentRadioOptions"]')
         .forEach(r => r.addEventListener('change', togglePredefinedNodesInput));
- 
+
         ['custom-topology-btn', 'predefined-topology-btn']
         .forEach(id => document.getElementById(id)
                 .addEventListener('change', togglePredefinedNodesInput));
- 
+
         togglePredefinedNodesInput();
         setupVpnDiscover();
         setupParticipantDisplay();
@@ -24,6 +24,48 @@ const UIControls = (function() {
         // Initialize help icons
         window.HelpContent.initializePopovers();
         setupDeploymentRadios();
+        setupCommunicationMechanismControl();
+    }
+
+    function setupCommunicationMechanismControl() {
+        const mechanismContainer = document.getElementById("communicationMechanismContainer");
+        const caffParams = document.getElementById("caffParametersContainer");
+
+        const federationSelect = document.getElementById('federationArchitecture');
+        const radioStandard = document.getElementById("mechanismStandard");
+        const radioCAFF = document.getElementById("mechanismCAFF");
+
+        // Show mechanism options only if DFL is selected
+        federationSelect.addEventListener('change', function () {
+            const federationType = this.value;
+
+            if (federationType === 'DFL') {
+                mechanismContainer.style.display = "block";
+
+                // Show CAFF params if CAFF was already selected
+                if (radioCAFF.checked) {
+                    caffParams.style.display = "block";
+                } else {
+                    caffParams.style.display = "none";
+                }
+            } else {
+                mechanismContainer.style.display = "none";
+                caffParams.style.display = "none";
+            }
+        });
+
+        // When switching between mechanisms inside DFL
+        radioStandard.addEventListener("change", () => {
+            if (radioStandard.checked) {
+                caffParams.style.display = "none";
+            }
+        });
+
+        radioCAFF.addEventListener("change", () => {
+            if (radioCAFF.checked) {
+                caffParams.style.display = "block";
+            }
+        });
     }
 
     function setupModeButton() {
@@ -650,33 +692,33 @@ const UIControls = (function() {
         const radios      = document.querySelectorAll('input[name="deploymentRadioOptions"]');
         const discoverBtn = document.getElementById('discoverDevicesBtn');
         if (!discoverBtn || !radios.length) return;
- 
+
         const toggle = () => {
             const sel = document.querySelector('input[name="deploymentRadioOptions"]:checked');
             discoverBtn.disabled = sel.value !== 'physical';
         };
- 
+
         radios.forEach(r => r.addEventListener('change', toggle));
         toggle();
     }
- 
+
     function setupVpnDiscover() {
         const discoverBtn = document.getElementById('discoverDevicesBtn');
         if (!discoverBtn) return;
-      
+
         discoverBtn.addEventListener('click', async () => {
             try {
                 const res = await fetch('/platform/api/discover-vpn');
                 if (!res.ok) throw new Error(res.statusText);
-          
+
                 const { ips } = await res.json();
-          
+
                 const form = document.getElementById('vpn-form');
                 form.innerHTML = '';
-                
+
                 const currentScenario = window.ScenarioManager.getScenariosList()[window.ScenarioManager.getActualScenario()];
                 const selectedIPs = currentScenario?.physical_ips || [];
- 
+
                 ips.forEach(ip => {
                     const wrapper = document.createElement('div');
                     wrapper.classList.add('form-check');
@@ -687,18 +729,18 @@ const UIControls = (function() {
                     `;
                     form.appendChild(wrapper);
                 });
-          
+
                 const modal = new bootstrap.Modal(document.getElementById('vpnModal'));
                 modal.show();
- 
+
                 document.getElementById('vpn-accept-btn').onclick = () => {
                     const selected = Array.from(form.querySelectorAll('input:checked'))
                                         .map(i => i.value);
-                
+
                     window.ScenarioManager.setPhysicalIPs(selected);
-                    
+
                     window.TopologyManager.setPhysicalIPs(selected);
-                    
+
                     modal.hide();
                 };
             } catch (err) {
@@ -707,19 +749,19 @@ const UIControls = (function() {
             }
         });
     }
- 
+
     function togglePredefinedNodesInput() {
     const deployment   = document.querySelector('input[name="deploymentRadioOptions"]:checked')?.value;
     const isPredefined = document.getElementById('predefined-topology-btn').checked;
     const nodesInput   = document.getElementById('predefined-topology-nodes');
-    
+
     if (!nodesInput) return;
-    
+
     const disable = deployment === 'physical' && isPredefined;
     nodesInput.disabled = disable;
     nodesInput.classList.toggle('disabled', disable);
     }
- 
+
     function setupDeploymentRadios() {
         const radios = document.querySelectorAll('input[name="deploymentRadioOptions"]');
         radios.forEach(radio => {

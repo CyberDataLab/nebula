@@ -5,7 +5,7 @@ class AddonEvent(ABC):
     """
     Abstract base class for all addon-related events in the system.
     """
-    
+
     @abstractmethod
     async def get_event_data(self):
         """
@@ -21,7 +21,7 @@ class NodeEvent(ABC):
     """
     Abstract base class for all node-related events in the system.
     """
-    
+
     @abstractmethod
     async def get_event_data(self):
         """
@@ -52,7 +52,7 @@ class MessageEvent:
         source (str): Address or identifier of the message sender.
         message (Any): The actual message payload.
     """
-    
+
     def __init__(self, message_type, source, message):
         """
         Initializes a MessageEvent instance.
@@ -264,7 +264,7 @@ class NodeFoundEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
 class ModelPropagationEvent(NodeEvent):
     def __init__(self, eligible_neighbors, strategy):
         """Event triggered when model propagation is ready.
@@ -275,7 +275,7 @@ class ModelPropagationEvent(NodeEvent):
         """
         self.eligible_neighbors = eligible_neighbors
         self._strategy = strategy
-        
+
     def __str__(self):
         return f"Model propagation event, strategy: {self._strategy}"
 
@@ -291,8 +291,8 @@ class ModelPropagationEvent(NodeEvent):
         return (self.eligible_neighbors, self._strategy)
 
     async def is_concurrent(self) -> bool:
-        return False    
-            
+        return False
+
 
 
 class UpdateReceivedEvent(NodeEvent):
@@ -362,7 +362,7 @@ class BeaconRecievedEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
 class DuplicatedMessageEvent(NodeEvent):
     """
     Event triggered when a message is received that has already been processed.
@@ -370,7 +370,7 @@ class DuplicatedMessageEvent(NodeEvent):
     Attributes:
         source (str): The address of the node that sent the duplicated message.
     """
-    
+
     def __init__(self, source: str, message_type: str):
         self.source = source
 
@@ -396,7 +396,7 @@ class GPSEvent(AddonEvent):
     Attributes:
         distances (dict): A dictionary mapping node addresses to their respective distances.
     """
-    
+
     def __init__(self, distances: dict):
         """
         Initializes a GPSEvent.
@@ -427,7 +427,7 @@ class ChangeLocationEvent(AddonEvent):
         latitude (float): New latitude of the node.
         longitude (float): New longitude of the node.
     """
-    
+
     def __init__(self, latitude, longitude):
         """
         Initializes a ChangeLocationEvent.
@@ -450,7 +450,8 @@ class ChangeLocationEvent(AddonEvent):
             tuple: A tuple containing latitude and longitude.
         """
         return (self.latitude, self.longitude)
-    
+
+
 class TestMetricsEvent(AddonEvent):
     def __init__(self, loss, accuracy):
         self._loss = loss

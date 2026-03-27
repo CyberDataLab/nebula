@@ -7,6 +7,10 @@ from nebula.core.nebulaevents import ModelPropagationEvent
 from nebula.core.eventmanager import EventManager
 from typing import TYPE_CHECKING, Any
 
+### TEST
+from nebula.core.aggregation.updatehandlers.caffupdatehandler import CAFFUpdateHandler
+### TEST
+
 from nebula.addons.functions import print_msg_box
 
 if TYPE_CHECKING:
@@ -308,7 +312,9 @@ class Propagator:
             bool: True if propagation occurred (payload sent), False if halted early.
         """
         eligible_neighbors, strategy_id = await mpe.get_event_data()
-        
+
+
+
         self.reset_status_history()
         if strategy_id not in self.strategies:
             logging.info(f"Strategy {strategy_id} not found.")
@@ -319,6 +325,20 @@ class Propagator:
 
         strategy = self.strategies[strategy_id]
         logging.info(f"Starting model propagation with strategy: {strategy_id}")
+
+
+
+        ### TEST FOR CAFF - Send model updates only to last contributors
+        #current_round = await self.get_round()
+        #handler = self.aggregator.us
+        #logging.info(f"HANDLER for CAFF: {handler}, current_round: {current_round}")
+
+        #if isinstance(handler, CAFFUpdateHandler) and current_round > 0:
+        #    logging.info("exchanging eligible neighbor list to last contributed peers")
+        #    eligible_neighbors = handler.last_contributors.copy()
+        ### TEST FOR CAFF - Send model updates only to last contributors
+
+
 
         # current_connections = await self.cm.get_addrs_current_connections(only_direct=True)
         # eligible_neighbors = [

@@ -6,15 +6,12 @@ import logging
 import math
 import os
 import shutil
-import subprocess
-import sys
 import time
 from datetime import datetime
 from urllib.parse import quote
 
-from aiohttp import FormData
 import docker
-import tensorboard_reducer as tbr
+from aiohttp import FormData
 
 from nebula.addons.topologymanager import TopologyManager
 from nebula.config.config import Config
@@ -108,6 +105,9 @@ class Scenario:
         sar_neighbor_policy,
         sar_training,
         sar_training_policy,
+        aggregator_args,  # <-- NEW
+        communication_args,  # <-- NEW
+        caff_args,  # <-- NEW
         physical_ips=None,
     ):
         """
@@ -199,30 +199,30 @@ class Scenario:
         self.mobile_participants_percent = mobile_participants_percent
         self.additional_participants = additional_participants
         self.with_trustworthiness = with_trustworthiness
-        self.robustness_pillar = robustness_pillar,
-        self.resilience_to_attacks = resilience_to_attacks,
-        self.algorithm_robustness = algorithm_robustness,
-        self.client_reliability = client_reliability,
-        self.privacy_pillar = privacy_pillar,
-        self.technique = technique,
-        self.uncertainty = uncertainty,
-        self.indistinguishability = indistinguishability,
-        self.fairness_pillar = fairness_pillar,
-        self.selection_fairness = selection_fairness,
-        self.performance_fairness = performance_fairness,
-        self.class_distribution = class_distribution,
-        self.explainability_pillar = explainability_pillar,
-        self.interpretability = interpretability,
-        self.post_hoc_methods = post_hoc_methods,
-        self.accountability_pillar = accountability_pillar,
-        self.factsheet_completeness = factsheet_completeness,
-        self.architectural_soundness_pillar = architectural_soundness_pillar,
-        self.client_management = client_management,
-        self.optimization = optimization,
-        self.sustainability_pillar = sustainability_pillar,
-        self.energy_source = energy_source,
-        self.hardware_efficiency = hardware_efficiency,
-        self.federation_complexity = federation_complexity,
+        self.robustness_pillar = (robustness_pillar,)
+        self.resilience_to_attacks = (resilience_to_attacks,)
+        self.algorithm_robustness = (algorithm_robustness,)
+        self.client_reliability = (client_reliability,)
+        self.privacy_pillar = (privacy_pillar,)
+        self.technique = (technique,)
+        self.uncertainty = (uncertainty,)
+        self.indistinguishability = (indistinguishability,)
+        self.fairness_pillar = (fairness_pillar,)
+        self.selection_fairness = (selection_fairness,)
+        self.performance_fairness = (performance_fairness,)
+        self.class_distribution = (class_distribution,)
+        self.explainability_pillar = (explainability_pillar,)
+        self.interpretability = (interpretability,)
+        self.post_hoc_methods = (post_hoc_methods,)
+        self.accountability_pillar = (accountability_pillar,)
+        self.factsheet_completeness = (factsheet_completeness,)
+        self.architectural_soundness_pillar = (architectural_soundness_pillar,)
+        self.client_management = (client_management,)
+        self.optimization = (optimization,)
+        self.sustainability_pillar = (sustainability_pillar,)
+        self.energy_source = (energy_source,)
+        self.hardware_efficiency = (hardware_efficiency,)
+        self.federation_complexity = (federation_complexity,)
         self.schema_additional_participants = schema_additional_participants
         self.random_topology_probability = random_topology_probability
         self.with_sa = with_sa
@@ -234,6 +234,9 @@ class Scenario:
         self.sar_training = sar_training
         self.sar_training_policy = sar_training_policy
         self.physical_ips = physical_ips
+        self.aggregator_args = aggregator_args  # <-- NEW
+        self.communication_args = communication_args  # <-- NEW
+        self.caff_args = caff_args  # <-- NEW
 
     def attack_node_assign(
         self,
@@ -694,6 +697,11 @@ class ScenarioManagement:
             participant_config["device_args"]["gpu_id"] = self.scenario.gpu_id
             participant_config["device_args"]["logging"] = self.scenario.logginglevel
             participant_config["aggregator_args"]["algorithm"] = self.scenario.agg_algorithm
+            participant_config["aggregator_args"]["aggregation_timeout"] = int(
+                self.scenario.aggregator_args["aggregation_timeout"]
+            )  # <-- New Addition
+            participant_config["communication_args"] = self.scenario.communication_args  # <-- New Addition
+            participant_config["caff_args"] = self.scenario.caff_args  # <-- New Addition
             # To be sure that benign nodes have no attack parameters
             if node_config["role"] == "malicious":
                 participant_config["adversarial_args"]["fake_behavior"] = node_config["fake_behavior"]

@@ -285,6 +285,78 @@
                         <input type="number" class="form-control" id="rounds" placeholder="Number of rounds" value="10"
                             style="display: inline; width: 20%">
                     </div>
+                    <!-- Communication Mechanism Selector (only visible for DFL) -->
+                    <div id="communicationMechanismContainer" style="display: block;">
+                        <h5 class="step-title">Communication Mechanism</h5>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="mechanism" id="mechanismStandard" value="standard" checked>
+                            <label class="form-check-label" for="mechanismStandard">Standard (Fedstellar)</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="mechanism" id="mechanismCAFF" value="CAFF">
+                            <label class="form-check-label" for="mechanismCAFF">CAFF (Asynchronous)</label>
+                        </div>
+                    </div>
+                    <!-- CAFF parameters (initially hidden) -->
+                    <div id="caffParametersContainer" style="display: none; margin-top: 10px;">
+                        <div class="form-group row align-items-center">
+                            <label for="aggregationFraction" class="col-sm-6 col-form-label">Aggregation Fraction (alpha)</label>
+                            <div class="col-sm-3">
+                                <input type="number" step="0.1" min="0" max="1" class="form-control" id="aggregationFraction" value="0.5" oninput="
+                                    // force into [0, 1] whenever the user types
+                                    {
+                                        let v = parseFloat(this.value);
+                                        if (isNaN(v)) return;
+                                        if (v < parseFloat(this.min)) v = this.min;
+                                        if (v > parseFloat(this.max)) v = this.max;
+                                        this.value = v;
+                                    }
+                                ">
+                            </div>
+                            <div class="col-sm-2">
+                                <small id="aggregationFractionHelp" class="form-text text-muted">
+                                    <i id="aggregationFractionHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                                </small>
+                            </div>
+                        </div>
+                        <div class="form-group row align-items-center">
+                            <label for="stalenessThreshold" class="col-sm-6 col-form-label">Staleness Threshold (S<sub>max</sub>)</label>
+                            <div class="col-sm-3">
+                                <input type="number" min="0" step="1" class="form-control" id="stalenessThreshold" value="2" oninput="
+                                    {
+                                        let v = parseInt(this.value);
+                                        if (isNaN(v)) return;
+                                        const maxR = parseInt(document.getElementById('rounds').value) || 0;
+                                        v = Math.min(Math.max(v, parseInt(this.min)), maxR);
+                                        this.value = v;
+                                    }
+                                ">
+                            </div>
+                            <div class="col-sm-1 text-center">
+                                <small id="stalenessThresholdHelp" class="form-text text-muted">
+                                    <i id="stalenessThresholdHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                                </small>
+                            </div>
+                        </div>
+                        <div class="form-group row align-items-center">
+                            <label for="aggregationTimeout" class="col-sm-6 col-form-label">Aggregation Timeout (s)</label>
+                            <div class="col-sm-3">
+                                <input type="number" min="10" step="10" class="form-control" id="aggregationTimeout" value="60" oninput="
+                                    {
+                                        let v = parseInt(this.value);
+                                        if (isNaN(v)) return;
+                                        v = Math.max(v, parseInt(this.min));
+                                        this.value = v;
+                                    }
+                                ">
+                            </div>
+                            <div class="col-sm-1 text-center">
+                                <small id="fallbackTimeoutHelp" class="form-text text-muted">
+                                    <i id="fallbackTimeoutHelpIcon" class="fa fa-info-circle" style="cursor: pointer;"></i>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div id="networkTopologyForm" class="form-group row container-shadow tiny grey">
                     <h5 class="step-number">Network Topology <i class="fa fa-sitemap"></i>
@@ -961,7 +1033,7 @@
                                 <input type="number" class="form-control" id="fairness-pillar"
                                     placeholder="Fairness pillar" min="5" value="15"
                                     style="display: inline; width: 67%">
-                                <small class="form-text text-muted">%</small> 
+                                <small class="form-text text-muted">%</small>
                             </div>
                             <div class="notion-container">
                                 <div class="notion">

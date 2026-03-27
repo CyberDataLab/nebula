@@ -47,6 +47,7 @@ class ControlAction(Enum):
     WEAK_LINK = nebula_pb2.ControlMessage.Action.WEAK_LINK
     LEADERSHIP_TRANSFER = nebula_pb2.ControlMessage.Action.LEADERSHIP_TRANSFER
     LEADERSHIP_TRANSFER_ACK = nebula_pb2.ControlMessage.Action.LEADERSHIP_TRANSFER_ACK
+    TERMINATED = nebula_pb2.ControlMessage.Action.Value("TERMINATED")
 
 
 class DiscoverAction(Enum):

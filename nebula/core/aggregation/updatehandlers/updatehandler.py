@@ -107,15 +107,32 @@ class UpdateHandler(ABC):
 
 
 def factory_update_handler(updt_handler, aggregator, addr) -> UpdateHandler:
+    from nebula.core.aggregation.updatehandlers.caffupdatehandler import CAFFUpdateHandler
     from nebula.core.aggregation.updatehandlers.cflupdatehandler import CFLUpdateHandler
     from nebula.core.aggregation.updatehandlers.dflupdatehandler import DFLUpdateHandler
     from nebula.core.aggregation.updatehandlers.sdflupdatehandler import SDFLUpdateHandler
 
-    UPDATE_HANDLERS = {"DFL": DFLUpdateHandler, "CFL": CFLUpdateHandler, "SDFL": SDFLUpdateHandler}
-
-    update_handler = UPDATE_HANDLERS.get(updt_handler)
-
-    if update_handler:
-        return update_handler(aggregator, addr)
+    # Choose between communication strategy once DFL is selected
+    if updt_handler == "DFL":
+        mechanism = aggregator.config.participant.get("communication_args", {}).get(
+            "mechanism", "standard"
+        )  # Strategy for DFL can be either standard or CAFF
+        if mechanism == "CAFF":
+            return CAFFUpdateHandler(aggregator, addr)
+        else:
+            return DFLUpdateHandler(aggregator, addr)
+    elif updt_handler == "CFL":
+        return CFLUpdateHandler(aggregator, addr)
+    elif updt_handler == "SDFL":
+        return SDFLUpdateHandler(aggregator, addr)
     else:
         raise UpdateHandlerException(f"Update Handler {updt_handler} not found")
+
+    # UPDATE_HANDLERS = {"DFL": DFLUpdateHandler, "CFL": CFLUpdateHandler, "SDFL": SDFLUpdateHandler, "CAFF": CAFFUpdateHandler}
+
+    # update_handler = UPDATE_HANDLERS.get(updt_handler)
+
+    # if update_handler:
+    #    return update_handler(aggregator, addr)
+    # else:
+    #    raise UpdateHandlerException(f"Update Handler {updt_handler} not found")

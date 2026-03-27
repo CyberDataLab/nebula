@@ -47,7 +47,6 @@ const ScenarioManager = (function () {
                 start: node.start
             };
         });
-
         // Get topology type from select element
         const topologyType = document.getElementById('predefined-topology-select').value;
 
@@ -131,7 +130,17 @@ const ScenarioManager = (function () {
             schema_additional_participants: document.getElementById("schemaAdditionalParticipantsSelect").value || "random",
             accelerator: "cpu",
             gpu_id: [],
-            physical_ips: physical_ips
+            physical_ips: physical_ips,
+            communication_args: {
+                mechanism: document.querySelector('input[name="mechanism"]:checked')?.value || "standard"
+            },
+            caff_args: {
+                aggregation_fraction: parseFloat(document.getElementById("aggregationFraction")?.value || 0.5),
+                staleness_threshold: parseInt(document.getElementById("stalenessThreshold")?.value || 2)
+            },
+            aggregator_args: {
+                aggregation_timeout: parseInt(document.getElementById("aggregationTimeout")?.value || 60)
+            }
         };
     }
 
