@@ -69,9 +69,9 @@ class FloodingAttack(CommunicationAttack):
                                 )
                             _, *new_args = args  # Exclude self argument
                             await func(*new_args, **kwargs)
-                _, *new_args = args 
+                _, *new_args = args
                 return await func(*new_args)
-            
+
             return wrapper
 
         return decorator

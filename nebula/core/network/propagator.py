@@ -308,7 +308,7 @@ class Propagator:
             bool: True if propagation occurred (payload sent), False if halted early.
         """
         eligible_neighbors, strategy_id = await mpe.get_event_data()
-        
+
         self.reset_status_history()
         if strategy_id not in self.strategies:
             logging.info(f"Strategy {strategy_id} not found.")
@@ -344,6 +344,7 @@ class Propagator:
 
         current_round = await self.get_round()
         round_number = -1 if strategy_id == "initialization" else current_round
+        await asyncio.sleep(10)
         parameters = serialized_model
         message = self.cm.create_message("model", "", round_number, parameters, weight)
         for neighbor_addr in eligible_neighbors:

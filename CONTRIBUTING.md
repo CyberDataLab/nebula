@@ -6,7 +6,7 @@ Follow conventional-commit style.
 ## 2 • Sign the CLA
 When you open your first Pull Request, **CLA-assistant** will block the
 merge until you tick the box confirming you accept the
-[ICLA](CLA.md).  
+[ICLA](CLA.md).
 Add a Developer-Certificate-of-Origin line in every commit:
 
 ```

@@ -19,12 +19,18 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 import logging
 from collections import Counter
 
+from nebula.addons.defenses.adversarial_training import apply_adversarial_training_if_enabled
+from nebula.addons.defenses.feature_squeezing import apply_feature_squeezing_if_enabled
 from nebula.config.config import Config
 from nebula.core.datasets.cifar10.cifar10 import CIFAR10PartitionHandler
 from nebula.core.datasets.cifar100.cifar100 import CIFAR100PartitionHandler
 from nebula.core.datasets.datamodule import DataModule
 from nebula.core.datasets.emnist.emnist import EMNISTPartitionHandler
 from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTPartitionHandler
+from nebula.core.datasets.covtype.covtype import CovtypePartitionHandler
+from nebula.core.datasets.kddcup99.kddcup99 import KDDCUP99PartitionHandler
+from nebula.core.datasets.adultcensus.adultcensus import AdultCensusPartitionHandler
+from nebula.core.datasets.breast_cancer.breast_cancer import BreastCancerPartitionHandler
 from nebula.core.datasets.mnist.mnist import MNISTPartitionHandler
 from nebula.core.datasets.nebuladataset import NebulaPartition
 from nebula.core.models.cifar10.cnn import CIFAR10ModelCNN
@@ -38,10 +44,15 @@ from nebula.core.models.emnist.cnn import EMNISTModelCNN
 from nebula.core.models.emnist.mlp import EMNISTModelMLP
 from nebula.core.models.fashionmnist.cnn import FashionMNISTModelCNN
 from nebula.core.models.fashionmnist.mlp import FashionMNISTModelMLP
+from nebula.core.models.covtype.mlp import CovtypeModelMLP
+from nebula.core.models.kddcup99.mlp import KDDCUP99ModelMLP
+from nebula.core.models.adultcensus.mlp import AdultCensusModelMLP
+from nebula.core.models.breast_cancer.mlp import BreastCancerModelMLP
 from nebula.core.models.mnist.cnn import MNISTModelCNN
 from nebula.core.models.mnist.mlp import MNISTModelMLP
 from nebula.core.engine import Engine
 from nebula.core.training.lightning import Lightning
+from nebula.core.training.lightning_dp import LightningDP
 from nebula.core.training.siamese import Siamese
 
 # os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -112,6 +123,34 @@ async def main(config: Config):
             model = FashionMNISTModelCNN()
         else:
             raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
+    elif dataset_name == "Covtype":
+        batch_size = 32
+        handler = CovtypePartitionHandler
+        if model_name == "MLP":
+            model = CovtypeModelMLP()
+        else:
+            raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
+    elif dataset_name == "KDDCUP99":
+        batch_size = 32
+        handler = KDDCUP99PartitionHandler
+        if model_name == "MLP":
+            model = KDDCUP99ModelMLP()
+        else:
+            raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
+    elif dataset_name == "AdultCensus":
+        batch_size = 32
+        handler = AdultCensusPartitionHandler
+        if model_name == "MLP":
+            model = AdultCensusModelMLP()
+        else:
+            raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
+    elif dataset_name == "BreastCancer":
+        batch_size = 32
+        handler = BreastCancerPartitionHandler
+        if model_name == "MLP":
+            model = BreastCancerModelMLP()
+        else:
+            raise ValueError(f"Model {model} not supported for dataset {dataset_name}")
     elif dataset_name == "EMNIST":
         batch_size = 32
         handler = EMNISTPartitionHandler
@@ -150,6 +189,8 @@ async def main(config: Config):
 
     dataset = NebulaPartition(handler=handler, config=config)
     dataset.load_partition()
+    apply_feature_squeezing_if_enabled(dataset, config.participant)
+    apply_adversarial_training_if_enabled(model, config.participant, dataset)
     dataset.log_partition()
     samples_per_label = Counter(dataset.get_train_labels())
 
@@ -167,8 +208,13 @@ async def main(config: Config):
 
     trainer = None
     trainer_str = config.participant["training_args"]["trainer"]
+    dp_enabled = config.participant["training_args"]["dp"]["enabled"]
     if trainer_str == "lightning":
-        trainer = Lightning
+        # DP is implemented as a Lightning-specific trainer wrapper around Opacus.
+        if dp_enabled:
+            trainer = LightningDP
+        else:
+            trainer = Lightning
     elif trainer_str == "scikit":
         raise NotImplementedError
     elif trainer_str == "siamese":

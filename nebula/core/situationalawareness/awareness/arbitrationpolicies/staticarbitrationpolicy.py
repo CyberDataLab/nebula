@@ -8,11 +8,11 @@ class SAP(ArbitrationPolicy):  # Static Arbitatrion Policy
     """
     Static Arbitration Policy for the Reasoner module.
 
-    This class implements a fixed priority arbitration mechanism for 
-    SA (Situational Awareness) components. Each SA component category 
+    This class implements a fixed priority arbitration mechanism for
+    SA (Situational Awareness) components. Each SA component category
     is assigned a static weight representing its priority level.
 
-    In case of conflicting SA commands, the policy selects the command 
+    In case of conflicting SA commands, the policy selects the command
     whose originating component has the highest priority weight.
 
     Attributes:
@@ -21,7 +21,7 @@ class SAP(ArbitrationPolicy):  # Static Arbitatrion Policy
 
     Methods:
         init(config): Placeholder for initialization with external configuration.
-        tie_break(sac1, sac2): Resolves conflicts between two SA commands by 
+        tie_break(sac1, sac2): Resolves conflicts between two SA commands by
             comparing their category weights, returning True if sac1 wins.
     """
     def __init__(self, verbose):

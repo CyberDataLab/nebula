@@ -10,17 +10,17 @@ class DistanceCandidateSelector(CandidateSelector):
     """
     Selects candidate nodes based on their physical proximity.
 
-    This selector uses geolocation data to filter candidates within a 
-    maximum distance threshold. It listens for GPS updates and maintains 
+    This selector uses geolocation data to filter candidates within a
+    maximum distance threshold. It listens for GPS updates and maintains
     a mapping of node identifiers to their distances and coordinates.
 
     Attributes:
-        MAX_DISTANCE_THRESHOLD (int): Maximum distance (in meters) allowed 
+        MAX_DISTANCE_THRESHOLD (int): Maximum distance (in meters) allowed
             for a node to be considered a valid candidate.
         candidates (list): List of candidate nodes to be evaluated.
-        candidates_lock (Locker): Async lock for managing concurrent access 
+        candidates_lock (Locker): Async lock for managing concurrent access
             to the candidate list.
-        nodes_distances (dict): Maps node IDs to a tuple containing the 
+        nodes_distances (dict): Maps node IDs to a tuple containing the
             distance and GPS coordinates.
         nodes_distances_lock (Locker): Async lock for the distance mapping.
         _verbose (bool): Flag to enable verbose logging for debugging.

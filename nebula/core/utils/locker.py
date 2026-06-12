@@ -92,6 +92,7 @@ class Locker:
         result = self._lock.locked()
         if self._verbose:
             logging.debug(f"🔐  Async lock [{self._name}] is locked? {result}")
+        return result
 
     async def __aenter__(self):
         logging.debug(f"🔒  Acquiring async lock [{self._name}] using [async with] statement")

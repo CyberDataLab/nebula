@@ -7,14 +7,14 @@ class DefaultModelHandler(ModelHandler):
     """
     Provides the initial default model.
 
-    This handler returns the baseline model with default weights, 
-    typically used at the start of the federation or when no suitable 
+    This handler returns the baseline model with default weights,
+    typically used at the start of the federation or when no suitable
     model offers have been received from peers.
 
     Inherits from:
         ModelHandler: Provides the base interface for model operations.
     """
-    
+
     def __init__(self):
         self.model = None
         self.rounds = 0

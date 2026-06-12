@@ -3,6 +3,7 @@ import logging
 import time
 
 from nebula.addons.functions import print_msg_box
+from nebula.core.pb import nebula_pb2
 from nebula.core.utils.locker import Locker
 
 
@@ -114,12 +115,17 @@ class Forwarder:
         """
         while messages_left > 0 and not self.pending_messages.empty():
             msg, neighbors = await self.pending_messages.get()
+            allow_after_learning_finished = self._allow_forward_after_learning_finished(msg)
             for neighbor in neighbors[:messages_left]:
                 if neighbor not in self.cm.connections:
                     continue
                 try:
                     logging.debug(f"🔁  Sending message (forwarding) --> to {neighbor}")
-                    await self.cm.send_message(neighbor, msg)
+                    await self.cm.send_message(
+                        neighbor,
+                        msg,
+                        allow_after_learning_finished=allow_after_learning_finished,
+                    )
                 except Exception as e:
                     logging.exception(f"🔁  Error forwarding message to {neighbor}. Error: {e!s}")
                     pass
@@ -128,6 +134,24 @@ class Forwarder:
             if len(neighbors) > messages_left:
                 logging.debug("🔁  Putting message back in queue for forwarding to the remaining neighbors")
                 await self.pending_messages.put((msg, neighbors[messages_left:]))
+
+    def _allow_forward_after_learning_finished(self, msg: bytes) -> bool:
+        try:
+            message_wrapper = nebula_pb2.Wrapper()
+            message_wrapper.ParseFromString(msg)
+            message_type = message_wrapper.WhichOneof("message")
+            if message_type == "trustscores_message":
+                return True
+            if message_type == "sdflmodel_message":
+                # Trainers may finish their local cycle before the forwarded global model arrives.
+                return message_wrapper.sdflmodel_message.action == nebula_pb2.SdflmodelMessage.Action.GLOBAL_MODEL
+            if message_type == "reputationtable_message":
+                # SDFL reputation tables can be forwarded while the aggregator is waiting.
+                return True
+            return False
+        except Exception as e:
+            logging.warning(f"🔁  Could not inspect forwarded message type: {e!s}")
+            return False
 
     async def forward(self, msg, addr_from):
         """

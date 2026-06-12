@@ -379,8 +379,8 @@ def setup_new_run():
 
     Expected multipart-form fields
     -------------------------------
-    * **config**     – JSON with scenario, network and security arguments  
-    * **global_test** – shared evaluation dataset (`*.h5`)  
+    * **config**     – JSON with scenario, network and security arguments
+    * **global_test** – shared evaluation dataset (`*.h5`)
     * **train_set**   – participant-specific training dataset (`*.h5`)
 
     The function rewrites paths inside *config*, validates neighbour IPs

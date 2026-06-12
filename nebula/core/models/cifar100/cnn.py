@@ -12,8 +12,10 @@ class CIFAR100ModelCNN(NebulaModel):
         metrics=None,
         confusion_matrix=None,
         seed=None,
+        data_type="Images",
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
+        self.data_type = data_type
 
         self.config = {
             "lr": 8.0505e-05,
@@ -94,9 +96,25 @@ class CIFAR100ModelCNN(NebulaModel):
         return x
 
     def configure_optimizers(self):
+        optimizer_override = self.get_optimizer_override()
+        if optimizer_override is not None:
+            return optimizer_override
+
         return torch.optim.Adam(
             self.parameters(),
             lr=self.config["lr"],
             betas=(self.config["beta1"], self.config["beta2"]),
             amsgrad=self.config["amsgrad"],
         )
+
+    def get_learning_rate(self):
+        return self.learning_rate
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def get_num_classes(self):
+        return self.num_classes
+
+    def get_data_type(self):
+        return self.data_type

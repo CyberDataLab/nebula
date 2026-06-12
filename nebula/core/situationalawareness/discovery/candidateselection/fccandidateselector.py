@@ -24,7 +24,7 @@ class FCCandidateSelector(CandidateSelector):
     Inherits from:
         CandidateSelector: Base class interface for candidate selection logic.
     """
-    
+
     def __init__(self):
         self.candidates = []
         self.candidates_lock = Locker(name="candidates_lock")

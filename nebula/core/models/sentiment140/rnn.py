@@ -12,8 +12,10 @@ class Sentiment140ModelRNN(NebulaModel):
         metrics=None,
         confusion_matrix=None,
         seed=None,
+        data_type="Tabular",
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
+        self.data_type = data_type
 
         self.config = {"beta1": 0.851436, "beta2": 0.999689, "amsgrad": True}
 
@@ -53,5 +55,15 @@ class Sentiment140ModelRNN(NebulaModel):
         return out
 
     def configure_optimizers(self):
+        optimizer_override = self.get_optimizer_override()
+        if optimizer_override is not None:
+            return optimizer_override
+
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
+
+    def get_num_classes(self):
+        return self.num_classes
+
+    def get_data_type(self):
+        return self.data_type

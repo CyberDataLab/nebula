@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 BLACKLIST_EXPIRATION_TIME = 60
 
-_COMPRESSED_MESSAGES = ["model", "offer_model"]
+_COMPRESSED_MESSAGES = ["model", "offer_model", "sdflmodel"]
 
 
 class CommunicationsManager:
@@ -854,7 +854,7 @@ class CommunicationsManager:
             if interval > 0:
                 await asyncio.sleep(interval)
 
-    async def send_message(self, dest_addr, message, message_type=""):
+    async def send_message(self, dest_addr, message, message_type="", allow_after_learning_finished = False,):
         """
         Sends a message to a specific destination address, with optional compression for large messages.
 
@@ -868,7 +868,7 @@ class CommunicationsManager:
             try:
                 if dest_addr in self.connections:
                     conn = self.connections[dest_addr]
-                    await conn.send(data=message)
+                    await conn.send(data=message, allow_after_learning_finished=allow_after_learning_finished)
             except Exception as e:
                 logging.exception(f"❗️  Cannot send message {message} to {dest_addr}. Error: {e!s}")
                 await self.disconnect(dest_addr, mutual_disconnection=False)
@@ -879,7 +879,7 @@ class CommunicationsManager:
                     if conn is None:
                         logging.info(f"❗️  Connection with {dest_addr} not found")
                         return
-                    await conn.send(data=message, is_compressed=True)
+                    await conn.send(data=message, is_compressed=True, allow_after_learning_finished=allow_after_learning_finished)
                 except Exception as e:
                     logging.exception(f"❗️  Cannot send model to {dest_addr}: {e!s}")
                     await self.disconnect(dest_addr, mutual_disconnection=False)

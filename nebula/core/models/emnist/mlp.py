@@ -12,8 +12,10 @@ class EMNISTModelMLP(NebulaModel):
         metrics=None,
         confusion_matrix=None,
         seed=None,
+        data_type="Images",
     ):
         super().__init__(input_channels, num_classes, learning_rate, metrics, confusion_matrix, seed)
+        self.data_type = data_type
 
         self.config = {"beta1": 0.851436, "beta2": 0.999689, "amsgrad": True}
 
@@ -35,6 +37,22 @@ class EMNISTModelMLP(NebulaModel):
         x = self.l3(x)
         return x
 
+    def get_learning_rate(self):
+        return self.learning_rate
+
     def configure_optimizers(self):
+        optimizer_override = self.get_optimizer_override()
+        if optimizer_override is not None:
+            return optimizer_override
+
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def get_num_classes(self):
+        return self.num_classes
+
+    def get_data_type(self):
+        return self.data_type

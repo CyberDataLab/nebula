@@ -1,0 +1,79 @@
+{
+	"project": {
+		"overview": "",
+		"purpose": "",
+		"background": ""
+	},
+	"data": {
+		"provenance": "",
+		"preprocessing": "",
+		"entropy_local": ""
+	},
+	"participants": {
+		"client_num": "",
+		"sample_client_rate": "",
+		"client_selector": "",
+		"local_dataset_size": "",
+		"neighbor_num": "",
+		"avg_neighbor_reputation": ""
+	},
+	"configuration": {
+		"aggregation_algorithm": "",
+		"training_model": "",
+		"personalization": "",
+		"reputation_enabled": "",
+		"visualization": "",
+		"monitoring": "",
+		"differential_privacy": "",
+		"dp_epsilon": "",
+		"trainable_param_num": "",
+		"total_round_num": "",
+		"learning_rate": "",
+		"local_update_steps": ""
+	},
+	"privacy": {
+		"privacy_risk": "",
+		"epsilon_star": "",
+		"inverse_epsilon_star": "",
+		"mia_auc": "",
+		"mia_auc_score": ""
+	},
+	"explainability": {
+		"alpha_score": "",
+		"spread_ratio": "",
+		"spread_divergence": ""
+	},
+	"performance": {
+		"test_loss": "",
+		"test_acc": "",
+		"test_macro_f1": "",
+		"clipped_test_feature_importance_cv": "",
+		"test_adv_accuracy": "",
+		"test_confidence_score": "",
+		"inverse_test_attack_success_rate": ""
+	},
+	"fairness": {
+		"selection_cv": "",
+		"class_imbalance": "",
+		"underfitting": "",
+		"inverse_overfitting": "",
+		"inverse_well_calibration_error": "",
+		"inverse_generalized_entropy_index": "",
+		"inverse_theil_index": "",
+		"inverse_coefficient_of_variation": ""
+	},
+	"system": {
+		"time_minutes": "",
+		"model_size": "",
+		"upload_bytes": "",
+		"download_bytes":"",
+		"dropout_rate": "",
+		"timeout_rate": ""
+	},
+	"sustainability": {
+		"carbon_intensity_local": "",
+		"emissions_training_local": "",
+		"energy_consumed_local": "",
+		"emissions_communication_local": ""
+	}
+}

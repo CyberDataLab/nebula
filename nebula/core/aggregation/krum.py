@@ -1,5 +1,6 @@
 import numpy
 import torch
+import logging
 
 from nebula.core.aggregation.aggregator import Aggregator
 
@@ -17,6 +18,10 @@ class Krum(Aggregator):
 
     def run_aggregation(self, models):
         super().run_aggregation(models)
+
+        if not models:
+            logging.warning("Krum received an empty update set.")
+            return None
 
         models = list(models.values())
 

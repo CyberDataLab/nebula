@@ -1,0 +1,88 @@
+{
+	"project": {
+		"overview": "",
+		"purpose": "",
+		"background": ""
+	},
+	"data": {
+		"provenance": "",
+		"preprocessing": "",
+		"avg_entropy": ""
+	},
+	"participants": {
+		"client_num": "",
+		"sample_client_rate": "",
+		"client_selector": "",
+		"avg_neighbor_reputation": "",
+		"avg_dataset_size": ""
+	},
+	"configuration": {
+		"aggregation_algorithm": "",
+		"training_model": "",
+		"reputation_enabled": "",
+		"personalization": "",
+		"visualization": "",
+		"monitoring": "",
+		"differential_privacy": "",
+		"dp_epsilon": "",
+		"trainable_param_num": "",
+		"total_round_num": "",
+		"learning_rate": "",
+		"local_update_steps": ""
+	},
+	"privacy": {
+		"privacy_risk": "",
+		"epsilon_star": "",
+		"inverse_epsilon_star": "",
+		"mia_auc": "",
+		"mia_auc_score": ""
+	},
+	"explainability": {
+		"alpha_score": "",
+		"spread_ratio": "",
+		"spread_divergence": ""
+	},
+	"performance": {
+		"test_loss_avg": "",
+		"test_acc_avg": "",
+		"test_macro_f1": "",
+		"clipped_test_feature_importance_cv": "",
+		"test_clever_score": "",
+		"inverse_test_loss_sensitivity": "",
+		"test_adv_accuracy": "",
+		"test_empirical_robustness_score": "",
+		"test_confidence_score": "",
+		"inverse_test_attack_success_rate": ""
+	},
+	"fairness": {
+		"test_acc_cv": "",
+		"selection_cv": "",
+		"class_imbalance": "",
+		"underfitting": "",
+		"inverse_overfitting": "",
+		"inverse_well_calibration_error": "",
+		"inverse_generalized_entropy_index": "",
+		"inverse_theil_index": "",
+		"inverse_coefficient_of_variation": ""
+	},
+	"system": {
+		"avg_time_minutes": "",
+		"avg_model_size": "",
+		"total_upload_bytes": "",
+		"total_download_bytes":"",
+		"avg_upload_bytes": "",
+		"avg_download_bytes": "",
+		"dropout_rate": "",
+		"timeout_rate": ""
+	},
+	"sustainability": {
+		"avg_carbon_intensity_server": "",
+		"avg_carbon_intensity_clients": "",
+		"avg_power_performance_clients": "",
+		"avg_power_performance_server": "",
+		"emissions_training": "",
+		"emissions_aggregation": "",
+		"emissions_communication_uplink": "",
+		"emissions_communication_downlink": ""
+	}
+}

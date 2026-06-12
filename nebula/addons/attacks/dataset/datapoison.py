@@ -71,6 +71,59 @@ class DataPoisoningStrategy(ABC):
         else:
             return torch.tensor(data)
 
+    def _restore_data_format(self, data, original):
+        if isinstance(data, torch.Tensor):
+            array_data = data.detach().cpu().numpy()
+        else:
+            array_data = np.asarray(data)
+
+        original_shape = None
+        if isinstance(original, torch.Tensor):
+            original_shape = tuple(original.shape)
+        elif isinstance(original, Image.Image):
+            original_shape = np.array(original).shape
+        elif hasattr(original, "shape"):
+            original_shape = tuple(original.shape)
+
+        if original_shape is not None and array_data.shape != original_shape and array_data.size == np.prod(original_shape):
+            array_data = array_data.reshape(original_shape)
+
+        if isinstance(original, torch.Tensor):
+            restored = torch.as_tensor(array_data, device=original.device)
+            if original.dtype.is_floating_point:
+                original_max = original.detach().max() if original.numel() > 0 else torch.tensor(1.0, device=original.device)
+                if restored.numel() > 0 and original_max > 1 and restored.min() >= 0 and restored.max() <= 1:
+                    restored = restored * original_max
+                return restored.to(dtype=original.dtype)
+
+            if restored.numel() > 0 and restored.min() >= 0 and restored.max() <= 1:
+                restored = restored * torch.iinfo(original.dtype).max
+            return restored.clamp(torch.iinfo(original.dtype).min, torch.iinfo(original.dtype).max).to(dtype=original.dtype)
+
+        if isinstance(original, Image.Image):
+            original_array = np.array(original)
+            restored = self._restore_array_dtype(array_data, original_array.dtype, original_array)
+            return Image.fromarray(restored, mode=original.mode)
+
+        if isinstance(original, np.ndarray):
+            return self._restore_array_dtype(array_data, original.dtype, original)
+
+        return data
+
+    def _restore_array_dtype(self, data: np.ndarray, dtype: np.dtype, original: np.ndarray | None = None) -> np.ndarray:
+        dtype = np.dtype(dtype)
+        if np.issubdtype(dtype, np.integer):
+            if data.size > 0 and data.min() >= 0 and data.max() <= 1:
+                data = data * np.iinfo(dtype).max
+            return np.rint(np.clip(data, np.iinfo(dtype).min, np.iinfo(dtype).max)).astype(dtype)
+
+        if original is not None and data.size > 0 and original.size > 0:
+            original_max = np.max(original)
+            if original_max > 1 and data.min() >= 0 and data.max() <= 1:
+                data = data * original_max
+
+        return data.astype(dtype)
+
     def _handle_single_point(self, tensor: torch.Tensor) -> tuple[torch.Tensor, bool]:
         """
         Handle single point tensors by reshaping them.
@@ -100,7 +153,7 @@ class NonTargetedSamplePoisoningStrategy(DataPoisoningStrategy):
         """
         self.noise_type = noise_type.lower()
 
-    def apply_noise(self, t: torch.Tensor | Image.Image, poisoned_noise_percent: float) -> torch.Tensor:
+    def apply_noise(self, t: torch.Tensor | Image.Image, poisoned_noise_percent: float):
         """
         Applies noise to a tensor based on the specified noise type and poisoning percentage.
 
@@ -109,9 +162,10 @@ class NonTargetedSamplePoisoningStrategy(DataPoisoningStrategy):
             poisoned_noise_percent: The percentage of noise to be applied (0-100)
 
         Returns:
-            The tensor with noise applied
+            The poisoned data in the same format as the input
         """
-        t = self._convert_to_tensor(t)
+        original = t[0] if isinstance(t, tuple) else t
+        t = self._convert_to_tensor(original)
         t, is_single_point = self._handle_single_point(t)
 
         arr = t.detach().cpu().numpy()
@@ -122,21 +176,21 @@ class NonTargetedSamplePoisoningStrategy(DataPoisoningStrategy):
         )
 
         if self.noise_type == "salt":
-            poisoned = torch.tensor(random_noise(arr, mode=self.noise_type, amount=poisoned_ratio))
+            poisoned = random_noise(arr, mode=self.noise_type, amount=poisoned_ratio)
         elif self.noise_type == "gaussian":
-            poisoned = torch.tensor(random_noise(arr, mode=self.noise_type, mean=0, var=poisoned_ratio, clip=True))
+            poisoned = random_noise(arr, mode=self.noise_type, mean=0, var=poisoned_ratio, clip=True)
         elif self.noise_type == "s&p":
-            poisoned = torch.tensor(random_noise(arr, mode=self.noise_type, amount=poisoned_ratio))
+            poisoned = random_noise(arr, mode=self.noise_type, amount=poisoned_ratio)
         elif self.noise_type == "nlp_rawdata":
             poisoned = self.poison_to_nlp_rawdata(arr, poisoned_ratio)
         else:
             logging.info(f"ERROR: noise_type '{self.noise_type}' not supported in data poison attack.")
-            return t
+            return original
 
         if is_single_point:
             poisoned = poisoned[0]
 
-        return poisoned
+        return self._restore_data_format(poisoned, original)
 
     def poison_to_nlp_rawdata(self, text_data: list, poisoned_ratio: float) -> list:
         """
@@ -221,7 +275,7 @@ class TargetedSamplePoisoningStrategy(DataPoisoningStrategy):
         """
         self.target_label = target_label
 
-    def add_x_to_image(self, img: torch.Tensor | Image.Image) -> torch.Tensor:
+    def add_x_to_image(self, img: torch.Tensor | Image.Image):
         """
         Adds a 10x10 pixel 'X' mark to the top-left corner of an image.
 
@@ -229,10 +283,11 @@ class TargetedSamplePoisoningStrategy(DataPoisoningStrategy):
             img: Input image tensor or PIL Image
 
         Returns:
-            Modified image with X pattern
+            Modified image in the same format as the input
         """
         logging.info(f"[{self.__class__.__name__}] Adding X pattern to image")
-        img = self._convert_to_tensor(img)
+        original = img[0] if isinstance(img, tuple) else img
+        img = self._convert_to_tensor(original)
         img, is_single_point = self._handle_single_point(img)
 
         # Handle batch dimension if present
@@ -267,7 +322,7 @@ class TargetedSamplePoisoningStrategy(DataPoisoningStrategy):
         if is_single_point:
             img = img[0]
 
-        return img
+        return self._restore_data_format(img, original)
 
     def poison_data(
         self,

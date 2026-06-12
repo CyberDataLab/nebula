@@ -338,6 +338,7 @@ class Connection:
         pb: bool = True,
         encoding_type: str = "utf-8",
         is_compressed: bool = False,
+        allow_after_learning_finished: bool = False,
     ) -> None:
         """
         Sends data over the active connection.
@@ -359,9 +360,12 @@ class Connection:
             return
 
         # Check if learning cycle has finished - don't send messages
-        if await self.cm.learning_finished():
+        if not allow_after_learning_finished and await self.cm.learning_finished():
             logging.info(f"Not sending message to {self.addr} because learning cycle has finished")
             return
+
+        if await self.cm.learning_finished() and allow_after_learning_finished:
+            logging.info(f"Sending message to {self.addr} after learning cycle finished (allowed)")
 
         try:
             message_id = uuid.uuid4().bytes

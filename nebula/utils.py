@@ -174,7 +174,7 @@ class DockerUtils:
             for container in containers:
                 if container.name.startswith(prefix):
                     return True
-                
+
             return False
 
         except docker.errors.APIError:

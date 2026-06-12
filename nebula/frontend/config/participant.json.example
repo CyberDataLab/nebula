@@ -84,14 +84,45 @@
   },
   "training_args": {
     "trainer": "lightning",
-    "epochs": 3
+    "epochs": 3,
+    "dp": {
+      "enabled": false,
+      "noise_multiplier": 1.0,
+      "max_grad_norm": 1.0,
+      "target_delta": 1e-5,
+      "accountant": "prv",
+      "secure_mode": false,
+      "poisson_sampling": true,
+      "clipping": "flat"
+    }
   },
   "aggregator_args": {
     "algorithm": "FedAvg",
-    "aggregation_timeout": 60,
+    "aggregation_timeout": 240,
     "aggregation_push": "slow"
   },
   "defense_args": {
+    "feature_squeezing": {
+      "enabled": false,
+      "bit_depth": 4,
+      "apply_to_train": true,
+      "apply_to_test": true,
+      "apply_to_local_test": true
+    },
+    "adversarial_training": {
+      "enabled": false,
+      "domain": "image",
+      "attack": "fgsm",
+      "epsilon": 0.03,
+      "steps": 1,
+      "mode": "mixed",
+      "apply_probability": 0.3,
+      "candidate_selection": "none",
+      "target_loss_increase": null,
+      "max_loss_increase": null,
+      "target_margin": 0,
+      "max_margin": 0.5
+    },
     "reputation": {
       "enabled": false,
       "metrics": {},
@@ -148,6 +179,7 @@
   },
   "misc_args": {
     "grace_time_connection": 10,
-    "grace_time_start_federation": 10
+    "grace_time_start_federation": 10,
+    "leadership_ack_timeout": 20
   }
 }

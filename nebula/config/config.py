@@ -55,7 +55,7 @@ class Config:
 
         self.__set_default_logging(mode="a")
         self.__set_training_logging(mode="a")
-        
+
     def shutdown_logging(self):
         """
         Properly shuts down all loggers and their handlers in the system.

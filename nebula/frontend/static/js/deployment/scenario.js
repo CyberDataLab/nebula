@@ -74,6 +74,9 @@ const ScenarioManager = (function () {
             logginglevel: document.getElementById("loggingLevel").value === "true",
             report_status_data_queue: document.getElementById("reportingSwitch").checked,
             epochs: parseInt(document.getElementById("epochs").value),
+            dp: window.DpManager.getDpConfig(),
+            feature_squeezing: window.FeatureSqueezingManager.getFeatureSqueezingConfig(),
+            adversarial_training: window.AdversarialTrainingManager.getAdversarialTrainingConfig(),
             attack_params: attackConfig,
             reputation: {
                 enabled: window.ReputationManager.getReputationConfig().enabled || false,
@@ -100,31 +103,121 @@ const ScenarioManager = (function () {
             sar_training: window.SaManager.getSaConfig().sar_training || false,
             sar_training_policy: window.SaManager.getSaConfig().sar_training_policy || "Broad-Propagation Strategy",
             random_topology_probability: document.getElementById("random-probability").value || 0.5,
+            // --- Trustworthiness (CFL/DFL) ---
             with_trustworthiness: document.getElementById("TrustworthinessSwitch").checked ? true : false,
-            robustness_pillar: document.getElementById("robustness-pillar").value,
-            resilience_to_attacks: document.getElementById("robustness-notion-1").value,
-            algorithm_robustness: document.getElementById("robustness-notion-2").value,
-            client_reliability: document.getElementById("robustness-notion-3").value,
-            privacy_pillar: document.getElementById("privacy-pillar").value,
-            technique: document.getElementById("privacy-notion-1").value,
-            uncertainty: document.getElementById("privacy-notion-2").value,
-            indistinguishability: document.getElementById("privacy-notion-3").value,
-            fairness_pillar: document.getElementById("fairness-pillar").value,
-            selection_fairness: document.getElementById("fairness-notion-1").value,
-            performance_fairness: document.getElementById("fairness-notion-2").value,
-            class_distribution: document.getElementById("fairness-notion-3").value,
-            explainability_pillar: document.getElementById("explainability-pillar").value,
-            interpretability: document.getElementById("explainability-notion-1").value,
-            post_hoc_methods: document.getElementById("explainability-notion-2").value,
-            accountability_pillar: document.getElementById("accountability-pillar").value,
-            factsheet_completeness: document.getElementById("accountability-notion-1").value,
-            architectural_soundness_pillar: document.getElementById("architectural-soundness-pillar").value,
-            client_management: document.getElementById("architectural-soundness-notion-1").value,
-            optimization: document.getElementById("architectural-soundness-notion-2").value,
-            sustainability_pillar: document.getElementById("sustainability-pillar").value,
-            energy_source: document.getElementById("sustainability-notion-1").value,
-            hardware_efficiency: document.getElementById("sustainability-notion-2").value,
-            federation_complexity: document.getElementById("sustainability-notion-3").value,
+
+            ...(document.getElementById("TrustworthinessSwitch").checked
+                ? (() => {
+                    const federationType = document.getElementById("federationArchitecture").value;
+                    const useDFL = (federationType === "DFL" || federationType === "SDFL");
+
+                    if (useDFL) {
+                        return {
+                            robustness_pillar: document.getElementById("dfl-robustness-pillar")?.value || "0",
+                            resilience_to_attacks: document.getElementById("dfl-robustness-notion-1")?.value || "0",
+                            algorithm_robustness: document.getElementById("dfl-robustness-notion-2")?.value || "0",
+                            client_reliability: document.getElementById("dfl-robustness-notion-3")?.value || "0",
+
+                            privacy_pillar: document.getElementById("dfl-privacy-pillar")?.value || "0",
+                            technique: document.getElementById("dfl-privacy-notion-1")?.value || "0",
+                            uncertainty: document.getElementById("dfl-privacy-notion-2")?.value || "0",
+                            indistinguishability: document.getElementById("dfl-privacy-notion-3")?.value || "0",
+
+                            fairness_pillar: document.getElementById("dfl-fairness-pillar")?.value || "0",
+
+                            selection_fairness: "0",
+                            performance_fairness: "0",
+                            class_distribution: document.getElementById("dfl-fairness-notion-3")?.value || "0",
+                            outcome_fairness: document.getElementById("dfl-fairness-notion-4")?.value || "0",
+
+                            explainability_pillar: document.getElementById("dfl-explainability-pillar")?.value || "0",
+                            interpretability: document.getElementById("dfl-explainability-notion-1")?.value || "0",
+                            post_hoc_methods: document.getElementById("dfl-explainability-notion-2")?.value || "0",
+
+                            accountability_pillar: document.getElementById("dfl-accountability-pillar")?.value || "0",
+                            factsheet_completeness: document.getElementById("dfl-accountability-notion-1")?.value || "0",
+                            monitoring: document.getElementById("dfl-accountability-notion-2")?.value || "0",
+
+                            architectural_soundness_pillar: document.getElementById("dfl-architectural-soundness-pillar")?.value || "0",
+                            client_management: document.getElementById("dfl-architectural-soundness-notion-1")?.value || "0",
+                            optimization: document.getElementById("dfl-architectural-soundness-notion-2")?.value || "0",
+                            federation_management: document.getElementById("dfl-architectural-soundness-notion-3")?.value || "0",
+
+                            sustainability_pillar: document.getElementById("dfl-sustainability-pillar")?.value || "0",
+                            energy_source: document.getElementById("dfl-sustainability-notion-1")?.value || "0",
+                            hardware_efficiency: "0",
+                            federation_complexity: document.getElementById("dfl-sustainability-notion-3")?.value || "0",
+                        };
+                    }
+
+                    // CFL
+                    return {
+                        robustness_pillar: document.getElementById("cfl-robustness-pillar")?.value || "0",
+                        resilience_to_attacks: document.getElementById("cfl-robustness-notion-1")?.value || "0",
+                        algorithm_robustness: document.getElementById("cfl-robustness-notion-2")?.value || "0",
+                        client_reliability: document.getElementById("cfl-robustness-notion-3")?.value || "0",
+
+                        privacy_pillar: document.getElementById("cfl-privacy-pillar")?.value || "0",
+                        technique: document.getElementById("cfl-privacy-notion-1")?.value || "0",
+                        uncertainty: document.getElementById("cfl-privacy-notion-2")?.value || "0",
+                        indistinguishability: document.getElementById("cfl-privacy-notion-3")?.value || "0",
+
+                        fairness_pillar: document.getElementById("cfl-fairness-pillar")?.value || "0",
+                        selection_fairness: document.getElementById("cfl-fairness-notion-1")?.value || "0",
+                        performance_fairness: document.getElementById("cfl-fairness-notion-2")?.value || "0",
+                        class_distribution: document.getElementById("cfl-fairness-notion-3")?.value || "0",
+                        outcome_fairness: document.getElementById("cfl-fairness-notion-4")?.value || "0",
+
+                        explainability_pillar: document.getElementById("cfl-explainability-pillar")?.value || "0",
+                        interpretability: document.getElementById("cfl-explainability-notion-1")?.value || "0",
+                        post_hoc_methods: document.getElementById("cfl-explainability-notion-2")?.value || "0",
+
+                        accountability_pillar: document.getElementById("cfl-accountability-pillar")?.value || "0",
+                        factsheet_completeness: document.getElementById("cfl-accountability-notion-1")?.value || "0",
+                        monitoring: document.getElementById("cfl-accountability-notion-2")?.value || "0",
+
+
+                        architectural_soundness_pillar: document.getElementById("cfl-architectural-soundness-pillar")?.value || "0",
+                        client_management: document.getElementById("cfl-architectural-soundness-notion-1")?.value || "0",
+                        optimization: document.getElementById("cfl-architectural-soundness-notion-2")?.value || "0",
+                        federation_management: document.getElementById("cfl-architectural-soundness-notion-3")?.value || "0",
+
+                        sustainability_pillar: document.getElementById("cfl-sustainability-pillar")?.value || "0",
+                        energy_source: document.getElementById("cfl-sustainability-notion-1")?.value || "0",
+                        hardware_efficiency: document.getElementById("cfl-sustainability-notion-2")?.value || "0",
+                        federation_complexity: document.getElementById("cfl-sustainability-notion-3")?.value || "0",
+                    };
+                })()
+                : {
+                    robustness_pillar: "0",
+                    resilience_to_attacks: "0",
+                    algorithm_robustness: "0",
+                    client_reliability: "0",
+                    privacy_pillar: "0",
+                    technique: "0",
+                    uncertainty: "0",
+                    indistinguishability: "0",
+                    fairness_pillar: "0",
+                    selection_fairness: "0",
+                    performance_fairness: "0",
+                    class_distribution: "0",
+                    outcome_fairness: "0",
+                    explainability_pillar: "0",
+                    interpretability: "0",
+                    post_hoc_methods: "0",
+                    accountability_pillar: "0",
+                    factsheet_completeness: "0",
+                    monitoring: "0",
+                    architectural_soundness_pillar: "0",
+                    client_management: "0",
+                    optimization: "0",
+                    federation_management: "0",
+                    sustainability_pillar: "0",
+                    energy_source: "0",
+                    hardware_efficiency: "0",
+                    federation_complexity: "0",
+                }),
+            // --- /Trustworthiness ---
             network_subnet: "172.20.0.0/16",
             network_gateway: "172.20.0.1",
             additional_participants: window.MobilityManager.getMobilityConfig().additionalParticipants || [],
@@ -173,6 +266,15 @@ const ScenarioManager = (function () {
         document.getElementById("loggingLevel").value = scenario.logginglevel ? "true" : "false";
         document.getElementById("reportingSwitch").checked = scenario.report_status_data_queue;
         document.getElementById("epochs").value = scenario.epochs;
+        if (window.DpManager) {
+            window.DpManager.setDpConfig(scenario.dp);
+        }
+        if (window.FeatureSqueezingManager) {
+            window.FeatureSqueezingManager.setFeatureSqueezingConfig(scenario.feature_squeezing);
+        }
+        if (window.AdversarialTrainingManager) {
+            window.AdversarialTrainingManager.setAdversarialTrainingConfig(scenario.adversarial_training);
+        }
 
         // Load module configurations
         if (scenario.attacks && scenario.attacks.length > 0) {
@@ -345,6 +447,15 @@ const ScenarioManager = (function () {
         }
         if (window.SaManager) {
             window.SaManager.resetSaConfig();
+        }
+        if (window.DpManager) {
+            window.DpManager.resetDpConfig();
+        }
+        if (window.FeatureSqueezingManager) {
+            window.FeatureSqueezingManager.resetFeatureSqueezingConfig();
+        }
+        if (window.AdversarialTrainingManager) {
+            window.AdversarialTrainingManager.resetAdversarialTrainingConfig();
         }
 
         // Trigger necessary events

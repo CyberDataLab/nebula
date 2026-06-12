@@ -27,7 +27,7 @@ class RINGCandidateSelector(CandidateSelector):
     Inherits from:
         CandidateSelector: Base interface for candidate selection strategies.
     """
-    
+
     def __init__(self):
         self._candidates = []
         self._rejected_candidates = []

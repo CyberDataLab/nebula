@@ -1,0 +1,1081 @@
+{
+    "robustness": {
+      "resilience_to_attacks": {
+        "weight": 0.4,
+        "metrics": {
+          "adversarial_accuracy": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_adv_accuracy"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Adversarial accuracy; higher values indicate better predictive performance under adversarial perturbations.",
+            "weight": 0.4444444444
+          },
+          "confidence_score": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_confidence_score"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Confidence score; higher values indicate more stable predictive confidence.",
+            "weight": 0.2222222222
+          },
+          "inverse_attack_success_rate": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "performance/inverse_test_attack_success_rate"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Inverse attack success rate; higher values indicate a lower fraction of successful adversarial attacks.",
+            "weight": 0.3333333334
+          }
+        }
+      },
+      "algorithm_robustness": {
+        "weight": 0.4,
+        "metrics": {
+          "performance": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_acc_avg"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Average test accuracy of the global model on clients test data.",
+            "weight": 0.4
+          },
+          "macro_f1": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_macro_f1"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Macro F1 score of the final model on test data.",
+            "weight": 0.4
+          },
+          "personalization": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/personalization"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "The use of personalized FL algorithm.",
+            "weight": 0.1
+          },
+          "reputation_enabled": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/reputation_enabled"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "The use of an active reputation-based defense mechanism.",
+            "weight": 0.1
+          }
+        }
+      },
+      "client_reliability": {
+        "weight": 0.2,
+        "metrics": {
+          "scale": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "participants/client_num"
+              }
+            ],
+            "operation": "get_value",
+            "type": "ranges",
+            "direction": "desc",
+            "ranges": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50],
+            "description": "The number of clients in the model.",
+            "weight": 0.1
+          },
+          "average_neighbor_reputation": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "participants/avg_neighbor_reputation"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Average reputation score of the neighbors associated with the node or federation.",
+            "weight": 0.3
+          },
+          "inverse_dropout_rate": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "system/dropout_rate"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "direction": "desc",
+            "description": "Fraction of expected client updates that were not received across rounds.",
+            "weight": 0.3
+          },
+          "inverse_timeout_rate": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "system/timeout_rate"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "direction": "desc",
+            "description": "Fraction of aggregation rounds that finished with missing expected client updates.",
+            "weight": 0.3
+          }
+        }
+      }
+    },
+    "privacy": {
+      "technique": {
+        "weight": 0.2,
+        "metrics": {
+          "differential_privacy": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/differential_privacy"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "The use of differential privacy.",
+            "weight": 1
+          }
+        }
+      },
+      "uncertainty": {
+        "weight": 0.6,
+        "metrics": {
+          "entropy": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "data/avg_entropy"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "The measure of uncertainty in identifying a client.",
+            "weight": 1
+          }
+        }
+      },
+      "indistinguishability": {
+        "weight": 0.2,
+        "metrics": {
+          "global_privacy_risk": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/differential_privacy"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/dp_epsilon"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "participants/client_num"
+              }
+            ],
+            "operation": "get_global_privacy_risk",
+            "type": "true_score",
+            "direction": "desc",
+            "description": "A worst-case approximation of the maximal risk for distinguishing two clients.",
+            "weight": 0.2
+          },
+          "epsilon_star": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "privacy/inverse_epsilon_star"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Empirical privacy leakage estimated from the separability of train and test loss distributions.",
+            "weight": 0.4
+          },
+          "mia_auc_score": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "privacy/mia_auc_score"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Trust-oriented score derived from the ROC-AUC of a loss-based membership inference attack.",
+            "weight": 0.4
+          }
+        }
+      }
+    },
+    "fairness": {
+      "selection_fairness": {
+        "weight": 0.25,
+        "metrics": {
+          "selection_variation": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/selection_cv"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "direction": "asc",
+            "description": "Variation in selection rate among the clients.",
+            "weight": 1
+          }
+        }
+      },
+      "performance_fairness": {
+        "weight": 0.25,
+        "metrics": {
+          "accuracy_variation": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/test_acc_cv"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "direction": "desc",
+            "description": "Variation of global model performance among the clients.",
+            "weight": 1
+          }
+        }
+      },
+      "class_distribution": {
+        "weight": 0.25,
+        "metrics": {
+          "class_imbalance": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/class_imbalance"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Variation of the sample size per class.",
+            "weight": 1
+          }
+        }
+      },
+      "outcome_fairness": {
+        "weight": 0.25,
+        "metrics": {
+          "underfitting": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/underfitting"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Held-out performance proxy used as an outcome-level fairness signal.",
+            "weight": 0.1
+          },
+          "inverse_overfitting": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_overfitting"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Generalization quality proxy transformed so higher is better.",
+            "weight": 0.15
+          },
+          "inverse_well_calibration_error": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_well_calibration_error"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Calibration quality of the predictive outputs represented as a trust-oriented score.",
+            "weight": 0.2
+          },
+          "inverse_generalized_entropy_index": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_generalized_entropy_index"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Outcome inequality score transformed so higher values indicate better fairness.",
+            "weight": 0.2
+          },
+          "inverse_theil_index": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_theil_index"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Theil-based outcome inequality score transformed so higher values indicate better fairness.",
+            "weight": 0.2
+          },
+          "inverse_coefficient_of_variation": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_coefficient_of_variation"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Coefficient-of-variation-based outcome fairness score.",
+            "weight": 0.15
+          }
+        }
+      }
+    },
+    "explainability": {
+      "interpretability": {
+        "weight": 0.4,
+        "metrics": {
+          "algorithmic_transparency": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/training_model"
+              }
+            ],
+            "operation": "get_value",
+            "type": "score_mapping",
+            "score_map": {
+              "RandomForestClassifier": 4,
+              "KNeighborsClassifier": 3,
+              "SVC": 2,
+              "GaussianProcessClassifier": 3,
+              "DecisionTreeClassifier": 5,
+              "MLP": 1,
+              "AdaBoostClassifier": 3,
+              "GaussianNB": 3.5,
+              "QuadraticDiscriminantAnalysis": 3,
+              "LogisticRegression": 4,
+              "LinearRegression": 3.5,
+              "Sequential": 1,
+              "CNN": 1
+            },
+            "description": "Mapping of Learning techniques to the level of explainability based on on literature research and qualitative analysis of each learning technique.",
+            "weight": 0.6
+          },
+          "model_size": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/trainable_param_num"
+              }
+            ],
+            "operation": "get_value",
+            "type": "ranges",
+            "direction": "desc",
+            "ranges": [10e1, 10e2, 10e3, 10e4, 10e5, 10e6, 10e7, 10e8],
+            "description": "Ranges of how to map model size to a score from 1-5.",
+            "weight": 0.4
+          }
+        }
+      },
+      "post_hoc_methods": {
+        "weight": 0.6,
+        "metrics": {
+          "clipped_feature_importance": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "performance/clipped_test_feature_importance_cv"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Variation of feature importance scores of all the features.",
+            "weight": 0.2
+          },
+          "alpha_score": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "explainability/alpha_score"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "direction": "desc",
+            "description": "Fraction of features needed to explain most of the attribution mass; lower values indicate sparser and more focused explanations.",
+            "weight": 0.2
+          },
+          "spread_ratio": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "explainability/spread_ratio"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "direction": "desc",
+            "description": "Normalized entropy of the attribution distribution; lower values indicate explanations concentrated on fewer features.",
+            "weight": 0.2
+          },
+          "spread_divergence": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "explainability/spread_divergence"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "Jensen-Shannon divergence between the attribution distribution and a uniform distribution; higher values indicate more selective explanations.",
+            "weight": 0.2
+          },
+          "visualization": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/visualization"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "The use of graphical capabilities to show the explainability.",
+            "weight": 0.2
+          }
+        }
+      }
+    },
+    "accountability": {
+      "factsheet_completeness": {
+        "weight": 0.8,
+        "metrics": {
+          "project_specs": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "project/overview"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "project/purpose"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "project/background"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Specifications of the project.",
+            "weight": 0.1
+          },
+          "participants": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "participants/client_num"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "participants/sample_client_rate"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "participants/client_selector"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "participants/avg_dataset_size"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "participants/avg_neighbor_reputation"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Participants information.",
+            "weight": 0.1
+          },
+          "data": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "data/provenance"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "data/preprocessing"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "data/avg_entropy"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Meta data about the data.",
+            "weight": 0.1
+          },
+          "configuration": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/aggregation_algorithm"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/training_model"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/personalization"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/visualization"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/monitoring"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/differential_privacy"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/dp_epsilon"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/trainable_param_num"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/total_round_num"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/learning_rate"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "configuration/local_update_steps"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "FL model configurations.",
+            "weight": 0.1
+          },
+          "performance": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_loss_avg"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_acc_avg"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_macro_f1"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "performance/clipped_test_feature_importance_cv"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_adv_accuracy"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "performance/test_confidence_score"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "performance/inverse_test_attack_success_rate"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Performance evaluation results.",
+            "weight": 0.1
+          },
+          "fairness": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "fairness/test_acc_cv"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/selection_cv"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/class_imbalance"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/underfitting"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_overfitting"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_well_calibration_error"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_generalized_entropy_index"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_theil_index"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "fairness/inverse_coefficient_of_variation"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Fairness metrics results.",
+            "weight": 0.1
+          },
+          "system": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "system/avg_time_minutes"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "system/avg_model_size"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "system/total_upload_bytes"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "system/total_download_bytes"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "system/avg_upload_bytes"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "system/avg_download_bytes"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "system/dropout_rate"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "system/timeout_rate"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Privacy metrics and risk estimates documented in the factsheet.",
+            "weight": 0.1
+          },
+          "privacy": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "privacy/privacy_risk"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "privacy/epsilon_star"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "privacy/inverse_epsilon_star"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "privacy/mia_auc"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "privacy/mia_auc_score"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Explainability metrics documented in the factsheet.",
+            "weight": 0.1
+          },
+          "explainability": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "explainability/alpha_score"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "explainability/spread_ratio"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "explainability/spread_divergence"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "Sustainability and emissions metrics documented in the factsheet.",
+            "weight": 0.1
+          },
+          "sustainability": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_carbon_intensity_server"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_carbon_intensity_clients"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_power_performance_clients"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_power_performance_server"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/emissions_training"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/emissions_aggregation"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/emissions_communication_uplink"
+              },
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/emissions_communication_downlink"
+              }
+            ],
+            "operation": "check_properties",
+            "type": "property_check",
+            "description": "System usage information.",
+            "weight": 0.1
+          }
+        }
+      },
+      "monitoring": {
+        "weight": 0.2,
+        "metrics": {
+          "logs_available": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/monitoring"
+              }
+            ],
+            "operation": "get_value",
+            "type": "true_score",
+            "description": "The use of logs to show all the nodes.",
+            "weight": 1
+          }
+        }
+      }
+    },
+    "architectural_soundness": {
+      "client_management": {
+        "weight": 0.25,
+        "metrics": {
+          "client_selector": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "participants/client_selector"
+              }
+            ],
+            "operation": "get_value",
+            "type": "score_mapping",
+            "score_map": {
+              "Reputation Based": 1.0,
+              "Full Participation": 0.5
+            },
+            "description": "Mapping of client selection strategies to architectural soundness. Reputation-based selection is scored higher than full participation because it introduces an explicit selection mechanism.",
+            "weight": 1
+          }
+        }
+      },
+      "optimization": {
+        "weight": 0.5,
+        "metrics": {
+          "algorithm": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/aggregation_algorithm"
+              }
+            ],
+            "operation": "get_value",
+            "type": "score_map_value",
+            "score_map": {
+              "FedAvg": 0.9509,
+              "Krum": 0.9535,
+              "TrimmedMean": 0.9595,
+              "Median": 0.9461
+            },
+            "description": "The choice of a suitable aggregation algorithm.",
+            "weight": 1
+          }
+        }
+      },
+      "federation_management": {
+        "weight": 0.25,
+        "metrics": {
+          "topology_type": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "data/preprocessing"
+              }
+            ],
+            "operation": "get_value",
+            "type": "score_mapping",
+            "score_map": {
+              "Fully": 1.0,
+              "Star": 0.8,
+              "Ring": 0.6,
+              "Random": 0.2
+            },
+            "description": "Mapping of network topology types to architectural soundness, assuming fully connected topologies provide the strongest structural connectivity, followed by star, ring, and random topologies.",
+            "weight": 1
+          }
+        }
+      }
+    },
+    "sustainability": {
+      "energy_source": {
+        "weight": 0.5,
+        "metrics": {
+          "carbon_intensity_clients": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_carbon_intensity_clients"
+              }
+            ],
+            "operation": "get_value",
+            "type": "scaled_score",
+            "direction": "desc",
+            "scale": [20, 795],
+            "description": "Carbon intensity of energy grid used by clients",
+            "weight": 0.5
+          },
+          "carbon_intensity_server": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_carbon_intensity_server"
+              }
+            ],
+            "operation": "get_value",
+            "type": "scaled_score",
+            "direction": "desc",
+            "scale": [20, 795],
+            "description": "Carbon intensity of energy grid used by server",
+            "weight": 0.5
+          }
+        }
+      },
+      "hardware_efficiency": {
+        "weight": 0.25,
+        "metrics": {
+          "avg_power_performance_clients": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_power_performance_clients"
+              }
+            ],
+            "operation": "get_value",
+            "type": "scaled_score",
+            "direction": "asc",
+            "scale": [20, 1447],
+            "description": "Average Power Performanc of Client CPUs or GPUs",
+            "weight": 0.5
+          },
+          "avg_power_performance_server": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "sustainability/avg_power_performance_server"
+              }
+            ],
+            "operation": "get_value",
+            "type": "scaled_score",
+            "direction": "asc",
+            "scale": [20, 1447],
+            "description": "Power Performanc of Server CPU or GPU",
+            "weight": 0.5
+          }
+        }
+      },
+      "federation_complexity": {
+        "weight": 0.25,
+        "metrics": {
+          "communication_efficiency": {
+            "inputs": [
+              { "source": "factsheet", "field_path": "system/total_upload_bytes" },
+              { "source": "factsheet", "field_path": "system/total_download_bytes" },
+              { "source": "factsheet", "field_path": "performance/test_acc_avg" }
+            ],
+            "operation": "comm_efficiency",
+            "type": "ranges",
+            "direction": "desc",
+            "ranges":[0.1, 10e2, 10e3,10e4, 10e5, 10e6,10e7,10e8,10e9,10e10,10e11],
+            "description": "Communication cost per unit of final test accuracy; lower values indicate more efficient federation communication.",
+            "weight": 0.3
+          },
+          "number_of_training_rounds": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/total_round_num"
+              }
+            ],
+            "operation": "get_value",
+            "type": "ranges",
+            "direction": "desc",
+            "ranges": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50],
+            "description": "The total number of training rounds",
+            "weight": 0.15
+          },
+          "avg_model_size": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/trainable_param_num"
+              }
+            ],
+            "operation": "get_value",
+            "type": "ranges",
+            "direction": "desc",
+            "ranges":[10e4, 10e5, 10e6,10e7,10e8,10e9,10e10,10e11],
+            "description": "The size of the model",
+            "weight": 0.15
+          },
+          "client_selection_rate": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "participants/sample_client_rate"
+              }
+            ],
+            "operation": "get_value",
+            "type": "scaled_score",
+            "direction": "asc",
+            "scale": [
+              0.1,1
+            ],
+            "description": "The selection rate of clients for each training round",
+            "weight": 0.1
+          },
+          "number_of_clients": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "participants/client_num"
+              }
+            ],
+            "operation": "get_value",
+            "type": "ranges",
+            "direction": "desc",
+            "ranges": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50],
+            "description": "The number of clients in the federation.",
+            "weight": 0.1
+          },
+          "local_training_rounds": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "configuration/local_update_steps"
+              }
+            ],
+            "operation": "get_value",
+            "type": "scaled_score",
+            "direction": "desc",
+            "scale": [1, 100],
+            "description": "The number of local training rounds.",
+            "weight": 0.1
+          },
+          "avg_dataset_size": {
+            "inputs": [
+              {
+                "source": "factsheet",
+                "field_path": "participants/avg_dataset_size"
+              }
+            ],
+            "operation": "get_value",
+            "type": "ranges",
+            "direction": "desc",
+            "ranges": [10e1, 10e2, 10e3, 10e4, 10e5],
+            "description": "The average number of training samples",
+            "weight": 0.1
+          }
+        }
+      }
+    }
+  }

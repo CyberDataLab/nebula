@@ -105,6 +105,15 @@ class UpdateHandler(ABC):
         """
         raise NotImplementedError
 
+    async def before_aggregation(self, updates: dict[str, tuple[object, float]], federation_nodes: set):
+        """
+        Hook for federation-specific processing just before aggregation.
+
+        DFL/CFL do not need extra work here. Federation-specific handlers can override this
+        without making the base aggregator know about a concrete federation type.
+        """
+        return None
+
 
 def factory_update_handler(updt_handler, aggregator, addr) -> UpdateHandler:
     from nebula.core.aggregation.updatehandlers.cflupdatehandler import CFLUpdateHandler

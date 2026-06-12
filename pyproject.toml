@@ -92,6 +92,7 @@ core = [
     "matplotlib==3.9.2",
     "networkx==3.3",
     "numpy==2.1.1",
+    "opacus==1.5.4",
     "plotly==5.24.0",
     "protobuf==4.25.3",
     "psutil==6.0.0",

@@ -61,6 +61,10 @@ const HelpContent = (function() {
             <li>MNIST: The MNIST dataset</li>
             <li>FashionMNIST: The FashionMNIST dataset</li>
             <li>CIFAR10: The CIFAR10 dataset</li>
+            <li>Covtype: The Covtype dataset</li>
+            <li>KDDCUP99: The KDDCUP99 dataset</li>
+            <li>AdultCensus: The AdultCensus dataset</li>
+            <li>BreastCancer: The BreastCancer dataset</li>
         </ul>
     </div>`;
 

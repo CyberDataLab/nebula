@@ -8,6 +8,9 @@ import SaManager from './situational-awareness.js';
 import GraphSettings from './graph-settings.js';
 import Utils from './utils.js';
 import TrustworthinessManager from './trustworthiness.js';
+import DpManager from './dp.js';
+import FeatureSqueezingManager from './feature-squeezing.js';
+import AdversarialTrainingManager from './adversarial-training.js';
 
 const DeploymentManager = (function() {
     function initialize() {
@@ -31,6 +34,9 @@ const DeploymentManager = (function() {
         ReputationManager.initializeReputationSystem();
         SaManager.initializeSa();
         TrustworthinessManager.initializeTrustworthinessSystem();
+        DpManager.initializeDifferentialPrivacy();
+        FeatureSqueezingManager.initializeFeatureSqueezing();
+        AdversarialTrainingManager.initializeAdversarialTraining();
         GraphSettings.initializeDistanceControls();
 
         // Make modules globally available
@@ -41,6 +47,9 @@ const DeploymentManager = (function() {
         window.ReputationManager = ReputationManager;
         window.SaManager = SaManager;
         window.TrustworthinessManager = TrustworthinessManager;
+        window.DpManager = DpManager;
+        window.FeatureSqueezingManager = FeatureSqueezingManager;
+        window.AdversarialTrainingManager = AdversarialTrainingManager;
         window.GraphSettings = GraphSettings;
         window.DeploymentManager = DeploymentManager;
         window.Utils = Utils;
@@ -111,7 +120,80 @@ const DeploymentManager = (function() {
             return false;
         }
 
+        const trustWeightsValidationMessage = validateTrustworthinessWeights();
+        if (trustWeightsValidationMessage) {
+            Utils.showAlert('error', trustWeightsValidationMessage);
+            return false;
+        }
+
+        const adversarialTrainingValidationMessage = validateAdversarialTraining();
+        if (adversarialTrainingValidationMessage) {
+            Utils.showAlert('error', adversarialTrainingValidationMessage);
+            return false;
+        }
+
+        const attackValidationMessage = validateAttack();
+        if (attackValidationMessage) {
+            Utils.showAlert('error', attackValidationMessage);
+            return false;
+        }
+
         return true;
+    }
+
+    function validateAttack() {
+        const manager = window.AttackManager || AttackManager;
+        if (manager && typeof manager.validateConfig === "function") {
+            return manager.validateConfig();
+        }
+        return null;
+    }
+
+    function validateAdversarialTraining() {
+        const manager = window.AdversarialTrainingManager || AdversarialTrainingManager;
+        if (manager && typeof manager.validateConfig === "function") {
+            return manager.validateConfig();
+        }
+        return null;
+    }
+
+    function validateTrustworthinessWeights() {
+        const manager = window.TrustworthinessManager || TrustworthinessManager;
+        if (manager && typeof manager.validateWeights === "function") {
+            return manager.validateWeights();
+        }
+
+        if (!manager || typeof manager.getTrustworthinessConfig !== "function") {
+            return null;
+        }
+
+        const config = manager.getTrustworthinessConfig();
+        if (!config?.enabled) {
+            return null;
+        }
+
+        const sumValues = (values) => values.reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+        const getWeightValidationMessage = (groupLabel, total) => {
+            if (total > 100) {
+                return `[Trustworthiness] ${groupLabel} weights exceed 100%. Please review the configuration.`;
+            }
+
+            if (total < 100) {
+                return `[Trustworthiness] ${groupLabel} weights are below 100%. Please review the configuration.`;
+            }
+
+            return null;
+        };
+
+        return (
+            getWeightValidationMessage("Pillars", sumValues(Object.values(config.pillars || {}))) ||
+            Object.entries(config.notions || {}).reduce((message, [groupName, weights]) => {
+                if (message) return message;
+
+                const label = `${groupName.charAt(0).toUpperCase()}${groupName.slice(1)} notions`;
+                return getWeightValidationMessage(label, sumValues(weights || []));
+            }, null)
+        );
     }
 
     function setupDatasetListeners() {
@@ -210,7 +292,7 @@ const DeploymentManager = (function() {
         datasetSelect.innerHTML = "";
 
         // Add dataset options
-        const datasets = ['MNIST', 'FashionMNIST', 'EMNIST', 'CIFAR10', 'CIFAR100'];
+        const datasets = ['MNIST', 'FashionMNIST', 'EMNIST', 'CIFAR10', 'CIFAR100', 'Covtype', 'KDDCUP99', 'AdultCensus', 'BreastCancer'];
         datasets.forEach(dataset => {
             const option = document.createElement("option");
             option.value = dataset;
@@ -251,6 +333,14 @@ const DeploymentManager = (function() {
                 return ['CNN', 'ResNet9', 'fastermobilenet', 'simplemobilenet', 'CNNv2', 'CNNv3'];
             case 'cifar100':
                 return ['CNN'];
+            case 'covtype':
+                return ['MLP'];
+            case 'kddcup99':
+                return ['MLP'];
+            case 'adultcensus':
+                return ['MLP'];
+            case 'breast_cancer':
+                return ['MLP'];
             default:
                 return ['MLP', 'CNN'];
         }

@@ -54,8 +54,10 @@ class SDFLUpdateHandler(UpdateHandler):
         self._addr = addr
         self._aggregator: Aggregator = aggregator
         self._buffersize = buffersize
+        # Store the last used update plus a short history per source to tolerate late/missing updates.
         self._updates_storage: dict[str, tuple[Update, deque[Update]]] = {}
         self._updates_storage_lock = Locker(name="updates_storage_lock", async_lock=True)
+        # SDFL aggregation waits for a dynamic set of trainer sources each round.
         self._sources_expected = set()
         self._sources_received = set()
         self._round_updates_lock = Locker(name="round_updates_lock", async_lock=True)
@@ -91,6 +93,7 @@ class SDFLUpdateHandler(UpdateHandler):
         """
         await self._update_federation_lock.acquire_async()
         await self._updates_storage_lock.acquire_async()
+        # Reset per-round reception state while preserving per-node history buffers.
         self._sources_expected = federation_nodes.copy()
         self._sources_received.clear()
 
@@ -143,6 +146,11 @@ class SDFLUpdateHandler(UpdateHandler):
         Args:
             updt_received_event (UpdateReceivedEvent): Event with model update data.
         """
+        if updt_received_event.is_reputation_update():
+            # Reputation model updates are consumed by the reputation addon, not by aggregation.
+            logging.debug("Discard reputation-only update in SDFL aggregation storage")
+            return
+
         time_received = time.time()
         (model, weight, source, round, _) = await updt_received_event.get_event_data()
         if source in self._sources_expected:
@@ -164,6 +172,7 @@ class SDFLUpdateHandler(UpdateHandler):
                     f"Updates received ({len(self._sources_received)}/{len(self._sources_expected)}) | Missing nodes: {updates_left}"
                 )
                 if self._round_updates_lock.locked() and not updates_left:
+                    # Release aggregation as soon as the last expected trainer update arrives.
                     all_rec = await self._all_updates_received()
                     if all_rec:
                         await self._notify()
@@ -190,6 +199,7 @@ class SDFLUpdateHandler(UpdateHandler):
         self._nodes_using_historic.clear()
         updates = {}
         for sr in self._sources_received:
+            # Use the newest update unless it was already consumed in a previous aggregation.
             source_historic = self.us[sr][1]
             last_updt_received = self.us[sr][0]
             updt: Update = None
@@ -204,6 +214,32 @@ class SDFLUpdateHandler(UpdateHandler):
 
         await self._updates_storage_lock.release_async()
         return updates
+
+    async def before_aggregation(self, updates: dict[str, tuple[object, float]], federation_nodes: set):
+        """
+        Calculate indirect SDFL reputation before aggregating trainer updates.
+        """
+        engine = self.agg.engine
+        if not hasattr(engine, "_reputation") or engine._reputation is None:
+            return
+
+        # The aggregator may receive updates from non-neighbor trainers through forwarding.
+        # Their reputation is inferred from reputation tables shared by expected trainers.
+        round_num = await engine.get_round()
+        expected_table_nodes = engine.get_sdfl_expected_trainers()
+        target_nodes = set(federation_nodes) | set(updates.keys())
+        timeout = float(
+            self.agg.config.participant["defense_args"]
+            .get("reputation", {})
+            .get("table_aggregation_timeout", 10)
+        )
+
+        await engine._reputation.calculate_indirect_reputation_for_non_neighbors(
+            target_nodes=target_nodes,
+            expected_table_nodes=expected_table_nodes,
+            round_num=round_num,
+            timeout=timeout,
+        )
 
     async def notify_federation_update(self, updt_nei_event: UpdateNeighborEvent):
         """
@@ -257,6 +293,7 @@ class SDFLUpdateHandler(UpdateHandler):
         Set a notification trigger and notify aggregator if all updates are already received.
         """
         logging.info("Set notification when all expected updates received")
+        # Hold this lock while the caller is waiting; _notify releases it once ready.
         await self._round_updates_lock.acquire_async()
         await self._updates_storage_lock.acquire_async()
         all_received = await self._all_updates_received()
@@ -278,6 +315,7 @@ class SDFLUpdateHandler(UpdateHandler):
         """
         await self._notification_sent_lock.acquire_async()
         if self._notification:
+            # Multiple updates can race to complete the round; notify the aggregator once.
             await self._notification_sent_lock.release_async()
             return
         self._notification = True

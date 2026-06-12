@@ -6,7 +6,7 @@ class NetworkSimulator(ABC):
     Abstract base class representing a network simulator interface.
 
     This interface defines the required methods for controlling and simulating network conditions between nodes.
-    A concrete implementation is expected to manage artificial delays, bandwidth restrictions, packet loss, 
+    A concrete implementation is expected to manage artificial delays, bandwidth restrictions, packet loss,
     or other configurable conditions typically used in network emulation or testing.
 
     Required asynchronous methods:

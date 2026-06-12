@@ -1,5 +1,6 @@
 // Attack Configuration Module
 const AttackManager = (function() {
+    const IMAGE_DATASETS = new Set(["MNIST", "FashionMNIST", "EMNIST", "CIFAR10", "CIFAR100"]);
     const ATTACK_TYPES = {
         NO_ATTACK: 'No Attack',
         LABEL_FLIPPING: 'Label Flipping',
@@ -86,13 +87,19 @@ const AttackManager = (function() {
             updateAttackUI(this.value);
         });
 
+        const datasetSelect = document.getElementById("datasetSelect");
+        if (datasetSelect) {
+            datasetSelect.addEventListener("change", updateDatasetAvailability);
+            updateDatasetAvailability();
+        }
+
         document.getElementById("targeted").addEventListener("change", function() {
             const attackType = document.getElementById("poisoning-attack-select").value;
             const elements = {
                 targetLabel: {title: document.getElementById("target_label-title"), container: document.getElementById("target_label-container")},
                 targetChangedLabel: {title: document.getElementById("target_changed_label-title"), container: document.getElementById("target_changed_label-container")}
             };
-            
+
             if (this.checked && attackType === ATTACK_TYPES.LABEL_FLIPPING) {
                 showElements(elements, ['targetLabel', 'targetChangedLabel']);
             } else if (this.checked && attackType === ATTACK_TYPES.SAMPLE_POISONING) {
@@ -116,9 +123,47 @@ const AttackManager = (function() {
         });
     }
 
+    function updateDatasetAvailability() {
+        const dataset = document.getElementById("datasetSelect")?.value;
+        const enabledForDataset = IMAGE_DATASETS.has(dataset);
+        const attackSelect = document.getElementById("poisoning-attack-select");
+        const samplePoisoningOption = Array.from(attackSelect?.options || [])
+            .find(option => option.value === ATTACK_TYPES.SAMPLE_POISONING || option.textContent === ATTACK_TYPES.SAMPLE_POISONING);
+        const datasetNote = document.getElementById("sample-poisoning-dataset-note");
+
+        if (samplePoisoningOption) {
+            samplePoisoningOption.disabled = !enabledForDataset;
+            samplePoisoningOption.title = enabledForDataset ? "" : "Sample Poisoning is currently available only for image datasets.";
+        }
+
+        if (datasetNote) {
+            datasetNote.style.display = enabledForDataset ? "none" : "block";
+        }
+
+        if (attackSelect?.value === ATTACK_TYPES.SAMPLE_POISONING && !enabledForDataset) {
+            attackSelect.value = ATTACK_TYPES.NO_ATTACK;
+            updateAttackUI(ATTACK_TYPES.NO_ATTACK);
+        }
+    }
+
+    function validateConfig() {
+        const dataset = document.getElementById("datasetSelect")?.value;
+        const attackType = document.getElementById("poisoning-attack-select")?.value;
+
+        if (attackType === ATTACK_TYPES.SAMPLE_POISONING && !IMAGE_DATASETS.has(dataset)) {
+            return "Sample Poisoning is currently available only for image datasets.";
+        }
+
+        return null;
+    }
+
     function getAttackConfig() {
         const attackType = document.getElementById("poisoning-attack-select").value;
-        
+        const validationMessage = validateConfig();
+        if (validationMessage) {
+            throw new Error(validationMessage);
+        }
+
         // Validate numeric inputs
         function validateNumericInput(id, min = 0, max = 100) {
             const value = parseFloat(document.getElementById(id).value);
@@ -185,10 +230,14 @@ const AttackManager = (function() {
 
     function setAttackConfig(config) {
         if (!config) return;
+        const attackType = Array.isArray(config.attacks)
+            ? config.attacks[0]
+            : (config.type || config.attacks || ATTACK_TYPES.NO_ATTACK);
 
         // Set attack type and update UI
-        document.getElementById("poisoning-attack-select").value = config.type;
-        updateAttackUI(config.type);
+        document.getElementById("poisoning-attack-select").value = attackType;
+        updateAttackUI(attackType);
+        updateDatasetAvailability();
 
         // Set common fields
         document.getElementById("poisoned-node-percent").value = config.poisoned_node_percent || 0;
@@ -197,7 +246,7 @@ const AttackManager = (function() {
         document.getElementById("attack-interval").value = config.attack_interval || 1;
 
         // Set attack-specific fields
-        switch(config.type) {
+        switch(attackType) {
             case ATTACK_TYPES.LABEL_FLIPPING:
                 document.getElementById("poisoned-sample-percent").value = config.poisoned_sample_percent || 0;
                 document.getElementById("targeted").checked = config.targeted || false;
@@ -243,12 +292,15 @@ const AttackManager = (function() {
     function resetAttackConfig() {
         document.getElementById("poisoning-attack-select").value = ATTACK_TYPES.NO_ATTACK;
         updateAttackUI(ATTACK_TYPES.NO_ATTACK);
+        updateDatasetAvailability();
     }
 
     return {
         ATTACK_TYPES,
         initializeEventListeners,
         updateAttackUI,
+        updateDatasetAvailability,
+        validateConfig,
         getAttackConfig,
         setAttackConfig,
         resetAttackConfig

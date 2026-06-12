@@ -1,7 +1,13 @@
 import logging
 
-from nebula.addons.trustworthiness import calculation
-from nebula.addons.trustworthiness.utils import get_input_value
+from nebula.addons.trustworthiness.helpers.factsheet_values import get_input_value
+from nebula.addons.trustworthiness.helpers.scoring import (
+    get_map_value_score,
+    get_mapped_score,
+    get_range_score,
+    get_scaled_score,
+    get_true_score,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +24,13 @@ class TrustPillar:
 
     """
 
-    def __init__(self, name, metrics, input_docs, use_weights=False):
+    def __init__(self, name, metrics, input_docs, use_weights=False, user_weights=None):
         self.name = name
         self.input_docs = input_docs
         self.metrics = metrics
         self.result = []
         self.use_weights = use_weights
+        self.user_weights = user_weights or {}
 
     def evaluate(self):
         """
@@ -35,10 +42,21 @@ class TrustPillar:
         score = 0
         avg_weight = 1 / len(self.metrics)
         for key, value in self.metrics.items():
-            weight = value.get("weight", avg_weight) if self.use_weights else avg_weight
+            weight = self._get_notion_weight(key, value, avg_weight) if self.use_weights else avg_weight
             score += weight * self.get_notion_score(key, value.get("metrics"))
         score = round(score, 2)
         return score, {self.name: {"score": score, "notions": self.result}}
+
+    def _get_notion_weight(self, notion_name, notion_config, avg_weight):
+        """
+        Resolve the weight for a notion.
+
+        Scenario-defined notion weights are stored as percentages in scenario.json.
+        When present, they must override the defaults from the metrics config.
+        """
+        if notion_name in self.user_weights:
+            return float(self.user_weights[notion_name]) / 100
+        return notion_config.get("weight", avg_weight)
 
     def get_notion_score(self, name, metrics):
         """
@@ -84,15 +102,15 @@ class TrustPillar:
                 logger.warning(f"{name} input value is null")
             else:
                 if score_type == "true_score":
-                    score = calculation.get_true_score(input_value, metric.get("direction"))
+                    score = get_true_score(input_value, metric.get("direction"))
                 elif score_type == "score_mapping":
-                    score = calculation.get_mapped_score(input_value, metric.get("score_map"))
+                    score = get_mapped_score(input_value, metric.get("score_map"))
                 elif score_type == "ranges":
-                    score = calculation.get_range_score(input_value, metric.get("ranges"), metric.get("direction"))
+                    score = get_range_score(input_value, metric.get("ranges"), metric.get("direction"))
                 elif score_type == "score_map_value":
-                    score = calculation.get_map_value_score(input_value, metric.get("score_map"))
+                    score = get_map_value_score(input_value, metric.get("score_map"))
                 elif score_type == "scaled_score":
-                    score = calculation.get_scaled_score(input_value, metric.get("scale"), metric.get("direction"))
+                    score = get_scaled_score(input_value, metric.get("scale"), metric.get("direction"))
                 elif score_type == "property_check":
                     score = 0 if input_value is None else input_value
 

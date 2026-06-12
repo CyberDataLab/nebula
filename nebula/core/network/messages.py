@@ -86,14 +86,68 @@ class MessagesManager:
                     "weight": 1,
                 },
             },
+            "sdflmodel": {
+                # SDFL uses a dedicated model channel for forwarded trainer/global updates.
+                "parameters": ["action", "target", "parameters", "weight", "round", "node_id"],
+                "defaults": {
+                    "weight": 1,
+                    "node_id": self.addr,
+                },
+            },
             "reputation": {
                 "parameters": ["node_id", "score", "round", "action"],
                 "defaults": {
                     "round": None,
                 },
             },
+            "reputationtable": {
+                # Reputation tables carry one-hop trust scores for SDFL indirect reputation.
+                "parameters": ["action", "node_id", "round", "reputation_table_json"],
+                "defaults": {
+                    "node_id": self.addr,
+                    "round": None,
+                    "reputation_table_json": "{}",
+                },
+            },
             "discover": {"parameters": ["action"], "defaults": {}},
             "link": {"parameters": ["action", "addrs"], "defaults": {}},
+            "trustworthiness": {
+                "parameters": [
+                    "action",
+                    "node_id",
+                    "bytes_sent",
+                    "bytes_recv",
+                    "accuracy",
+                    "loss",
+                    "role",
+                    "energy_grid",
+                    "emissions",
+                    "workload",
+                    "cpu_model",
+                    "gpu_model",
+                    "cpu_used",
+                    "gpu_used",
+                    "energy_consumed",
+                    "sample_size",
+                    "class_imbalance",
+                    "model_size",
+                    "local_entropy",
+                    "val_accuracy",
+                    "dp_enabled",
+                    "dp_epsilon",
+                    "macro_f1",
+                    "train_accuracy"
+                ],
+                "defaults": {},
+            },
+            "trustscores": {
+                "parameters": [
+                    "action",
+                    "node_id",
+                    "trust_report_json"
+                ],
+                "defaults": {},
+            }
             # Add additional message types here
         }
 
@@ -122,7 +176,14 @@ class MessagesManager:
             addr_from (str): Address from which the message was received.
         """
         not_processing_messages = {"control_message", "connection_message"}
-        special_processing_messages = {"discovery_message", "federation_message", "model_message"}
+        special_processing_messages = {
+            "discovery_message",
+            "federation_message",
+            "model_message",
+            "trustscores_message",
+            "sdflmodel_message",
+            "reputationtable_message",
+        }
 
         try:
             message_wrapper = nebula_pb2.Wrapper()
@@ -200,6 +261,18 @@ class MessagesManager:
             and message_wrapper.federation_message.action
             == nebula_pb2.FederationMessage.Action.Value("FEDERATION_START")
         ):
+            return True
+        if message_type == "trustscores_message":
+            return True
+
+        if  self.cm.config.participant["scenario_args"]["federation"] == "SDFL" and message_type == "sdflmodel_message":
+            # SDFL model messages must still flow after the generic learning-finished gate.
+            return True
+        if (
+            self.cm.config.participant["scenario_args"]["federation"] == "SDFL"
+            and message_type == "reputationtable_message"
+        ):
+            # Reputation tables can arrive late while aggregation is waiting for trust evidence.
             return True
 
     def create_message(self, message_type: str, action: str = "", *args, **kwargs):

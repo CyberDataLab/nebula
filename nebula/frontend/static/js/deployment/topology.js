@@ -533,7 +533,7 @@ const TopologyManager = (function() {
 
     function updateIPsAndPorts() {
         const isPhysical = document.getElementById("physical-devices-radio").checked;
-    
+
         /*  ⬅︎  if physical deployment get default IPs        */
         if (isPhysical) {
             gData.nodes.forEach((node, idx) => {
@@ -541,11 +541,11 @@ const TopologyManager = (function() {
             });
             return;
         }
-    
+
         /*  Docker or Process → generate sintetic IPs                       */
         const isProcess = document.getElementById("process-radio").checked;
         const baseIP = "192.168.50";
-    
+
         gData.nodes.forEach((node, idx) => {
             node.ip   = isProcess ? "127.0.0.1" : `${baseIP}.${idx + 2}`;
             node.port = (45001 + idx).toString();
@@ -572,23 +572,23 @@ const TopologyManager = (function() {
 
     function setPhysicalIPs(ipList = []) {
         if (!ipList.length) return;
- 
+
         /*  1. Update input for the user                 */
         const nodesInput = document.getElementById('predefined-topology-nodes');
         if (nodesInput) {
             nodesInput.value = ipList.length;
-            nodesInput.disabled = true;                 
-            nodesInput.classList.add('disabled');       
+            nodesInput.disabled = true;
+            nodesInput.classList.add('disabled');
         }
- 
+
         /*  2. Regenerate topology         */
         generatePredefinedTopology();           // ← create Nodes and Links
- 
+
         /*  3. Assign IPs                                             */
         gData.nodes.forEach((n, idx) => {
             n.ip = ipList[idx] || n.ip;         // if more nodes than IPs
         });
- 
+
         updateGraph();                          // redraw
     }
 
@@ -660,7 +660,7 @@ const TopologyManager = (function() {
                 generatePredefinedTopology();
                 return;
             }
- 
+
             // Ensure each node has the required properties
             data.nodes = data.nodes.map(node => ({
                 id: node.id,
@@ -670,13 +670,13 @@ const TopologyManager = (function() {
                 neighbors: node.neighbors || [],
                 links: node.links || []
             }));
- 
+
             // Ensure each link has the required properties
             data.links = data.links.map(link => ({
                 source: link.source,
                 target: link.target
             }));
- 
+
             gData = data;
             updateGraph();
         },
@@ -690,7 +690,7 @@ const TopologyManager = (function() {
                 nodes: [],
                 links: []
             };
-            // Update graph 
+            // Update graph
             if (Graph) {
                 Graph.graphData(gData);
             }

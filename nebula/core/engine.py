@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import random
@@ -94,7 +95,7 @@ class Engine:
         self.ip = config.participant["network_args"]["ip"]
         self.port = config.participant["network_args"]["port"]
         self.addr = config.participant["network_args"]["addr"]
-        
+
         self.name = config.participant["device_args"]["name"]
         self.client = docker.from_env()
 
@@ -116,6 +117,8 @@ class Engine:
 
         self._secure_neighbors = []
         self._is_malicious = self.config.participant["adversarial_args"]["attack_params"]["attacks"] != "No Attack"
+
+        role = config.participant["device_args"]["role"]
 
         msg = f"Trainer: {self._trainer.__class__.__name__}"
         msg += f"\nDataset: {self.config.participant['data_args']['dataset']}"
@@ -139,7 +142,6 @@ class Engine:
 
         self._cm = CommunicationsManager(engine=self)
 
-        role = config.participant["device_args"]["role"]
         self._role_behavior: RoleBehavior = factory_role_behavior(role, self, config)
         self._role_behavior_performance_lock = Locker("role_behavior_performance_lock", async_lock=True)
 
@@ -155,6 +157,12 @@ class Engine:
         self.sinchronized_status_lock = Locker(name="sinchronized_status_lock")
 
         self.trainning_in_progress_lock = Locker(name="trainning_in_progress_lock", async_lock=True)
+        self._global_model_received = asyncio.Event()
+        self._global_model_source = None
+        self._leadership_transfer_lock = Locker("leadership_transfer_lock", async_lock=True)
+        self._leadership_transfer_pending = None
+        self._leadership_transfer_ack = asyncio.Event()
+        self._leadership_transfer_counts = {}
 
         event_manager = EventManager.get_instance(verbose=False)
         self._addon_manager = AddondManager(self, self.config)
@@ -165,7 +173,13 @@ class Engine:
         else:
             self._situational_awareness = None
 
-        if self.config.participant["defense_args"]["reputation"]["enabled"]:
+        self._reputation = None
+
+        role = self.config.participant["device_args"]["role"]
+        federation = self.config.participant["scenario_args"].get("federation")
+        reputation_enabled = self.config.participant["defense_args"]["reputation"]["enabled"]
+
+        if reputation_enabled and (role == "server" or federation!="CFL"):
             self._reputation = Reputation(engine=self, config=self.config)
 
     @property
@@ -187,7 +201,7 @@ class Engine:
     def trainer(self):
         """Trainer"""
         return self._trainer
-    
+
     @property
     def rb(self):
         """Role Behavior"""
@@ -214,6 +228,114 @@ class Engine:
     async def update_federation_nodes(self, federation_nodes):
         async with self._federation_nodes_lock:
             self.federation_nodes = federation_nodes
+
+    async def mark_leadership_transfer_pending(self, successor: str):
+        async with self._leadership_transfer_lock:
+            self._leadership_transfer_pending = successor
+            self._leadership_transfer_ack.clear()
+            logging.info(f"SDFL leadership | Waiting ACK from successor {successor}")
+
+    async def confirm_leadership_transfer_ack(self, source: str) -> bool:
+        async with self._leadership_transfer_lock:
+            if self._leadership_transfer_pending is None:
+                return False
+            if self._leadership_transfer_pending != source:
+                logging.info(
+                    f"SDFL leadership | Ignoring ACK from {source}; "
+                    f"pending successor is {self._leadership_transfer_pending}"
+                )
+                return False
+
+            logging.info(f"SDFL leadership | ACK received from successor {source}")
+            self._leadership_transfer_ack.set()
+            return True
+
+    async def wait_pending_leadership_ack(self):
+        async with self._leadership_transfer_lock:
+            successor = self._leadership_transfer_pending
+
+        if successor is None:
+            return
+
+        timeout = float(self.config.participant.get("misc_args", {}).get("leadership_ack_timeout", 20))
+        logging.info(f"SDFL leadership | Waiting up to {timeout}s for ACK from {successor}")
+
+        ack_received = False
+        try:
+            await asyncio.wait_for(self._leadership_transfer_ack.wait(), timeout=timeout)
+            ack_received = True
+        except TimeoutError:
+            logging.warning(
+                f"SDFL leadership | ACK from {successor} not received before next round; "
+                "keeping aggregator role until ACK arrives"
+            )
+
+        async with self._leadership_transfer_lock:
+            if self._leadership_transfer_pending != successor:
+                return
+
+            if self._leadership_transfer_ack.is_set():
+                ack_received = True
+
+            if not ack_received:
+                return
+
+            self._leadership_transfer_pending = None
+            self._leadership_transfer_ack.clear()
+
+        await self.rb.set_next_role(Role.TRAINER)
+
+    async def select_leadership_successor(self, candidates) -> str | None:
+        candidates = sorted(set(candidates))
+        if not candidates:
+            return None
+
+        async with self._leadership_transfer_lock:
+            candidate_counts = {
+                candidate: self._leadership_transfer_counts.get(candidate, 0)
+                for candidate in candidates
+            }
+
+        min_count = min(candidate_counts.values())
+        least_used_candidates = [
+            candidate
+            for candidate, count in candidate_counts.items()
+            if count == min_count
+        ]
+        successor = random.choice(least_used_candidates)
+        logging.info(
+            f"Leadership transfer candidate counts: {candidate_counts} | "
+            f"selected={successor}"
+        )
+        return successor
+
+    async def register_leadership_transfer(self, node: str):
+        async with self._leadership_transfer_lock:
+            self._leadership_transfer_counts[node] = (
+                self._leadership_transfer_counts.get(node, 0) + 1
+            )
+            logging.info(
+                f"Leadership transfer count updated | node={node} | "
+                f"count={self._leadership_transfer_counts[node]}"
+            )
+
+    def get_sdfl_expected_trainers(self) -> set[str]:
+        nodes = self.config.participant.get("trust_args", {}).get("scenario", {}).get("nodes", {})
+        expected_nodes = set()
+        roles_to_include = {"trainer", "aggregator", "trainer_aggregator", "malicious"}
+
+        for node in nodes.values():
+            role = node.get("role")
+            ip = node.get("ip")
+            port = node.get("port")
+            if role not in roles_to_include or ip is None or port is None:
+                continue
+
+            addr = f"{ip}:{port}"
+            if addr != self.addr:
+                expected_nodes.add(addr)
+
+        return expected_nodes
 
     def get_initialization_status(self):
         return self.initialized
@@ -272,6 +394,23 @@ class Engine:
         if not self.get_federation_ready_lock().locked() and len(await self.get_federation_nodes()) == 0:
             logging.info("🤖  handle_model_message | There are no defined federation nodes")
             return
+        if self.config.participant["scenario_args"].get("federation") == "SDFL":
+            direct_neighbors = await self.cm.get_addrs_current_connections(only_direct=True, myself=False)
+            if source not in direct_neighbors:
+                logging.info(f"SDFL reputation | Ignoring model/update from non-neighbor source={source}")
+                return
+
+            decoded_model = self.trainer.deserialize_model(message.parameters)
+            updt_received_event = UpdateReceivedEvent(
+                decoded_model,
+                message.weight,
+                source,
+                message.round,
+                update_type=UpdateReceivedEvent.REPUTATION_UPDATE,
+            )
+            await EventManager.get_instance().publish_node_event(updt_received_event)
+            logging.info(f"SDFL reputation | Published reputation UpdateReceivedEvent from {source}")
+            return
         decoded_model = self.trainer.deserialize_model(message.parameters)
         updt_received_event = UpdateReceivedEvent(decoded_model, message.weight, source, message.round)
         await EventManager.get_instance().publish_node_event(updt_received_event)
@@ -317,7 +456,8 @@ class Engine:
 
     async def _control_leadership_transfer_callback(self, source, message):
         logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer message from {source}")
-        
+        await self.register_leadership_transfer(source)
+
         if await self._round_in_process_lock.locked_async():
             logging.info("Learning cycle is executing, role behavior will be modified next round")
             await self.rb.set_next_role(Role.AGGREGATOR, source_to_notificate=source)
@@ -337,6 +477,9 @@ class Engine:
     async def _control_leadership_transfer_ack_callback(self, source, message):
         logging.info(f"🔧  handle_control_message | Trigger | Received leadership transfer ack message from {source}")
         # No concurrence of difference ack received treated, be aware of that.
+        if await self.confirm_leadership_transfer_ack(source):
+            return
+
         if await self._round_in_process_lock.locked_async():
             logging.info("Learning cycle is executing, role behavior will be modified next round")
             await self.rb.set_next_role(Role.TRAINER)
@@ -354,7 +497,7 @@ class Engine:
             except TimeoutError:
                 logging.info("Learning cycle is locked, role behavior will be modified next round")
                 await self.rb.set_next_role(Role.TRAINER)
-        
+
 
     async def _connection_connect_callback(self, source, message):
         logging.info(f"🔗  handle_connection_message | Trigger | Received connection message from {source}")
@@ -413,6 +556,190 @@ class Engine:
                     self._reputation.reputation_with_all_feedback[key].append(message.score)
         except Exception as e:
             logging.exception(f"Error handling reputation message: {e}")
+
+    async def _reputationtable_table_callback(self, source, message):
+        try:
+            # Reputation tables are an SDFL-only control plane for indirect reputation.
+            if self.config.participant["scenario_args"].get("federation") != "SDFL":
+                return
+            if self.rb.get_role_name(True) != "aggregator":
+                return
+            if not hasattr(self, "_reputation") or self._reputation is None:
+                return
+
+            reputation_table = json.loads(message.reputation_table_json or "{}")
+            if not isinstance(reputation_table, dict):
+                logging.warning(
+                    f"SDFL reputation | Ignoring reputation table from {message.node_id}; "
+                    f"invalid payload type: {type(reputation_table)}"
+                )
+                return
+
+            await self._reputation.register_reputation_table(
+                message.node_id,
+                message.round,
+                reputation_table,
+                received_from=source,
+            )
+            # Start or refresh the async collection window for this SDFL round.
+            expected_nodes = self.get_sdfl_expected_trainers()
+            timeout = float(
+                self.config.participant["defense_args"]
+                .get("reputation", {})
+                .get("table_aggregation_timeout", 10)
+            )
+            self._reputation.start_reputation_tables_collection(expected_nodes, message.round, timeout)
+        except json.JSONDecodeError as e:
+            logging.warning(f"SDFL reputation | Could not decode reputation table from {source}: {e}")
+        except Exception as e:
+            logging.exception(f"Error handling reputation table message: {e}")
+
+    async def _trustworthiness_report_callback(self, source, message):
+        try:
+            report = {
+                "source": source,
+                "node_id": message.node_id,
+                "bytes_sent": message.bytes_sent,
+                "bytes_recv": message.bytes_recv,
+                "accuracy": message.accuracy,
+                "loss": message.loss,
+                "role": message.role,
+                "energy_grid": message.energy_grid,
+                "emissions": message.emissions,
+                "workload": message.workload,
+                "cpu_model": message.cpu_model,
+                "gpu_model": message.gpu_model,
+                "cpu_used": message.cpu_used,
+                "gpu_used": message.gpu_used,
+                "energy_consumed": message.energy_consumed,
+                "sample_size": message.sample_size,
+                "class_imbalance": message.class_imbalance,
+                "model_size": message.model_size,
+                "local_entropy": message.local_entropy,
+                "val_accuracy": message.val_accuracy,
+                "dp_enabled": message.dp_enabled,
+                "dp_epsilon": message.dp_epsilon,
+                "macro_f1": message.macro_f1,
+                "train_accuracy": message.train_accuracy,
+            }
+
+            logging.info(f"handle_trustworthiness_message | Trigger | {report}")
+
+            if hasattr(self, "trustworthiness") and self.trustworthiness is not None:
+                if hasattr(self.trustworthiness, "tw") and self.trustworthiness.tw is not None:
+                    if hasattr(self.trustworthiness.tw, "register_trustworthiness_report"):
+                        await self.trustworthiness.tw.register_trustworthiness_report(source, message)
+
+
+        except Exception as e:
+            logging.exception(f"Error handling trustworthiness message: {e}")
+
+    async def _trustscores_share_callback(self, source, message):
+        try:
+            report = {
+                "source": source,
+                "node_id": message.node_id,
+                "trust_report_json": message.trust_report_json,
+            }
+
+            logging.info(f"handle_trustscores_message | Trigger | {report}")
+
+            trust_handler = getattr(self, "trustworthiness", None)
+            if trust_handler is None:
+                trust_handler = getattr(self, "trustscores", None)
+
+            if trust_handler is not None:
+                if hasattr(trust_handler, "tw") and trust_handler.tw is not None:
+                    if hasattr(trust_handler.tw, "register_trustscores_report"):
+                        await trust_handler.tw.register_trustscores_report(source, message)
+
+
+        except Exception as e:
+            logging.exception(f"Error handling trustscores message: {e}")
+
+    async def _sdflmodel_trainer_update_callback(self, source, message):
+        try:
+            logging.info(
+                f"SDFL | TRAINER_UPDATE callback triggered | "
+                f"source={source} | node_id={message.node_id} | "
+                f"target={message.target} | round={message.round} | "
+                f"local_round={self.round} | role={self.rb.get_role_name(True)}"
+            )
+
+            federation = self.config.participant["scenario_args"]["federation"]
+
+            if federation != "SDFL":
+                logging.info("SDFL | Ignoring TRAINER_UPDATE because federation is not SDFL")
+                return
+
+            role = self.rb.get_role_name(True)
+
+            if role != "aggregator":
+                logging.info(f"SDFL | Ignoring TRAINER_UPDATE because role={role}")
+                return
+
+            if message.target != "aggregator":
+                logging.info(f"SDFL | Ignoring TRAINER_UPDATE because target={message.target}")
+                return
+
+            if message.round != self.round:
+                logging.info(
+                    f"SDFL | Ignoring TRAINER_UPDATE from round={message.round}; "
+                    f"current round={self.round}"
+                )
+                return
+
+            # Valid trainer updates are converted into the normal aggregation event stream.
+            decoded_model = self.trainer.deserialize_model(message.parameters)
+
+            event = UpdateReceivedEvent(
+                decoded_model,
+                message.weight,
+                message.node_id,
+                message.round,
+            )
+
+            await EventManager.get_instance().publish_node_event(event)
+
+            logging.info(
+                f"SDFL aggregator | Published UpdateReceivedEvent | "
+                f"trainer={message.node_id} | round={message.round} | weight={message.weight}"
+            )
+
+        except Exception as e:
+            logging.exception(f"Error handling SDFL TRAINER_UPDATE message: {e}")
+
+    async def _sdflmodel_global_model_callback(self, source, message):
+        role = self.rb.get_role_name(True)
+        logging.info(
+            f"SDFL | GLOBAL_MODEL callback triggered | "
+            f"source={source} | node_id={message.node_id} | "
+            f"target={message.target} | round={message.round} | "
+            f"local_round={self.round} | role={role}"
+        )
+
+        if self.config.participant["scenario_args"].get("federation") == "SDFL":
+            if role != "trainer":
+                logging.info(f"SDFL | Ignoring GLOBAL_MODEL because role={role}")
+                return
+
+            if message.target != "trainer":
+                logging.info(f"SDFL | Ignoring GLOBAL_MODEL because target={message.target}")
+                return
+
+            if message.round != self.round:
+                logging.info(
+                    f"SDFL | Ignoring GLOBAL_MODEL from round={message.round}; "
+                    f"current round={self.round}"
+                )
+                return
+
+        # Trainers apply the aggregator's global model and unblock their SDFL round wait.
+        decoded_model = self.trainer.deserialize_model(message.parameters)
+        self.trainer.set_model_parameters(decoded_model)
+
+        self._global_model_source = message.node_id
+        self._global_model_received.set()
 
     """                                                     ##############################
                                                             #    REGISTERING CALLBACKS   #
@@ -621,8 +948,8 @@ class Engine:
         await self.aggregator.init()
         if "situational_awareness" in self.config.participant:
             await self.sa.init()
-        if self.config.participant["defense_args"]["reputation"]["enabled"]:
-            await self._reputation.setup()
+        if self._reputation is not None:
+          await self._reputation.setup()
         await self._reporter.start()
         await self._addon_manager.deploy_additional_services()
 
@@ -710,10 +1037,10 @@ class Engine:
                 await self.get_federation_ready_lock().acquire_async()
                 if self.config.participant["device_args"]["start"]:
                     logging.info("Propagate initial model updates.")
-                    
+
                     mpe = ModelPropagationEvent(await self.cm.get_addrs_current_connections(only_direct=True, myself=False), "initialization")
                     await EventManager.get_instance().publish_node_event(mpe)
-                    
+
                     await self.get_federation_ready_lock().release_async()
 
                 self.trainer.set_epochs(epochs)
@@ -764,7 +1091,8 @@ class Engine:
             return False
         else:
             return current_round >= self.total_rounds
-        
+            #return False
+
     async def resolve_missing_updates(self):
         """
         Delegates the resolution strategy for missing updates to the current role behavior.
@@ -778,7 +1106,7 @@ class Engine:
         """
         logging.info(f"Using Role behavior: {self.rb.get_role_name()} conflict resolve strategy")
         return await self.rb.resolve_missing_updates()
-    
+
     async def update_self_role(self):
         """
         Checks whether a role update is required and performs the transition if necessary.
@@ -806,7 +1134,7 @@ class Engine:
                 logging.info(f"Sending role modification ACK to transferer: {source_to_notificate}")
                 message = self.cm.create_message("control", "leadership_transfer_ack")
                 asyncio.create_task(self.cm.send_message(source_to_notificate, message))
-             
+
     async def _learning_cycle(self):
         """
         Main asynchronous loop for executing the Federated Learning process across multiple rounds.
@@ -837,9 +1165,10 @@ class Engine:
                     indent=2,
                     title="Round information",
                 )
-                
+
+                await self.rb.before_round_start()
                 await self.update_self_role()
-                
+
                 logging.info(f"Federation nodes: {self.federation_nodes}")
                 await self.update_federation_nodes(
                     await self.cm.get_addrs_current_connections(only_direct=True, myself=True)
@@ -851,10 +1180,10 @@ class Engine:
                 logging.info(f"Expected nodes: {expected_nodes}")
                 direct_connections = await self.cm.get_addrs_current_connections(only_direct=True)
                 undirected_connections = await self.cm.get_addrs_current_connections(only_undirected=True)
-                
+
                 logging.info(f"Direct connections: {direct_connections} | Undirected connections: {undirected_connections}")
                 logging.info(f"[Role {self.rb.get_role_name()}] Starting learning cycle...")
-                
+
                 await self.aggregator.update_federation_nodes(expected_nodes)
                 async with self._role_behavior_performance_lock:
                     await self.rb.extended_learning_cycle()
@@ -882,13 +1211,13 @@ class Engine:
         self.trainer.on_learning_cycle_end()
 
         await self.trainer.test()
-        
+
         # Shutdown protocol
         await self._shutdown_protocol()
-            
+
     async def _shutdown_protocol(self):
         logging.info("Starting graceful shutdown process...")
-        
+
         # 1.- Publish Experiment Finish Event to the last update on modules
         logging.info("Publishing Experiment Finish Event...")
         efe = ExperimentFinishEvent()

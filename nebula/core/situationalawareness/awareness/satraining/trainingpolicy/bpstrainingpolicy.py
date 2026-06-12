@@ -4,18 +4,18 @@ from nebula.core.situationalawareness.awareness.sautils.sacommand import SAComma
 from nebula.core.nebulaevents import RoundEndEvent
 
 class BPSTrainingPolicy(TrainingPolicy):
-    
+
     def __init__(self, config=None):
         pass
-    
+
     async def init(self, config):
-        await self.register_sa_agent()    
+        await self.register_sa_agent()
 
     async def get_evaluation_results(self):
         sac = factory_sa_command(
             "connectivity",
             SACommandAction.MAINTAIN_CONNECTIONS,
-            self, 
+            self,
             "",
             SACommandPRIO.LOW,
             False,
@@ -24,15 +24,15 @@ class BPSTrainingPolicy(TrainingPolicy):
         )
         await self.suggest_action(sac)
         await self.notify_all_suggestions_done(RoundEndEvent)
-    
+
     async def get_agent(self) -> str:
         return "SATraining_BPSTP"
 
     async def register_sa_agent(self):
         await SuggestionBuffer.get_instance().register_event_agents(RoundEndEvent, self)
-    
+
     async def suggest_action(self, sac : SACommand):
         await SuggestionBuffer.get_instance().register_suggestion(RoundEndEvent, self, sac)
-    
+
     async def notify_all_suggestions_done(self, event_type):
         await SuggestionBuffer.get_instance().notify_all_suggestions_done_for_agent(self, event_type)

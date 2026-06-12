@@ -6,9 +6,9 @@ from nebula.core.situationalawareness.awareness.sareasoner import SAMComponent
 from nebula.addons.functions import print_msg_box
 from nebula.core.situationalawareness.awareness.sareasoner import SAReasoner, SAMComponent
 from nebula.core.eventmanager import EventManager
-    
-RESTRUCTURE_COOLDOWN = 5    
-    
+
+RESTRUCTURE_COOLDOWN = 5
+
 class SATraining(SAMComponent):
     """
     SATraining is a Situational Awareness (SA) component responsible for enhancing
@@ -24,7 +24,7 @@ class SATraining(SAMComponent):
         _sar (SAReasoner): Reference to the shared situational reasoner.
         _trainning_policy: Instantiated training policy strategy.
     """
-    
+
     def __init__(self, config):
         """
         Initialize the SATraining component with a given configuration.
@@ -61,7 +61,7 @@ class SATraining(SAMComponent):
         """
         Returns the currently active training policy instance.
         """
-        return self._trainning_policy    
+        return self._trainning_policy
 
     async def init(self):
         """
@@ -69,7 +69,7 @@ class SATraining(SAMComponent):
         This setup enables the policy to make informed decisions based on local topology.
         """
         config = {}
-        config["nodes"] = set(await self.sar.get_nodes_known(neighbors_only=True)) 
+        config["nodes"] = set(await self.sar.get_nodes_known(neighbors_only=True))
         await self.tp.init(config)
 
     async def sa_component_actions(self):
@@ -79,4 +79,3 @@ class SATraining(SAMComponent):
         """
         logging.info("SA Trainng evaluating current scenario")
         asyncio.create_task(self.tp.get_evaluation_results())
-

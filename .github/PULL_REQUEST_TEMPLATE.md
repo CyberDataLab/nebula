@@ -17,5 +17,5 @@ Please fill out the following template to help us review your pull request.
 <!-- List any related issues, e.g. "Closes #123" -->
 
 ## Signed-off-by
-Signed-off-by: *Your Name (email)*  
+Signed-off-by: *Your Name (email)*
 Date: *YYYY-MM-DD*

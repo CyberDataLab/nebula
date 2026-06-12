@@ -23,6 +23,10 @@ from nebula.core.datasets.cifar10.cifar10 import CIFAR10Dataset
 from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
 from nebula.core.datasets.emnist.emnist import EMNISTDataset
 from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
+from nebula.core.datasets.kddcup99.kddcup99 import KDDCUP99Dataset
+from nebula.core.datasets.covtype.covtype import CovtypeDataset
+from nebula.core.datasets.adultcensus.adultcensus import AdultCensusDataset
+from nebula.core.datasets.breast_cancer.breast_cancer import BreastCancerDataset
 from nebula.core.datasets.mnist.mnist import MNISTDataset
 from nebula.core.utils.certificate import generate_ca_certificate, generate_certificate
 from nebula.utils import DockerUtils, FileUtils
@@ -87,14 +91,17 @@ class Scenario:
         selection_fairness,
         performance_fairness,
         class_distribution,
+        outcome_fairness,
         explainability_pillar,
         interpretability,
         post_hoc_methods,
         accountability_pillar,
         factsheet_completeness,
+        monitoring,
         architectural_soundness_pillar,
         client_management,
         optimization,
+        federation_management,
         sustainability_pillar,
         energy_source,
         hardware_efficiency,
@@ -108,6 +115,9 @@ class Scenario:
         sar_neighbor_policy,
         sar_training,
         sar_training_policy,
+        dp=None,
+        feature_squeezing=None,
+        adversarial_training=None,
         physical_ips=None,
     ):
         """
@@ -185,6 +195,9 @@ class Scenario:
         self.network_subnet = network_subnet
         self.network_gateway = network_gateway
         self.epochs = epochs
+        self.dp = dp
+        self.feature_squeezing = feature_squeezing
+        self.adversarial_training = adversarial_training
         self.attack_params = attack_params
         self.reputation = reputation
         self.random_geo = random_geo
@@ -211,14 +224,17 @@ class Scenario:
         self.selection_fairness = selection_fairness,
         self.performance_fairness = performance_fairness,
         self.class_distribution = class_distribution,
+        self.outcome_fairness = outcome_fairness,
         self.explainability_pillar = explainability_pillar,
         self.interpretability = interpretability,
         self.post_hoc_methods = post_hoc_methods,
         self.accountability_pillar = accountability_pillar,
         self.factsheet_completeness = factsheet_completeness,
+        self.monitoring = monitoring,
         self.architectural_soundness_pillar = architectural_soundness_pillar,
         self.client_management = client_management,
         self.optimization = optimization,
+        self.federation_management = federation_management,
         self.sustainability_pillar = sustainability_pillar,
         self.energy_source = energy_source,
         self.hardware_efficiency = hardware_efficiency,
@@ -690,6 +706,64 @@ class ScenarioManagement:
             participant_config["data_args"]["partition_parameter"] = self.scenario.partition_parameter
             participant_config["model_args"]["model"] = self.scenario.model
             participant_config["training_args"]["epochs"] = int(self.scenario.epochs)
+            if isinstance(self.scenario.dp, dict):
+                participant_config.setdefault("training_args", {})
+                participant_config["training_args"].setdefault("dp", {})
+                if "enabled" in self.scenario.dp:
+                    participant_config["training_args"]["dp"]["enabled"] = bool(self.scenario.dp["enabled"])
+                if "noise_multiplier" in self.scenario.dp:
+                    participant_config["training_args"]["dp"]["noise_multiplier"] = float(
+                        self.scenario.dp["noise_multiplier"]
+                    )
+                if "max_grad_norm" in self.scenario.dp:
+                    participant_config["training_args"]["dp"]["max_grad_norm"] = float(
+                        self.scenario.dp["max_grad_norm"]
+                    )
+            feature_squeezing = (
+                self.scenario.feature_squeezing if isinstance(self.scenario.feature_squeezing, dict) else {}
+            )
+            participant_config.setdefault("defense_args", {})
+            participant_config["defense_args"].setdefault("feature_squeezing", {})
+            participant_config["defense_args"]["feature_squeezing"]["enabled"] = bool(
+                feature_squeezing.get("enabled", False)
+            )
+            bit_depth = feature_squeezing.get("bit_depth", feature_squeezing.get("n"))
+            if bit_depth is not None:
+                participant_config["defense_args"]["feature_squeezing"]["bit_depth"] = int(bit_depth)
+            adversarial_training = (
+                self.scenario.adversarial_training if isinstance(self.scenario.adversarial_training, dict) else {}
+            )
+            participant_config["defense_args"].setdefault("adversarial_training", {})
+            participant_config["defense_args"]["adversarial_training"]["enabled"] = bool(
+                adversarial_training.get("enabled", False)
+            )
+            if "domain" in adversarial_training:
+                participant_config["defense_args"]["adversarial_training"]["domain"] = str(
+                    adversarial_training["domain"]
+                )
+            if "attack" in adversarial_training:
+                participant_config["defense_args"]["adversarial_training"]["attack"] = str(
+                    adversarial_training["attack"]
+                )
+            for key in (
+                "epsilon",
+                "alpha",
+                "apply_probability",
+                "target_loss_increase",
+                "max_loss_increase",
+            ):
+                if key in adversarial_training and adversarial_training[key] is not None:
+                    participant_config["defense_args"]["adversarial_training"][key] = float(
+                        adversarial_training[key]
+                    )
+            if "steps" in adversarial_training:
+                participant_config["defense_args"]["adversarial_training"]["steps"] = int(
+                    adversarial_training["steps"]
+                )
+            if "mode" in adversarial_training:
+                participant_config["defense_args"]["adversarial_training"]["mode"] = str(
+                    adversarial_training["mode"]
+                )
             participant_config["device_args"]["accelerator"] = self.scenario.accelerator
             participant_config["device_args"]["gpu_id"] = self.scenario.gpu_id
             participant_config["device_args"]["logging"] = self.scenario.logginglevel
@@ -743,14 +817,17 @@ class ScenarioManagement:
                     "selection_fairness": self.scenario.selection_fairness,
                     "performance_fairness": self.scenario.performance_fairness,
                     "class_distribution": self.scenario.class_distribution,
+                    "outcome_fairness": self.scenario.outcome_fairness,
                     "explainability_pillar": self.scenario.explainability_pillar,
                     "interpretability": self.scenario.interpretability,
                     "post_hoc_methods": self.scenario.post_hoc_methods,
                     "accountability_pillar": self.scenario.accountability_pillar,
                     "factsheet_completeness": self.scenario.factsheet_completeness,
+                    "monitoring": self.scenario.monitoring,
                     "architectural_soundness_pillar": self.scenario.architectural_soundness_pillar,
                     "client_management": self.scenario.client_management,
                     "optimization": self.scenario.optimization,
+                    "federation_management": self.scenario.federation_management,
                     "sustainability_pillar": self.scenario.sustainability_pillar,
                     "energy_source": self.scenario.energy_source,
                     "hardware_efficiency": self.scenario.hardware_efficiency,
@@ -953,7 +1030,7 @@ class ScenarioManagement:
 
                 logging.info(f"Configuration | additional nodes |  participant: {self.n_nodes + i + 1}")
                 last_ip = participant_config["network_args"]["ip"]
-                logging.info(f"Valores de la ultima ip: ({last_ip})")
+                logging.info(f"Last ip values: ({last_ip})")
                 participant_config["scenario_args"]["n_nodes"] = self.n_nodes + additional_nodes  # self.n_nodes + i + 1
                 participant_config["device_args"]["idx"] = last_participant_index + i
                 participant_config["network_args"]["neighbors"] = ""
@@ -988,9 +1065,12 @@ class ScenarioManagement:
         if additional_participants:
             self.n_nodes += len(additional_participants)
 
+
+
         # Splitting dataset
         dataset_name = self.scenario.dataset
         dataset = None
+
         if dataset_name == "MNIST":
             dataset = MNISTDataset(
                 num_classes=10,
@@ -1004,6 +1084,46 @@ class ScenarioManagement:
         elif dataset_name == "FashionMNIST":
             dataset = FashionMNISTDataset(
                 num_classes=10,
+                partitions_number=self.n_nodes,
+                iid=self.scenario.iid,
+                partition=self.scenario.partition_selection,
+                partition_parameter=self.scenario.partition_parameter,
+                seed=42,
+                config_dir=self.config_dir,
+            )
+        elif dataset_name == "Covtype":
+            dataset = CovtypeDataset(
+                num_classes=7,
+                partitions_number=self.n_nodes,
+                iid=self.scenario.iid,
+                partition=self.scenario.partition_selection,
+                partition_parameter=self.scenario.partition_parameter,
+                seed=42,
+                config_dir=self.config_dir,
+            )
+        elif dataset_name == "KDDCUP99":
+            dataset = KDDCUP99Dataset(
+                num_classes=2,
+                partitions_number=self.n_nodes,
+                iid=self.scenario.iid,
+                partition=self.scenario.partition_selection,
+                partition_parameter=self.scenario.partition_parameter,
+                seed=42,
+                config_dir=self.config_dir,
+            )
+        elif dataset_name == "AdultCensus":
+            dataset = AdultCensusDataset(
+                num_classes=2,
+                partitions_number=self.n_nodes,
+                iid=self.scenario.iid,
+                partition=self.scenario.partition_selection,
+                partition_parameter=self.scenario.partition_parameter,
+                seed=42,
+                config_dir=self.config_dir,
+            )
+        elif dataset_name == "BreastCancer":
+            dataset = BreastCancerDataset(
+                num_classes=2,
                 partitions_number=self.n_nodes,
                 iid=self.scenario.iid,
                 partition=self.scenario.partition_selection,
@@ -1046,6 +1166,7 @@ class ScenarioManagement:
 
         logging.info(f"Splitting {dataset_name} dataset...")
         dataset.initialize_dataset()
+
         logging.info(f"Splitting {dataset_name} dataset... Done")
 
         if self.scenario.deployment in ["docker", "process", "physical"]:

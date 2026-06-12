@@ -39,14 +39,16 @@ class CIFAR10ModelResNet(NebulaModel):
         seed=None,
         implementation="scratch",
         classifier="resnet9",
+        data_type="Images",
     ):
         super().__init__()
+        self.data_type = data_type
         if metrics is None:
             metrics = MetricCollection([
                 MulticlassAccuracy(num_classes=num_classes),
                 MulticlassPrecision(num_classes=num_classes),
                 MulticlassRecall(num_classes=num_classes),
-                MulticlassF1Score(num_classes=num_classes),
+                MulticlassF1Score(num_classes=num_classes, average="macro"),
             ])
         self.train_metrics = metrics.clone(prefix="Train/")
         self.val_metrics = metrics.clone(prefix="Validation/")
@@ -141,6 +143,10 @@ class CIFAR10ModelResNet(NebulaModel):
         raise NotImplementedError()
 
     def configure_optimizers(self):
+        optimizer_override = self.get_optimizer_override()
+        if optimizer_override is not None:
+            return optimizer_override
+
         if self.implementation == "scratch" and self.classifier == "resnet9":
             params = []
             for key, module in self.model.items():
@@ -149,3 +155,15 @@ class CIFAR10ModelResNet(NebulaModel):
         else:
             optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
         return optimizer
+
+    def get_learning_rate(self):
+        return self.learning_rate
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+    def get_num_classes(self):
+        return self.num_classes
+
+    def get_data_type(self):
+        return self.data_type

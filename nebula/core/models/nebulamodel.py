@@ -83,6 +83,26 @@ class NebulaModel(pl.LightningModule, ABC):
             f"{phase}/{key.replace('Multiclass', '').split('/')[-1]}": value.detach() for key, value in output.items()
         }
 
+        output_values = {
+            key: float(value.detach().cpu().item()) for key, value in output.items()
+        }
+
+        if phase == "Train":
+            self._latest_train_metrics = output_values
+
+        if phase == "Validation":
+            self._latest_validation_metrics = output_values
+
+        if phase in {"Test", "Test (Local)"}:
+            self._latest_test_metrics = output_values
+
+        if phase == "Train" and self._train_extra_metrics:
+            output.update({
+                f"{phase}/{key}": torch.tensor(value["sum"] / value["count"], device=self.device)
+                for key, value in self._train_extra_metrics.items()
+                if value["count"] > 0
+            })
+
         self.logger.log_data(output, step=self.global_number[phase])
 
         metrics_str = ""
@@ -140,7 +160,6 @@ class NebulaModel(pl.LightningModule, ABC):
 
             del cm_numpy, classes, fig, ax
 
-        # Restablecer la matriz de confusión
         if phase == "Test (Local)":
             self.cm.reset()
         else:
@@ -168,7 +187,7 @@ class NebulaModel(pl.LightningModule, ABC):
                 MulticlassAccuracy(num_classes=num_classes),
                 MulticlassPrecision(num_classes=num_classes),
                 MulticlassRecall(num_classes=num_classes),
-                MulticlassF1Score(num_classes=num_classes),
+                MulticlassF1Score(num_classes=num_classes, average="macro"),
             ])
         self.train_metrics = metrics.clone(prefix="Train/")
         self.val_metrics = metrics.clone(prefix="Validation/")
@@ -199,6 +218,33 @@ class NebulaModel(pl.LightningModule, ABC):
 
         self._current_loss = -1
         self._optimizer = None
+        self._optimizer_override = None
+        self._latest_train_metrics = {}
+        self._latest_validation_metrics = {}
+        self._latest_test_metrics = {}
+        self._train_extra_metrics = {}
+
+        # DP trainers update these fields after querying the Opacus accountant.
+        self.dp_enabled = False
+        self.dp_epsilon = None
+        self.dp_delta = None
+        self.adversarial_training = None
+
+    def set_optimizer_override(self, optimizer):
+        self._optimizer_override = optimizer
+        self._optimizer = optimizer
+
+    def clear_optimizer_override(self):
+        self._optimizer_override = None
+
+    def get_optimizer_override(self):
+        return self._optimizer_override
+
+    def set_adversarial_training(self, adversarial_training):
+        self.adversarial_training = adversarial_training
+
+    def clear_adversarial_training(self):
+        self.adversarial_training = None
 
     def set_communication_manager(self, communication_manager):
         self.communication_manager = communication_manager
@@ -221,15 +267,52 @@ class NebulaModel(pl.LightningModule, ABC):
     def step(self, batch, batch_idx, phase):
         """Training/validation/test step."""
         x, y = batch
-        y_pred = self.forward(x)
-        loss = self.criterion(y_pred, y)
+        extra_metrics = {}
+        if phase == "Train" and self.adversarial_training is not None:
+            loss, y_pred, extra_metrics = self.adversarial_training.compute_training_step(
+                self,
+                x,
+                y,
+                self.criterion,
+            )
+        else:
+            y_pred = self.forward(x)
+            loss = self.criterion(y_pred, y)
+
         self.process_metrics(phase, y_pred, y, loss)
+        if phase == "Train" and extra_metrics:
+            self._log_training_extra_metrics(extra_metrics)
 
         self._current_loss = loss
         return loss
 
+    def _log_training_extra_metrics(self, metrics):
+        if self.logger is None:
+            return
+        detached_metrics = {key: value.detach() for key, value in metrics.items()}
+        for key, value in detached_metrics.items():
+            metric = self._train_extra_metrics.setdefault(key, {"sum": 0.0, "count": 0})
+            metric["sum"] += float(value.cpu().item())
+            metric["count"] += 1
+        self.logger.log_data({f"Train/{key}": value for key, value in detached_metrics.items()})
+
     def get_loss(self):
         return self._current_loss
+
+    def get_latest_validation_metrics(self):
+        return self._latest_validation_metrics
+
+    def get_latest_train_metrics(self):
+        return self._latest_train_metrics
+
+    def get_latest_test_metrics(self):
+        return self._latest_test_metrics
+
+    def get_latest_train_accuracy(self):
+        return self._latest_train_metrics.get("Train/Accuracy")
+
+    def get_latest_test_macro_f1(self):
+        return self._latest_test_metrics.get("Test (Local)/F1Score")
 
     def modify_learning_rate(self, new_lr):
         logging.info(f"Modifiying | learning rate, new value: {new_lr}")
@@ -270,6 +353,7 @@ class NebulaModel(pl.LightningModule, ABC):
     def on_train_epoch_end(self):
         self.log_metrics_end("Train")
         self.train_metrics.reset()
+        self._train_extra_metrics = {}
         self.global_number["Train"] += 1
 
     def validation_step(self, batch, batch_idx):
@@ -306,7 +390,7 @@ class NebulaModel(pl.LightningModule, ABC):
         loss = self.criterion(y_pred, y)
         y_pred_classes = torch.argmax(y_pred, dim=1)
         accuracy = torch.mean((y_pred_classes == y).float())
-        
+
         if dataloader_idx == 0:
             self.log(f"val_loss", loss, on_epoch=True, prog_bar=False)
             self.log(f"val_accuracy", accuracy, on_epoch=True, prog_bar=False)
@@ -346,6 +430,7 @@ class NebulaModelStandalone(NebulaModel):
     def on_train_epoch_end(self):
         self.log_metrics_end("Train")
         self.train_metrics.reset()
+        self._train_extra_metrics = {}
         # NebulaModel registers training rounds
         # NebulaModelStandalone register the global number of epochs instead of rounds
         self.global_number["Train"] += 1

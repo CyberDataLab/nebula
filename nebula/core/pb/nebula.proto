@@ -26,6 +26,10 @@ message Wrapper {
     DiscoverMessage discover_message = 9;
     OfferMessage offer_message = 10;
     LinkMessage link_message = 11;
+    TrustworthinessMessage trustworthiness_message = 12;
+    TrustscoresMessage trustscores_message = 13;
+    SdflmodelMessage sdflmodel_message = 14;
+    ReputationtableMessage reputationtable_message = 15;
   }
 }
 
@@ -71,6 +75,19 @@ message ModelMessage {
   bytes parameters = 1;       // Serialized form of the model parameters.
   int64 weight = 2;           // Significance or weighting factor of this model update, e.g., based on sample size.
   int32 round = 3;            // Identifies the communication round, particularly useful in iterative processes.
+}
+
+message SdflmodelMessage {
+  enum Action {
+    TRAINER_UPDATE = 0;
+    GLOBAL_MODEL = 1;
+  }
+  Action action = 1;
+  string target = 2;          // Target role: "aggregator" or "trainer".
+  bytes parameters = 3;       // Serialized form of the model parameters.
+  int64 weight = 4;           // Significance or weighting factor of this model update.
+  int32 round = 5;            // Identifies the communication round.
+  string node_id = 6;         // Logical producer of the update/model, preserved during forwarding.
 }
 
 message ConnectionMessage {
@@ -126,7 +143,58 @@ message ReputationMessage {
   Action action = 4; // Action type (default: SHARE)
 }
 
+message ReputationtableMessage {
+  enum Action {
+    TABLE = 0;
+  }
+  string node_id = 1; // Logical source node of the reputation table.
+  int32 round = 2; // Round to which the reputation table belongs.
+  string reputation_table_json = 3; // JSON encoded reputation table.
+  Action action = 4; // Action type (default: TABLE)
+}
+
 // Response transmits the outcome of a requested operation, including any errors.
 message ResponseMessage {
   string response = 1;      // Outcome of the requested operation.
+}
+
+message TrustworthinessMessage {
+  enum Action {
+    REPORT = 0;
+  }
+
+  Action action = 1;
+  string node_id = 2;
+  int64 bytes_sent = 3;
+  int64 bytes_recv = 4;
+  double accuracy = 5;
+  double loss = 6;
+  string role = 7;
+  double energy_grid = 8;
+  double emissions = 9;
+  string workload = 10;
+  string cpu_model = 11;
+  string gpu_model = 12;
+  bool cpu_used = 13;
+  bool gpu_used = 14;
+  double energy_consumed = 15;
+  int32 sample_size = 16;
+  float class_imbalance = 17;
+  int64 model_size = 18;
+  float local_entropy = 19;
+  float val_accuracy = 20;
+  bool dp_enabled = 21;
+  float dp_epsilon = 22;
+  double macro_f1 = 23;
+  double train_accuracy = 24;
+}
+
+message TrustscoresMessage {
+  enum Action {
+    SHARE = 0;
+  }
+
+  Action action = 1;
+  string node_id = 2;
+  string trust_report_json = 3;
 }

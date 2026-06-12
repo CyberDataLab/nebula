@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import logging
 
 from nebula.core.aggregation.aggregator import Aggregator
 
@@ -43,6 +44,10 @@ class TrimmedMean(Aggregator):
 
     def run_aggregation(self, models):
         super().run_aggregation(models)
+
+        if not models:
+            logging.warning("TrimmedMean received an empty update set.")
+            return None
 
         models = list(models.values())
         models_params = [m for m, _ in models]

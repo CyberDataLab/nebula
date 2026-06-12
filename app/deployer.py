@@ -289,17 +289,17 @@ class NebulaEventHandler(PatternMatchingEventHandler):
     def kill_script_processes(self, pids_file):
         """
         Forcefully terminates processes listed in a given PID file, including their child processes.
-    
+
         Args:
             pids_file (str): Path to the file containing PIDs, one per line.
-    
+
         Behavior:
             - Reads the PIDs from the file.
             - For each PID, checks if the process exists.
             - If it exists, kills all child processes recursively before killing the main process.
             - Handles and logs exceptions such as missing processes or invalid PID entries.
             - Logs warnings and errors appropriately.
-    
+
         Typical use case:
             Used to clean up running processes related to a scenario or script that has been deleted or stopped.
         """
@@ -344,7 +344,7 @@ def run_observer():
     """
     Starts a watchdog observer to monitor the configuration directory for changes.
 
-    This function is typically used to execute additional scripts or trigger events 
+    This function is typically used to execute additional scripts or trigger events
     during the execution of a federated learning session by monitoring file system changes.
 
     Main functionalities:
@@ -357,7 +357,7 @@ def run_observer():
         - Trigger specific actions during a federation lifecycle.
 
     Note:
-        The observer runs in a blocking mode and will keep the process alive 
+        The observer runs in a blocking mode and will keep the process alive
         until manually stopped or interrupted.
     """
     # Watchdog for running additional scripts in the host machine (i.e. during the execution of a federation)
@@ -373,7 +373,7 @@ class Deployer:
     """
     Handles the configuration and initialization of deployment parameters for the NEBULA system.
 
-    This class reads and stores various deployment-related settings such as port assignments, 
+    This class reads and stores various deployment-related settings such as port assignments,
     environment paths, logging configuration, and system mode (production, development, or simulation).
 
     Main functionalities:
@@ -438,7 +438,7 @@ class Deployer:
         """
         Configures the logging system for the deployment controller.
 
-        This method sets up both console and file logging with a consistent format and appropriate log levels. 
+        This method sets up both console and file logging with a consistent format and appropriate log levels.
         It also ensures that Uvicorn loggers are properly configured to avoid duplicate log outputs.
 
         Main functionalities:
@@ -452,7 +452,7 @@ class Deployer:
             - Ensures clean and consistent logging output during deployment.
 
         Note:
-            This method does not set up file logging directly, but prepares the base configuration 
+            This method does not set up file logging directly, but prepares the base configuration
             and Uvicorn logger behavior for further logging use.
         """
         log_console_format = "[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s"
@@ -475,7 +475,7 @@ class Deployer:
         """
         Ensures that the specified directory exists and is writable.
 
-        This method attempts to create the directory if it does not exist and verifies 
+        This method attempts to create the directory if it does not exist and verifies
         write access by writing and deleting a temporary metadata file.
 
         Args:
@@ -521,8 +521,8 @@ class Deployer:
         """
         Starts the NEBULA deployment process and all associated services.
 
-        This method initializes the NEBULA platform by setting up the environment, 
-        checking port availability, starting key services (controller, frontend, WAF), 
+        This method initializes the NEBULA platform by setting up the environment,
+        checking port availability, starting key services (controller, frontend, WAF),
         and launching a filesystem observer to react to configuration changes.
 
         Main functionalities:
@@ -539,7 +539,7 @@ class Deployer:
             - Central entry point for managing NEBULA components during deployment.
 
         Note:
-            The method blocks indefinitely until manually interrupted, 
+            The method blocks indefinitely until manually interrupted,
             and ensures graceful shutdown upon receiving SIGINT or SIGTERM.
         """
         banner = """
@@ -616,8 +616,8 @@ class Deployer:
         """
         Handles system termination signals to ensure a clean shutdown.
 
-        This method is triggered when the application receives SIGTERM or SIGINT signals 
-        (e.g., via Ctrl+C or `kill`). It logs the event, performs cleanup actions, and 
+        This method is triggered when the application receives SIGTERM or SIGINT signals
+        (e.g., via Ctrl+C or `kill`). It logs the event, performs cleanup actions, and
         terminates the process gracefully.
 
         Args:
@@ -749,7 +749,7 @@ class Deployer:
                 )
 
         network_name = f"{os.environ['USER']}_nebula-net-base"
-        
+
         try:
             subprocess.check_call(["nvidia-smi"])
             self.gpu_available = True

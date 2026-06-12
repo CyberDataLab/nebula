@@ -144,6 +144,22 @@
                                 style="margin-right: 10px; margin-left: 10px;">FashionMNIST
                         </label>
                         <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+                            <input type="checkbox" id="mod-fmnist" value='Covtype'
+                                style="margin-right: 10px; margin-left: 10px;">Covtype
+                        </label>
+                        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+                            <input type="checkbox" id="mod-fmnist" value='KDDCUP99'
+                                style="margin-right: 10px; margin-left: 10px;">KDDCUP99
+                        </label>
+                        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+                            <input type="checkbox" id="mod-fmnist" value='AdultCensus'
+                                style="margin-right: 10px; margin-left: 10px;">AdultCensus
+                        </label>
+                        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
+                            <input type="checkbox" id="mod-fmnist" value='BreastCancer'
+                                style="margin-right: 10px; margin-left: 10px;">BreastCancer
+                        </label>
+                        <label style="display: inline-block; align-items: center; margin-bottom: 10px;">
                             <input type="checkbox" id="mod-cifar10" value='CIFAR10'
                                 style="margin-right: 10px; margin-left: 10px;">CIFAR10
                         </label>
@@ -503,6 +519,154 @@
                             style="display: inline; width: 80%">
                     </div>
                 </div>
+                <!-- Differential Privacy -->
+                <div class="form-group row container-shadow tiny grey">
+                    <h5 class="step-number">Differential Privacy <i class="fa fa-user-secret"></i>
+                    </h5>
+                    <h5 class="step-title">Enable/Disable DP</h5>
+                    <div class="form-check form-switch" style="margin-left: 23px;">
+                        <input class="form-check-input" type="checkbox" id="dpSwitch"
+                            style="display: inline; width: 80px; height: 30px;">
+                    </div>
+                    <div id="dp-settings" style="margin-top: 10px; display: none;">
+                        <h5 class="step-title">Noise multiplier</h5>
+                        <div class="form-check form-check-inline">
+                            <input type="number" class="form-control" id="dpNoiseMultiplier"
+                                placeholder="Noise multiplier" min="0" step="0.01" value="1.0"
+                                style="display: inline; width: 80%">
+                        </div>
+                        <h5 class="step-title">Max Grad Norm</h5>
+                        <div class="form-check form-check-inline">
+                            <input type="number" class="form-control" id="dpMaxGradNorm"
+                                placeholder="Max Grad Norm" min="0" step="0.01" value="1.0"
+                                style="display: inline; width: 80%">
+                        </div>
+                        <small class="form-text text-muted">
+                            Other DP parameters are still taken from
+                            <code>nebula/frontend/config/participant.json.example</code>.
+                        </small>
+                    </div>
+                </div>
+                <!-- Feature Squeezing -->
+                <div class="form-group row container-shadow tiny grey">
+                    <h5 class="step-number">Feature Squeezing <i class="fa fa-compress"></i>
+                    </h5>
+                    <h5 class="step-title">Enable/Disable Feature Squeezing</h5>
+                    <div class="form-check form-switch" style="margin-left: 23px;">
+                        <input class="form-check-input" type="checkbox" id="featureSqueezingSwitch"
+                            style="display: inline; width: 80px; height: 30px;">
+                    </div>
+                    <small id="feature-squeezing-dataset-note" class="form-text text-muted" style="display: none;">
+                        Feature Squeezing is currently available only for image datasets.
+                    </small>
+                    <div id="feature-squeezing-settings" style="margin-top: 10px; display: none;">
+                        <h5 class="step-title">n (bit depth)</h5>
+                        <div class="form-check form-check-inline">
+                            <select class="form-control" id="featureSqueezingN"
+                                style="display: inline; width: 80%">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="4" selected>4</option>
+                                <option value="8">8</option>
+                                <option value="16">16</option>
+                                <option value="32">32</option>
+                                <option value="64">64</option>
+                            </select>
+                        </div>
+                        <small class="form-text text-muted">
+                            Applies only to image datasets.
+                        </small>
+                    </div>
+                </div>
+                <!-- Adversarial Training -->
+                <div class="form-group row container-shadow tiny grey">
+                    <h5 class="step-number">Adversarial Training <i class="fa fa-shield"></i>
+                    </h5>
+                    <h5 class="step-title">Enable/Disable Adversarial Training</h5>
+                    <div class="form-check form-switch" style="margin-left: 23px;">
+                        <input class="form-check-input" type="checkbox" id="adversarialTrainingSwitch"
+                            style="display: inline; width: 80px; height: 30px;">
+                    </div>
+                    <small id="adversarial-training-dataset-note" class="form-text text-muted" style="display: none;">
+                        Adversarial Training for tabular datasets currently supports AdultCensus, BreastCancer, Covtype, and KDDCUP99 with constrained PGD.
+                    </small>
+                    <div id="adversarial-training-settings" style="margin-top: 10px; display: none;">
+                        <input type="hidden" id="adversarialTrainingDomain" value="image">
+                        <h5 class="step-title">Attack</h5>
+                        <div class="form-check form-check-inline">
+                            <select class="form-control" id="adversarialTrainingAttack"
+                                style="display: inline; width: 80%">
+                                <option value="fgsm" selected>FGSM</option>
+                                <option value="pgd">PGD</option>
+                            </select>
+                        </div>
+                        <h5 class="step-title">Epsilon</h5>
+                        <div class="form-check form-check-inline">
+                            <input type="number" class="form-control" id="adversarialTrainingEpsilon"
+                                placeholder="Epsilon" min="0" step="0.001" value="0.031372549"
+                                style="display: inline; width: 80%">
+                        </div>
+                        <h5 class="step-title">Apply probability</h5>
+                        <div class="form-check form-check-inline">
+                            <input type="number" class="form-control" id="adversarialTrainingApplyProbability"
+                                placeholder="Probability" min="0" max="1" step="0.05" value="0.3"
+                                style="display: inline; width: 80%">
+                        </div>
+                        <div id="adversarial-training-candidate-selection-settings" style="display: none;">
+                            <h5 class="step-title">Tabular candidate selection</h5>
+                            <div class="form-check form-check-inline">
+                                <select class="form-control" id="adversarialTrainingCandidateSelection"
+                                    style="display: inline; width: 80%">
+                                    <option value="none" selected>None</option>
+                                    <option value="loss_window">Loss window</option>
+                                    <option value="margin_window">Margin window</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="adversarial-training-loss-window-settings" style="display: none;">
+                            <h5 class="step-title">Tabular loss window</h5>
+                            <div class="form-check form-check-inline">
+                                <input type="number" class="form-control" id="adversarialTrainingTargetLossIncrease"
+                                    placeholder="Target loss increase" min="0" step="0.01" value=""
+                                    style="display: inline; width: 39%">
+                                <input type="number" class="form-control" id="adversarialTrainingMaxLossIncrease"
+                                    placeholder="Max loss increase" min="0" step="0.01" value=""
+                                    style="display: inline; width: 39%">
+                            </div>
+                        </div>
+                        <div id="adversarial-training-margin-window-settings" style="display: none;">
+                            <h5 class="step-title">Tabular margin window</h5>
+                            <div class="form-check form-check-inline">
+                                <input type="number" class="form-control" id="adversarialTrainingTargetMargin"
+                                    placeholder="Target margin" step="0.01" value="0"
+                                    style="display: inline; width: 39%">
+                                <input type="number" class="form-control" id="adversarialTrainingMaxMargin"
+                                    placeholder="Max margin" step="0.01" value="0.5"
+                                    style="display: inline; width: 39%">
+                            </div>
+                        </div>
+                        <div id="adversarial-training-pgd-settings" style="display: none;">
+                            <h5 class="step-title" id="adversarialTrainingStepsTitle">PGD steps</h5>
+                            <div class="form-check form-check-inline">
+                                <input type="number" class="form-control" id="adversarialTrainingSteps"
+                                    placeholder="Steps" min="1" step="1" value="1"
+                                    style="display: inline; width: 80%">
+                            </div>
+                            <input type="hidden" id="adversarialTrainingAlpha" value="">
+                        </div>
+                        <h5 class="step-title">Training mode</h5>
+                        <div class="form-check form-check-inline">
+                            <select class="form-control" id="adversarialTrainingMode"
+                                style="display: inline; width: 80%">
+                                <option value="mixed" selected>Clean + adversarial</option>
+                                <option value="adversarial">Adversarial only</option>
+                            </select>
+                        </div>
+                        <small class="form-text text-muted">
+                            Image datasets use FGSM/PGD. AdultCensus, BreastCancer, Covtype, and KDDCUP99 use constrained PGD for tabular adversarial training.
+                        </small>
+                    </div>
+                </div>
                 <!-- Advanced Robustness -->
                 <div class="form-group row container-shadow tiny grey">
                     <h5 class="step-number">Robustness <i class="fa fa-shield"></i>
@@ -520,6 +684,9 @@
                             <option>Delayer</option>
                             <option>Flooding</option>
                         </select>
+                        <small id="sample-poisoning-dataset-note" class="form-text text-muted" style="display: none;">
+                            Sample Poisoning is currently available only for image datasets.
+                        </small>
                         <h5 id="poisoned-node-title" class="step-title" style="margin-left: 11px; display: none;">%
                             Malicious nodes</h5>
                         <div class="form-check form-check-inline" style="display: none;"
@@ -891,202 +1058,423 @@
                         <input class="form-check-input" type="checkbox" id="TrustworthinessSwitch" style="display: inline; width: 80px; height: 30px;">
                     </div>
                     <div id="trustworthiness-options" style="display: none;">
-                        <div class="trust-options">
-                            <div class="pillar">
-                                <h5 class="step-title">Robustness pillar</h5>
-                                <input type="number" class="form-control" id="robustness-pillar"
-                                    placeholder="Robustness pillar" min="5" value="20"
-                                    style="display: inline; width: 67%;">
-                                <small class="form-text text-muted">%</small>
-                            </div>
-                            <div class="notion-container">
-                                <div class="notion">
-                                    <h5 class="step-title">Resilience to attacks notion</h5>
-                                    <input type="number" class="form-control" id="robustness-notion-1"
-                                        placeholder="Resilience to attacks" min="20" value="40"
-                                        style="display: inline; width: 70%;">
+                        <div id="tw-cfl" style="display: none;">
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Robustness pillar</h5>
+                                    <input type="number" class="form-control" id="cfl-robustness-pillar"
+                                        placeholder="Robustness pillar" min="5" value="20"
+                                        style="display: inline; width: 67%;">
                                     <small class="form-text text-muted">%</small>
                                 </div>
-                                <div class="notion">
-                                    <h5 class="step-title" >Algorithm robustness notion</h5>
-                                    <input type="number" class="form-control" id="robustness-notion-2"
-                                        placeholder="Algorithm robustness" min="20" value="40"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Client reliability notion</h5>
-                                    <input type="number" class="form-control" id="robustness-notion-3"
-                                        placeholder="Client reliability" min="20" value="20"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="trust-options">
-                            <div class="pillar">
-                                <h5 class="step-title">Privacy pillar</h5>
-                                <input type="number" class="form-control" id="privacy-pillar"
-                                    placeholder="Privacy pillar" min="5" value="15"
-                                    style="display: inline; width: 67%">
-                                <small class="form-text text-muted">%</small>
-                            </div>
-                            <div class="notion-container">
-                                <div class="notion">
-                                    <h5 class="step-title">Technique notion</h5>
-                                    <input type="number" class="form-control" id="privacy-notion-1"
-                                        placeholder="Technique notion" min="20" value="20"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Uncertainty notion</h5>
-                                    <input type="number" class="form-control" id="privacy-notion-2"
-                                        placeholder="Uncertainty notion" min="20" value="60"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Indistinguishability notion</h5>
-                                    <input type="number" class="form-control" id="privacy-notion-3"
-                                        placeholder="Indistinguishability notion" min="20" value="20"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Resilience to attacks notion</h5>
+                                        <input type="number" class="form-control" id="cfl-robustness-notion-1"
+                                            placeholder="Resilience to attacks" min="20" value="40"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title" >Algorithm robustness notion</h5>
+                                        <input type="number" class="form-control" id="cfl-robustness-notion-2"
+                                            placeholder="Algorithm robustness" min="20" value="40"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Client reliability notion</h5>
+                                        <input type="number" class="form-control" id="cfl-robustness-notion-3"
+                                            placeholder="Client reliability" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="trust-options">
-                            <div class="pillar">
-                                <h5 class="step-title">Fairness pillar</h5>
-                                <input type="number" class="form-control" id="fairness-pillar"
-                                    placeholder="Fairness pillar" min="5" value="15"
-                                    style="display: inline; width: 67%">
-                                <small class="form-text text-muted">%</small> 
-                            </div>
-                            <div class="notion-container">
-                                <div class="notion">
-                                    <h5 class="step-title">Selection fairness notion</h5>
-                                    <input type="number" class="form-control" id="fairness-notion-1"
-                                        placeholder="Selection fairness notion" min="20" value="30"
-                                        style="display: inline; width: 70%;">
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Privacy pillar</h5>
+                                    <input type="number" class="form-control" id="cfl-privacy-pillar"
+                                        placeholder="Privacy pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
                                     <small class="form-text text-muted">%</small>
                                 </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Performance fairness  notion</h5>
-                                    <input type="number" class="form-control" id="fairness-notion-2"
-                                        placeholder="Performance fairness notion" min="20" value="35"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Class distribution notion</h5>
-                                    <input type="number" class="form-control" id="fairness-notion-3"
-                                        placeholder="Class distribution notion" min="20" value="35"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="trust-options">
-                            <div class="pillar">
-                                <h5 class="step-title">Explainability pillar</h5>
-                                <input type="number" class="form-control" id="explainability-pillar"
-                                    placeholder="Explainability pillar" min="5" value="15"
-                                    style="display: inline; width: 67%">
-                                <small class="form-text text-muted">%</small>
-                            </div>
-                            <div class="notion-container">
-                                <div class="notion">
-                                    <h5 class="step-title">Interpretability notion</h5>
-                                    <input type="number" class="form-control" id="explainability-notion-1"
-                                        placeholder="Interpretability notion" min="20" value="40"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Post hoc methods notion</h5>
-                                    <input type="number" class="form-control" id="explainability-notion-2"
-                                        placeholder="Post hoc methods notion" min="20" value="60"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Technique notion</h5>
+                                        <input type="number" class="form-control" id="cfl-privacy-notion-1"
+                                            placeholder="Technique notion" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Uncertainty notion</h5>
+                                        <input type="number" class="form-control" id="cfl-privacy-notion-2"
+                                            placeholder="Uncertainty notion" min="20" value="60"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Indistinguishability notion</h5>
+                                        <input type="number" class="form-control" id="cfl-privacy-notion-3"
+                                            placeholder="Indistinguishability notion" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="trust-options">
-                            <div class="pillar">
-                                <h5 class="step-title">Accountability pillar</h5>
-                                <input type="number" class="form-control" id="accountability-pillar"
-                                    placeholder="Accountability pillar" min="5" value="10"
-                                    style="display: inline; width: 67%">
-                                <small class="form-text text-muted">%</small>
-                            </div>
-                            <div class="notion-container">
-                                <div class="notion">
-                                    <h5 class="step-title">Factsheet completeness notion</h5>
-                                    <input type="number" class="form-control" id="accountability-notion-1"
-                                        placeholder="Factsheet completeness notion" min="100" value="100"
-                                        style="display: inline; width: 70%;" disabled="true">
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Fairness pillar</h5>
+                                    <input type="number" class="form-control" id="cfl-fairness-pillar"
+                                        placeholder="Fairness pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
                                     <small class="form-text text-muted">%</small>
                                 </div>
-                            </div>
-                        </div>
-                        <div class="trust-options">
-                            <div class="pillar">
-                                <h5 class="step-title">Architectural soundness pillar</h5>
-                                <input type="number" class="form-control" id="architectural-soundness-pillar"
-                                    placeholder="Architectural soundness pillar" min="5" value="10"
-                                    style="display: inline; width: 67%">
-                                <small class="form-text text-muted">%</small>
-                            </div>
-                            <div class="notion-container">
-                                <div class="notion">
-                                    <h5 class="step-title">Client management notion</h5>
-                                    <input type="number" class="form-control" id="architectural-soundness-notion-1"
-                                        placeholder="Client management notion" min="20" value="50"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Optimization notion</h5>
-                                    <input type="number" class="form-control" id="architectural-soundness-notion-2"
-                                        placeholder="Optimization notion" min="20" value="50"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="trust-options">
-                            <div class="pillar">
-                                <h5 class="step-title">Sustainability pillar</h5>
-                                <input type="number" class="form-control" id="sustainability-pillar"
-                                    placeholder="Sustainability pillar" min="5" value="15"
-                                    style="display: inline; width: 67%">
-                                <small class="form-text text-muted">%</small>
-                            </div>
-                            <div class="notion-container">
-                                <div class="notion">
-                                    <h5 class="step-title">Energy source notion</h5>
-                                    <input type="number" class="form-control" id="sustainability-notion-1"
-                                        placeholder="Energy source notion" min="20" value="50"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Hardware efficiency notion</h5>
-                                    <input type="number" class="form-control" id="sustainability-notion-2"
-                                        placeholder="Hardware efficiency notion" min="20" value="25"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
-                                </div>
-                                <div class="notion">
-                                    <h5 class="step-title">Federation complexity notion</h5>
-                                    <input type="number" class="form-control" id="sustainability-notion-3"
-                                        placeholder="Federation complexity notion" min="20" value="25"
-                                        style="display: inline; width: 70%;">
-                                    <small class="form-text text-muted">%</small>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Selection fairness notion</h5>
+                                        <input type="number" class="form-control" id="cfl-fairness-notion-1"
+                                            placeholder="Selection fairness notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Performance fairness  notion</h5>
+                                        <input type="number" class="form-control" id="cfl-fairness-notion-2"
+                                            placeholder="Performance fairness notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Class distribution notion</h5>
+                                        <input type="number" class="form-control" id="cfl-fairness-notion-3"
+                                            placeholder="Class distribution notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Outcome fairness notion</h5>
+                                        <input type="number" class="form-control" id="cfl-fairness-notion-4"
+                                            placeholder="Outcome fairness notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Explainability pillar</h5>
+                                    <input type="number" class="form-control" id="cfl-explainability-pillar"
+                                        placeholder="Explainability pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Interpretability notion</h5>
+                                        <input type="number" class="form-control" id="cfl-explainability-notion-1"
+                                            placeholder="Interpretability notion" min="20" value="40"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Post hoc methods notion</h5>
+                                        <input type="number" class="form-control" id="cfl-explainability-notion-2"
+                                            placeholder="Post hoc methods notion" min="20" value="60"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Accountability pillar</h5>
+                                    <input type="number" class="form-control" id="cfl-accountability-pillar"
+                                        placeholder="Accountability pillar" min="5" value="10"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Factsheet completeness notion</h5>
+                                        <input type="number" class="form-control" id="cfl-accountability-notion-1"
+                                            placeholder="Factsheet completeness notion" min="20" value="80"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Monitoring notion</h5>
+                                        <input type="number" class="form-control" id="cfl-accountability-notion-2"
+                                            placeholder="Monitoring notion" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Architectural soundness pillar</h5>
+                                    <input type="number" class="form-control" id="cfl-architectural-soundness-pillar"
+                                        placeholder="Architectural soundness pillar" min="5" value="10"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Client management notion</h5>
+                                        <input type="number" class="form-control" id="cfl-architectural-soundness-notion-1"
+                                            placeholder="Client management notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Optimization notion</h5>
+                                        <input type="number" class="form-control" id="cfl-architectural-soundness-notion-2"
+                                            placeholder="Optimization notion" min="20" value="50"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Federation management notion</h5>
+                                        <input type="number" class="form-control" id="cfl-architectural-soundness-notion-3"
+                                            placeholder="Federation management notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Sustainability pillar</h5>
+                                    <input type="number" class="form-control" id="cfl-sustainability-pillar"
+                                        placeholder="Sustainability pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Energy source notion</h5>
+                                        <input type="number" class="form-control" id="cfl-sustainability-notion-1"
+                                            placeholder="Energy source notion" min="20" value="50"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Hardware efficiency notion</h5>
+                                        <input type="number" class="form-control" id="cfl-sustainability-notion-2"
+                                            placeholder="Hardware efficiency notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Federation complexity notion</h5>
+                                        <input type="number" class="form-control" id="cfl-sustainability-notion-3"
+                                            placeholder="Federation complexity notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <!-- /#tw-cfl -->
+                        <div id="tw-dfl" style="display: none;">
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Robustness pillar</h5>
+                                    <input type="number" class="form-control" id="dfl-robustness-pillar"
+                                        placeholder="Robustness pillar" min="5" value="20"
+                                        style="display: inline; width: 67%;">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Resilience to attacks notion</h5>
+                                        <input type="number" class="form-control" id="dfl-robustness-notion-1"
+                                            placeholder="Resilience to attacks" min="20" value="40"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title" >Algorithm robustness notion</h5>
+                                        <input type="number" class="form-control" id="dfl-robustness-notion-2"
+                                            placeholder="Algorithm robustness" min="20" value="40"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Client reliability notion</h5>
+                                        <input type="number" class="form-control" id="dfl-robustness-notion-3"
+                                            placeholder="Client reliability" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Privacy pillar</h5>
+                                    <input type="number" class="form-control" id="dfl-privacy-pillar"
+                                        placeholder="Privacy pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Technique notion</h5>
+                                        <input type="number" class="form-control" id="dfl-privacy-notion-1"
+                                            placeholder="Technique notion" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Uncertainty notion</h5>
+                                        <input type="number" class="form-control" id="dfl-privacy-notion-2"
+                                            placeholder="Uncertainty notion" min="20" value="60"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Indistinguishability notion</h5>
+                                        <input type="number" class="form-control" id="dfl-privacy-notion-3"
+                                            placeholder="Indistinguishability notion" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Fairness pillar</h5>
+                                    <input type="number" class="form-control" id="dfl-fairness-pillar"
+                                        placeholder="Fairness pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Class distribution notion</h5>
+                                        <input type="number" class="form-control" id="dfl-fairness-notion-3"
+                                            placeholder="Class distribution notion" min="20" value="50"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Outcome fairness notion</h5>
+                                        <input type="number" class="form-control" id="dfl-fairness-notion-4"
+                                            placeholder="Outcome fairness notion" min="20" value="50"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Explainability pillar</h5>
+                                    <input type="number" class="form-control" id="dfl-explainability-pillar"
+                                        placeholder="Explainability pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Interpretability notion</h5>
+                                        <input type="number" class="form-control" id="dfl-explainability-notion-1"
+                                            placeholder="Interpretability notion" min="20" value="40"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Post hoc methods notion</h5>
+                                        <input type="number" class="form-control" id="dfl-explainability-notion-2"
+                                            placeholder="Post hoc methods notion" min="20" value="60"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Accountability pillar</h5>
+                                    <input type="number" class="form-control" id="dfl-accountability-pillar"
+                                        placeholder="Accountability pillar" min="5" value="10"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Factsheet completeness notion</h5>
+                                        <input type="number" class="form-control" id="dfl-accountability-notion-1"
+                                            placeholder="Factsheet completeness notion" min="20" value="80"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Monitoring notion</h5>
+                                        <input type="number" class="form-control" id="dfl-accountability-notion-2"
+                                            placeholder="Monitoring notion" min="20" value="20"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Architectural soundness pillar</h5>
+                                    <input type="number" class="form-control" id="dfl-architectural-soundness-pillar"
+                                        placeholder="Architectural soundness pillar" min="5" value="10"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Client management notion</h5>
+                                        <input type="number" class="form-control" id="dfl-architectural-soundness-notion-1"
+                                            placeholder="Client management notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Optimization notion</h5>
+                                        <input type="number" class="form-control" id="dfl-architectural-soundness-notion-2"
+                                            placeholder="Optimization notion" min="20" value="50"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Federation management notion</h5>
+                                        <input type="number" class="form-control" id="dfl-architectural-soundness-notion-3"
+                                            placeholder="Federation management notion" min="20" value="25"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="trust-options">
+                                <div class="pillar">
+                                    <h5 class="step-title">Sustainability pillar</h5>
+                                    <input type="number" class="form-control" id="dfl-sustainability-pillar"
+                                        placeholder="Sustainability pillar" min="5" value="15"
+                                        style="display: inline; width: 67%">
+                                    <small class="form-text text-muted">%</small>
+                                </div>
+                                <div class="notion-container">
+                                    <div class="notion">
+                                        <h5 class="step-title">Energy source notion</h5>
+                                        <input type="number" class="form-control" id="dfl-sustainability-notion-1"
+                                            placeholder="Energy source notion" min="20" value="50"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                    <div class="notion">
+                                        <h5 class="step-title">Federation complexity notion</h5>
+                                        <input type="number" class="form-control" id="dfl-sustainability-notion-3"
+                                            placeholder="Federation complexity notion" min="20" value="50"
+                                            style="display: inline; width: 70%;">
+                                        <small class="form-text text-muted">%</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <!-- /#tw-dfl -->
                     </div>
                 </div>
             </div>

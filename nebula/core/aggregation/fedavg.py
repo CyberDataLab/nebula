@@ -1,6 +1,7 @@
 import gc
 
 import torch
+import logging
 
 from nebula.core.aggregation.aggregator import Aggregator
 
@@ -18,12 +19,17 @@ class FedAvg(Aggregator):
     def run_aggregation(self, models):
         super().run_aggregation(models)
 
+        if not models:
+            logging.warning("FedAvg received an empty update set.")
+            return None
+
         models = list(models.values())
 
         total_samples = float(sum(weight for _, weight in models))
 
         if total_samples == 0:
-            raise ValueError("Total number of samples must be greater than zero.")
+            logging.warning("Total number of samples must be greater than zero.")
+            return None
 
         last_model_params = models[-1][0]
         accum = {layer: torch.zeros_like(param, dtype=torch.float32) for layer, param in last_model_params.items()}

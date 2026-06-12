@@ -10,9 +10,9 @@ class RINGNeighborPolicy(NeighborPolicy):
     """
     Neighbor policy for ring topologies.
 
-    This policy maintains a strict limit on the number of neighbors per node, 
-    enforcing a ring-like structure. Each node connects to a fixed number of 
-    neighbors (by default 2), and excess connections are detected and marked 
+    This policy maintains a strict limit on the number of neighbors per node,
+    enforcing a ring-like structure. Each node connects to a fixed number of
+    neighbors (by default 2), and excess connections are detected and marked
     for removal.
 
     The policy ensures:
@@ -34,7 +34,7 @@ class RINGNeighborPolicy(NeighborPolicy):
         _excess_neighbors_removed_lock (Locker): Lock for accessing the removal tracking set.
         _verbose (bool): Enables verbose logging.
     """
-    
+
     RECENTLY_REMOVED_BAN_TIME = 20
 
     def __init__(self):

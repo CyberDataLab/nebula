@@ -54,13 +54,13 @@ class Aggregator(ABC):
         """
         Updates the current set of nodes expected to participate in the upcoming aggregation round.
 
-        This method informs the update handler (`us`) about the new set of federation nodes, 
-        clears any pending models, and attempts to acquire the aggregation lock to prepare 
+        This method informs the update handler (`us`) about the new set of federation nodes,
+        clears any pending models, and attempts to acquire the aggregation lock to prepare
         for model aggregation. If the aggregation process is already running, it releases the lock
         and tries again to ensure proper cleanup between rounds.
 
         Args:
-            federation_nodes (set): A set of addresses representing the nodes expected to contribute 
+            federation_nodes (set): A set of addresses representing the nodes expected to contribute
                                     updates for the next aggregation round.
 
         Raises:
@@ -108,7 +108,10 @@ class Aggregator(ABC):
             TimeoutError: If the aggregation lock is not acquired within the defined timeout.
             asyncio.CancelledError: If the aggregation lock acquisition is cancelled.
             Exception: For any other unexpected errors during the aggregation process.
-        """            
+        """
+        lock_acquired = False
+        lock_task = None
+        skip_task = None
         try:
             timeout = self.config.participant["aggregator_args"]["aggregation_timeout"]
             logging.info(f"Aggregation timeout: {timeout} starts...")
@@ -119,24 +122,38 @@ class Aggregator(ABC):
                 [lock_task, skip_task],
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            lock_acquired = lock_task in done
+
             if skip_task in done:
                 logging.info("Skipping aggregation timeout, updates received before grace time")
                 self._aggregation_waiting_skip.clear()
-                if not lock_acquired:
+                if not lock_task.done():
                     lock_task.cancel()
-                try:
-                    await lock_task  # Clean cancel
-                except asyncio.CancelledError:
-                    pass
 
-        except TimeoutError:
-            logging.exception("🔄  get_aggregation | Timeout reached for aggregation")
+            if lock_task in done:
+                try:
+                    await lock_task
+                    lock_acquired = True
+                except TimeoutError:
+                    logging.info("🔄  get_aggregation | Timeout reached; aggregating received updates")
+                except asyncio.CancelledError:
+                    logging.info("🔄  get_aggregation | Lock acquisition was cancelled")
+
         except asyncio.CancelledError:
-            logging.exception("🔄  get_aggregation | Lock acquisition was cancelled")
+            logging.exception("🔄  get_aggregation | Aggregation wait was cancelled")
         except Exception as e:
             logging.exception(f"🔄  get_aggregation | Error acquiring lock: {e}")
         finally:
+            for task in (lock_task, skip_task):
+                if task is None:
+                    continue
+                if not task.done():
+                    task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                except TimeoutError:
+                    pass
             if lock_acquired or self._aggregation_done_lock.locked():
                 await self._aggregation_done_lock.release_async()
 
@@ -145,12 +162,14 @@ class Aggregator(ABC):
         if not updates:
             logging.info(f"🔄  get_aggregation | No updates has been received..resolving conflict to continue...")
             updates = {self._addr: await self.engine.resolve_missing_updates()}
-        
+
         missing_nodes = await self.us.get_round_missing_nodes()
         if missing_nodes:
             logging.info(f"🔄  get_aggregation | Aggregation incomplete, missing models from: {missing_nodes}")
         else:
             logging.info("🔄  get_aggregation | All models accounted for, proceeding with aggregation.")
+
+        await self.us.before_aggregation(updates, self._federation_nodes)
 
         agg_event = AggregationEvent(updates, self._federation_nodes, missing_nodes)
         await EventManager.get_instance().publish_node_event(agg_event)

@@ -5,7 +5,7 @@ class AddonEvent(ABC):
     """
     Abstract base class for all addon-related events in the system.
     """
-    
+
     @abstractmethod
     async def get_event_data(self):
         """
@@ -21,7 +21,7 @@ class NodeEvent(ABC):
     """
     Abstract base class for all node-related events in the system.
     """
-    
+
     @abstractmethod
     async def get_event_data(self):
         """
@@ -52,7 +52,7 @@ class MessageEvent:
         source (str): Address or identifier of the message sender.
         message (Any): The actual message payload.
     """
-    
+
     def __init__(self, message_type, source, message):
         """
         Initializes a MessageEvent instance.
@@ -264,7 +264,7 @@ class NodeFoundEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
 class ModelPropagationEvent(NodeEvent):
     def __init__(self, eligible_neighbors, strategy):
         """Event triggered when model propagation is ready.
@@ -275,7 +275,7 @@ class ModelPropagationEvent(NodeEvent):
         """
         self.eligible_neighbors = eligible_neighbors
         self._strategy = strategy
-        
+
     def __str__(self):
         return f"Model propagation event, strategy: {self._strategy}"
 
@@ -291,12 +291,15 @@ class ModelPropagationEvent(NodeEvent):
         return (self.eligible_neighbors, self._strategy)
 
     async def is_concurrent(self) -> bool:
-        return False    
-            
+        return False
+
 
 
 class UpdateReceivedEvent(NodeEvent):
-    def __init__(self, decoded_model, weight, source, round, local=False):
+    FEDERATION_UPDATE = "federation"
+    REPUTATION_UPDATE = "reputation"
+
+    def __init__(self, decoded_model, weight, source, round, local=False, update_type=FEDERATION_UPDATE):
         """
         Initializes an UpdateReceivedEvent.
 
@@ -306,12 +309,15 @@ class UpdateReceivedEvent(NodeEvent):
             source (str): The identifier or address of the node that sent the update.
             round (int): The round number in which the update was received.
             local (bool): Local update
+            update_type (str): Semantic channel for this update. Federation updates feed aggregation;
+                reputation updates only feed reputation metrics.
         """
         self._source = source
         self._round = round
         self._model = decoded_model
         self._weight = weight
         self._local = local
+        self._update_type = update_type
 
     def __str__(self):
         return f"Update received from source: {self._source}, round: {self._round}"
@@ -329,6 +335,12 @@ class UpdateReceivedEvent(NodeEvent):
                 - If the update is local
         """
         return (self._model, self._weight, self._source, self._round, self._local)
+
+    async def get_update_type(self) -> str:
+        return self._update_type
+
+    def is_reputation_update(self) -> bool:
+        return self._update_type == self.REPUTATION_UPDATE
 
     async def is_concurrent(self) -> bool:
         return False
@@ -362,7 +374,7 @@ class BeaconRecievedEvent(NodeEvent):
 
     async def is_concurrent(self) -> bool:
         return True
-    
+
 class DuplicatedMessageEvent(NodeEvent):
     """
     Event triggered when a message is received that has already been processed.
@@ -370,7 +382,7 @@ class DuplicatedMessageEvent(NodeEvent):
     Attributes:
         source (str): The address of the node that sent the duplicated message.
     """
-    
+
     def __init__(self, source: str, message_type: str):
         self.source = source
 
@@ -396,7 +408,7 @@ class GPSEvent(AddonEvent):
     Attributes:
         distances (dict): A dictionary mapping node addresses to their respective distances.
     """
-    
+
     def __init__(self, distances: dict):
         """
         Initializes a GPSEvent.
@@ -427,7 +439,7 @@ class ChangeLocationEvent(AddonEvent):
         latitude (float): New latitude of the node.
         longitude (float): New longitude of the node.
     """
-    
+
     def __init__(self, latitude, longitude):
         """
         Initializes a ChangeLocationEvent.
@@ -450,14 +462,28 @@ class ChangeLocationEvent(AddonEvent):
             tuple: A tuple containing latitude and longitude.
         """
         return (self.latitude, self.longitude)
-    
+
 class TestMetricsEvent(AddonEvent):
-    def __init__(self, loss, accuracy):
+    def __init__(self, loss, accuracy, macro_f1=None):
         self._loss = loss
         self._accuracy = accuracy
+        self._macro_f1 = macro_f1
 
     def __str__(self):
         return "TestMetricsEvent"
 
     async def get_event_data(self):
-        return (self._loss, self._accuracy)
+        return (self._loss, self._accuracy, self._macro_f1)
+
+
+class ValidationMetricsEvent(AddonEvent):
+    def __init__(self, loss, accuracy, train_accuracy=None):
+        self._loss = loss
+        self._accuracy = accuracy
+        self._train_accuracy = train_accuracy
+
+    def __str__(self):
+        return "ValidationMetricsEvent"
+
+    async def get_event_data(self):
+        return (self._loss, self._accuracy, self._train_accuracy)

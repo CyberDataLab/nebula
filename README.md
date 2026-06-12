@@ -159,4 +159,33 @@ We would like to thank the following projects for their contributions which have
 - [FastAPI](https://github.com/tiangolo/fastapi) for the RESTful API
 - [Fedstellar](https://github.com/CyberDataLab/fedstellar) platform and [p2pfl](https://github.com/pguijas/p2pfl/) library
 - [Adversarial Robustness Toolbox (ART)](https://github.com/Trusted-AI/adversarial-robustness-toolbox) for the implementation of adversarial attacks
+- [Opacus](https://github.com/meta-pytorch/opacus) for differential privacy training support
+- [AI Fairness 360 (AIF360)](https://github.com/Trusted-AI/AIF360) for fairness metric definitions
+- [HolisticAI](https://github.com/holistic-ai/holisticai) for trustworthiness and fairness metric definitions
 - [D3.js](https://github.com/d3/d3-force) for the network visualizations
+
+## Third-party Differential Privacy
+
+NEBULA uses Opacus for differential privacy training:
+
+- Yousefpour, A., Shilov, I., Sablayrolles, A., Testuggine, D., Prasad, K., Malek, M., Nguyen, J., Ghosh, S., Bharadwaj, A., Zhao, J., Cormode, G., & Mironov, I. (2021). Opacus: User-Friendly Differential Privacy Library in PyTorch. arXiv:2109.12298. Licensed under Apache License 2.0: https://github.com/meta-pytorch/opacus/blob/main/LICENSE
+
+## Third-party Trustworthiness Metrics
+
+NEBULA implements some trustworthiness and fairness metrics following definitions documented in external toolkits:
+
+- AI Fairness 360 (AIF360). AI Fairness 360 [Software]. https://github.com/Trusted-AI/AIF360. Licensed under Apache License 2.0: https://github.com/Trusted-AI/AIF360/blob/main/LICENSE
+
+- Holistic AI. HolisticAI [Software]. https://github.com/holistic-ai/holisticai. Licensed under Apache License 2.0: https://github.com/holistic-ai/holisticai/blob/main/LICENSE
+
+## Third-party Tabular Datasets
+
+NEBULA preprocesses these datasets for experiments, including splitting, scaling, encoding, label mapping, filtering, and/or sample limiting depending on the dataset.
+
+- Becker, B. & Kohavi, R. (1996). Adult [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5XW20. Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+- Blackard, J. (1998). Covertype [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C50K5N. Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+- Wolberg, W., Mangasarian, O., Street, N., & Street, W. (1993). Breast Cancer Wisconsin (Diagnostic) [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5DW2B. Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+- Stolfo, S., Fan, W., Lee, W., Prodromidis, A., & Chan, P. (1999). KDD Cup 1999 Data [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C51C7N. Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/

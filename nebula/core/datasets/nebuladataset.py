@@ -1,4 +1,5 @@
 import copy
+import json
 import os
 import pickle
 from abc import ABC, abstractmethod
@@ -74,6 +75,11 @@ class NebulaPartitionHandler(Dataset, ABC):
             self.data = self.load_partition(f, f"{prefix}_data")
             self.targets = np.array(f[f"{prefix}_targets"])
             self.num_classes = f[f"{prefix}_data"].attrs.get("num_classes", 0)
+            raw_tabular_metadata = f[f"{prefix}_data"].attrs.get("tabular_metadata", None)
+            if raw_tabular_metadata is not None:
+                if isinstance(raw_tabular_metadata, bytes):
+                    raw_tabular_metadata = raw_tabular_metadata.decode("utf-8")
+                self.tabular_metadata = json.loads(raw_tabular_metadata)
             self.length = len(self.data)
         logging_training.info(
             f"[NebulaPartitionHandler] [{self.prefix}] Loaded {self.length} samples from {self.file_path} and {self.num_classes} classes."
@@ -156,6 +162,9 @@ class NebulaPartitionHandler(Dataset, ABC):
             elif typ == "pickle_bytes":
                 logging_training.info(f"Loading compressed pickled bytes object from {name}")
                 return pickle.loads(item[()])
+            elif typ == "array":
+                logging_training.info(f"Loading array object from {name}")
+                return item[()]
             else:
                 logging_training.warning(f"[NebulaPartitionHandler] Unknown type encountered: {typ} for item {name}")
                 return item[()]
@@ -289,6 +298,8 @@ class NebulaPartition:
 
             self.local_test_set = self.handler(test_partition_file, "local_test", config=self.config, empty=True)
             self.local_test_set.set_data(self.test_set.data, self.test_set.targets)
+            if hasattr(self.test_set, "tabular_metadata"):
+                self.local_test_set.tabular_metadata = self.test_set.tabular_metadata
             self.local_test_indices = self.set_local_test_indices()
 
             logging_training.info(f"Successfully loaded partition data for participant {p}.")
@@ -458,6 +469,18 @@ class NebulaDataset:
             logging.exception(f"Error saving object to HDF5: {e}")
             raise
 
+    def save_dataset_partition(self, dataset, indices, file, name):
+        if hasattr(dataset, "x") and isinstance(dataset.x, np.ndarray):
+            logging.info(f"Saving array partition {name} with {len(indices)} samples")
+            data = dataset.x[indices].astype(np.float32, copy=False)
+            ds = file.create_dataset(name, data=data, compression="lzf", shuffle=True)
+            ds.attrs["__type__"] = "array"
+            logging.info(f"Saved array partition {name} with shape {data.shape}")
+            return
+
+        partition_data = [dataset[i] for i in indices]
+        self.save_partition(partition_data, file, name)
+
     def save_partitions(self):
         """
         Save each partition data (train, test, and local test) to separate pickle files.
@@ -481,9 +504,9 @@ class NebulaDataset:
             file_name = os.path.join(path, "global_test.h5")
             with h5py.File(file_name, "w") as f:
                 indices = list(range(len(self.test_set)))
-                test_data = [self.test_set[i] for i in indices]
-                self.save_partition(test_data, f, "test_data")
+                self.save_dataset_partition(self.test_set, indices, f, "test_data")
                 f["test_data"].attrs["num_classes"] = self.num_classes
+                self._save_tabular_metadata_attr(self.test_set, f["test_data"])
                 test_targets = np.array(self.test_set.targets)
                 f.create_dataset("test_targets", data=test_targets, compression="gzip")
 
@@ -492,9 +515,9 @@ class NebulaDataset:
                 with h5py.File(file_name, "w") as f:
                     logging.info(f"Saving training data for participant {participant} in {file_name}")
                     indices = self.train_indices_map[participant]
-                    train_data = [self.train_set[i] for i in indices]
-                    self.save_partition(train_data, f, "train_data")
+                    self.save_dataset_partition(self.train_set, indices, f, "train_data")
                     f["train_data"].attrs["num_classes"] = self.num_classes
+                    self._save_tabular_metadata_attr(self.train_set, f["train_data"])
                     train_targets = np.array([self.train_set.targets[i] for i in indices])
                     f.create_dataset("train_targets", data=train_targets, compression="gzip")
                     logging.info(f"Partition saved for participant {participant}.")
@@ -507,6 +530,14 @@ class NebulaDataset:
         finally:
             self.clear()
             logging.info("Cleared dataset after saving partitions.")
+
+    def _save_tabular_metadata_attr(self, dataset, h5_dataset):
+        metadata = getattr(dataset, "tabular_metadata", None)
+        if metadata is None:
+            return
+        if hasattr(metadata, "to_dict"):
+            metadata = metadata.to_dict()
+        h5_dataset.attrs["tabular_metadata"] = json.dumps(metadata)
 
     @abstractmethod
     def generate_non_iid_map(self, dataset, partition="dirichlet", plot=False):
@@ -1285,11 +1316,19 @@ def factory_nebuladataset(dataset, **config) -> NebulaDataset:
     from nebula.core.datasets.cifar100.cifar100 import CIFAR100Dataset
     from nebula.core.datasets.emnist.emnist import EMNISTDataset
     from nebula.core.datasets.fashionmnist.fashionmnist import FashionMNISTDataset
+    from nebula.core.datasets.covtype.covtype import CovtypeDataset
+    from nebula.core.datasets.kddcup99.kddcup99 import KDDCUP99Dataset
+    from nebula.core.datasets.adultcensus.adultcensus import AdultCensusDataset
+    from nebula.core.datasets.breast_cancer.breast_cancer import BreastCancerDataset
     from nebula.core.datasets.mnist.mnist import MNISTDataset
 
     options = {
         "MNIST": MNISTDataset,
         "FashionMNIST": FashionMNISTDataset,
+        "Covtype": CovtypeDataset,
+        "KDDCUP99": KDDCUP99Dataset,
+        "AdultCensus": AdultCensusDataset,
+        "BreastCancer": BreastCancerDataset,
         "EMNIST": EMNISTDataset,
         "CIFAR10": CIFAR10Dataset,
         "CIFAR100": CIFAR100Dataset,
