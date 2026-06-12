@@ -3,10 +3,10 @@ docs_dir: '_prebuilt'
 repo_url: https://github.com/CyberDataLab/nebula
 site_url: https://docs.nebula-dfl.com
 site_description: "NEBULA: A Platform for Decentralized Federated Learning"
-site_author: Enrique Tomás Martínez Beltrán, Alberto Huertas Celdrán, Alejandro Avilés Serrano, Fernando Torres Vega
+site_author: Enrique Tomás Martínez Beltrán, Alberto Huertas Celdrán, Fernando Torres Vega, Juan Jesús Torralba Mateos
 edit_uri: edit/main/docs/
 repo_name: CyberDataLab/nebula
-copyright: Created by <a href="https://enriquetomasmb.com">Enrique Tomás Martínez Beltrán</a>, Alberto Huertas Celdrán, Alejandro Avilés Serrano, and Fernando Torres Vega - Source code (AGPL-3.0)
+copyright: Currently developed by <a href="https://enriquetomasmb.com">Enrique Tomás Martínez Beltrán</a>, Alberto Huertas Celdrán, Fernando Torres Vega, and Juan Jesús Torralba Mateos - Source code (AGPL-3.0)
 
 nav:
   - Home: index.md

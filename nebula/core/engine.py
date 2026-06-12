@@ -72,8 +72,8 @@ def print_banner():
                       Developed by:
                        • Enrique Tomás Martínez Beltrán
                        • Alberto Huertas Celdrán
-                       • Alejandro Avilés Serrano
                        • Fernando Torres Vega
+                       • Juan Jesús Torralba Mateos
 
                       https://nebula-dfl.com / https://nebula-dfl.eu
             """

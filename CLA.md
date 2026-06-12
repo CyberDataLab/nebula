@@ -1,12 +1,12 @@
 # Individual Contributor License Agreement (ICLA) – NEBULA
 
 Thank you for your interest in contributing to NEBULA
-(“Project”) maintained by **Enrique Tomás Martínez Beltrán**, **Alberto Huertas Celdrán**, **Alejandro Aviles Serrano** and **Fernando Torres Vega** (“Authors”).
+(“Project”) maintained by **Enrique Tomás Martínez Beltrán**, **Alberto Huertas Celdrán**, **Fernando Torres Vega** and **Juan Jesús Torralba Mateos** (“Developers”).
 
 By submitting a pull request, patch or code snippet, you agree that:
 
 1. **Licensing.**  You license your contribution under the GNU Affero
-   General Public License v3.0 *and* grant Authors the
+   General Public License v3.0 *and* grant Developers the
    non-exclusive, royalty-free right to distribute your contribution
    under additional proprietary or commercial licenses of NEBULA.
 
@@ -15,7 +15,7 @@ By submitting a pull request, patch or code snippet, you agree that:
    intellectual-property claim.
 
 3. **No compensation.**  You understand that you will not be paid for
-   your contribution and that Authors may use, sell or license the
+   your contribution and that Developers may use, sell or license the
    software containing your contribution at its sole discretion.
 
 Signed-off-by: *Enrique Tomás Martínez Beltrán (enriquetomas@um.es)*

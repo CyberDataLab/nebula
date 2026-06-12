@@ -1,6 +1,6 @@
 __version__ = "1.0.0"
 __description__ = "NEBULA: A Platform for Decentralized Federated Learning"
 __long_description__ = "NEBULA: A Platform for Decentralized Federated Learning"
-__author__ = "Enrique Tomás Martínez Beltrán, Alberto Huertas Celdrán, Alejandro Avilés Serrano, Fernando Torres Vega"
+__author__ = "Enrique Tomás Martínez Beltrán, Alberto Huertas Celdrán, Fernando Torres Vega, Juan Jesús Torralba Mateos"
 __long_description_content_type__ = "text/markdown"
 __keywords__ = "federated learning, decentralized federated learning, machine learning, deep learning, neural networks, collaborative learning"
