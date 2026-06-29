@@ -2,702 +2,874 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://docs.nebula-dfl.com/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/changelog/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/commercial-faq/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/contributing/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/developerguide/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/git-workflow/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/installation/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/userguide/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/SUMMARY/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/utils/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/env/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/functions/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/mobility/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/reporter/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/topologymanager/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/attacks/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/communications/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/communications/communicationattack/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/communications/delayerattack/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/communications/floodingattack/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/dataset/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/dataset/datapoison/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/dataset/datasetattack/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/dataset/labelflipping/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/model/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/model/gllneuroninversion/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/model/modelattack/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/model/modelpoison/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/attacks/model/swappingweights/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/feature_squeezing/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/adversarial_training/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/adversarial_training/base/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/adversarial_training/config/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/adversarial_training/defense/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/adversarial_training/image/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/adversarial_training/logging/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/defenses/adversarial_training/tabular/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/gps/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/gps/gpsmodule/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/gps/nebulagps/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/networksimulation/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/networksimulation/nebulanetworksimulator/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/networksimulation/networksimulator/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/reputation/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/reputation/reputation/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/calculation/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/cfl_factsheet/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/factsheet/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/dfl_factsheet/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/factsheet_common/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/factsheet_populators/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/graphics/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/metric/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/per_round_metrics/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/pillar/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/trustworthiness/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
-         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/utils/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/weights/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/csv_io/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/data_distribution/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/explainability/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/factsheet_values/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/model_quality/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/privacy/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/robustness/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/scenario_metrics/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/scoring/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/addons/trustworthiness/helpers/trust_reports/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/addons/waf/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/controller/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/controller/controller/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/controller/database/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/controller/http_helpers/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/controller/scenarios/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/addonmanager/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/engine/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/eventmanager/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/nebulaevents/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/node/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/noderole/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/role/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/aggregator/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/fedavg/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/krum/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/median/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/trimmedmean/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/updatehandlers/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/updatehandlers/cflupdatehandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/updatehandlers/dflupdatehandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/updatehandlers/sdflupdatehandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/aggregation/updatehandlers/updatehandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/changeablesubset/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/datamodule/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/image_metadata/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/nebuladataset/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/tabular_metadata/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/adultcensus/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/adultcensus/adultcensus/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/breast_cancer/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/breast_cancer/breast_cancer/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/cifar10/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/cifar10/cifar10/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/cifar100/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/cifar100/cifar100/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/covtype/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/covtype/covtype/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/emnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/emnist/emnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/fashionmnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/fashionmnist/fashionmnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/kddcup99/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/datasets/kddcup99/kddcup99/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/mnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/datasets/mnist/mnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/nebulamodel/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/adultcensus/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/adultcensus/mlp/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/breast_cancer/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/breast_cancer/mlp/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar10/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar10/cnn/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar10/cnnV2/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar10/cnnV3/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar10/fastermobilenet/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar10/resnet/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar10/simplemobilenet/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar100/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/cifar100/cnn/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/covtype/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/covtype/mlp/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/emnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/emnist/cnn/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/emnist/mlp/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/fashionmnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/fashionmnist/cnn/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/fashionmnist/mlp/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/kddcup99/</loc>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/models/kddcup99/mlp/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/mnist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/mnist/cnn/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/mnist/mlp/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/sentiment140/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/sentiment140/cnn/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/models/sentiment140/rnn/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/actions/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/blacklist/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/communications/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/connection/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/discoverer/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/forwarder/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/health/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/messages/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/propagator/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/externalconnection/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/externalconnection/externalconnectionservice/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/network/externalconnection/nebuladiscoveryservice/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/pb/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/pb/nebula_pb2/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/situationalawareness/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sareasoner/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/suggestionbuffer/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/arbitrationpolicies/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/arbitrationpolicies/arbitrationpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/arbitrationpolicies/staticarbitrationpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/sanetwork/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/neighborpolicies/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/neighborpolicies/distanceneighborpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/neighborpolicies/fcneighborpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/neighborpolicies/idleneighborpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/neighborpolicies/neighborpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/neighborpolicies/ringneighborpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sanetwork/neighborpolicies/starneighborpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/satraining/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/trainingpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/trainingpolicy/bpstrainingpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/trainingpolicy/fastreboot/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/trainingpolicy/htstrainingpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/trainingpolicy/qdstrainingpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/satraining/trainingpolicy/trainingpolicy/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sautils/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sautils/sacommand/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sautils/samoduleagent/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/awareness/sautils/sasystemmonitor/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/federationconnector/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/candidateselection/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/candidateselection/candidateselector/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/candidateselection/distcandidateselector/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/candidateselection/fccandidateselector/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/candidateselection/ringcandidateselector/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/candidateselection/stdcandidateselector/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/modelhandlers/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/modelhandlers/aggmodelhandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/modelhandlers/defaultmodelhandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/modelhandlers/modelhandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/situationalawareness/discovery/modelhandlers/stdmodelhandler/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/training/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/training/dp/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/training/lightning/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.nebula-dfl.com/api/core/training/lightning_dp/</loc>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/training/scikit/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/core/training/siamese/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/frontend/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/frontend/app/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/physical/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
     <url>
          <loc>https://docs.nebula-dfl.com/api/physical/api/</loc>
-         <lastmod>2025-07-02</lastmod>
+         <lastmod>2026-06-29</lastmod>
     </url>
 </urlset>
